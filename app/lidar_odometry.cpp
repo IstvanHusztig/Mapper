@@ -227,7 +227,7 @@ bool load_data(std::vector<std::string>& input_file_names,
             {
                 const std::string& fn = laz_files[i];
 
-                auto data = load_point_cloud(fn.c_str(), true, params.filter_threshold_xy_inner, params.filter_threshold_xy_outer, combinedCalibration);
+                auto data = load_point_cloud(fn.c_str(), true, params.filter_threshold_xy_inner, params.filter_threshold_xy_outer, combinedCalibration, get_lidar_imu_lever_arm(params));
 
                 std::sort(data.begin(), data.end(), [](const Point3Di& a, const Point3Di& b)
                     { return a.timestamp < b.timestamp; });
@@ -256,9 +256,6 @@ bool load_data(std::vector<std::string>& input_file_names,
                 // Store results
                 pointsPerFile[i] = std::move(data);
             });
-
-       /* if (pointsPerFile.size() > 0)
-            pointsPerFile.front().clear();*/
 
         // --- Summary
         size_t totalPoints = 0;
@@ -290,10 +287,8 @@ void calculate_trajectory(
     ahrs.settings.gain = ahrs_gain;
     int counter = 1;
 
-    double previous_time_stamp = 0.0;
-
-    static bool first = true;
-    static double last_ts;
+    bool first = true;
+    double last_ts = 0.0;
 
     std::cout << "start calculating trajectory.." << std::endl;
 
@@ -313,9 +308,9 @@ void calculate_trajectory(
             {
                 const auto& [timestamp_pair, gyr, acc] = imu_data[i];
 
-                gyr_x.push_back(gyr.axis.x * RAD_TO_DEG);//
-                gyr_y.push_back(gyr.axis.y * RAD_TO_DEG);//
-                gyr_z.push_back(gyr.axis.z * RAD_TO_DEG);//
+                gyr_x.push_back(gyr.axis.x * RAD_TO_DEG);
+                gyr_y.push_back(gyr.axis.y * RAD_TO_DEG);
+                gyr_z.push_back(gyr.axis.z * RAD_TO_DEG);
             }
 
             double mean_x = 0, mean_y = 0, mean_z = 0;
@@ -416,8 +411,6 @@ void calculate_trajectory(
                 printf("Roll %0.1f, Pitch %0.1f, Yaw %0.1f [%d of %d]\n", euler.angle.roll, euler.angle.pitch, euler.angle.yaw, counter++, (int)imu_data.size());
             }
         }
-
-        previous_time_stamp = timestamp_pair.first;
     }
 }
 
@@ -432,7 +425,6 @@ bool compute_step_1(
 
     for (const auto& pp : pointsPerFile)
     {
-        // number_of_points += pp.size();
         for (const auto& p : pp)
         {
             number_of_initial_points++;
@@ -446,8 +438,6 @@ bool compute_step_1(
         if (number_of_initial_points > params.threshold_initial_points)
             break;
     }
-
-    // std::cout << "timestamp_begin: " << timestamp_begin << std::endl;
 
     std::vector<std::pair<double, double>> timestamps;
     std::vector<Eigen::Affine3d> poses;
@@ -509,7 +499,6 @@ bool compute_step_1(
             wd.intermediate_trajectory_timestamps.emplace_back(timestamps[idx]);
 
             const TaitBryanPose tb = pose_tait_bryan_from_affine_matrix(poses[idx]);
-            // wd.imu_roll_pitch.emplace_back(tb.om, tb.fi);
             wd.imu_om_fi_ka.emplace_back(tb.om, tb.fi, tb.ka);
         }
 
@@ -536,33 +525,12 @@ bool compute_step_1(
                 points.insert(points.end(), std::make_move_iterator(lower), std::make_move_iterator(upper));
         }
 
-        // wd.original_points = points;
-
-        // correct points timestamps
-        //if (wd.intermediate_trajectory_timestamps.size() > 2)
-        //{
-
-        //    double ts_begin = wd.intermediate_trajectory_timestamps[0].first;
-        //    double ts_step = (wd.intermediate_trajectory_timestamps[wd.intermediate_trajectory_timestamps.size() - 1].first -
-        //        wd.intermediate_trajectory_timestamps[0].first) /
-        //        points.size();
-
-        //    // std::cout << "ts_begin " << ts_begin << std::endl;
-        //    // std::cout << "ts_step " << ts_step << std::endl;
-        //    // std::cout << "ts_end " << wd.intermediate_trajectory_timestamps[wd.intermediate_trajectory_timestamps.size() - 1].first << std::endl;
-
-        //    for (size_t pp = 0; pp < points.size(); pp++)
-        //        points[pp].timestamp = ts_begin + pp * ts_step;
-        //}
-        //////////////////////////////////////////
-
         for (size_t k = 0; k < points.size(); k++)
         {
             Point3Di& p = points[k];
             auto lower = std::lower_bound(wd.intermediate_trajectory_timestamps.begin(), wd.intermediate_trajectory_timestamps.end(), p.timestamp,
                 [](std::pair<double, double> lhs, double rhs) -> bool
                 { return lhs.first < rhs; });
-            // p.index_pose = std::distance(wd.intermediate_trajectory_timestamps.begin(), lower);
 
             int index_pose = std::distance(wd.intermediate_trajectory_timestamps.begin(), lower) - 1;
 
@@ -658,7 +626,7 @@ void save_result(std::vector<WorkerData> &worker_data, LidarOdometryParams &para
     int original_points_to_save_counter = 0;
     for (int i = 0; i < worker_data.size(); i++)
     {
-        std::vector<Point3Di> original_points; // = worker_data[i].load_points(worker_data[i].original_points_cache_file_name);
+        std::vector<Point3Di> original_points;
         if (!load_vector_data(worker_data[i].original_points_cache_file_name.string(), original_points))
         {
             std::cout << "problem with load_vector_data file '" << worker_data[i].original_points_cache_file_name.string() << "'" << std::endl;
@@ -670,16 +638,6 @@ void save_result(std::vector<WorkerData> &worker_data, LidarOdometryParams &para
         }
         auto tmp_data = original_points;
         point_sizes_per_chunk.push_back(tmp_data.size());
-        /*// filter data
-        std::vector<Point3Di> filtered_local_point_cloud;
-        for (auto &t : tmp_data)
-        {
-            auto pp = worker_data[i].intermediate_trajectory[t.index_pose].inverse() * t.point;
-            if(pp.norm() > threshould_output_filter){
-                filtered_local_point_cloud.push_back(t);
-            }
-        }
-        tmp_data = filtered_local_point_cloud;*/
         for (auto &t : tmp_data)
         {
             t.index_pose += pose_offset;
@@ -701,7 +659,6 @@ void save_result(std::vector<WorkerData> &worker_data, LidarOdometryParams &para
         if (counter > 50)
         {
             std::filesystem::path path = params.working_directory_cache;
-            // path /= "cache";
             std::string fn = "session_chunk_" + std::to_string(original_points_to_save_counter) + ".cache";
             path /= fn;
             wd.original_points_to_save_cache_file_name = path;
@@ -730,7 +687,6 @@ void save_result(std::vector<WorkerData> &worker_data, LidarOdometryParams &para
     if (counter > params.min_counter_concatenated_trajectory_nodes)
     {
         std::filesystem::path path = params.working_directory_cache;
-        // path /= "cache";
         std::string fn = "session_chunk_" + std::to_string(original_points_to_save_counter) + ".cache";
         path /= fn;
         wd.original_points_to_save_cache_file_name = path;
@@ -777,7 +733,7 @@ void save_result(std::vector<WorkerData> &worker_data, LidarOdometryParams &para
         std::vector<unsigned short> intensity;
         std::vector<double> timestamps;
 
-        std::vector<Point3Di> original_points_to_save; // = worker_data[i].load_points(worker_data[i].original_points_cache_file_name);
+        std::vector<Point3Di> original_points_to_save;
         if (!load_vector_data(worker_data_concatenated[i].original_points_to_save_cache_file_name.string(), original_points_to_save))
         {
             std::cout << "problem with load_vector_data file '" << worker_data_concatenated[i].original_points_to_save_cache_file_name.string() << "'" << std::endl;
@@ -802,7 +758,6 @@ void save_result(std::vector<WorkerData> &worker_data, LidarOdometryParams &para
         pathtrj /= trajectory_filename;
         std::cout << "saving to: " << pathtrj << std::endl;
 
-        ///
         std::ofstream outfile;
         outfile.open(pathtrj);
         if (!outfile.good())
@@ -837,7 +792,6 @@ void save_result(std::vector<WorkerData> &worker_data, LidarOdometryParams &para
                 << std::endl;
         }
         outfile.close();
-        //
     }
     fs::path path(outwd);
     path /= "session_ini_poses.mri";
@@ -912,13 +866,7 @@ void save_result(std::vector<WorkerData> &worker_data, LidarOdometryParams &para
     save_parameters_toml(params, outwd, elapsed_time_s);
 
     // Save processing results and complex data to JSON file
-    save_processing_results_json(params, outwd, elapsed_time_s);
-
-
-    //remove cache
-    //std::cout << "remove cache: '" << params.working_directory_cache << "' START" << std::endl;
-    //std::filesystem::remove_all(params.working_directory_cache);
-    //std::cout << "remove cache: '" << params.working_directory_cache << "' FINISHED" << std::endl;
+    save_processing_results_json(params, outwd, elapsed_time_s, &worker_data);
 }
 
 void filter_reference_buckets(LidarOdometryParams &params)
@@ -968,65 +916,13 @@ void load_reference_point_clouds(std::vector<std::string> input_file_names, Lida
     for (size_t i = 0; i < input_file_names.size(); i++)
     {
         std::cout << "loading reference point cloud from: " << input_file_names[i] << std::endl;
-        auto pp = load_point_cloud(input_file_names[i].c_str(), false, 0, 10000, {});
+        auto pp = load_point_cloud(input_file_names[i].c_str(), false, 0, 10000, {}, get_lidar_imu_lever_arm(params));
         std::cout << "loaded " << pp.size() << " reference points" << std::endl;
         params.reference_points.insert(std::end(params.reference_points), std::begin(pp), std::end(pp));
     }
 
     update_rgd(params.in_out_params_indoor, params.reference_buckets, params.reference_points);
     params.buckets_indoor = params.reference_buckets;
-}
-
-std::string save_results_automatic(LidarOdometryParams &params, std::vector<WorkerData> &worker_data, std::string working_directory, double elapsed_seconds)
-{
-    fs::path outwd = get_next_result_path(working_directory);
-    save_result(worker_data, params, outwd, elapsed_seconds);
-    return outwd.string();
-}
-
-std::vector<WorkerData> run_lidar_odometry(std::string input_dir, LidarOdometryParams &params)
-{
-    Session session;
-    std::vector<WorkerData> worker_data;
-    std::vector<std::string> input_file_names;
-    for (const auto &entry : std::filesystem::directory_iterator(input_dir))
-    {
-        if (fs::is_regular_file(entry))
-        {
-            input_file_names.push_back(entry.path().string());
-        }
-    }
-    std::vector<std::vector<Point3Di>> pointsPerFile;
-    Imu imu_data;
-    if (!load_data(input_file_names, params, pointsPerFile, imu_data, true))
-    {
-        std::cout << "Calculation failed at data loading, exiting." << std::endl;
-        return worker_data;
-    }
-    Trajectory trajectory;
-    calculate_trajectory(trajectory, imu_data, params.fusionConventionNwu, params.fusionConventionEnu, params.fusionConventionNed, params.ahrs_gain, true, params.use_remove_imu_bias_from_first_stationary_scan);
-
-    std::atomic<bool> pause{false};
-
-    if (!compute_step_1(pointsPerFile, params, trajectory, worker_data, pause))
-    {
-        std::cout << "Calculation failed at step 1 of lidar odometry, exiting." << std::endl;
-        return worker_data;
-    }
-    double ts_failure = 0.0;
-
-    std::atomic<float> loProgress;
-
-    if (!compute_step_2(worker_data, params, ts_failure, loProgress, pause, true))
-    {
-        std::cout << "Calculation failed at step 2 of lidar odometry, exiting." << std::endl;
-
-        return worker_data;
-    }
-
-   
-
-    return worker_data;
 }
 
 void save_parameters_toml(const LidarOdometryParams &params, const fs::path &outwd, double elapsed_seconds)
@@ -1070,7 +966,8 @@ void save_parameters_toml(const LidarOdometryParams &params, const fs::path &out
     }
 }
 
-void save_processing_results_json(const LidarOdometryParams &params, const fs::path &outwd, double elapsed_seconds)
+void save_processing_results_json(const LidarOdometryParams &params, const fs::path &outwd, double elapsed_seconds,
+                                  const std::vector<WorkerData> *worker_data)
 {
     // Get current date and time
     auto now = std::chrono::system_clock::now();
@@ -1132,6 +1029,23 @@ void save_processing_results_json(const LidarOdometryParams &params, const fs::p
         results["motion_model_correction"]["om"] = params.motion_model_correction.om;
         results["motion_model_correction"]["fi"] = params.motion_model_correction.fi;
         results["motion_model_correction"]["ka"] = params.motion_model_correction.ka;
+
+        // Estimated gyro bias per window [deg/s] and its 1-sigma [deg/s]
+        if (worker_data && params.use_gyro_bias_estimation)
+        {
+            nlohmann::json track = nlohmann::json::array();
+            for (const auto &wd : *worker_data)
+            {
+                if (wd.intermediate_trajectory_timestamps.empty())
+                    continue;
+                const Eigen::Vector3d b = wd.gyro_bias * RAD_TO_DEG;
+                const Eigen::Vector3d s = wd.gyro_bias_cov.diagonal().cwiseMax(0.0).cwiseSqrt() * RAD_TO_DEG;
+                track.push_back({{"t_start_s", wd.intermediate_trajectory_timestamps.front().first},
+                                 {"bias_deg_s", {b.x(), b.y(), b.z()}},
+                                 {"sigma_deg_s", {s.x(), s.y(), s.z()}}});
+            }
+            results["gyro_bias_per_window"] = track;
+        }
 
         // Transformation matrix (if needed for debugging)
         auto &m_g = params.m_g;

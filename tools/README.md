@@ -1,0 +1,40 @@
+# tools
+
+## eval_odometry.py
+
+Quality metrics for `lidar_odometry_step_1` results. Pure Python 3, with no extra packages.
+
+### 1. Export the point cloud to ASCII (optional, needed for the cell metrics and PNG)
+
+With the CloudCompare command line, from Git Bash:
+
+```
+"/c/Program Files/CloudCompare/CloudCompare.exe" -SILENT -AUTO_SAVE OFF \
+  -O "<result_folder>/scan_lio_0.laz" \
+  -C_EXPORT_FMT ASC -SEP SPACE -PREC 4 \
+  -SAVE_CLOUDS FILE "\"<result_folder>/scan_lio_0.asc\""
+```
+
+The escaped inner quotes are required: `-SAVE_CLOUDS FILE` splits its argument on spaces, so a path such as `raw data/43/...` would otherwise be read as two file names and nothing is saved. The export has the columns `x y z intensity gps_time`.
+
+### 2. Run the metrics
+
+```
+python tools/eval_odometry.py "<dataset_folder>" "<result_folder_A>" "<result_folder_B>" --png compare.png
+```
+
+- `<dataset_folder>` is the input folder of the run (the one containing `imu*.csv`).
+- Pass any number of result folders. The PNG shows their top views side by side: red is before `--tsplit` seconds (default 10.5), cyan is after.
+- `--zmin/--zmax` select the Z section used for the cell metrics (default -0.3..0.7 m).
+- `--window` sets the nodes per optimization window (`threshold_nr_poses`, default 360).
+- `--json` prints the metrics as JSON.
+
+| metric | meaning | better |
+|---|---|---|
+| jitter | median / p99 yaw change between consecutive trajectory nodes [deg] | lower |
+| win diff | mean per-window LiDAR-vs-gyro yaw difference [deg], and windows > 3 deg. The gyro is bias-corrected when the results JSON holds `gyro_bias_per_window` | lower |
+| end spikes | yaw of each window's last node vs the median of nodes 30..60 before it [deg], and count > 3 deg | lower |
+| final yaw | total LiDAR yaw vs total (bias-corrected) gyro yaw [deg] | closer |
+| cells 3/5/10cm | occupied top-view cells of the Z section, for the same scene | lower = sharper |
+
+The IMU timestamps must be strictly increasing. Recordings from dLidar builds before the timestamp fix must be repaired first.

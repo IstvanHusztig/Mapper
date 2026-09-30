@@ -4,14 +4,11 @@
 #include <ImGuizmo.h>
 #include <imgui_internal.h>
 
-//#define GLEW_STATIC
-//#include <GL/glew.h>
 #include <GL/freeglut.h>
 #include <portable-file-dialogs.h>
 
 #include "lidar_odometry_utils.h"
 #include "lidar_odometry.h"
-#include <registration_plane_feature.h>
 #include <export_laz.h>
 
 #include <utils.hpp>
@@ -20,7 +17,6 @@
 #include <HDMapping/Version.hpp>
 #include <session.h>
 #include <pfd_wrapper.hpp>
-#include <export_laz.h>
 #include <ctime>
 #include <chrono>
 #include "toml_io.h"
@@ -35,8 +31,6 @@
 // This is LiDAR odometry (step 1)
 // This program calculates trajectory based on IMU and LiDAR data provided by MANDEYE mobile mapping system https://github.com/JanuszBedkowski/mandeye_controller
 // The output is a session proving trajekctory and point clouds that can be  further processed by "multi_view_tls_registration" program.
-
-// #define SAMPLE_PERIOD (1.0 / 200.0)
 
 std::string winTitle = std::string("Step 1 (Lidar odometry) ") + HDMAPPING_VERSION_STRING;
 
@@ -134,19 +128,15 @@ namespace fs = std::filesystem;
 
 bool is_settings_gui = false;
 bool full_debug_messages = false;
-NDT ndt;
 bool show_reference_buckets = true;
 bool show_reference_points = false;
 int dec_reference_points = 100;
 bool show_initial_points = true;
 bool show_trajectory = true;
 bool show_trajectory_as_axes = false;
-bool show_covs = false;
-int dec_covs = 10;
 bool simple_gui = true;
 bool step_1_done = false;
 bool step_2_done = false;
-bool step_3_done = false;
 bool calculations_failed = false;
 
 int lastPar = 1;
@@ -161,17 +151,12 @@ float m_gizmo[] = {1, 0, 0, 0,
                    0, 0, 1, 0,
                    0, 0, 0, 1};
 
-float x_displacement = 0.01;
-
 int index_begin = -1;
 int index_end = -1;
 bool gizmo_stretch_interval = false;
 Eigen::Affine3d stretch_gizmo_m = Eigen::Affine3d::Identity();
 
 LidarOdometryParams params;
-std::vector<std::string> csv_files;
-std::vector<std::string> sn_files;
-std::string imuSnToUse;
 Session session;
 
 std::vector<std::vector<Point3Di>> pointsPerFile;
@@ -181,14 +166,6 @@ std::atomic<bool> loRunning{false};
 std::atomic<float> loProgress{0.0};
 std::atomic<bool> loPause{false};
 std::chrono::time_point<std::chrono::system_clock> loStartTime;
-std::atomic<double> loElapsedSeconds{0.0};
-std::atomic<double> loEstimatedTimeRemaining{0.0};
-
-#if _WIN32
-#define DEFAULT_PATH "C:\\"
-#else
-#define DEFAULT_PATH "~"
-#endif
 
 ///////////////////////////////////////////////////////////////////////////////////
 
@@ -250,181 +227,6 @@ std::string formatCompletionTime(double remainingSeconds)
     return std::string(timeStr);
 }
 
-std::vector<std::vector<Point3Di>> get_batches_of_points(std::string laz_file, int point_count_threshold, std::vector<Point3Di> prev_points)
-{
-    std::vector<std::vector<Point3Di>> res_points;
-    std::vector<Point3Di> points = load_point_cloud(laz_file, false, 0, 10000, {});
-
-    std::vector<Point3Di> tmp_points = prev_points;
-    int counter = tmp_points.size();
-    for (size_t i = 0; i < points.size(); i++)
-    {
-        counter++;
-        tmp_points.push_back(points[i]);
-        if (counter > point_count_threshold)
-        {
-            res_points.push_back(tmp_points);
-            tmp_points.clear();
-            counter = 0;
-        }
-    }
-
-    if (tmp_points.size() > 0)
-    {
-        res_points.push_back(tmp_points);
-    }
-    return res_points;
-}
-
-int get_index(set<int> s, int k)
-{
-    int index = 0;
-    for (auto u : s)
-    {
-        if (u == k)
-        {
-            return index;
-        }
-        index++;
-    }
-    return -1;
-}
-
-void find_best_stretch(std::vector<Point3Di> points, std::vector<double> timestamps, std::vector<Eigen::Affine3d> poses, std::string fn1, std::string fn2)
-{
-    for (size_t i = 0; i < points.size(); i++)
-    {
-        auto lower = std::lower_bound(timestamps.begin(), timestamps.end(), points[i].timestamp);
-        points[i].index_pose = std::distance(timestamps.begin(), lower);
-        // std::cout << "points[i].timestamp " << points[i].timestamp << " timestamps " << timestamps[points[i].index_pose] << std::endl;
-    }
-
-    std::set<int> indexes;
-
-    for (size_t i = 0; i < points.size(); i++)
-    {
-        indexes.insert(points[i].index_pose);
-    }
-    // build trajectory
-    std::vector<Eigen::Affine3d> trajectory;
-    std::vector<double> ts;
-
-    for (auto& s : indexes)
-    {
-        trajectory.push_back(poses[s]);
-        ts.push_back(timestamps[s]);
-    }
-
-    std::cout << "trajectory.size() " << trajectory.size() << std::endl;
-    // Sleep(2000);
-
-    std::vector<Point3Di> points_reindexed = points;
-    for (size_t i = 0; i < points_reindexed.size(); i++)
-    {
-        points_reindexed[i].index_pose = get_index(indexes, points[i].index_pose);
-    }
-    ///
-    std::vector<Eigen::Affine3d> best_trajectory = trajectory;
-    unsigned long long min_buckets = ULLONG_MAX;
-
-    for (double x = 0.0; x < 0.2; x += 0.0005)
-    {
-        std::vector<Eigen::Affine3d> trajectory_stretched;
-
-        Eigen::Affine3d m_x_offset = Eigen::Affine3d::Identity();
-        m_x_offset(0, 3) = x;
-
-        Eigen::Affine3d m = trajectory[0];
-        trajectory_stretched.push_back(m);
-        for (size_t i = 1; i < trajectory.size(); i++)
-        {
-            Eigen::Affine3d m_update = trajectory[i - 1].inverse() * trajectory[i] * (m_x_offset);
-            m = m * m_update;
-            trajectory_stretched.push_back(m);
-        }
-
-        NDT::GridParameters rgd_params;
-        rgd_params.resolution_X = 0.3;
-        rgd_params.resolution_Y = 0.3;
-        rgd_params.resolution_Z = 0.3;
-        NDTBucketMapType my_buckets;
-
-        std::vector<Point3Di> points_global = points_reindexed;
-
-        std::vector<Point3Di> points_global2;
-
-        for (auto& p : points_global)
-        {
-            if (p.point.z() > 0)
-            {
-                p.point = trajectory_stretched[p.index_pose] * p.point;
-                points_global2.push_back(p);
-                // if (p.point.norm() > 6 && p.point.norm() < 15)
-                //{
-                // points_global.push_back(p);
-                // }
-            }
-        }
-        update_rgd(rgd_params, my_buckets, points_global2, trajectory_stretched[0].translation());
-
-        std::cout << "number of buckets [" << x << "]: " << my_buckets.size() << std::endl;
-        if (my_buckets.size() < min_buckets)
-        {
-            min_buckets = my_buckets.size();
-            best_trajectory = trajectory_stretched;
-        }
-    }
-
-    std::map<double, Eigen::Matrix4d> trajectory_for_interpolation;
-    for (size_t i = 0; i < best_trajectory.size(); i++)
-    {
-        trajectory_for_interpolation[ts[i]] = best_trajectory[i].matrix();
-    }
-
-    std::vector<Eigen::Vector3d> pointcloud_global;
-    std::vector<unsigned short> intensity;
-    std::vector<double> timestamps_;
-    for (const auto& p : points_reindexed)
-    {
-        Eigen::Matrix4d pose = getInterpolatedPose(trajectory_for_interpolation, p.timestamp);
-        Eigen::Affine3d b;
-        b.matrix() = pose;
-        Eigen::Vector3d vec = b * p.point;
-        pointcloud_global.push_back(vec);
-        intensity.push_back(p.intensity);
-        timestamps_.push_back(p.timestamp);
-    }
-
-    std::cout << "saving file: " << fn1 << std::endl;
-    exportLaz(fn1, pointcloud_global, intensity, timestamps_);
-
-    pointcloud_global.clear();
-    for (const auto& p : points_reindexed)
-    {
-        Eigen::Vector3d vec = trajectory[p.index_pose] * p.point;
-        pointcloud_global.push_back(vec);
-    }
-    exportLaz(fn2, pointcloud_global, intensity, timestamps_);
-}
-
-Eigen::Vector3d GLWidgetGetOGLPos(int x, int y, const ObservationPicking& observation_picking)
-{
-    const auto laser_beam = GetLaserBeam(x, y);
-
-    RegistrationPlaneFeature::Plane pl;
-
-    pl.a = 0;
-    pl.b = 0;
-    pl.c = 1;
-    pl.d = -observation_picking.picking_plane_height;
-
-    Eigen::Vector3d pos = rayIntersection(laser_beam, pl);
-
-    std::cout << "intersection: " << pos.x() << " " << pos.y() << " " << pos.z() << std::endl;
-
-    return pos;
-}
-
 void step1(const std::atomic<bool> &loPause)
 {
     std::string input_folder_name;
@@ -471,25 +273,7 @@ void step2(const std::atomic<bool> &loPause)
     if (compute_step_2(worker_data, params, ts_failure, loProgress, loPause, full_debug_messages))
         step_2_done = true;
     else
-    {
-        for (size_t fileNo = 0; fileNo < csv_files.size(); fileNo++)
-        {
-            const std::string &imufn = csv_files.at(fileNo);
-            const std::string snFn = (fileNo >= sn_files.size()) ? ("") : (sn_files.at(fileNo));
-            const auto idToSn = MLvxCalib::GetIdToSnMapping(snFn);
-            // GetId of Imu to use
-            int imuNumberToUse = MLvxCalib::GetImuIdToUse(idToSn, imuSnToUse);
-            auto imu = load_imu(imufn.c_str(), imuNumberToUse);
-
-            if (imu.size() > 0)
-            {
-                if (std::get<0>(imu[imu.size() - 1]).first > ts_failure)
-                    break;
-            }
-            std::cout << "file: '" << imufn << "' [OK]" << std::endl;
-        }
         calculations_failed = true;
-    }
 }
 
 void save_results(bool info, double elapsed_seconds)
@@ -521,7 +305,6 @@ void settings_gui()
 
         if (!loRunning)
         {
-            // TaitBryanPose motion_model_correction;
             ImGui::Text("motion_model_correction [deg]:");
             ImGui::PushItemWidth(ImGuiNumberWidth);
             ImGui::InputDouble("om, rotation via X", &params.motion_model_correction.om);
@@ -575,6 +358,10 @@ void settings_gui()
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip(kaText);
 
+            ImGui::InputDouble("acc_1 [m/s^2]", &params.lidar_odometry_motion_model_acc_1_sigma_mps2, 0.0, 0.0, "%.2f");
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Velocity-continuity prior (acceleration sigma), also across window boundaries; 0 = disabled");
+
             ImGui::PopItemWidth();
 
             ImGui::Text("lidar_odometry_motion_model_fix_origin sigmas [m] / [deg]:");
@@ -620,8 +407,6 @@ void settings_gui()
 
             ImGui::NewLine();
         }
-
-        // ImGui::Checkbox("show_all_points", &show_all_points);
 
         if (calculations_failed)
         {
@@ -828,7 +613,6 @@ void settings_gui()
                 if (output_file_name.size() > 0)
                 {
                     session.fill_session_from_worker_data(worker_data, false, true, true, params.threshould_output_filter);
-                    // save_all_to_las(session, output_file_name, false);
                     save_all_to_las(session, output_file_name, true, true);
                 }
             }
@@ -845,7 +629,6 @@ void settings_gui()
                 ImGui::InputDouble("Polar angle [deg]", &params.polar_angle_deg, 0.0, 0.0, "%.3f");
                 ImGui::InputDouble("Azimutal angle [deg]", &params.azimutal_angle_deg, 0.0, 0.0, "%.3f");
                 ImGui::InputInt("Number of iterations", &params.robust_and_accurate_lidar_odometry_iterations);
-                // ImGui::InputDouble("Max distance lidar", &params.max_distance_lidar);
                 ImGui::PopItemWidth();
             }
 
@@ -938,7 +721,6 @@ void settings_gui()
                 ImGui::NewLine();
                 ImGui::Text("Manipulate initial transformation:");
                 ImGui::Checkbox("Show gizmo", &initial_transformation_gizmo);
-                // gizmo_stretch_interval
                 if (initial_transformation_gizmo)
                 {
                     m_gizmo[0] = (float)params.m_g(0, 0);
@@ -1138,7 +920,6 @@ void settings_gui()
                     ImGui::Checkbox("Gizmo_stretch_interval", &gizmo_stretch_interval);
                 }
 
-                // gizmo_stretch_interval
                 if (gizmo_stretch_interval)
                 {
                     if (index_end < worker_data.size())
@@ -1263,8 +1044,6 @@ void settings_gui()
 
                 for (int i = 0; i < n_items; i++)
                 {
-                    // std::string text = "[" + std::to_string(i) + "]";
-                    // ImGui::Checkbox(text.c_str(), &worker_data[i].show);
                     std::stringstream ss;
                     ss << "[" << std::setw(digits) << std::setfill('0') << i << "]";
 
@@ -1291,7 +1070,6 @@ void progress_window()
     auto currentTime = std::chrono::system_clock::now();
     std::chrono::duration<double> elapsed = currentTime - loStartTime;
     double elapsedSeconds = elapsed.count();
-    loElapsedSeconds.store(elapsedSeconds);
 
     float progress = loProgress.load();
     double estimatedTimeRemaining = 0.0;
@@ -1300,7 +1078,6 @@ void progress_window()
     { // Only estimate when we have meaningful progress
         double totalEstimatedTime = elapsedSeconds / progress;
         estimatedTimeRemaining = totalEstimatedTime - elapsedSeconds;
-        loEstimatedTimeRemaining.store(estimatedTimeRemaining);
     }
 
     // Format progress text with time information
@@ -1361,8 +1138,6 @@ void openData()
 
     loRunning.store(true);
     loProgress.store(0.0f);
-    loElapsedSeconds.store(0.0);
-    loEstimatedTimeRemaining.store(0.0);
     loStartTime = std::chrono::system_clock::now();
 
     step1(loPause);
@@ -1441,12 +1216,6 @@ void step2(std::vector<WorkerData> &worker_data, LidarOdometryParams &params, co
     compute_step_2(worker_data, params, ts_failure, loProgress, loPause, full_debug_messages);
 }
 
-void save_results(bool info, double elapsed_seconds, std::string &working_directory,
-                  std::vector<WorkerData> &worker_data, LidarOdometryParams &params, fs::path outwd)
-{
-    save_result(worker_data, params, outwd, elapsed_seconds);
-}
-
 void display()
 { 
     ImGuiIO& io = ImGui::GetIO();
@@ -1458,7 +1227,6 @@ void display()
 
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    float ratio = float(io.DisplaySize.x) / float(io.DisplaySize.y);
 
     updateCameraTransition();
 
@@ -1495,46 +1263,6 @@ void display()
         glEnd();
     }
 
-    if (show_covs)
-    {
-        for (const auto &b : params.buckets_indoor)
-            draw_ellipse(b.second.cov, b.second.mean, Eigen::Vector3f(0.0f, 0.0f, 1.0f), 3);
-    }
-
-#if 0 // ToDo
-    for (size_t i = 0; i < worker_data.size(); i++)
-    {
-        if (worker_data[i].show)
-        {
-            glPointSize(1);
-            glColor3d(0.0, 0.0, 1.0);
-            glBegin(GL_POINTS);
-            for (const auto &p : worker_data[i].intermediate_points)
-            {
-                // std::cout << "kk";
-                // std::cout << p.index_pose;
-                Eigen::Vector3d pt = worker_data[i].intermediate_trajectory[p.index_pose] * p.point;
-                glVertex3d(pt.x(), pt.y(), pt.z());
-            }
-            glEnd();
-            glPointSize(1);
-
-            glLineWidth(1);
-            glBegin(GL_LINES);
-            const auto &it = worker_data[i].intermediate_trajectory[0];
-            glColor3f(1, 0, 0);
-            glVertex3f(it(0, 3), it(1, 3), it(2, 3));
-            glVertex3f(it(0, 3) + it(0, 0), it(1, 3) + it(1, 0), it(2, 3) + it(2, 0));
-
-            glColor3f(0, 1, 0);
-            glVertex3f(it(0, 3), it(1, 3), it(2, 3));
-            glVertex3f(it(0, 3) + it(0, 1), it(1, 3) + it(1, 1), it(2, 3) + it(2, 1));
-
-            glEnd();
-        }
-    }
-#endif
-
     if (show_reference_points)
     {
         glColor3f(1, 0, 0);
@@ -1546,7 +1274,6 @@ void display()
 
     if (show_trajectory_as_axes)
     {
-        // glBegin(GL_LINE_STRIP);
         glBegin(GL_LINES);
         for (const auto &wd : worker_data)
         {
@@ -1612,7 +1339,6 @@ void display()
         glEnd();
     }
 
-    //
     if (worker_data.size() > 0)
     {
         if (index_begin < worker_data.size())
@@ -1920,8 +1646,6 @@ void display()
 
                 ImGui::MenuItem("Lock Z", "Shift + Z", &lock_z, !is_ortho);
 
-                // ImGui::MenuItem("show_covs", nullptr, &show_covs);
-
                 ImGui::Separator();
 
                 ImGui::Text("Colors:");
@@ -2141,7 +1865,7 @@ int main(int argc, char *argv[])
                       << std::ctime(&end_time)
                       << "Elapsed time: " << formatTime(elapsed_seconds.count()).c_str() << "s\n";
 
-            save_results(false, elapsed_seconds.count(), working_directory, worker_data, params, argv[3]);
+            save_result(worker_data, params, argv[3], elapsed_seconds.count());
         }
         else //full GUI mode
         {

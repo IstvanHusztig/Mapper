@@ -13,6 +13,7 @@ build_date = "Mar 27 2026"
 
 [consistency]
 num_constistency_iter = 10
+consistency_min_distance = 0.4
 use_mutliple_gaussian = true
 
 [filter_points]
@@ -21,6 +22,13 @@ filter_threshold_xy_inner = 0.3
 filter_threshold_xy_outer = 70.0
 min_counter_concatenated_trajectory_nodes = 10
 threshould_output_filter = 0.3
+
+[gyro_bias_estimation]
+gyro_bias_initial_sigma_deg_s = 10.0
+gyro_bias_max_deg_s = 20.0
+gyro_bias_rw_deg_s_sqrt_s = 0.05
+handoff_tail_nodes = 30
+use_gyro_bias_estimation = true
 
 [in_out_params_indoor]
 bounding_box_extension = 0.0
@@ -56,7 +64,10 @@ resolution_Z = 0.3
 
 [lidar_odometry_control]
 max_distance_lidar = 70.0
+min_distance_lidar = 0.06
+min_distance_lidar_outdoor_grid = 1.0
 nr_iter = 100
+lm_factor_initial = 5.0
 sliding_window_trajectory_length_threshold = 200.0
 threshold_initial_points = 10000
 threshold_nr_poses = 300
@@ -66,11 +77,17 @@ use_motion_from_previous_step = true
 calibration_validation_points = 1000000
 save_calibration_validation = false
 
+[lidar_imu_extrinsics]
+lidar_imu_lever_arm_x_m = 0.00667
+lidar_imu_lever_arm_y_m = -0.014655
+lidar_imu_lever_arm_z_m = 0.007698
+
 [madgwick_filter]
 ahrs_gain = 0.05
 fusionConventionEnu = false
 fusionConventionNed = false
 fusionConventionNwu = true
+use_remove_imu_bias_from_first_stationary_scan = true
 
 [misc]
 clear_color = [ 0.44999998807907104, 0.550000011920929, 0.6000000238418579, 1.0 ]
@@ -91,17 +108,24 @@ lidar_odometry_motion_model_fix_origin_z_1_sigma_m = 1e-06
 [motion_model_uncertainty]
 lidar_odometry_motion_model_fi_1_sigma_deg = 0.1
 lidar_odometry_motion_model_ka_1_sigma_deg = 0.7
+lidar_odometry_motion_model_acc_1_sigma_mps2 = 0.0
 lidar_odometry_motion_model_om_1_sigma_deg = 0.1
 lidar_odometry_motion_model_x_1_sigma_m = 8e-04
 lidar_odometry_motion_model_y_1_sigma_m = 8e-04
 lidar_odometry_motion_model_z_1_sigma_m = 8e-04
+gyro_arw_x_deg_sqrt_s = 0.028
+gyro_arw_y_deg_sqrt_s = 0.042
+gyro_arw_z_deg_sqrt_s = 0.057
+rotation_sigma_floor_deg = 0.002
+rotation_sigma_inflation_k = 4.0
+use_time_scaled_rotation_sigma = true
 
 [paths]
 current_output_dir = ''
 
 [performance]
 real_time_threshold_seconds = 10.0
-useMultithread = true
+useMultithread = false
 
 [robust_lidar_odometry]
 azimutal_angle_deg = 10.0

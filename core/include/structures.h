@@ -406,6 +406,8 @@ struct WorkerData
 	std::vector<Eigen::Affine3d> intermediate_trajectory_motion_model;
 	std::vector<std::pair<double, double>> intermediate_trajectory_timestamps;
 	std::vector<Eigen::Vector3d> imu_om_fi_ka;
+	Eigen::Vector3d gyro_bias = Eigen::Vector3d::Zero();		  // estimated gyro bias of this window [rad/s], body frame
+	Eigen::Matrix3d gyro_bias_cov = Eigen::Matrix3d::Zero(); // its covariance [(rad/s)^2]
 	bool show = false;
 };
 
