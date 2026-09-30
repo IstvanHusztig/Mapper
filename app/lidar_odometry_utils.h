@@ -126,6 +126,16 @@ struct LidarOdometryParams
     // before they seed the next window (they carry almost no points); 0 = disabled
     int handoff_tail_nodes = 30;
 
+    // IMU-aided translation prediction: instead of carrying the previous window's constant velocity, the initial guess
+    // (and with it the translation motion-model prior) of each window is integrated from the accelerometer;
+    // gravity is removed per node with the AHRS tilt: a = R * (f - |g| * R_ahrs^T * z)
+    bool use_imu_translation_prediction = false;
+    double imu_acc_smoothing_s = 0.01; // moving-average width over the accelerometer (evens out IMU sample bursts)
+    // zero-velocity update: a window in which the device rests is predicted without motion
+    bool use_zero_velocity_detection = false;
+    double zero_velocity_acc_threshold_mps2 = 0.3; // max |world acceleration| inside the window
+    double zero_velocity_gyro_threshold_deg_s = 3.0; // max rotation rate inside the window
+
     // motion_model first trajectory node prior uncertainty
     double lidar_odometry_motion_model_fix_origin_x_1_sigma_m = 0.000001;
     double lidar_odometry_motion_model_fix_origin_y_1_sigma_m = 0.000001;

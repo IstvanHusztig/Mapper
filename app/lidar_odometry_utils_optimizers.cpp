@@ -1346,6 +1346,72 @@ namespace
             trajectory[k].linear() = q.toRotationMatrix();
         }
     }
+
+    // world-frame acceleration of each node [m/s^2]: gravity is removed in the sensor frame with the node's AHRS tilt,
+    // a = R * (f - |g| * R_ahrs^T * z), so a slow tilt drift of the odometry frame does not leak gravity into it;
+    // averaged over +-half_width_s (IMU samples arrive in bursts)
+    std::vector<Eigen::Vector3d> world_acceleration(const std::vector<Eigen::Affine3d> &trajectory,
+                                                    const std::vector<std::pair<double, double>> &timestamps,
+                                                    const std::vector<Eigen::Vector3d> &acc,
+                                                    const std::vector<Eigen::Vector3d> &ahrs_om_fi_ka,
+                                                    double gravity_norm, double half_width_s)
+    {
+        const size_t n = trajectory.size();
+        const double to_mps2 = 9.80665 / gravity_norm;
+        std::vector<Eigen::Vector3d> a(n);
+        for (size_t k = 0; k < n; k++)
+        {
+            TaitBryanPose tb;
+            tb.om = ahrs_om_fi_ka[k].x();
+            tb.fi = ahrs_om_fi_ka[k].y();
+            tb.ka = ahrs_om_fi_ka[k].z();
+            const Eigen::Matrix3d r_ahrs = affine_matrix_from_pose_tait_bryan(tb).linear();
+            const Eigen::Vector3d gravity_body = gravity_norm * (r_ahrs.transpose() * Eigen::Vector3d::UnitZ());
+            a[k] = rotation_of(trajectory[k]) * (acc[k] - gravity_body) * to_mps2;
+        }
+        if (half_width_s <= 0.0)
+            return a;
+
+        std::vector<Eigen::Vector3d> prefix(n + 1, Eigen::Vector3d::Zero());
+        for (size_t k = 0; k < n; k++)
+            prefix[k + 1] = prefix[k] + a[k];
+        std::vector<Eigen::Vector3d> smoothed(n);
+        size_t lo = 0, hi = 0;
+        for (size_t k = 0; k < n; k++)
+        {
+            while (timestamps[lo].first < timestamps[k].first - half_width_s)
+                lo++;
+            while (hi < n && timestamps[hi].first <= timestamps[k].first + half_width_s)
+                hi++;
+            smoothed[k] = (prefix[hi] - prefix[lo]) / double(hi - lo);
+        }
+        return smoothed;
+    }
+
+    // true if the device rests during the whole window: small world acceleration and small rotation rate
+    bool is_window_stationary(const std::vector<Eigen::Affine3d> &trajectory,
+                              const std::vector<std::pair<double, double>> &timestamps,
+                              const std::vector<Eigen::Vector3d> &acceleration,
+                              double acc_threshold_mps2, double gyro_threshold_rad_s)
+    {
+        for (const auto &a : acceleration)
+            if (a.norm() > acc_threshold_mps2)
+                return false;
+
+        // rotation rate over spans of >= 20 ms (single-sample rates are dominated by timestamp jitter)
+        size_t a = 0;
+        for (size_t k = 1; k < trajectory.size(); k++)
+        {
+            const double dt = timestamps[k].first - timestamps[a].first;
+            if (dt < 0.02)
+                continue;
+            const double angle = Eigen::AngleAxisd(relative_rotation(trajectory[a], trajectory[k])).angle();
+            if (angle / dt > gyro_threshold_rad_s)
+                return false;
+            a = k;
+        }
+        return true;
+    }
 } // namespace
 
 bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &params, double &ts_failure, std::atomic<float> &loProgress, const std::atomic<bool> &pause, bool debugMsg)
@@ -1396,6 +1462,24 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
         Eigen::Vector3d carried_bias = Eigen::Vector3d::Zero();
         Eigen::Matrix3d carried_bias_cov = Eigen::Matrix3d::Identity() * (bias_sigma0_rad * bias_sigma0_rad);
 
+        // IMU-aided translation prediction: raw accelerometer and AHRS orientation of every node are needed
+        const bool have_acc = !worker_data.empty() && worker_data[0].imu_acc.size() == worker_data[0].intermediate_trajectory.size() &&
+                              worker_data[0].imu_om_fi_ka.size() == worker_data[0].intermediate_trajectory.size();
+        const bool use_imu_pred = params.use_imu_translation_prediction && have_acc;
+        const bool use_zupt = params.use_zero_velocity_detection && have_acc;
+        if ((params.use_imu_translation_prediction || params.use_zero_velocity_detection) && !have_acc)
+            std::cout << "no accelerometer data per node: IMU translation prediction / zero-velocity detection disabled" << std::endl;
+        // accelerometer reading of gravity [g]: mean magnitude over the first window (the recording starts at rest)
+        double gravity_norm = 1.0;
+        if (have_acc)
+        {
+            double sum = 0.0;
+            for (const auto &a : worker_data[0].imu_acc)
+                sum += a.norm();
+            gravity_norm = sum / double(worker_data[0].imu_acc.size());
+        }
+        int stationary_windows = 0;
+
         for (int i = 0; i < worker_data.size(); i++)
         {
             std::vector<Point3Di> intermediate_points;
@@ -1414,7 +1498,8 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
             const bool use_acc_prior = params.lidar_odometry_motion_model_acc_1_sigma_mps2 > 0.0;
             bool use_prev_velocity = false;
             Eigen::Vector3d prev_velocity(0.0, 0.0, 0.0);
-            if (use_acc_prior && i > 0)
+            const bool imu_translation = use_imu_pred || use_zupt;
+            if ((use_acc_prior || imu_translation) && i > 0)
             {
                 const auto &prev_tr = worker_data[i - 1].intermediate_trajectory;
                 const auto &prev_ts = worker_data[i - 1].intermediate_trajectory_timestamps;
@@ -1439,7 +1524,8 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
             }
 
             Eigen::Vector3d mean_shift(0.0, 0.0, 0.0);
-            if ((i > 1 || (use_acc_prior && i > 0)) && params.use_motion_from_previous_step)
+            bool stationary = false;
+            if ((i > 1 || ((use_acc_prior || imu_translation) && i > 0)) && params.use_motion_from_previous_step)
             {
                 if (i > 1)
                 {
@@ -1466,7 +1552,44 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
                 }
 
                 const auto &ts = worker_data[i].intermediate_trajectory_timestamps;
-                if (use_acc_prior && ts.size() == new_trajectory.size())
+                const auto &acc = worker_data[i].imu_acc;
+                const bool imu_sizes_ok = imu_translation && ts.size() == new_trajectory.size() && acc.size() == new_trajectory.size() &&
+                                          worker_data[i].imu_om_fi_ka.size() == new_trajectory.size();
+                std::vector<Eigen::Vector3d> a;
+                if (imu_sizes_ok)
+                {
+                    a = world_acceleration(new_trajectory, ts, acc, worker_data[i].imu_om_fi_ka, gravity_norm, 0.5 * params.imu_acc_smoothing_s);
+                    // rest detection on a 50 ms average: the accelerometer noise of a 10 ms average already reaches ~0.3 m/s^2
+                    // at rest, while walking accelerations (1-3 m/s^2 at ~2 Hz) survive the longer average
+                    constexpr double zupt_smoothing_half_width_s = 0.025;
+                    stationary = use_zupt && is_window_stationary(new_trajectory, ts,
+                                                                  world_acceleration(new_trajectory, ts, acc, worker_data[i].imu_om_fi_ka, gravity_norm, zupt_smoothing_half_width_s),
+                                                                  params.zero_velocity_acc_threshold_mps2,
+                                                                  params.zero_velocity_gyro_threshold_deg_s * DEG_TO_RAD);
+                }
+
+                if (imu_sizes_ok && (use_imu_pred || stationary))
+                {
+                    // integrate the accelerometer from the previous window's final velocity;
+                    // a window at rest (zero-velocity detection) is predicted without motion
+                    Eigen::Vector3d v = stationary ? Eigen::Vector3d::Zero() : prev_velocity;
+                    Eigen::Vector3d p = new_trajectory[0].translation();
+                    for (size_t tr = 1; tr < new_trajectory.size(); tr++)
+                    {
+                        const double dt = std::max(ts[tr].first - ts[tr - 1].first, 0.0);
+                        const Eigen::Vector3d a_k = (use_imu_pred && !stationary) ? a[tr - 1] : Eigen::Vector3d::Zero();
+                        p += v * dt + 0.5 * a_k * dt * dt;
+                        v += a_k * dt;
+                        new_trajectory[tr].translation() = p;
+                    }
+                    if (stationary)
+                    {
+                        stationary_windows++;
+                        if (debugMsg)
+                            std::cout << "window " << i + 1 << " stationary (zero-velocity detection)\n";
+                    }
+                }
+                else if (use_acc_prior && ts.size() == new_trajectory.size())
                 {
                     // timestamp-aware constant-velocity prediction from the previous window's final velocity
                     for (int tr = 0; tr < new_trajectory.size(); tr++)
@@ -1834,6 +1957,8 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
             params.total_length_of_calculated_trajectory += (worker_data[i].intermediate_trajectory[0].translation() - worker_data[i - 1].intermediate_trajectory[0].translation()).norm();
 
         std::cout << "total_length_of_calculated_trajectory: " << params.total_length_of_calculated_trajectory << " [m]" << std::endl;
+        if (use_zupt)
+            std::cout << "zero-velocity detection: " << stationary_windows << " of " << worker_data.size() << " windows stationary" << std::endl;
     }
 
     return true;

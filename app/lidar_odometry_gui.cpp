@@ -248,7 +248,7 @@ void step1(const std::atomic<bool> &loPause)
         {
             working_directory = fs::path(input_file_names[0]).parent_path().string();
             calculate_trajectory(trajectory, imu_data, params.fusionConventionNwu, params.fusionConventionEnu, params.fusionConventionNed, params.ahrs_gain, full_debug_messages, params.use_remove_imu_bias_from_first_stationary_scan);
-            compute_step_1(pointsPerFile, params, trajectory, worker_data, loPause);
+            compute_step_1(pointsPerFile, params, trajectory, worker_data, loPause, &imu_data);
             step_1_done = true;
         }
         else
@@ -1204,7 +1204,7 @@ void step1(const std::string &folder,
     {
         working_directory = fs::path(input_file_names[0]).parent_path().string();
         calculate_trajectory(trajectory, imu_data, params.fusionConventionNwu, params.fusionConventionEnu, params.fusionConventionNed, params.ahrs_gain, full_debug_messages, params.use_remove_imu_bias_from_first_stationary_scan);
-        compute_step_1(pointsPerFile, params, trajectory, worker_data, loPause);
+        compute_step_1(pointsPerFile, params, trajectory, worker_data, loPause, &imu_data);
         std::cout << "step_1_done" << std::endl;
     }
 }

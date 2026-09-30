@@ -415,7 +415,7 @@ void calculate_trajectory(
 }
 
 bool compute_step_1(
-    std::vector<std::vector<Point3Di>>& pointsPerFile, LidarOdometryParams& params, Trajectory& trajectory, std::vector<WorkerData>& worker_data, const std::atomic<bool>& pause)
+    std::vector<std::vector<Point3Di>>& pointsPerFile, LidarOdometryParams& params, Trajectory& trajectory, std::vector<WorkerData>& worker_data, const std::atomic<bool>& pause, const Imu* imu_data)
 {
     int number_of_initial_points = 0;
     double timestamp_begin = 0.0;
@@ -464,6 +464,21 @@ bool compute_step_1(
         return false;
     }
 
+    // raw accelerometer of each trajectory node (the trajectory has one node per IMU sample, keyed by its timestamp)
+    std::vector<Eigen::Vector3d> accelerations;
+    if (imu_data && !imu_data->empty())
+    {
+        accelerations.reserve(timestamps.size());
+        size_t j = 0;
+        for (const auto& ts : timestamps)
+        {
+            while (j + 1 < imu_data->size() && std::get<0>((*imu_data)[j]).first < ts.first)
+                j++;
+            const FusionVector& a = std::get<2>((*imu_data)[j]);
+            accelerations.emplace_back(a.axis.x, a.axis.y, a.axis.z);
+        }
+    }
+
     int threshold = params.threshold_nr_poses;
 
     const int n_iter = poses.size() / threshold;
@@ -500,6 +515,9 @@ bool compute_step_1(
 
             const TaitBryanPose tb = pose_tait_bryan_from_affine_matrix(poses[idx]);
             wd.imu_om_fi_ka.emplace_back(tb.om, tb.fi, tb.ka);
+
+            if (!accelerations.empty())
+                wd.imu_acc.emplace_back(accelerations[idx]);
         }
 
         std::vector<Point3Di> points;
