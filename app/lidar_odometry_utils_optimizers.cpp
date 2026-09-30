@@ -1754,9 +1754,9 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
                 acc_distance = 0;
                 points_global = points_global_new;
 
-                // decimate
+                // decimate (decimate() returns the reduced cloud; its result used to be discarded)
                 if (params.decimation > 0){
-                    decimate(points_global, params.decimation, params.decimation, params.decimation);
+                    points_global = decimate(points_global, params.decimation, params.decimation, params.decimation);
                 }
 
                 update_rgd(params.in_out_params_indoor, params.buckets_indoor, points_global, worker_data[i].intermediate_trajectory[0].translation());

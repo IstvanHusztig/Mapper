@@ -55,7 +55,7 @@ struct LidarOdometryParams
     double filter_threshold_xy_outer = 70.0; //filtering points during load
     double decimation = 0.01;                // filtering points during load
     double threshould_output_filter = 0.5; //for export --> all points xyz.norm() < threshould_output_filter will be removed
-    int min_counter_concatenated_trajectory_nodes = 10; //for export default 10
+    int min_counter_concatenated_trajectory_nodes = 0; // export: the last output chunk is written only if it has more windows than this (0 = always)
 
     //Madgwick filter
     bool fusionConventionNwu = true;
@@ -86,6 +86,7 @@ struct LidarOdometryParams
     int calibration_validation_points = 1000000;
 
     //consistency
+    bool use_consistency = false;   // run the whole-trajectory consistency pass after the odometry (CLI; the GUI has a button)
     int num_constistency_iter = 10;
     bool use_mutliple_gaussian = false;
     double consistency_min_distance = 0.4; // points closer (3D norm) are skipped in Consistency2 (masks the operator's body)

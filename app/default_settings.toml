@@ -12,6 +12,7 @@ config_version = "1.0"
 build_date = "Mar 27 2026"
 
 [consistency]
+use_consistency = false
 num_constistency_iter = 10
 consistency_min_distance = 0.4
 use_mutliple_gaussian = true
@@ -20,7 +21,7 @@ use_mutliple_gaussian = true
 decimation = 0.01
 filter_threshold_xy_inner = 0.3
 filter_threshold_xy_outer = 70.0
-min_counter_concatenated_trajectory_nodes = 10
+min_counter_concatenated_trajectory_nodes = 0
 threshould_output_filter = 0.3
 
 [gyro_bias_estimation]

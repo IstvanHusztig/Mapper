@@ -134,6 +134,7 @@
   <a class="indent" href="#p-misc">debug, paths, misc, version</a>
   <div class="group">More</div>
   <a href="#tuning">Tuning cheat sheet</a>
+  <a href="#fixes">Fixes and map sharpness</a>
   <a href="#limits">Known limitations</a>
 </nav>
 
@@ -276,22 +277,27 @@
 <li class="step" id="s-update">
 <h3>Map update</h3>
 <div class="where">compute_step_2 · app/lidar_odometry_utils_optimizers.cpp</div>
-<p>The window's decimated points, now transformed with their optimized poses, are added to both NDT grids (the Gaussians are updated incrementally). The map therefore grows with the whole recording. Once the travelled distance exceeds <code>sliding_window_trajectory_length_threshold</code>, the map is rebuilt from the most recent half of the points, which bounds memory on long runs.</p>
+<p>The window's decimated points, now transformed with their optimized poses, are added to both NDT grids (the Gaussians are updated incrementally). The map therefore grows with the whole recording. Once the travelled distance exceeds <code>sliding_window_trajectory_length_threshold</code>, the map is rebuilt from the most recent half of the points, voxel-decimated with <code>decimation</code>, which bounds memory on long runs. With the default 200 m this happens rarely on handheld recordings.</p>
 <div class="params"><span>sliding_window_trajectory_length_threshold</span></div>
 </li>
 
 <li class="step" id="s-export">
 <h3>Export</h3>
 <div class="where">save_result · app/lidar_odometry.cpp</div>
-<p>All <b>original</b> points (not the decimated ones) are transformed with their own optimized node pose. Points whose sensor-frame distance is below <code>threshould_output_filter</code> are removed from the export. Windows are grouped into chunks of 51, and each chunk becomes one <code>scan_lio_N.laz</code>, expressed relative to the chunk's first pose, with that pose stored in the session files. A final chunk with ≤ <code>min_counter_concatenated_trajectory_nodes</code> windows is <b>not</b> written.</p>
+<p>All <b>original</b> points (not the decimated ones) are transformed with their own optimized node pose. Points whose sensor-frame distance is below <code>threshould_output_filter</code> are removed from the export. Windows are grouped into chunks of 51, and each chunk becomes one <code>scan_lio_N.laz</code>, expressed relative to the chunk's first pose, with that pose stored in the session files. The remaining windows form a final, shorter chunk, which is written if it has more than <code>min_counter_concatenated_trajectory_nodes</code> windows (default 0, so it is always written).</p>
 <div class="params"><span>threshould_output_filter</span><span>min_counter_concatenated_trajectory_nodes</span></div>
 </li>
 </ol>
 
-<div class="warn"><b>Consistency pass: GUI only</b>The <code>[consistency]</code> refinement (a global smoothing and point-cloud consistency optimization over the whole trajectory) is only run from the GUI. The command-line mode goes straight from step 8 to the export and ignores these parameters.</div>
+<div class="warn"><b>Optional: consistency pass (between steps 8 and 9)</b>With <code>use_consistency = true</code> the command-line mode runs <code>run_consistency</code> after the odometry, before the export (the GUI has a button for it). It re-optimizes <b>the whole trajectory at once</b>, <code>num_constistency_iter</code> times: every node is pulled towards a smooth trajectory (relative-pose prior between consecutive nodes), and points from <b>all</b> windows must agree with one NDT map built from the whole recording. This can remove residual misalignment between windows, such as a wall seen at the start and again at the end, but it is slow and it can also smear the trajectory if the smoothness prior is too strong. Two variants (<code>use_mutliple_gaussian</code>):
+<ul>
+<li><b>Consistency</b> (false): one Gaussian per indoor-grid cube, rotation smoothness 0.1°, points closer than a hard-coded 1 m are ignored.</li>
+<li><b>Consistency2</b> (true): several Gaussians per cube, one per time segment of 1M points (a cube needs ≥ 5 points in the segment), so different passes through the same place are matched against each other. Rotation smoothness 0.01°, points closer than <code>consistency_min_distance</code> are ignored.</li>
+</ul>
+See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 
 <h2 id="params">Parameter reference</h2>
-<p>One table per TOML section, in the order that matters most. Values are those of <code>settings/lidar-vertical.toml</code>. Labels: <span class="badge b-key">key</span> strongly affects results, <span class="badge b-gui">GUI only</span> not used by the command-line mode, <span class="badge b-off">inactive</span> read but has no effect with the current settings or code. Missing keys fall back to built-in defaults, and every run saves the complete set it used to <code>HDMapping_params_*.toml</code>.</p>
+<p>One table per TOML section, in the order that matters most. Values are those of <code>settings/lidar-vertical.toml</code>. Labels: <span class="badge b-key">key</span> strongly affects results, <span class="badge b-gui">GUI only</span> only affects the GUI, <span class="badge b-off">inactive</span> read but has no effect with the current settings or code. Missing keys fall back to built-in defaults, and every run saves the complete set it used to <code>HDMapping_params_*.toml</code>.</p>
 
 <h3 id="p-filter">[filter_points]</h3>
 <div class="table-wrap"><table>
@@ -300,7 +306,7 @@
 <tr><td>filter_threshold_xy_outer</td><td class="val">25.0 m</td><td>At load: drop points beyond this horizontal radius. The L2 reaches 30 m at 90 % reflectivity and 15 m on dark rock.</td></tr>
 <tr><td>decimation <span class="badge b-key">key</span></td><td class="val">0.03 m</td><td>Voxel size for the copy of each window used in the optimization (the first point per cube is kept). Smaller means more points, slower but more constraints. The export always uses all points.</td></tr>
 <tr><td>threshould_output_filter</td><td class="val">0.4 m</td><td>Export only: drop points closer than this 3-D distance to the sensor.</td></tr>
-<tr><td>min_counter_concatenated_trajectory_nodes</td><td class="val">10</td><td>Export only: the last output chunk is written only if it contains more than this many windows (1 window ≈ 0.4 s).</td></tr>
+<tr><td>min_counter_concatenated_trajectory_nodes</td><td class="val">0</td><td>Export only: the last output chunk is written only if it contains more than this many windows (1 window ≈ 0.4 s). 0 keeps the tail of the recording. The old value 10 silently dropped up to 4 s at the end.</td></tr>
 </table></div>
 
 <h3 id="p-control">[lidar_odometry_control]</h3>
@@ -322,7 +328,7 @@
 <tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr>
 <tr><td>indoor resolution_X/Y/Z <span class="badge b-key">key</span></td><td class="val">0.15 m</td><td>Cube size of the fine NDT grid. It should be a few times the point noise (≤ 2 cm) and small enough to separate nearby surfaces in narrow passages. Too small gives too few points per cube.</td></tr>
 <tr><td>outdoor resolution_X/Y/Z</td><td class="val">0.4 m</td><td>Cube size of the coarse grid, which gives robust, large-scale alignment for points beyond 1 m.</td></tr>
-<tr><td>bounding_box_*, number_of_buckets*, bounding_box_extension <span class="badge b-off">inactive</span></td><td class="val">0</td><td>Grid bookkeeping fields carried in the file format. The odometry uses a hashed grid of unlimited extent, so these are ignored.</td></tr>
+<tr><td>bounding_box_*, number_of_buckets*, bounding_box_extension <span class="badge b-off">inactive</span></td><td class="val">0</td><td>Grid bookkeeping fields carried in the file format. The odometry uses a hashed grid of unlimited extent and never reads them, so changing them has no effect. Only <code>resolution_*</code> matters.</td></tr>
 </table></div>
 
 <h3 id="p-mm">[motion_model_uncertainty]</h3>
@@ -375,12 +381,14 @@
 <tr><td>lidar_imu_lever_arm_x / y / z_m</td><td class="val">0.00667 / −0.014655 / 0.007698</td><td>Offset added to every point to express it at the IMU origin (Unitree L2 datasheet values mapped to NWU). Applied only when no calibration <code>.json</code> is present. No rotation is applied, since dLidar already delivers points in the IMU axes.</td></tr>
 </table></div>
 
-<h3 id="p-cons">[consistency] <span class="badge b-gui">GUI only</span></h3>
+<h3 id="p-cons">[consistency]</h3>
+<p>Optional whole-trajectory refinement after the odometry, described in the <a href="#pipeline">pipeline</a> note after step 8. The key names keep the original spelling (<code>constistency</code>, <code>mutliple</code>).</p>
 <div class="table-wrap"><table>
 <tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr>
-<tr><td>num_constistency_iter</td><td class="val">10</td><td>Iterations of the whole-trajectory consistency pass (GUI button after step 2).</td></tr>
-<tr><td>use_mutliple_gaussian</td><td class="val">false</td><td>Selects the variant that uses multiple Gaussians per cube (Consistency2).</td></tr>
-<tr><td>consistency_min_distance</td><td class="val">0.4 m</td><td>In Consistency2, points closer than this are ignored (masks the operator).</td></tr>
+<tr><td>use_consistency</td><td class="val">false</td><td>Run the consistency pass in the command-line mode, after the odometry and before the export. The GUI ignores it and uses its button instead.</td></tr>
+<tr><td>num_constistency_iter</td><td class="val">10</td><td>Number of passes. Each pass re-optimizes all nodes and rebuilds the whole-recording NDT map, so runtime grows linearly with it. 0 disables the pass even when <code>use_consistency</code> is true.</td></tr>
+<tr><td>use_mutliple_gaussian</td><td class="val">false</td><td>false: <b>Consistency</b> (one Gaussian per cube, smoothness 0.1°, fixed 1 m minimum distance). true: <b>Consistency2</b> (one Gaussian per cube per 1M-point time segment, smoothness 0.01°).</td></tr>
+<tr><td>consistency_min_distance</td><td class="val">0.4 m</td><td>Consistency2 only: points closer than this to the sensor are ignored (masks the operator).</td></tr>
 </table></div>
 
 <h3 id="p-perf">[performance]</h3>
@@ -418,18 +426,37 @@
 <tr><td style="font-family:inherit;white-space:normal">Walls thick or fuzzy</td><td>Per-node rotation jitter</td><td>Lower <code>rotation_sigma_inflation_k</code> (not below about 2), or check <code>decimation</code>.</td></tr>
 <tr><td style="font-family:inherit;white-space:normal">Map rotates slowly over the recording</td><td>Gyro bias</td><td>Keep <code>use_gyro_bias_estimation</code> on. Check the bias track in the results JSON.</td></tr>
 <tr><td style="font-family:inherit;white-space:normal">Bias clamp warnings</td><td>Poor LiDAR geometry, or points on the operator</td><td>Raise <code>filter_threshold_xy_inner</code> / <code>min_distance_lidar</code>, and check the first second of the recording.</td></tr>
+<tr><td style="font-family:inherit;white-space:normal">Walls slightly doubled between windows or passes</td><td>Residual window-to-window offsets</td><td>Set <code>use_consistency = true</code> (about 6–7% sharper on the test recordings, +20–30 s).</td></tr>
 <tr><td style="font-family:inherit;white-space:normal">Feature-poor tunnel drifts</td><td>Too few constraints</td><td>Lower <code>decimation</code>, raise <code>max_distance_lidar</code>, or try <code>threshold_nr_poses</code> = 720.</td></tr>
 <tr><td style="font-family:inherit;white-space:normal">Results differ between runs</td><td>Multithreading</td><td><code>useMultithread = false</code>.</td></tr>
 </table></div>
 <p>Use <code>tools/eval_odometry.py</code> to compare runs objectively: jitter, heading agreement with the gyro, end-of-window spikes, and map sharpness (occupied cells in a height section). See <code>tools/README.md</code>.</p>
 
+<h2 id="fixes">Fixes and map sharpness</h2>
+<p>Bugs found while documenting, what was changed, and how each one affects the sharpness of the exported map. Sharpness is the number of occupied 3/5/10 cm cells in the height section −0.3 … 0.7 m from <code>tools/eval_odometry.py</code>: <b>fewer cells means thinner walls</b>.</p>
+<div class="table-wrap"><table>
+<tr><th>Issue</th><th>Fix</th><th>Effect on map sharpness</th></tr>
+<tr><td style="font-family:inherit;white-space:normal"><b>Consistency pass never ran in the command-line mode</b></td><td>New option <code>use_consistency</code> (default false) runs it after the odometry.</td><td>The largest gain measured: about 6–7% fewer occupied cells, see below. The cost is about 20–30 s per run.</td></tr>
+<tr><td style="font-family:inherit;white-space:normal"><b>Map rebuild ignored <code>decimation</code></b>: the result of <code>decimate()</code> was discarded, so the rebuilt map kept every point of the newer half</td><td>The reduced cloud is now used.</td><td>None measurable (±0.5%, within run-to-run noise), even with a rebuild every 2 m. It makes each rebuild smaller, so long walks use less memory and run faster (42 with rebuilds every 2 m: 183 s → 145 s). With the default 200 m, the map is never rebuilt on the test recordings.</td></tr>
+<tr><td style="font-family:inherit;white-space:normal"><b>Tail of the recording dropped</b>: the last output chunk was not written if it had ≤ 10 windows (up to ~4 s)</td><td><code>min_counter_concatenated_trajectory_nodes</code> = 0.</td><td>None. It only affects completeness: the last seconds of the walk are now in the export.</td></tr>
+<tr><td style="font-family:inherit;white-space:normal"><b><code>bounding_box_*</code>, <code>number_of_buckets*</code></b> look like settings</td><td>Documented as unused.</td><td>None. The grid is hashed and unbounded.</td></tr>
+</table></div>
+
+<h3>Consistency pass, measured</h3>
+<p>Recordings 43 and 42 (handheld cave walks, about 20 s each) with <code>settings/lidar-vertical.toml</code>, 10 iterations. The exported point count is identical in all runs, so fewer cells means genuinely thinner surfaces. Jitter is the median / p99 node-to-node rotation roughness in degrees.</p>
+<div class="table-wrap"><table>
+<tr><th>Run</th><th>43 cells 3/5/10 cm</th><th>43 jitter</th><th>42 cells 3/5/10 cm</th><th>42 jitter</th></tr>
+<tr><td>Odometry only (default)</td><td class="val">15191 / 7290 / 2647</td><td class="val">0.022 / 0.09</td><td class="val">6628 / 3040 / 1080</td><td class="val">0.017 / 0.08</td></tr>
+<tr><td>+ Consistency</td><td class="val">14071 / 6808 / 2533 <b>(−7.4%)</b></td><td class="val">0.050 / 0.25</td><td class="val">6250 / 2926 / 1033 <b>(−5.7%)</b></td><td class="val">0.062 / 0.36</td></tr>
+<tr><td>+ Consistency2</td><td class="val">14046 / 6791 / 2530 <b>(−7.5%)</b></td><td class="val">0.028 / 0.11</td><td class="val">6579 / 3099 / 1110 (−0.7%)</td><td class="val">0.027 / 0.11</td></tr>
+</table></div>
+<p><b>Reading the result.</b> Both variants pull every window towards one map of the whole recording, which removes the small offsets left between windows. Consistency sharpens both recordings, but its weaker smoothness prior (0.1°) lets the trajectory roughen by 2–4×. That does not blur the map, because each node is re-fitted to the points, but the trajectory is less smooth when used on its own. Consistency2 keeps the trajectory almost as smooth (0.01° prior) and matches Consistency on 43. On 42 it barely helps, because a short walk seldom revisits the same cubes in a different 1M-point segment. The heading agreement with the gyro is unchanged in all runs.</p>
+<p><b>Recommendation.</b> Turn on <code>use_consistency</code> when map quality matters more than runtime. Use Consistency (the default variant) for the sharpest map. Use Consistency2 on longer walks with loops or revisits, or when the trajectory itself is used downstream.</p>
+
 <h2 id="limits">Known limitations</h2>
 <ul>
 <li><b>Initial map is not motion-compensated.</b> The first ~60k points are placed with the first pose only.</li>
-<li><b>Consistency pass is GUI only</b>, so the command-line output skips it.</li>
-<li><b>Map decimation on rebuild has no effect.</b> When the map is rebuilt after <code>sliding_window_trajectory_length_threshold</code>, the result of <code>decimate()</code> is discarded, so the rebuilt map uses all points of the newer half.</li>
 <li><b>dLidar IMU timestamps.</b> Current recordings are strictly increasing, but samples inside a batch are stamped only about 0.02 ms apart instead of about 1.13 ms. Heading is unaffected, but most steps hit <code>rotation_sigma_floor_deg</code>. This should be fixed in dLidar.</li>
-<li><b>Last partial output chunk.</b> It is dropped if it has ≤ <code>min_counter_concatenated_trajectory_nodes</code> windows.</li>
 </ul>
 </main>
 </div>

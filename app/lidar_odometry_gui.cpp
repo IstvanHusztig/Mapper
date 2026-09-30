@@ -1858,6 +1858,9 @@ int main(int argc, char *argv[])
 
             step2(worker_data, params, loPause);
 
+            if (params.use_consistency && params.num_constistency_iter > 0)
+                run_consistency(worker_data, params);
+
             end = std::chrono::system_clock::now();
             std::chrono::duration<double> elapsed_seconds = end - start;
             std::time_t end_time = std::chrono::system_clock::to_time_t(end);

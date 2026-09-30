@@ -34,7 +34,7 @@ The input folder is scanned non-recursively; `load_data` (`app/lidar_odometry.cp
 1. `load_data` — read LAZ chunks + IMU CSV, apply calibration, decimate.
 2. `calculate_trajectory` — IMU-only orientation via Fusion AHRS (NWU/ENU/NED convention flags in params).
 3. `compute_step_1` — cut the data into `WorkerData` windows (points + intermediate trajectory per chunk).
-4. `compute_step_2` (`app/lidar_odometry_utils_optimizers.cpp`) — per-window scan-to-map optimization against an NDT-bucket reference map (`optimize_lidar_odometry`, `optimize_sf*`, `optimize_icp`), optional `Consistency`/`Consistency2` passes.
+4. `compute_step_2` (`app/lidar_odometry_utils_optimizers.cpp`) — per-window scan-to-map optimization against an NDT-bucket reference map (`optimize_lidar_odometry`, `optimize_sf*`, `optimize_icp`), optional `Consistency`/`Consistency2` passes (`run_consistency`, run by the CLI when `use_consistency = true`).
 5. `save_result` (`app/lidar_odometry.cpp`) — write session, trajectories, LAZ, `parameters.toml` and processing-results JSON to the output folder.
 
 **Parameters:** everything tunable lives in `LidarOdometryParams` (`app/lidar_odometry_utils.h`), defaults set by `set_lidar_odometry_default_params` (in `lidar_odometry_gui.cpp`). TOML I/O (`app/toml_io.h`) is table-driven: to make a new field loadable/savable, add it to both `TomlIO::POINTERS` (name → member pointer; only bool/double/int/string supported) and the appropriate `CATEGORIES` section. `app/default_settings.toml` is the shipped config.

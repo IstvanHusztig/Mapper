@@ -48,7 +48,8 @@ IMU samples ──> AHRS orientation ──> initial trajectory ─────�
 3. **Windows:** the IMU poses are cut into windows of `threshold_nr_poses` poses. Every point is attached to the pose just before its timestamp (at most 10 ms), so each point gets its own pose (motion compensation). A voxel-decimated copy (`decimation`) is used for optimization.
 4. **Optimization:** window by window, all poses of the window (and the gyro bias) are adjusted so that the points fit the map, a hierarchical NDT grid of Gaussians built from all previous windows, while staying close to what the IMU measured.
 5. **Map update and hand-off:** the optimized points are added to the map, the last poses of the window are re-derived from the IMU, and the next window starts where this one ended.
-6. **Export:** every original (non-decimated) point is transformed with its own optimized pose and written to LAZ.
+6. **Optional consistency pass** (`use_consistency = true`, off by default): the whole trajectory is re-optimized against one map of the entire recording. On the test recordings it gave about 6–7% sharper walls for about 20–30 s more runtime.
+7. **Export:** every original (non-decimated) point is transformed with its own optimized pose and written to LAZ.
 
 ## Repository layout
 
