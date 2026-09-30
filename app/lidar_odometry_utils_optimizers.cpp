@@ -28,12 +28,11 @@ namespace
         }
     };
 
-    //! Sparse copy of a normal matrix whose pose part couples only nodes up to two apart (|row - col| < 18);
-    //! columns and rows from n_pose_params on (extra unknowns such as the gyro bias) are copied completely.
-    //! Much cheaper than sparseView(), which scans every element of the dense matrix.
-    Eigen::SparseMatrix<double> pose_band_to_sparse(const Eigen::MatrixXd &m, int n_pose_params)
+    //! Sparse copy of a normal matrix whose pose part couples only parameters up to max_offset apart
+    //! (default: nodes up to two apart); columns and rows from n_pose_params on (extra unknowns such as the gyro bias)
+    //! are copied completely. Much cheaper than sparseView(), which scans every element of the dense matrix.
+    Eigen::SparseMatrix<double> pose_band_to_sparse(const Eigen::MatrixXd &m, int n_pose_params, int max_offset = 17)
     {
-        constexpr int max_offset = 17;
         const int n = static_cast<int>(m.rows());
         std::vector<Eigen::Triplet<double>> triplets;
         triplets.reserve(static_cast<size_t>(n_pose_params) * (2 * max_offset + 1) + static_cast<size_t>(n - n_pose_params) * n * 2);
@@ -634,14 +633,22 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points,
                              const Eigen::Vector3d &prev_velocity,
                              const MotionModelRotationOptions &rotation_options,
                              Eigen::Vector3d &gyro_bias,
-                             Eigen::Matrix3d &gyro_bias_cov)
+                             Eigen::Matrix3d &gyro_bias_cov,
+                             const MotionModelTranslationImuOptions &translation_imu_options,
+                             Eigen::Vector3d &acc_offset,
+                             Eigen::Matrix3d &acc_offset_cov,
+                             Eigen::Matrix3d *lidar_translation_information)
 {
     const bool have_dt = timestamps.size() == intermediate_trajectory.size();
     const bool time_scaled_sigma = rotation_options.time_scaled_sigma && have_dt;
     const bool estimate_bias = rotation_options.estimate_bias && have_dt;
     const int n_pose_params = static_cast<int>(intermediate_trajectory.size()) * 6;
-    const int n_params = n_pose_params + (estimate_bias ? 3 : 0); // [pose_0 .. pose_n-1 | b_om b_fi b_ka]
-    const int ib = n_pose_params;                                   // first bias column
+    const bool acc_term = translation_imu_options.enabled && have_dt && translation_imu_options.acc &&
+                          translation_imu_options.acc->size() == intermediate_trajectory.size();
+    // [pose_0 .. pose_n-1 | b_om b_fi b_ka (gyro bias) | e_x e_y e_z (acceleration offset)]
+    const int n_params = n_pose_params + (estimate_bias ? 3 : 0) + (acc_term ? 3 : 0);
+    const int ib = n_pose_params;                        // first bias column
+    const int io = n_pose_params + (estimate_bias ? 3 : 0); // first acceleration offset column
 
     double sigma_motion_model_om = lidar_odometry_motion_model_om_1_sigma_deg * DEG_TO_RAD;
     double sigma_motion_model_fi = lidar_odometry_motion_model_fi_1_sigma_deg * DEG_TO_RAD;
@@ -666,6 +673,11 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points,
     Eigen::Vector3d b_indoor(rgd_params_indoor.resolution_X, rgd_params_indoor.resolution_Y, rgd_params_indoor.resolution_Z);
 
     std::vector<std::mutex> mutexes(intermediate_trajectory.size());
+    // sum of n * n^T over the surface normals the points are matched to (per node): geometric constraint of the
+    // translation, independent of the in-plane pull of the NDT cells
+    std::vector<Eigen::Matrix3d> normal_information;
+    if (lidar_translation_information)
+        normal_information.assign(intermediate_trajectory.size(), Eigen::Matrix3d::Zero());
 
     const auto hessian_fun_indoor = [&](const Point3Di &intermediate_points_i)
     {
@@ -754,6 +766,8 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points,
         std::unique_lock lck(m);
         AtPAndt.block<6, 6>(c, c) += AtPA;
         AtPBndt.block<6, 1>(c, 0) -= AtPB;
+        if (!normal_information.empty() && this_bucket.normal_vector.squaredNorm() > 0.5)
+            normal_information[intermediate_points_i.index_pose] += this_bucket.normal_vector * this_bucket.normal_vector.transpose();
     };
 
     if (multithread)
@@ -848,6 +862,14 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points,
             std::for_each(std::execution::par_unseq, std::begin(intermediate_points), std::end(intermediate_points), hessian_fun_outdoor);
         else
             std::for_each(std::begin(intermediate_points), std::end(intermediate_points), hessian_fun_outdoor);
+    }
+
+    // geometric translation constraint of this window (world frame, summed over the nodes)
+    if (lidar_translation_information)
+    {
+        lidar_translation_information->setZero();
+        for (const auto &ni : normal_information)
+            *lidar_translation_information += ni;
     }
 
     std::vector<std::pair<int, int>> odo_edges;
@@ -1031,7 +1053,7 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points,
 
     // velocity-continuity prior on world-frame translation (white-noise acceleration):
     // residual = change of velocity between consecutive steps [m/s], sigma = acc_sigma * dt
-    if (acc_sigma_mps2 > 0.0 && timestamps.size() == intermediate_trajectory.size())
+    if (acc_sigma_mps2 > 0.0 && !acc_term && timestamps.size() == intermediate_trajectory.size())
     {
         constexpr double min_dt = 1e-4;
 
@@ -1083,6 +1105,94 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points,
         }
     }
 
+    // accelerometer as a soft measurement of the change of world-frame velocity between node anchors ~span_s apart:
+    // residual = sum(c_j * p_j) - (mean acceleration - e) * tau, with mean acceleration = mean(R f - g) * to_mps2
+    // (the node rotations are taken as fixed here) and e the acceleration offset of this window
+    int pose_band_offset = 17;
+    if (acc_term)
+    {
+        const auto &acc = *translation_imu_options.acc;
+        const int n = static_cast<int>(intermediate_trajectory.size());
+        std::vector<Eigen::Vector3d> a(n);
+        for (int k = 0; k < n; k++)
+            a[k] = (Eigen::Quaterniond(intermediate_trajectory[k].linear()).normalized() * acc[k] - translation_imu_options.gravity) * translation_imu_options.to_mps2;
+
+        // time-weighted mean acceleration over [t0, t1), nodes first..last searched
+        auto mean_acceleration = [&](double t0, double t1, int first, int last)
+        {
+            Eigen::Vector3d sum = Eigen::Vector3d::Zero();
+            double weight = 0.0;
+            for (int k = first; k <= last && k + 1 < n; k++)
+            {
+                const double s0 = std::max(timestamps[k].first, t0);
+                const double s1 = std::min(timestamps[k + 1].first, t1);
+                if (s1 > s0)
+                {
+                    sum += a[k] * (s1 - s0);
+                    weight += s1 - s0;
+                }
+            }
+            return weight > 0.0 ? Eigen::Vector3d(sum / weight) : a[std::clamp(first, 0, n - 1)];
+        };
+
+        const double w_scale = 1.0 / (translation_imu_options.sigma_mps2 * translation_imu_options.sigma_mps2);
+        auto add_term = [&](const std::vector<int> &nodes, const std::vector<double> &c, const Eigen::Vector3d &measured_dv, double tau)
+        {
+            const double w = w_scale / (tau * tau);
+            Eigen::Vector3d r = -measured_dv;
+            for (size_t j = 0; j < nodes.size(); j++)
+                r += c[j] * intermediate_trajectory[nodes[j]].translation();
+            r += acc_offset * tau; // measured_dv = (mean acceleration - e) * tau
+            for (int k = 0; k < 3; k++)
+            {
+                for (size_t ja = 0; ja < nodes.size(); ja++)
+                {
+                    const int ra = nodes[ja] * 6 + k;
+                    for (size_t jb = 0; jb < nodes.size(); jb++)
+                        AtPAndt(ra, nodes[jb] * 6 + k) += w * c[ja] * c[jb];
+                    AtPAndt(ra, io + k) += w * c[ja] * tau;
+                    AtPAndt(io + k, ra) += w * c[ja] * tau;
+                    AtPBndt(ra, 0) -= w * c[ja] * r(k);
+                }
+                AtPAndt(io + k, io + k) += w * tau * tau;
+                AtPBndt(io + k, 0) -= w * tau * r(k);
+            }
+            pose_band_offset = std::max(pose_band_offset, (nodes.back() - nodes.front()) * 6 + 5);
+        };
+
+        std::vector<int> anchors{0};
+        for (int k = 1; k < n; k++)
+            if (timestamps[k].first - timestamps[anchors.back()].first >= translation_imu_options.span_s)
+                anchors.push_back(k);
+
+        for (size_t j = 1; j + 1 < anchors.size(); j++)
+        {
+            const int A = anchors[j - 1], B = anchors[j], C = anchors[j + 1];
+            const double tA = timestamps[A].first, tB = timestamps[B].first, tC = timestamps[C].first;
+            const double dt1 = tB - tA, dt2 = tC - tB;
+            const double m1 = 0.5 * (tA + tB), m2 = 0.5 * (tB + tC);
+            const double tau = m2 - m1;
+            add_term({A, B, C}, {1.0 / dt1, -(1.0 / dt1 + 1.0 / dt2), 1.0 / dt2}, mean_acceleration(m1, m2, A, C) * tau, tau);
+        }
+
+        // tie the first velocity of this window to the final velocity of the previous window
+        if (use_prev_velocity && anchors.size() > 1)
+        {
+            const int B = anchors[1];
+            const double t0 = timestamps[0].first, tB = timestamps[B].first;
+            const double dt = tB - t0;
+            const double tau = 0.5 * dt + translation_imu_options.prev_velocity_age_s;
+            // measured_dv relative to prev_velocity: move prev_velocity to the measured side
+            const Eigen::Vector3d measured_dv = mean_acceleration(t0, 0.5 * (t0 + tB), 0, B) * tau + prev_velocity;
+            add_term({0, B}, {-1.0 / dt, 1.0 / dt}, measured_dv, tau);
+        }
+
+        // offset prior carried over from the previous window
+        const Eigen::Matrix3d prior_inf = translation_imu_options.offset_prior_cov.inverse();
+        AtPAndt.block<3, 3>(io, io) += prior_inf;
+        AtPBndt.block<3, 1>(io, 0) += prior_inf * (translation_imu_options.offset_prior_mean - acc_offset);
+    }
+
     int ic = 0;
     int ir = tripletListB.size();
     tripletListA.emplace_back(ir, ic * 6 + 0, 1);
@@ -1127,26 +1237,33 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points,
     tripletListP.clear();
     tripletListB.clear();
 
-    AtPA += pose_band_to_sparse(AtPAndt, n_pose_params);
+    AtPA += pose_band_to_sparse(AtPAndt, n_pose_params, pose_band_offset);
     AtPB += AtPBndt.sparseView();
 
-    if (estimate_bias)
+    const int n_extra = n_params - n_pose_params;
+    if (n_extra > 0)
     {
-        // marginal covariance of the bias: bias block of the inverse of the undamped normal matrix
+        // marginal covariance of the extra unknowns (gyro bias, acceleration offset):
+        // their block of the inverse of the undamped normal matrix
         Eigen::SimplicialCholesky<Eigen::SparseMatrix<double>> solver_cov(AtPA);
         if (solver_cov.info() == Eigen::Success)
         {
-            Eigen::MatrixXd unit = Eigen::MatrixXd::Zero(n_params, 3);
-            for (int r = 0; r < 3; r++)
-                unit(ib + r, r) = 1.0;
+            Eigen::MatrixXd unit = Eigen::MatrixXd::Zero(n_params, n_extra);
+            for (int r = 0; r < n_extra; r++)
+                unit(n_pose_params + r, r) = 1.0;
             const Eigen::MatrixXd cols = solver_cov.solve(unit);
             if (solver_cov.info() == Eigen::Success)
-                gyro_bias_cov = cols.block<3, 3>(ib, 0);
+            {
+                if (estimate_bias)
+                    gyro_bias_cov = cols.block<3, 3>(ib, ib - n_pose_params);
+                if (acc_term)
+                    acc_offset_cov = cols.block<3, 3>(io, io - n_pose_params);
+            }
         }
     }
 
     Eigen::SparseMatrix<double> AtPA_I(n_params, n_params);
-    if (estimate_bias)
+    if (n_extra > 0)
     {
         // LM damping on the pose parameters only: lm_factor grows to ~1e10, which is negligible against the pose
         // curvature (~1e8+) but would freeze the bias (curvature ~1e3); the bias is kept well-posed by its prior
@@ -1173,6 +1290,10 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points,
     if (h_x.size() == static_cast<size_t>(n_params))
     {
         int counter = 0;
+
+        if (acc_term)
+            for (int r = 0; r < 3; r++)
+                acc_offset(r) += h_x[io + r];
 
         if (estimate_bias)
         {
@@ -1388,6 +1509,38 @@ namespace
         return smoothed;
     }
 
+    // acceleration offset e [m/s^2] seen in an optimized window: (integral of the IMU acceleration - change of the
+    // trajectory velocity) / T, both over the nodes k1..k2; the velocities are averaged over span nodes
+    bool observed_acceleration_offset(const std::vector<Eigen::Affine3d> &trajectory,
+                                      const std::vector<std::pair<double, double>> &timestamps,
+                                      const std::vector<Eigen::Vector3d> &acc, const Eigen::Vector3d &gravity,
+                                      double to_mps2, int tail_nodes, Eigen::Vector3d &offset)
+    {
+        constexpr int span = 20;
+        const int n = static_cast<int>(trajectory.size());
+        const int k1 = span;
+        const int k2 = n - 1 - std::max(tail_nodes, 0); // tail nodes are re-propagated, not optimized
+        if (k2 - k1 < 2 * span || static_cast<int>(timestamps.size()) != n || static_cast<int>(acc.size()) != n)
+            return false;
+        auto velocity_at = [&](int k)
+        {
+            const double dt = timestamps[k].first - timestamps[k - span].first;
+            return dt > 0.0 ? Eigen::Vector3d((trajectory[k].translation() - trajectory[k - span].translation()) / dt) : Eigen::Vector3d::Zero();
+        };
+        // velocities are averages over [k - span, k]: integrate the acceleration between their centres
+        Eigen::Vector3d dv_imu = Eigen::Vector3d::Zero();
+        for (int k = k1 - span / 2; k < k2 - span / 2; k++)
+        {
+            const double dt = timestamps[k + 1].first - timestamps[k].first;
+            dv_imu += (Eigen::Quaterniond(trajectory[k].linear()).normalized() * acc[k] - gravity) * to_mps2 * dt;
+        }
+        const double T = timestamps[k2 - span / 2].first - timestamps[k1 - span / 2].first;
+        if (T <= 0.0)
+            return false;
+        offset = (dv_imu - (velocity_at(k2) - velocity_at(k1))) / T;
+        return true;
+    }
+
     // true if the device rests during the whole window: small world acceleration and small rotation rate
     bool is_window_stationary(const std::vector<Eigen::Affine3d> &trajectory,
                               const std::vector<std::pair<double, double>> &timestamps,
@@ -1480,6 +1633,25 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
         }
         int stationary_windows = 0;
 
+        // accelerometer term: gravity in the odometry frame [accelerometer units], taken from the first window
+        // (the recording starts at rest); the acceleration offset e is folded into it after every window
+        const bool use_acc_term = params.use_imu_acceleration_term && have_acc;
+        Eigen::Vector3d acc_gravity = Eigen::Vector3d::Zero();
+        if (use_acc_term)
+        {
+            for (size_t k = 0; k < worker_data[0].imu_acc.size(); k++)
+                acc_gravity += rotation_of(worker_data[0].intermediate_trajectory[k]) * worker_data[0].imu_acc[k];
+            acc_gravity /= double(worker_data[0].imu_acc.size());
+        }
+        const double acc_offset_sigma0 = params.imu_acceleration_offset_initial_sigma_mps2;
+        Eigen::Matrix3d carried_acc_offset_cov = Eigen::Matrix3d::Identity() * (acc_offset_sigma0 * acc_offset_sigma0);
+        // gating to LiDAR-degenerate stretches: degeneracy of the previous window, time spent in the current stretch
+        const bool acc_gated = use_acc_term && params.imu_acceleration_only_when_degenerate;
+        bool previous_window_degenerate = false;
+        double degenerate_time_s = 0.0;
+        int acc_term_windows = 0;
+        constexpr double gravity_calibration_time_constant_s = 2.0;
+
         for (int i = 0; i < worker_data.size(); i++)
         {
             std::vector<Point3Di> intermediate_points;
@@ -1499,7 +1671,8 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
             bool use_prev_velocity = false;
             Eigen::Vector3d prev_velocity(0.0, 0.0, 0.0);
             const bool imu_translation = use_imu_pred || use_zupt;
-            if ((use_acc_prior || imu_translation) && i > 0)
+            double prev_velocity_age_s = 0.0;
+            if ((use_acc_prior || imu_translation || use_acc_term) && i > 0)
             {
                 const auto &prev_tr = worker_data[i - 1].intermediate_trajectory;
                 const auto &prev_ts = worker_data[i - 1].intermediate_trajectory_timestamps;
@@ -1512,6 +1685,9 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
                     {
                         prev_velocity = (prev_tr[n - 1].translation() - prev_tr[n - 1 - k].translation()) / dt;
                         use_prev_velocity = true;
+                        const auto &ts_i = worker_data[i].intermediate_trajectory_timestamps;
+                        if (!ts_i.empty())
+                            prev_velocity_age_s = std::max(ts_i[0].first - 0.5 * (prev_ts[n - 1].first + prev_ts[n - 1 - k].first), 0.0);
                     }
                 }
 
@@ -1525,7 +1701,7 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
 
             Eigen::Vector3d mean_shift(0.0, 0.0, 0.0);
             bool stationary = false;
-            if ((i > 1 || ((use_acc_prior || imu_translation) && i > 0)) && params.use_motion_from_previous_step)
+            if ((i > 1 || ((use_acc_prior || imu_translation || use_acc_term) && i > 0)) && params.use_motion_from_previous_step)
             {
                 if (i > 1)
                 {
@@ -1589,7 +1765,7 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
                             std::cout << "window " << i + 1 << " stationary (zero-velocity detection)\n";
                     }
                 }
-                else if (use_acc_prior && ts.size() == new_trajectory.size())
+                else if ((use_acc_prior || use_acc_term) && ts.size() == new_trajectory.size())
                 {
                     // timestamp-aware constant-velocity prediction from the previous window's final velocity
                     for (int tr = 0; tr < new_trajectory.size(); tr++)
@@ -1625,6 +1801,44 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
             // so the bias is only estimated from the second window on
             MotionModelRotationOptions window_rotation_options = rotation_options;
             window_rotation_options.estimate_bias = rotation_options.estimate_bias && i > 0;
+
+            // accelerometer term (from the second window on, like the bias): offset prior grown by its random walk
+            MotionModelTranslationImuOptions translation_imu_options;
+            Eigen::Matrix3d lidar_translation_information = Eigen::Matrix3d::Zero();
+            Eigen::Vector3d acc_offset = Eigen::Vector3d::Zero();
+            Eigen::Matrix3d acc_offset_cov = carried_acc_offset_cov;
+            const double window_duration_s = worker_data[i].intermediate_trajectory_timestamps.size() > 1
+                                                 ? worker_data[i].intermediate_trajectory_timestamps.back().first - worker_data[i].intermediate_trajectory_timestamps.front().first
+                                                 : 0.0;
+            bool acc_term_active = use_acc_term && i > 0;
+            if (acc_gated)
+            {
+                // a new degenerate stretch starts with the calibrated gravity and a fresh offset prior
+                if (previous_window_degenerate && degenerate_time_s == 0.0)
+                    carried_acc_offset_cov = Eigen::Matrix3d::Identity() * (acc_offset_sigma0 * acc_offset_sigma0);
+                degenerate_time_s = previous_window_degenerate ? degenerate_time_s + window_duration_s : 0.0;
+                acc_term_active = acc_term_active && previous_window_degenerate && degenerate_time_s <= params.imu_degenerate_max_duration_s;
+            }
+            double sigma_x_m = params.lidar_odometry_motion_model_x_1_sigma_m;
+            double sigma_y_m = params.lidar_odometry_motion_model_y_1_sigma_m;
+            double sigma_z_m = params.lidar_odometry_motion_model_z_1_sigma_m;
+            if (acc_gated && acc_term_active)
+                sigma_x_m = sigma_y_m = sigma_z_m = params.imu_degenerate_translation_sigma_m;
+
+            if (acc_term_active && worker_data[i].imu_acc.size() == worker_data[i].intermediate_trajectory.size())
+            {
+                const double window_duration = window_duration_s;
+                const double rw = params.imu_acceleration_offset_rw_mps2_sqrt_s;
+                translation_imu_options.enabled = true;
+                translation_imu_options.acc = &worker_data[i].imu_acc;
+                translation_imu_options.gravity = acc_gravity;
+                translation_imu_options.to_mps2 = 9.80665 / acc_gravity.norm();
+                translation_imu_options.sigma_mps2 = params.imu_acceleration_sigma_mps2;
+                translation_imu_options.span_s = params.imu_acceleration_span_s;
+                translation_imu_options.prev_velocity_age_s = prev_velocity_age_s;
+                translation_imu_options.offset_prior_cov = carried_acc_offset_cov + Eigen::Matrix3d::Identity() * (rw * rw * window_duration);
+                acc_offset_cov = translation_imu_options.offset_prior_cov;
+            }
 
             std::chrono::time_point<std::chrono::system_clock> start1, end1;
             start1 = std::chrono::system_clock::now();
@@ -1732,9 +1946,9 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
                                         params.useMultithread, params.min_distance_lidar, params.min_distance_lidar_outdoor_grid, params.max_distance_lidar, delta,
                                         lm_factor,
                                         params.motion_model_correction,
-                                        params.lidar_odometry_motion_model_x_1_sigma_m,
-                                        params.lidar_odometry_motion_model_y_1_sigma_m,
-                                        params.lidar_odometry_motion_model_z_1_sigma_m,
+                                        sigma_x_m,
+                                        sigma_y_m,
+                                        sigma_z_m,
                                         params.lidar_odometry_motion_model_om_1_sigma_deg,
                                         params.lidar_odometry_motion_model_fi_1_sigma_deg,
                                         params.lidar_odometry_motion_model_ka_1_sigma_deg,
@@ -1754,7 +1968,11 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
                                         prev_velocity,
                                         window_rotation_options,
                                         worker_data[i].gyro_bias,
-                                        worker_data[i].gyro_bias_cov);
+                                        worker_data[i].gyro_bias_cov,
+                                        translation_imu_options,
+                                        acc_offset,
+                                        acc_offset_cov,
+                                        acc_gated ? &lidar_translation_information : nullptr);
                 if (delta < params.convergence_delta_threshold)
                     break;
 
@@ -1802,6 +2020,42 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
 
                 carried_bias = worker_data[i].gyro_bias;
                 carried_bias_cov = worker_data[i].gyro_bias_cov;
+            }
+
+            if (acc_gated)
+            {
+                // degeneracy of this window decides about the term in the next one
+                const Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eig(lidar_translation_information);
+                const double ratio = eig.eigenvalues().maxCoeff() > 0.0 ? eig.eigenvalues().minCoeff() / eig.eigenvalues().maxCoeff() : 0.0;
+                previous_window_degenerate = ratio < params.imu_degenerate_information_ratio;
+                const Eigen::Vector3d weak = eig.eigenvectors().col(0);
+                std::cout << "lidar translation information window " << i + 1 << ": ratio " << std::setprecision(4) << ratio
+                          << " weakest direction " << std::setprecision(2) << weak.x() << " " << weak.y() << " " << weak.z()
+                          << (translation_imu_options.enabled ? " | accelerometer term active" : "") << std::endl;
+
+                // outside degenerate stretches: calibrate the gravity vector from the LiDAR-constrained trajectory
+                Eigen::Vector3d observed;
+                if (!translation_imu_options.enabled && !previous_window_degenerate &&
+                    observed_acceleration_offset(worker_data[i].intermediate_trajectory, worker_data[i].intermediate_trajectory_timestamps,
+                                                 worker_data[i].imu_acc, acc_gravity, 9.80665 / acc_gravity.norm(), params.handoff_tail_nodes, observed))
+                {
+                    const double alpha = 1.0 - std::exp(-window_duration_s / gravity_calibration_time_constant_s);
+                    acc_gravity += alpha * observed / (9.80665 / acc_gravity.norm());
+                }
+            }
+
+            if (translation_imu_options.enabled)
+            {
+                acc_term_windows++;
+                // fold the estimated offset into the gravity vector; its uncertainty carries over as the next prior
+                acc_gravity += acc_offset / translation_imu_options.to_mps2;
+                carried_acc_offset_cov = acc_offset_cov;
+                {
+                    const Eigen::Vector3d s = acc_offset_cov.diagonal().cwiseMax(0.0).cwiseSqrt();
+                    std::cout << "acceleration offset [m/s^2] window " << i + 1 << ": " << std::setprecision(3)
+                              << acc_offset.x() << " " << acc_offset.y() << " " << acc_offset.z() << " (1-sigma "
+                              << s.x() << " " << s.y() << " " << s.z() << ")" << std::endl;
+                }
             }
 
             // window hand-off: the last nodes carry almost no points (the last one none), so their pose is
@@ -1959,6 +2213,8 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
         std::cout << "total_length_of_calculated_trajectory: " << params.total_length_of_calculated_trajectory << " [m]" << std::endl;
         if (use_zupt)
             std::cout << "zero-velocity detection: " << stationary_windows << " of " << worker_data.size() << " windows stationary" << std::endl;
+        if (use_acc_term)
+            std::cout << "accelerometer term: active in " << acc_term_windows << " of " << worker_data.size() << " windows" << std::endl;
     }
 
     return true;

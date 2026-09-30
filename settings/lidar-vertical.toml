@@ -30,9 +30,24 @@ threshould_output_filter = 0.4
 [gyro_bias_estimation]
 gyro_bias_initial_sigma_deg_s = 10.0
 gyro_bias_max_deg_s = 20.0
-gyro_bias_rw_deg_s_sqrt_s = 0.05
+gyro_bias_rw_deg_s_sqrt_s = 0.005
 handoff_tail_nodes = 30
 use_gyro_bias_estimation = true
+
+[imu_translation]
+# accelerometer as a soft measurement of the change of velocity, only where the LiDAR geometry does not
+# constrain the translation (corridor turnaround, stairwell), for at most 15 s per stretch; tested on b1/42/43
+use_imu_acceleration_term = true
+imu_acceleration_only_when_degenerate = true
+imu_degenerate_information_ratio = 0.3
+imu_degenerate_max_duration_s = 15.0
+imu_degenerate_translation_sigma_m = 3e-4
+imu_acceleration_sigma_mps2 = 0.5
+imu_acceleration_span_s = 0.01
+imu_acceleration_offset_initial_sigma_mps2 = 0.1
+imu_acceleration_offset_rw_mps2_sqrt_s = 0.05
+use_imu_translation_prediction = false
+use_zero_velocity_detection = false
 
 [in_out_params_indoor]
 bounding_box_extension = 0.0

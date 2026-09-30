@@ -136,6 +136,24 @@ struct LidarOdometryParams
     double zero_velocity_acc_threshold_mps2 = 0.3; // max |world acceleration| inside the window
     double zero_velocity_gyro_threshold_deg_s = 3.0; // max rotation rate inside the window
 
+    // accelerometer as a soft measurement inside the window optimization: the change of world-frame velocity between
+    // nodes ~imu_acceleration_span_s apart must match the measured acceleration R * f - g minus an offset e;
+    // e (3 unknowns per window, absorbs tilt and accelerometer bias errors) is carried across windows as a prior.
+    // The prediction stays constant velocity. Usually combined with looser lidar_odometry_motion_model_x/y/z_1_sigma_m.
+    bool use_imu_acceleration_term = false;
+    double imu_acceleration_sigma_mps2 = 0.5;                 // accuracy of the measured acceleration
+    double imu_acceleration_span_s = 0.01;                    // node spacing of the velocity-change terms
+    double imu_acceleration_offset_initial_sigma_mps2 = 0.5;  // prior sigma of e in the first window
+    double imu_acceleration_offset_rw_mps2_sqrt_s = 0.05;     // e prior sigma grows by rw * sqrt(window duration)
+    // use the accelerometer term only where the LiDAR geometry does not constrain the translation in some direction
+    // (smallest / largest eigenvalue of sum(n * n^T) over the surface normals the points are matched to, below
+    // imu_degenerate_information_ratio; decided from the previous window),
+    // for at most imu_degenerate_max_duration_s per such stretch; outside, e is calibrated from the LiDAR trajectory
+    bool imu_acceleration_only_when_degenerate = false;
+    double imu_degenerate_information_ratio = 0.05;
+    double imu_degenerate_max_duration_s = 15.0;
+    double imu_degenerate_translation_sigma_m = 3e-4; // lidar_odometry_motion_model_x/y/z_1_sigma_m while the term is active
+
     // motion_model first trajectory node prior uncertainty
     double lidar_odometry_motion_model_fix_origin_x_1_sigma_m = 0.000001;
     double lidar_odometry_motion_model_fix_origin_y_1_sigma_m = 0.000001;
@@ -252,6 +270,20 @@ struct MotionModelRotationOptions
 
 MotionModelRotationOptions get_motion_model_rotation_options(const LidarOdometryParams &params);
 
+// translation part of the motion model: accelerometer as a soft measurement of the change of velocity (see LidarOdometryParams)
+struct MotionModelTranslationImuOptions
+{
+    bool enabled = false;
+    const std::vector<Eigen::Vector3d> *acc = nullptr;           // raw accelerometer of each node, body frame [accelerometer units]
+    Eigen::Vector3d gravity = Eigen::Vector3d::Zero();           // gravity in the odometry frame [accelerometer units]
+    double to_mps2 = 9.80665;                                    // [m/s^2] per accelerometer unit
+    double sigma_mps2 = 0.5;
+    double span_s = 0.01;
+    double prev_velocity_age_s = 0.0;                            // time from the centre of prev_velocity to the first node
+    Eigen::Vector3d offset_prior_mean = Eigen::Vector3d::Zero(); // [m/s^2]
+    Eigen::Matrix3d offset_prior_cov = Eigen::Matrix3d::Identity();
+};
+
 // this function performs main LiDAR odometry calculations
 // gyro_bias / gyro_bias_cov are updated only when rotation_options.estimate_bias is set
 void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, std::vector<Eigen::Affine3d> &intermediate_trajectory,
@@ -281,7 +313,11 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, std::ve
                              const Eigen::Vector3d &prev_velocity,
                              const MotionModelRotationOptions &rotation_options,
                              Eigen::Vector3d &gyro_bias,
-                             Eigen::Matrix3d &gyro_bias_cov);
+                             Eigen::Matrix3d &gyro_bias_cov,
+                             const MotionModelTranslationImuOptions &translation_imu_options,
+                             Eigen::Vector3d &acc_offset,
+                             Eigen::Matrix3d &acc_offset_cov,
+                             Eigen::Matrix3d *lidar_translation_information = nullptr);
 
 void optimize_sf2(std::vector<Point3Di> &intermediate_points, std::vector<Point3Di> &intermediate_points_sf, std::vector<Eigen::Affine3d> &intermediate_trajectory,
                   const std::vector<Eigen::Affine3d> &intermediate_trajectory_motion_model,
