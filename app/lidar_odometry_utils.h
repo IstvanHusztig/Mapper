@@ -66,6 +66,9 @@ struct LidarOdometryParams
     //lidar odometry control
     bool use_motion_from_previous_step = true;
     int nr_iter = 100;
+    // a window stops iterating once the sum of |parameter updates| of an LM step falls below this value
+    // (1e-12 is practically never reached, so all nr_iter iterations run)
+    double convergence_delta_threshold = 1e-12;
     NDT::GridParameters in_out_params_indoor;
     NDT::GridParameters in_out_params_outdoor;
     double sliding_window_trajectory_length_threshold = 5.0;

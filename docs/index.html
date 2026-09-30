@@ -262,8 +262,8 @@
 <li><b>Fixed start:</b> node 0 is locked to the previous window's end (<code>fix_origin</code> sigmas, 1e-6).</li>
 <li><b>Bias prior:</b> the bias stays near the previous window's estimate, within its uncertainty grown by the bias random walk.</li>
 </ul>
-<p>The system is solved with a sparse Cholesky factorization. Up to <code>nr_iter</code> iterations run; the damping starts at <code>lm_factor_initial</code> and is multiplied by 10 every 10 iterations (pose unknowns only). A window is also stopped once it has run for longer than <code>real_time_threshold_seconds</code>.</p>
-<div class="params"><span>nr_iter</span><span>lm_factor_initial</span><span>min_distance_lidar</span><span>max_distance_lidar</span><span>motion_model_uncertainty.*</span><span>gyro_arw_*</span><span>rotation_sigma_*</span></div>
+<p>The system is solved with a sparse Cholesky factorization. Up to <code>nr_iter</code> iterations run; the damping starts at <code>lm_factor_initial</code> and is multiplied by 10 every 10 iterations (pose unknowns only). A window stops early when the sum of all parameter updates of one iteration falls below <code>convergence_delta_threshold</code> (default 1e-12, which is practically never reached, so all iterations run), or once it has run for longer than <code>real_time_threshold_seconds</code>. Only the band of the normal matrix that can hold values (neighbouring nodes and the bias unknowns) is converted to sparse form each iteration.</p>
+<div class="params"><span>nr_iter</span><span>convergence_delta_threshold</span><span>lm_factor_initial</span><span>min_distance_lidar</span><span>max_distance_lidar</span><span>motion_model_uncertainty.*</span><span>gyro_arw_*</span><span>rotation_sigma_*</span></div>
 </li>
 
 <li class="step" id="s-handoff">
@@ -315,6 +315,7 @@ See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 <tr><td>threshold_nr_poses <span class="badge b-key">key</span></td><td class="val">360</td><td>Nodes (IMU samples) per window: 360 ≈ 0.4 s at 893 Hz. Longer windows give more context but are slower (cost grows with the square) and adapt the bias more slowly. Tested 720: slightly sharper, about 50 % slower.</td></tr>
 <tr><td>threshold_initial_points</td><td class="val">60000</td><td>Points used for the initial map (≈ 1 s of L2 data). Not motion-compensated, so ideally recorded while standing still.</td></tr>
 <tr><td>nr_iter</td><td class="val">100</td><td>Maximum Levenberg–Marquardt iterations per window.</td></tr>
+<tr><td>convergence_delta_threshold</td><td class="val">1e-12</td><td>A window stops iterating once the sum of |updates| of one step is below this value. The default runs all <code>nr_iter</code> iterations. <code>1e-2</code> is a fast mode: on the test recordings 3&ndash;4&times; faster, with 0.5% (42) and 1.5% (43) more occupied 3 cm cells, i.e. slightly less sharp. Not in the file, so the default applies.</td></tr>
 <tr><td>lm_factor_initial</td><td class="val">5.0</td><td>Initial LM damping on the pose unknowns, ×10 every 10 iterations. Larger values mean smaller, safer steps.</td></tr>
 <tr><td>min_distance_lidar</td><td class="val">0.15 m</td><td>Points closer than this (3-D) are not used against the fine NDT grid. Blind zone and self-reflections.</td></tr>
 <tr><td>min_distance_lidar_outdoor_grid</td><td class="val">1.0 m</td><td>Points closer than this are not used against the coarse grid.</td></tr>
@@ -395,7 +396,7 @@ See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 <div class="table-wrap"><table>
 <tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr>
 <tr><td>useMultithread</td><td class="val">false</td><td>Parallel accumulation of the point terms. Off by default because the parallel float summation makes results differ from run to run. Single-threaded runs are byte-identical, at about 40 % more time per window.</td></tr>
-<tr><td>real_time_threshold_seconds</td><td class="val">10.0 s</td><td>Wall-clock limit per window. If a window takes longer, its iterations stop early, and results then depend on machine speed. Currently about 3 s per window.</td></tr>
+<tr><td>real_time_threshold_seconds</td><td class="val">10.0 s</td><td>Wall-clock limit per window. If a window takes longer, its iterations stop early, and results then depend on machine speed. About 2 s per window on the test recordings (b1: up to 9 s before the matrix speed-up, so iterations could be cut under CPU load).</td></tr>
 </table></div>
 
 <h3 id="p-robust">[robust_lidar_odometry] <span class="badge b-off">inactive</span></h3>

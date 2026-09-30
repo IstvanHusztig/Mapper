@@ -27,6 +27,33 @@ namespace
             AtPBndt.block<6, 1>(c, 0) -= block.AtPBndtBlocksToSum;
         }
     };
+
+    //! Sparse copy of a normal matrix whose pose part couples only nodes up to two apart (|row - col| < 18);
+    //! columns and rows from n_pose_params on (extra unknowns such as the gyro bias) are copied completely.
+    //! Much cheaper than sparseView(), which scans every element of the dense matrix.
+    Eigen::SparseMatrix<double> pose_band_to_sparse(const Eigen::MatrixXd &m, int n_pose_params)
+    {
+        constexpr int max_offset = 17;
+        const int n = static_cast<int>(m.rows());
+        std::vector<Eigen::Triplet<double>> triplets;
+        triplets.reserve(static_cast<size_t>(n_pose_params) * (2 * max_offset + 1) + static_cast<size_t>(n - n_pose_params) * n * 2);
+        for (int col = 0; col < n; col++)
+        {
+            const bool extra_col = col >= n_pose_params;
+            const int row_begin = extra_col ? 0 : std::max(0, col - max_offset);
+            const int row_end = extra_col ? n : std::min(n_pose_params, col + max_offset + 1);
+            for (int row = row_begin; row < row_end; row++)
+                if (m(row, col) != 0.0)
+                    triplets.emplace_back(row, col, m(row, col));
+            if (!extra_col)
+                for (int row = n_pose_params; row < n; row++)
+                    if (m(row, col) != 0.0)
+                        triplets.emplace_back(row, col, m(row, col));
+        }
+        Eigen::SparseMatrix<double> s(n, n);
+        s.setFromTriplets(triplets.begin(), triplets.end());
+        return s;
+    }
 }
 
 void optimize_sf2(std::vector<Point3Di> &intermediate_points, std::vector<Point3Di> &intermediate_points_sf, std::vector<Eigen::Affine3d> &intermediate_trajectory,
@@ -1100,7 +1127,7 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points,
     tripletListP.clear();
     tripletListB.clear();
 
-    AtPA += AtPAndt.sparseView();
+    AtPA += pose_band_to_sparse(AtPAndt, n_pose_params);
     AtPB += AtPBndt.sparseView();
 
     if (estimate_bias)
@@ -1605,7 +1632,7 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
                                         window_rotation_options,
                                         worker_data[i].gyro_bias,
                                         worker_data[i].gyro_bias_cov);
-                if (delta < 1e-12)
+                if (delta < params.convergence_delta_threshold)
                     break;
 
                 if (iter % 10 == 0 && iter > 0)
@@ -1633,10 +1660,10 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
                       << " with acc_distance " << fixed << std::setprecision(2) << acc_distance << "[m] in "
                       << fixed << std::setprecision(2) << elapsed_seconds1.count()
                       << "[s], delta ";
-            if (delta > 1e-12)
+            if (delta >= params.convergence_delta_threshold)
                 std::cout << std::setprecision(10) << delta << "!!!";
             else
-                std::cout << "< 1e-12";
+                std::cout << "< " << std::setprecision(1) << std::scientific << params.convergence_delta_threshold << std::defaultfloat;
 
             std::cout << "\n";
 
