@@ -15,7 +15,7 @@ config_version = "1.0"
 build_date = "Mar 28 2026"
 
 [consistency]
-use_consistency = false
+use_consistency = true
 num_constistency_iter = 10
 consistency_min_distance = 0.4
 use_mutliple_gaussian = false
