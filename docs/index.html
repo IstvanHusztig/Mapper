@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mapper Odometry Guide</title>
+<style>
+  :root {
+    --bg: #fbfbfa; --panel: #ffffff; --text: #1d2126; --muted: #5b6470; --line: #e3e5e8;
+    --accent: #1f6fb2; --accent-soft: #e8f1fa; --code-bg: #f2f3f5; --warn: #9a5b00; --warn-soft: #fff4e0;
+    --ok: #20703c; --tag: #eef0f3;
+    --node: #ffffff; --node-line: #9aa6b4; --arrow: #7a8594;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15181c; --panel: #1c2026; --text: #e4e7eb; --muted: #9aa3ae; --line: #2c323a;
+      --accent: #6cb0ec; --accent-soft: #1d2d3d; --code-bg: #242a31; --warn: #f0b35a; --warn-soft: #3a2c16;
+      --ok: #6ccf8e; --tag: #262c34;
+      --node: #222830; --node-line: #56616e; --arrow: #8994a2;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15181c; --panel: #1c2026; --text: #e4e7eb; --muted: #9aa3ae; --line: #2c323a;
+    --accent: #6cb0ec; --accent-soft: #1d2d3d; --code-bg: #242a31; --warn: #f0b35a; --warn-soft: #3a2c16;
+    --ok: #6ccf8e; --tag: #262c34;
+    --node: #222830; --node-line: #56616e; --arrow: #8994a2;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); max-width: 1280px; margin: 0 auto; }
+  nav {
+    position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto;
+    padding: 28px 18px 28px 24px; border-right: 1px solid var(--line); font-size: 14px;
+  }
+  nav .brand { font-weight: 700; font-size: 16px; margin-bottom: 4px; }
+  nav .sub { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+  nav a { display: block; color: var(--muted); text-decoration: none; padding: 3px 0; }
+  nav a:hover { color: var(--accent); }
+  nav .group { margin-top: 14px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); opacity: .8; }
+  nav .indent { padding-left: 12px; }
+  main { padding: 36px 44px 80px; min-width: 0; }
+  h1 { font-size: 30px; line-height: 1.25; margin: 0 0 8px; }
+  h2 { font-size: 23px; margin: 52px 0 12px; padding-top: 8px; border-top: 1px solid var(--line); }
+  h3 { font-size: 18px; margin: 30px 0 8px; }
+  p, li { max-width: 78ch; }
+  .lead { color: var(--muted); font-size: 17px; margin-top: 0; }
+  code, pre { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13.5px; }
+  code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--code-bg); padding: 12px 14px; border-radius: 8px; overflow-x: auto; }
+  a { color: var(--accent); }
+  .note, .warn {
+    border-left: 3px solid var(--accent); background: var(--accent-soft);
+    padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 14px 0; max-width: 82ch;
+  }
+  .warn { border-left-color: var(--warn); background: var(--warn-soft); }
+  .note b, .warn b { display: block; margin-bottom: 2px; }
+  .steps { counter-reset: step; padding: 0; list-style: none; }
+  .step { position: relative; padding: 16px 18px 6px 58px; margin: 14px 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+  .step::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 16px; top: 16px; width: 28px; height: 28px; border-radius: 50%;
+    background: var(--accent); color: var(--panel); font-weight: 700; font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .step h3 { margin: 0 0 6px; }
+  .step .where { color: var(--muted); font-size: 13px; margin-top: -4px; }
+  .params { margin: 10px 0 8px; }
+  .params span { display: inline-block; background: var(--tag); border-radius: 4px; padding: 0 6px; margin: 2px 4px 2px 0; font: 12.5px ui-monospace, Consolas, monospace; }
+  .table-wrap { overflow-x: auto; margin: 10px 0 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+  th { font-size: 12.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: var(--code-bg); }
+  tr:last-child td { border-bottom: none; }
+  td:first-child { font-family: ui-monospace, Consolas, monospace; font-size: 13px; white-space: nowrap; }
+  td.val { font-family: ui-monospace, Consolas, monospace; font-size: 13px; white-space: nowrap; }
+  .badge { display: inline-block; font: 11px/1.6 system-ui, sans-serif; padding: 0 6px; border-radius: 9px; margin-left: 6px; vertical-align: 1px; white-space: nowrap; }
+  .b-gui { background: var(--warn-soft); color: var(--warn); }
+  .b-off { background: var(--tag); color: var(--muted); }
+  .b-key { background: var(--accent-soft); color: var(--accent); }
+  .diagram { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin: 16px 0; overflow-x: auto; }
+  .diagram svg { display: block; min-width: 760px; width: 100%; height: auto; }
+  .diagram text { fill: var(--text); font: 13px system-ui, sans-serif; }
+  .diagram .small { fill: var(--muted); font-size: 11.5px; }
+  .diagram .box { fill: var(--node); stroke: var(--node-line); stroke-width: 1.2; }
+  .diagram .box.hl { stroke: var(--accent); stroke-width: 1.8; }
+  .diagram .arr { stroke: var(--arrow); stroke-width: 1.5; fill: none; marker-end: url(#ah); }
+  .diagram .loop { stroke: var(--accent); stroke-width: 1.5; fill: none; stroke-dasharray: 5 4; marker-end: url(#ahb); }
+  #ah path { fill: var(--arrow); } #ahb path { fill: var(--accent); }
+  .theme-btn { float: right; background: var(--panel); color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; font-size: 13px; cursor: pointer; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    nav { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--line); padding: 18px 16px; }
+    main { padding: 24px 16px 60px; }
+    h1 { font-size: 25px; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+<nav>
+  <div class="brand">Mapper odometry</div>
+  <div class="sub">lidar_odometry_step_1 · Unitree L2 / dLidar</div>
+  <a href="#overview">Overview</a>
+  <a href="#inputs">Inputs and outputs</a>
+  <div class="group">Pipeline</div>
+  <a href="#pipeline">The diagram</a>
+  <a class="indent" href="#s-load">1 · Loading points</a>
+  <a class="indent" href="#s-imu">2 · IMU orientation</a>
+  <a class="indent" href="#s-windows">3 · Windows and point poses</a>
+  <a class="indent" href="#s-map">4 · Initial map</a>
+  <a class="indent" href="#s-guess">5 · Initial guess per window</a>
+  <a class="indent" href="#s-opt">6 · Optimization</a>
+  <a class="indent" href="#s-handoff">7 · Hand-off and bias</a>
+  <a class="indent" href="#s-update">8 · Map update</a>
+  <a class="indent" href="#s-export">9 · Export</a>
+  <div class="group">Parameters</div>
+  <a href="#params">How to read the tables</a>
+  <a class="indent" href="#p-filter">filter_points</a>
+  <a class="indent" href="#p-control">lidar_odometry_control</a>
+  <a class="indent" href="#p-ndt">in_out_params_*</a>
+  <a class="indent" href="#p-mm">motion_model_uncertainty</a>
+  <a class="indent" href="#p-bias">gyro_bias_estimation</a>
+  <a class="indent" href="#p-origin">first_node_prior</a>
+  <a class="indent" href="#p-mmc">motion_model_correction</a>
+  <a class="indent" href="#p-ahrs">madgwick_filter</a>
+  <a class="indent" href="#p-ext">lidar_imu_extrinsics</a>
+  <a class="indent" href="#p-cons">consistency</a>
+  <a class="indent" href="#p-perf">performance</a>
+  <a class="indent" href="#p-robust">robust_lidar_odometry</a>
+  <a class="indent" href="#p-misc">debug, paths, misc, version</a>
+  <div class="group">More</div>
+  <a href="#tuning">Tuning cheat sheet</a>
+  <a href="#limits">Known limitations</a>
+</nav>
+
+<main>
+<button class="theme-btn" id="themeBtn" type="button">Theme</button>
+<h1 id="overview">What the odometry does with the points it reads</h1>
+<p class="lead">A reference for <code>lidar_odometry_step_1</code>: how every LiDAR point travels from the recorder's LAZ file to the final map, and what each parameter in <code>settings/lidar-vertical.toml</code> controls.</p>
+
+<p>The program is a <b>LiDAR-inertial odometry</b>. The IMU gives a fast but drifting estimate of how the sensor rotated. The LiDAR sees the surroundings, which do not move. The program cuts the recording into short windows of about 0.4 s. Each window's trajectory is adjusted until its points line up with the map built from all previous windows, without contradicting the IMU more than its noise allows. Every point keeps its own timestamp and gets its own pose, so the motion during a sweep is compensated (deskewed).</p>
+
+<div class="note"><b>Values on this page</b>The values shown are those of <code>settings/lidar-vertical.toml</code>, tuned on datasets 42 and 43 (handheld L2, about 893 Hz IMU, 64k points/s) and on a static recording. The measurements behind them are in <code>openspec/changes/archive/2026-09-30-gyro-bias-estimation/baseline.md</code>.</div>
+
+<h2 id="inputs">Inputs and outputs</h2>
+<div class="table-wrap"><table>
+<tr><th>File in input folder</th><th>Content</th><th>Required</th></tr>
+<tr><td>lidar*.laz / *.las</td><td>Points with x, y, z (sensor frame, metres), intensity, <code>gps_time</code> (ns) and <code>user_data</code> = LiDAR id</td><td>yes</td></tr>
+<tr><td>imu*.csv</td><td><code>gyroX gyroY gyroZ</code> (rad/s), <code>accX accY accZ</code> (g), <code>imuId</code>, <code>timestamp</code> (ns, same clock as the points), <code>timestampUnix</code>. <b>Every</b> <code>.csv</code> in the folder is read as IMU data.</td><td>yes</td></tr>
+<tr><td>*.json</td><td>LiDAR extrinsic calibration per serial number (multi-LiDAR rigs). Without it, only the lever arm is applied.</td><td>no</td></tr>
+<tr><td>*.sn</td><td>LiDAR id → serial number mapping</td><td>no</td></tr>
+</table></div>
+<p>The run command is <code>lidar_odometry_step_1 &lt;input_folder&gt; settings/lidar-vertical.toml &lt;output_folder&gt;</code>. The output folder receives <code>scan_lio_N.laz</code> (the map), <code>trajectory_lio_N.csv</code> (one pose per IMU sample, 4×3 matrix plus the raw IMU angles), <code>session.mjs</code> with <code>session_poses.mrp</code> (loadable in HDMapping), the parameters used (<code>HDMapping_params_*.toml</code>) and <code>HDMapping_results_*.json</code> (trajectory length, grid info, and the gyro bias per window in <code>gyro_bias_per_window</code>).</p>
+
+<h2 id="pipeline">The pipeline</h2>
+<div class="diagram" role="img" aria-label="Pipeline: LAZ points and IMU samples are loaded, the IMU gives an orientation per sample, points are attached to poses and grouped into windows, each window is optimized against the NDT map, then the map is updated and the next window starts; finally all points are exported with their own pose.">
+<svg viewBox="0 0 960 330" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="ahb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z"/></marker>
+  </defs>
+  <rect class="box" x="10" y="30" width="150" height="56" rx="8"/>
+  <text x="85" y="54" text-anchor="middle">LAZ points</text><text class="small" x="85" y="72" text-anchor="middle">1 · load &amp; filter</text>
+  <rect class="box" x="10" y="200" width="150" height="56" rx="8"/>
+  <text x="85" y="224" text-anchor="middle">IMU samples</text><text class="small" x="85" y="242" text-anchor="middle">2 · AHRS orientation</text>
+  <rect class="box" x="210" y="112" width="170" height="64" rx="8"/>
+  <text x="295" y="138" text-anchor="middle">3 · Windows</text><text class="small" x="295" y="156" text-anchor="middle">point → pose, 360 poses</text>
+  <rect class="box" x="210" y="10" width="170" height="56" rx="8"/>
+  <text x="295" y="34" text-anchor="middle">4 · Initial map</text><text class="small" x="295" y="52" text-anchor="middle">first 60k points → NDT</text>
+  <rect class="box" x="430" y="112" width="160" height="64" rx="8"/>
+  <text x="510" y="138" text-anchor="middle">5 · Initial guess</text><text class="small" x="510" y="156" text-anchor="middle">prev. end + IMU − bias</text>
+  <rect class="box hl" x="640" y="100" width="170" height="88" rx="8"/>
+  <text x="725" y="128" text-anchor="middle">6 · Optimize window</text><text class="small" x="725" y="148" text-anchor="middle">NDT + IMU prior</text><text class="small" x="725" y="165" text-anchor="middle">+ velocity + bias</text>
+  <rect class="box" x="640" y="240" width="170" height="56" rx="8"/>
+  <text x="725" y="264" text-anchor="middle">7-8 · Hand-off, map</text><text class="small" x="725" y="282" text-anchor="middle">tail, bias, NDT update</text>
+  <rect class="box" x="850" y="120" width="100" height="48" rx="8"/>
+  <text x="900" y="142" text-anchor="middle">9 · Export</text><text class="small" x="900" y="158" text-anchor="middle">LAZ + poses</text>
+  <path class="arr" d="M160,58 C185,58 185,130 208,135"/>
+  <path class="arr" d="M160,228 C185,228 185,160 208,154"/>
+  <path class="arr" d="M160,50 C185,40 190,38 208,38"/>
+  <path class="arr" d="M380,144 L428,144"/>
+  <path class="arr" d="M590,144 L638,144"/>
+  <path class="arr" d="M380,38 C600,38 700,50 718,98"/>
+  <path class="arr" d="M725,188 L725,238"/>
+  <path class="loop" d="M640,268 C520,268 510,230 510,178"/>
+  <text class="small" x="540" y="290">next window</text>
+  <path class="arr" d="M810,144 L848,144"/>
+</svg>
+</div>
+<p>Steps 5 to 8 repeat for every window (dashed arrow). The sections below follow one point through all of them.</p>
+
+<ol class="steps">
+<li class="step" id="s-load">
+<h3>Loading and filtering the points</h3>
+<div class="where">load_data / load_point_cloud · app/lidar_odometry.cpp, app/lidar_odometry_utils.cpp</div>
+<p>Each point is read with its position in the <b>sensor frame</b>, its intensity and its timestamp. Then:</p>
+<ul>
+<li>If a calibration <code>.json</code> exists, the point is transformed with that LiDAR's extrinsics. Otherwise it is shifted by the LiDAR→IMU <b>lever arm</b> (translation only), so that points and IMU share one origin. The L2 data from dLidar is already in the IMU axes (NWU: x forward, y left, z up).</li>
+<li>Points with timestamp 0 are dropped.</li>
+<li>Points whose <b>horizontal</b> distance √(x²+y²) in the sensor frame is below <code>filter_threshold_xy_inner</code> (the handle, your hand, the housing) or above <code>filter_threshold_xy_outer</code> are dropped.</li>
+<li>The points of each file are sorted by time. The IMU CSVs are read, merged and sorted by time.</li>
+</ul>
+<div class="params"><span>filter_threshold_xy_inner</span><span>filter_threshold_xy_outer</span><span>lidar_imu_lever_arm_*</span></div>
+</li>
+
+<li class="step" id="s-imu">
+<h3>An orientation for every IMU sample</h3>
+<div class="where">calculate_trajectory · app/lidar_odometry.cpp</div>
+<p>A Madgwick-type filter (Fusion AHRS, 6-axis, no magnetometer) integrates the gyro, and uses the accelerometer's gravity direction to correct roll and pitch. Heading (yaw) has no absolute reference, so it drifts with the gyro bias. That is what the LiDAR optimization and the bias estimation fix later. The accelerometer correction is switched off whenever |a| is outside 0.9–1.1 g (hard accelerations).</p>
+<p>If <code>use_remove_imu_bias_from_first_stationary_scan</code> is on, the median gyro value of the first 1000 samples is subtracted as bias, but only if the total gyro variance there is below 5 (°/s)². Handheld recordings usually fail that check ("Excessive movement detected") and continue with zero bias.</p>
+<p>Result: a trajectory map <i>timestamp → rotation</i> with one entry per IMU sample (about 1.1 ms apart). These are the <b>trajectory nodes</b>. Their positions are still zero at this stage.</p>
+<div class="params"><span>ahrs_gain</span><span>fusionConvention*</span><span>use_remove_imu_bias_from_first_stationary_scan</span></div>
+</li>
+
+<li class="step" id="s-windows">
+<h3>Windows and a pose for every point</h3>
+<div class="where">compute_step_1 · app/lidar_odometry.cpp</div>
+<ul>
+<li>The first <code>threshold_initial_points</code> points are set aside to build the initial map (step 4). Nodes before the time of the last of these points are skipped.</li>
+<li>The remaining nodes are cut into <b>windows</b> of <code>threshold_nr_poses</code> consecutive nodes (360 ≈ 0.4 s at 893 Hz). A leftover shorter than a full window is dropped.</li>
+<li>Every point in the window's time span is attached to the <b>node just before its timestamp</b> (its <code>index_pose</code>), but only if that node is at most 10 ms earlier. Otherwise the point is dropped. Windows with ≤ 1000 points are dropped.</li>
+<li>Two copies are cached on disk (<code>&lt;input&gt;/cache</code>): all points (for export) and a <b>voxel-decimated</b> copy that keeps the first point per <code>decimation</code>-sized cube (used in the optimization).</li>
+</ul>
+<p>From here on, a point is always used as <i>pose(index_pose) × point</i>. Correcting a node's pose moves exactly the points recorded in that ~1 ms, and this is how motion during the scan is compensated.</p>
+<div class="params"><span>threshold_initial_points</span><span>threshold_nr_poses</span><span>decimation</span></div>
+</li>
+
+<li class="step" id="s-map">
+<h3>The initial map</h3>
+<div class="where">compute_step_2 (start) · app/lidar_odometry_utils_optimizers.cpp</div>
+<p>The set-aside initial points are transformed with the <b>first pose only</b> (no per-point motion compensation) and inserted into two <b>NDT grids</b>. Space is divided into cubes (0.15 m "indoor" and 0.4 m "outdoor" grid), and each cube stores the mean and covariance of the points in it, i.e. a small Gaussian that describes the local surface. A cube with 3 or more points also gets a normal vector facing the sensor.</p>
+<p>Because this map is not motion-compensated, stand still for the first second or two if you can. The first window is registered against this map, so its misfit is not allowed to affect the gyro bias estimate.</p>
+<div class="params"><span>in_out_params_indoor.resolution_*</span><span>in_out_params_outdoor.resolution_*</span><span>threshold_initial_points</span></div>
+</li>
+
+<li class="step" id="s-guess">
+<h3>Initial guess for the next window</h3>
+<div class="where">compute_step_2 · app/lidar_odometry_utils_optimizers.cpp</div>
+<ul>
+<li>The window's first node is placed exactly on the previous window's last node.</li>
+<li>Rotations follow the IMU's relative rotations between nodes, <b>minus the gyro bias</b> estimated so far (bias × Δt per step).</li>
+<li>Positions follow a <b>constant velocity</b>: the velocity over the last 20 nodes of the previous window (<code>use_motion_from_previous_step</code>). The IMU accelerometer is not integrated for position.</li>
+</ul>
+<p>This guess is also stored as the <b>motion model</b>: the IMU "measurement" the optimizer compares against.</p>
+<div class="params"><span>use_motion_from_previous_step</span><span>use_gyro_bias_estimation</span></div>
+</li>
+
+<li class="step" id="s-opt">
+<h3>Window optimization</h3>
+<div class="where">optimize_lidar_odometry · app/lidar_odometry_utils_optimizers.cpp</div>
+<p>The unknowns are the 6 pose parameters (x, y, z, ω, φ, κ) of every node of the window, plus 3 gyro-bias values: 6 × 360 + 3 = 2163 numbers. Each Levenberg–Marquardt iteration builds one least-squares system from these terms:</p>
+<ul>
+<li><b>Point to map (NDT, fine grid):</b> every decimated point with 3-D distance between <code>min_distance_lidar</code> and <code>max_distance_lidar</code> is transformed with its node's pose and looked up in the 0.15 m grid. Its distance to that cube's Gaussian, weighted by the inverse covariance, is minimized. Points hitting a cube whose normal faces away from the sensor, or whose covariance is degenerate, are skipped.</li>
+<li><b>Point to map (NDT, coarse grid):</b> the same with the 0.4 m grid, for points between <code>min_distance_lidar_outdoor_grid</code> and <code>max_distance_lidar</code>.</li>
+<li><b>IMU motion model:</b> between consecutive nodes, the relative pose should match the guess. Translation is held tightly (<code>*_x/y/z_1_sigma_m</code>). Rotation may deviate by <code>max(k × ARW × √Δt, floor)</code> per axis, i.e. about what the gyro can drift in that Δt (time-scaled rotation prior). The gyro bias enters here: the IMU step is corrected by −bias × Δt.</li>
+<li><b>Velocity continuity:</b> the velocity may only change as much as <code>acc_1_sigma_mps2</code> allows, including across the boundary to the previous window.</li>
+<li><b>Fixed start:</b> node 0 is locked to the previous window's end (<code>fix_origin</code> sigmas, 1e-6).</li>
+<li><b>Bias prior:</b> the bias stays near the previous window's estimate, within its uncertainty grown by the bias random walk.</li>
+</ul>
+<p>The system is solved with a sparse Cholesky factorization. Up to <code>nr_iter</code> iterations run; the damping starts at <code>lm_factor_initial</code> and is multiplied by 10 every 10 iterations (pose unknowns only). A window is also stopped once it has run for longer than <code>real_time_threshold_seconds</code>.</p>
+<div class="params"><span>nr_iter</span><span>lm_factor_initial</span><span>min_distance_lidar</span><span>max_distance_lidar</span><span>motion_model_uncertainty.*</span><span>gyro_arw_*</span><span>rotation_sigma_*</span></div>
+</li>
+
+<li class="step" id="s-handoff">
+<h3>Hand-off and gyro bias</h3>
+<div class="where">compute_step_2 · app/lidar_odometry_utils_optimizers.cpp</div>
+<p>The last node of a window has no points, and the ones just before it have very few. Left free, they can spin by several degrees, and the next window would inherit that error permanently, which shows up as rotated "ghost" copies of walls. So after the optimization, the last <code>handoff_tail_nodes</code> nodes are <b>recomputed from the last well-constrained node</b> using the bias-corrected IMU rotation and the optimized velocity. The next window starts from that recomputed end.</p>
+<p>The window's bias estimate and its uncertainty become the prior for the next window, and they are printed and written to the results JSON.</p>
+<div class="params"><span>handoff_tail_nodes</span><span>gyro_bias_*</span></div>
+</li>
+
+<li class="step" id="s-update">
+<h3>Map update</h3>
+<div class="where">compute_step_2 · app/lidar_odometry_utils_optimizers.cpp</div>
+<p>The window's decimated points, now transformed with their optimized poses, are added to both NDT grids (the Gaussians are updated incrementally). The map therefore grows with the whole recording. Once the travelled distance exceeds <code>sliding_window_trajectory_length_threshold</code>, the map is rebuilt from the most recent half of the points, which bounds memory on long runs.</p>
+<div class="params"><span>sliding_window_trajectory_length_threshold</span></div>
+</li>
+
+<li class="step" id="s-export">
+<h3>Export</h3>
+<div class="where">save_result · app/lidar_odometry.cpp</div>
+<p>All <b>original</b> points (not the decimated ones) are transformed with their own optimized node pose. Points whose sensor-frame distance is below <code>threshould_output_filter</code> are removed from the export. Windows are grouped into chunks of 51, and each chunk becomes one <code>scan_lio_N.laz</code>, expressed relative to the chunk's first pose, with that pose stored in the session files. A final chunk with ≤ <code>min_counter_concatenated_trajectory_nodes</code> windows is <b>not</b> written.</p>
+<div class="params"><span>threshould_output_filter</span><span>min_counter_concatenated_trajectory_nodes</span></div>
+</li>
+</ol>
+
+<div class="warn"><b>Consistency pass: GUI only</b>The <code>[consistency]</code> refinement (a global smoothing and point-cloud consistency optimization over the whole trajectory) is only run from the GUI. The command-line mode goes straight from step 8 to the export and ignores these parameters.</div>
+
+<h2 id="params">Parameter reference</h2>
+<p>One table per TOML section, in the order that matters most. Values are those of <code>settings/lidar-vertical.toml</code>. Labels: <span class="badge b-key">key</span> strongly affects results, <span class="badge b-gui">GUI only</span> not used by the command-line mode, <span class="badge b-off">inactive</span> read but has no effect with the current settings or code. Missing keys fall back to built-in defaults, and every run saves the complete set it used to <code>HDMapping_params_*.toml</code>.</p>
+
+<h3 id="p-filter">[filter_points]</h3>
+<div class="table-wrap"><table>
+<tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr>
+<tr><td>filter_threshold_xy_inner <span class="badge b-key">key</span></td><td class="val">0.35 m</td><td>At load: drop points closer than this <b>horizontal</b> radius (√(x²+y²), sensor frame). Removes the operator's hand and body and the housing. Points on the operator that move with the sensor pull the solution toward "no rotation", so this must cover them.</td></tr>
+<tr><td>filter_threshold_xy_outer</td><td class="val">25.0 m</td><td>At load: drop points beyond this horizontal radius. The L2 reaches 30 m at 90 % reflectivity and 15 m on dark rock.</td></tr>
+<tr><td>decimation <span class="badge b-key">key</span></td><td class="val">0.03 m</td><td>Voxel size for the copy of each window used in the optimization (the first point per cube is kept). Smaller means more points, slower but more constraints. The export always uses all points.</td></tr>
+<tr><td>threshould_output_filter</td><td class="val">0.4 m</td><td>Export only: drop points closer than this 3-D distance to the sensor.</td></tr>
+<tr><td>min_counter_concatenated_trajectory_nodes</td><td class="val">10</td><td>Export only: the last output chunk is written only if it contains more than this many windows (1 window ≈ 0.4 s).</td></tr>
+</table></div>
+
+<h3 id="p-control">[lidar_odometry_control]</h3>
+<div class="table-wrap"><table>
+<tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr>
+<tr><td>threshold_nr_poses <span class="badge b-key">key</span></td><td class="val">360</td><td>Nodes (IMU samples) per window: 360 ≈ 0.4 s at 893 Hz. Longer windows give more context but are slower (cost grows with the square) and adapt the bias more slowly. Tested 720: slightly sharper, about 50 % slower.</td></tr>
+<tr><td>threshold_initial_points</td><td class="val">60000</td><td>Points used for the initial map (≈ 1 s of L2 data). Not motion-compensated, so ideally recorded while standing still.</td></tr>
+<tr><td>nr_iter</td><td class="val">100</td><td>Maximum Levenberg–Marquardt iterations per window.</td></tr>
+<tr><td>lm_factor_initial</td><td class="val">5.0</td><td>Initial LM damping on the pose unknowns, ×10 every 10 iterations. Larger values mean smaller, safer steps.</td></tr>
+<tr><td>min_distance_lidar</td><td class="val">0.15 m</td><td>Points closer than this (3-D) are not used against the fine NDT grid. Blind zone and self-reflections.</td></tr>
+<tr><td>min_distance_lidar_outdoor_grid</td><td class="val">1.0 m</td><td>Points closer than this are not used against the coarse grid.</td></tr>
+<tr><td>max_distance_lidar</td><td class="val">25.0 m</td><td>Points farther than this are not used in the optimization (both grids). Far points are noisier but constrain rotation strongly.</td></tr>
+<tr><td>use_motion_from_previous_step</td><td class="val">true</td><td>Initial position guess from the previous window's velocity (constant-velocity model). If false, the positions start where the IMU chain puts them, i.e. without motion.</td></tr>
+<tr><td>sliding_window_trajectory_length_threshold</td><td class="val">200.0 m</td><td>After this much travelled distance, the map is rebuilt from the newer half of its points. Lower it for very long recordings to bound memory.</td></tr>
+</table></div>
+
+<h3 id="p-ndt">[in_out_params_indoor] and [in_out_params_outdoor]</h3>
+<div class="table-wrap"><table>
+<tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr>
+<tr><td>indoor resolution_X/Y/Z <span class="badge b-key">key</span></td><td class="val">0.15 m</td><td>Cube size of the fine NDT grid. It should be a few times the point noise (≤ 2 cm) and small enough to separate nearby surfaces in narrow passages. Too small gives too few points per cube.</td></tr>
+<tr><td>outdoor resolution_X/Y/Z</td><td class="val">0.4 m</td><td>Cube size of the coarse grid, which gives robust, large-scale alignment for points beyond 1 m.</td></tr>
+<tr><td>bounding_box_*, number_of_buckets*, bounding_box_extension <span class="badge b-off">inactive</span></td><td class="val">0</td><td>Grid bookkeeping fields carried in the file format. The odometry uses a hashed grid of unlimited extent, so these are ignored.</td></tr>
+</table></div>
+
+<h3 id="p-mm">[motion_model_uncertainty]</h3>
+<p>How far each node may deviate from the IMU-based guess relative to its neighbour. Small sigma = trust the IMU, large sigma = let the LiDAR decide.</p>
+<div class="table-wrap"><table>
+<tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr>
+<tr><td>use_time_scaled_rotation_sigma <span class="badge b-key">key</span></td><td class="val">true</td><td>Rotation sigma per step = <code>max(k · ARW · √Δt, floor)</code>, per axis. It matches how a gyro actually drifts: a 0.1 ms step gets far less freedom than a 2 ms step. If false, the constant <code>*_om/fi/ka_1_sigma_deg</code> below are used per node.</td></tr>
+<tr><td>gyro_arw_x / y / z_deg_sqrt_s</td><td class="val">0.028 / 0.042 / 0.057</td><td>Gyro angle random walk (noise density) in °/√s, measured on a 17 s static L2 recording. Axes map to ω (roll), φ (pitch), κ (yaw).</td></tr>
+<tr><td>rotation_sigma_inflation_k <span class="badge b-key">key</span></td><td class="val">4.0</td><td>Multiplier on the pure gyro noise, which covers timestamp jitter, vibration and model error. Tuned: 12 leaves visible jitter, 4 gives the sharpest maps, 2 and 1 over-trust the IMU and blur walls.</td></tr>
+<tr><td>rotation_sigma_floor_deg</td><td class="val">0.002°</td><td>Lower bound of the per-step rotation sigma, so that near-zero Δt does not produce infinite weights.</td></tr>
+<tr><td>lidar_odometry_motion_model_x/y/z_1_sigma_m</td><td class="val">1e-4 m</td><td>Allowed deviation of the <b>relative translation</b> between consecutive nodes from the constant-velocity guess. Very tight: position changes mainly through the velocity prior and the first node.</td></tr>
+<tr><td>lidar_odometry_motion_model_acc_1_sigma_mps2</td><td class="val">1.0 m/s²</td><td>Velocity-continuity prior: how fast the velocity may change, also across window boundaries (avoids velocity kinks every window). 0 disables it.</td></tr>
+<tr><td>lidar_odometry_motion_model_om/fi/ka_1_sigma_deg <span class="badge b-off">inactive</span></td><td class="val">0.1 / 0.1 / 0.15°</td><td>Constant rotation sigma per node, only used when <code>use_time_scaled_rotation_sigma = false</code>. These values caused the ghost walls: every ~1 ms node could turn 0.15°.</td></tr>
+</table></div>
+
+<h3 id="p-bias">[gyro_bias_estimation]</h3>
+<div class="table-wrap"><table>
+<tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr>
+<tr><td>use_gyro_bias_estimation <span class="badge b-key">key</span></td><td class="val">true</td><td>Estimate a 3-axis gyro bias in every window after the first, while moving, with no stationary start needed. Validated against a static recording (true z bias −0.61 °/s; estimated −0.56 °/s on the moving dataset 43).</td></tr>
+<tr><td>gyro_bias_rw_deg_s_sqrt_s</td><td class="val">0.05</td><td>Bias random walk in °/s/√s: how much the bias may change over time. Larger values follow changes faster but are much noisier (0.5 was about 10× noisier with the same mean).</td></tr>
+<tr><td>gyro_bias_initial_sigma_deg_s</td><td class="val">10.0 °/s</td><td>Uncertainty of the bias before the first estimate (effectively "unknown").</td></tr>
+<tr><td>gyro_bias_max_deg_s</td><td class="val">20.0 °/s</td><td>Per-axis clamp. Reaching it logs a warning, which usually means the LiDAR data of that stretch is poor.</td></tr>
+<tr><td>handoff_tail_nodes <span class="badge b-key">key</span></td><td class="val">30</td><td>Number of last nodes per window (≈ 33 ms) that are recomputed from the IMU before they seed the next window. Prevents heading jumps at window boundaries. 0 disables it.</td></tr>
+</table></div>
+
+<h3 id="p-origin">[motion_model_first_node_prior_uncertainty]</h3>
+<div class="table-wrap"><table>
+<tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr>
+<tr><td>lidar_odometry_motion_model_fix_origin_x/y/z_1_sigma_m</td><td class="val">1e-6 m</td><td>How strictly the first node of a window is held at the previous window's end. 1e-6 = fixed. The windows form one continuous trajectory.</td></tr>
+<tr><td>lidar_odometry_motion_model_fix_origin_om/fi/ka_1_sigma_deg</td><td class="val">1e-6°</td><td>The same for the orientation.</td></tr>
+</table></div>
+
+<h3 id="p-mmc">[motion_model_correction]</h3>
+<div class="table-wrap"><table>
+<tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr>
+<tr><td>motion_model_correction_om/fi/ka</td><td class="val">0.0°</td><td>A constant rotation offset (degrees) added to every IMU step. It is a manual, per-step bias correction that predates the automatic bias estimation. Leave it at 0.</td></tr>
+</table></div>
+
+<h3 id="p-ahrs">[madgwick_filter]</h3>
+<div class="table-wrap"><table>
+<tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr>
+<tr><td>ahrs_gain</td><td class="val">0.05</td><td>How strongly the accelerometer pulls roll and pitch toward gravity. Higher corrects faster but lets hand accelerations tilt the estimate. It is set to 0 automatically while |a| is outside 0.9–1.1 g.</td></tr>
+<tr><td>fusionConventionNwu / Enu / Ned</td><td class="val">NWU</td><td>Axis convention of the IMU data. dLidar writes the L2 as NWU (x forward, y left, z up). Exactly one must be true.</td></tr>
+<tr><td>use_remove_imu_bias_from_first_stationary_scan</td><td class="val">true</td><td>Subtract the median gyro of the first 1000 samples, but only if they look stationary (variance &lt; 5 (°/s)²). Usually skipped on handheld data. The online bias estimation covers it.</td></tr>
+</table></div>
+
+<h3 id="p-ext">[lidar_imu_extrinsics]</h3>
+<div class="table-wrap"><table>
+<tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr>
+<tr><td>lidar_imu_lever_arm_x / y / z_m</td><td class="val">0.00667 / −0.014655 / 0.007698</td><td>Offset added to every point to express it at the IMU origin (Unitree L2 datasheet values mapped to NWU). Applied only when no calibration <code>.json</code> is present. No rotation is applied, since dLidar already delivers points in the IMU axes.</td></tr>
+</table></div>
+
+<h3 id="p-cons">[consistency] <span class="badge b-gui">GUI only</span></h3>
+<div class="table-wrap"><table>
+<tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr>
+<tr><td>num_constistency_iter</td><td class="val">10</td><td>Iterations of the whole-trajectory consistency pass (GUI button after step 2).</td></tr>
+<tr><td>use_mutliple_gaussian</td><td class="val">false</td><td>Selects the variant that uses multiple Gaussians per cube (Consistency2).</td></tr>
+<tr><td>consistency_min_distance</td><td class="val">0.4 m</td><td>In Consistency2, points closer than this are ignored (masks the operator).</td></tr>
+</table></div>
+
+<h3 id="p-perf">[performance]</h3>
+<div class="table-wrap"><table>
+<tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr>
+<tr><td>useMultithread</td><td class="val">false</td><td>Parallel accumulation of the point terms. Off by default because the parallel float summation makes results differ from run to run. Single-threaded runs are byte-identical, at about 40 % more time per window.</td></tr>
+<tr><td>real_time_threshold_seconds</td><td class="val">10.0 s</td><td>Wall-clock limit per window. If a window takes longer, its iterations stop early, and results then depend on machine speed. Currently about 3 s per window.</td></tr>
+</table></div>
+
+<h3 id="p-robust">[robust_lidar_odometry] <span class="badge b-off">inactive</span></h3>
+<p>An experimental pre-alignment of each window in spherical coordinates (range / polar / azimuth buckets) before the main optimization. It is off (<code>use_robust_and_accurate_lidar_odometry = false</code>), and gyro bias estimation is disabled automatically if it is switched on.</p>
+<div class="table-wrap"><table>
+<tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr>
+<tr><td>use_robust_and_accurate_lidar_odometry</td><td class="val">false</td><td>Enables the pre-alignment.</td></tr>
+<tr><td>distance_bucket, polar_angle_deg, azimutal_angle_deg</td><td class="val">0.2 m, 10°, 10°</td><td>Bucket sizes of the spherical grid.</td></tr>
+<tr><td>*_rigid_sf, max_distance_lidar_rigid_sf</td><td class="val">0.5 m, 10°, 10°, 25 m</td><td>The same for the rigid scan-frame stage.</td></tr>
+<tr><td>rgd_sf_sigma_x/y/z_m, rgd_sf_sigma_om/fi/ka_deg</td><td class="val">0.001 m, 0.01°</td><td>Motion priors of the rigid stage.</td></tr>
+<tr><td>robust_and_accurate_lidar_odometry_iterations, …_rigid_sf_iterations</td><td class="val">20, 30</td><td>Iterations of both stages.</td></tr>
+</table></div>
+
+<h3 id="p-misc">[lidar_odometry_debug_info], [paths], [misc], [version_info]</h3>
+<div class="table-wrap"><table>
+<tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr>
+<tr><td>save_calibration_validation</td><td class="val">false</td><td>Writes the first <code>calibration_validation_points</code> calibrated points of the first file to the preview folder, to check the extrinsics.</td></tr>
+<tr><td>calibration_validation_points</td><td class="val">1000000</td><td>Number of points for that check.</td></tr>
+<tr><td>working_directory_preview, current_output_dir</td><td class="val">(paths)</td><td>Written by the program: the preview folder (<code>&lt;input&gt;/preview</code>, which holds a temporary point cloud of window 1 and every 100th window after it) and the output folder. Recalculated on every run, so the stored value doesn't matter.</td></tr>
+<tr><td>clear_color <span class="badge b-gui">GUI only</span></td><td class="val">RGBA</td><td>Background colour of the 3-D view.</td></tr>
+<tr><td>software_version, config_version, build_date</td><td class="val">0.95.0</td><td>Compatibility check when loading: the file counts as compatible when major and minor version match the program (0.95); otherwise a warning is printed.</td></tr>
+</table></div>
+
+<h2 id="tuning">Tuning cheat sheet</h2>
+<div class="table-wrap"><table>
+<tr><th>Symptom</th><th>Likely cause</th><th>What to change</th></tr>
+<tr><td style="font-family:inherit;white-space:normal">Walls appear as several rotated copies</td><td>Heading error handed from window to window</td><td>Keep <code>use_time_scaled_rotation_sigma</code> on and <code>handoff_tail_nodes</code> &gt; 0. Check that the IMU timestamps are strictly increasing.</td></tr>
+<tr><td style="font-family:inherit;white-space:normal">Walls thick or fuzzy</td><td>Per-node rotation jitter</td><td>Lower <code>rotation_sigma_inflation_k</code> (not below about 2), or check <code>decimation</code>.</td></tr>
+<tr><td style="font-family:inherit;white-space:normal">Map rotates slowly over the recording</td><td>Gyro bias</td><td>Keep <code>use_gyro_bias_estimation</code> on. Check the bias track in the results JSON.</td></tr>
+<tr><td style="font-family:inherit;white-space:normal">Bias clamp warnings</td><td>Poor LiDAR geometry, or points on the operator</td><td>Raise <code>filter_threshold_xy_inner</code> / <code>min_distance_lidar</code>, and check the first second of the recording.</td></tr>
+<tr><td style="font-family:inherit;white-space:normal">Feature-poor tunnel drifts</td><td>Too few constraints</td><td>Lower <code>decimation</code>, raise <code>max_distance_lidar</code>, or try <code>threshold_nr_poses</code> = 720.</td></tr>
+<tr><td style="font-family:inherit;white-space:normal">Results differ between runs</td><td>Multithreading</td><td><code>useMultithread = false</code>.</td></tr>
+</table></div>
+<p>Use <code>tools/eval_odometry.py</code> to compare runs objectively: jitter, heading agreement with the gyro, end-of-window spikes, and map sharpness (occupied cells in a height section). See <code>tools/README.md</code>.</p>
+
+<h2 id="limits">Known limitations</h2>
+<ul>
+<li><b>Initial map is not motion-compensated.</b> The first ~60k points are placed with the first pose only.</li>
+<li><b>Consistency pass is GUI only</b>, so the command-line output skips it.</li>
+<li><b>Map decimation on rebuild has no effect.</b> When the map is rebuilt after <code>sliding_window_trajectory_length_threshold</code>, the result of <code>decimate()</code> is discarded, so the rebuilt map uses all points of the newer half.</li>
+<li><b>dLidar IMU timestamps.</b> Current recordings are strictly increasing, but samples inside a batch are stamped only about 0.02 ms apart instead of about 1.13 ms. Heading is unaffected, but most steps hit <code>rotation_sigma_floor_deg</code>. This should be fixed in dLidar.</li>
+<li><b>Last partial output chunk.</b> It is dropped if it has ≤ <code>min_counter_concatenated_trajectory_nodes</code> windows.</li>
+</ul>
+</main>
+</div>
+<script>
+  (function () {
+    var root = document.documentElement, btn = document.getElementById('themeBtn');
+    function current() {
+      var t = root.getAttribute('data-theme');
+      if (t) return t;
+      return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    try { var saved = localStorage.getItem('mapper-docs-theme'); if (saved) root.setAttribute('data-theme', saved); } catch (e) {}
+    btn.addEventListener('click', function () {
+      var next = current() === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      try { localStorage.setItem('mapper-docs-theme', next); } catch (e) {}
+    });
+  })();
+</script>
+</body>
+</html>
