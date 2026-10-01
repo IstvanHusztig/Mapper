@@ -4,13 +4,13 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
 
 ## 1. Sensitivity of the working-directory test (on today's code)
 
-- [ ] 1.1 Create a scratch folder holding a `default_settings.toml` that sets only `[lidar_odometry_control] convergence_delta_threshold = 0.001`; run today's Release CLI on `44_short` with that folder as the working directory; verify that `compare_baseline.py` reports **differences** against the `44_short` manifest (record which files in design.md). If it is identical, choose another key from the six that `lidar-vertical.toml` lacks before continuing
+- [x] 1.1 Create a scratch folder holding a `default_settings.toml` that sets only `[lidar_odometry_control] convergence_delta_threshold = 0.001`; run today's Release CLI on `44_short` with that folder as the working directory; verify that `compare_baseline.py` reports **differences** against the `44_short` manifest (record which files in design.md). If it is identical, choose another key from the six that `lidar-vertical.toml` lacks before continuing
 
 ## 2. OdometryPipeline and the CLI
 
-- [ ] 2.1 Add `app/odometry_pipeline.{h,cpp}` (design decision 1) with `load`, `run_odometry`, `post_process` (the CLI's loop-closure and consistency `if`s, verbatim), `save` and `run_all`; add it to `SOURCES` in `CMakeLists.txt`; verify both presets build
-- [ ] 2.2 CLI branch of `main()`: load only `argv[2]` onto a value-initialized config (no `default_settings.toml`), exit 1 with a message when it fails; run a local `OdometryPipeline` (`load` → `run_all` → `save`); delete the CLI `step1`/`step2` wrappers; verify a missing or invalid TOML path exits non-zero with no output folder
-- [ ] 2.3 Run the step checks; also repeat the 1.1 run (planted `default_settings.toml` as the working directory) and verify it is now IDENTICAL to the manifest; commit
+- [x] 2.1 Add `app/odometry_pipeline.{h,cpp}` (design decision 1) with `load`, `run_odometry`, `post_process` (the CLI's loop-closure and consistency `if`s, verbatim), `save` and `run_all`; add it to `SOURCES` in `CMakeLists.txt`; verify both presets build
+- [x] 2.2 CLI branch of `main()`: load only `argv[2]` onto a value-initialized config (no `default_settings.toml`), exit 1 with a message when it fails; run a local `OdometryPipeline` (`load` → `run_all` → `save`); delete the CLI `step1`/`step2` wrappers; verify a missing or invalid TOML path exits non-zero with no output folder
+- [x] 2.3 Run the step checks; also repeat the 1.1 run (planted `default_settings.toml` as the working directory) and verify it is now IDENTICAL to the manifest; commit
 
 ## 3. GUI on the pipeline
 

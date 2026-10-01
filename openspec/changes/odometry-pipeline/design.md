@@ -108,3 +108,14 @@ See proposal.md for the motivation. Current state:
 - [Starting a second run in the same GUI session without restarting] → It gets a fresh
   `OdometryPipeline`. That is a behaviour improvement, not covered by the baselines; it is noted
   in the user check.
+
+## Findings during implementation
+
+- **The working-directory test is sensitive (task 1.1).** Today's CLI, run with a working
+  directory containing a `default_settings.toml` that sets only `convergence_delta_threshold =
+  0.001`, loaded that file ("No version information found in config file:
+  default_settings.toml").
+  - Its `44_short` output differed from the baseline in **10 of 11 files**: the params TOML,
+    results JSON, `session.mjs`, both pose files, all LAZ and trajectories. Only
+    `point_sizes_per_chunk.json` matched.
+  - The run took 109 s instead of about 200 s, because the optimizer stopped earlier.

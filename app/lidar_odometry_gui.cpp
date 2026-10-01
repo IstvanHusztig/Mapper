@@ -10,6 +10,7 @@
 #include "lidar_odometry_utils.h"
 #include "lidar_odometry.h"
 #include "loop_closure.h"
+#include "odometry_pipeline.h"
 #include <export_laz.h>
 
 #include <utils.hpp>
@@ -1189,43 +1190,6 @@ void openData()
         loRunning = false;
 }
 
-void step1(const std::string &folder,
-           const OdometryConfig &params,
-           OdometryState &state,
-           std::vector<std::vector<Point3Di>> &pointsPerFile,
-           Imu &imu_data,
-           std::string &working_directory,
-           Trajectory &trajectory,
-           std::vector<WorkerData> &worker_data,
-           const std::atomic<bool> &loPause)
-{
-    std::vector<std::string> input_file_names;
-
-    for (const auto &entry : fs::directory_iterator(folder))
-    {
-        if (!entry.is_directory())
-        {
-            std::cout << entry.path() << std::endl;
-            input_file_names.push_back(entry.path().string());
-        }
-    }
-
-    if (load_data(input_file_names, params, state, pointsPerFile, imu_data, full_debug_messages))
-    {
-        working_directory = fs::path(input_file_names[0]).parent_path().string();
-        calculate_trajectory(trajectory, imu_data, params.fusionConventionNwu, params.fusionConventionEnu, params.fusionConventionNed, params.ahrs_gain, full_debug_messages, params.use_remove_imu_bias_from_first_stationary_scan);
-        compute_step_1(pointsPerFile, params, state, trajectory, worker_data, loPause, &imu_data);
-        std::cout << "step_1_done" << std::endl;
-    }
-}
-
-void step2(std::vector<WorkerData> &worker_data, const OdometryConfig &params, OdometryState &state, const std::atomic<bool> &loPause)
-{
-    double ts_failure = 0.0;
-    std::atomic<float> loProgress;
-    compute_step_2(worker_data, params, state, ts_failure, loProgress, loPause, full_debug_messages);
-}
-
 void display()
 { 
     ImGuiIO& io = ImGui::GetIO();
@@ -1835,45 +1799,42 @@ void mouse(int glut_button, int state, int x, int y)
 
 int main(int argc, char *argv[])
 {
-    set_lidar_odometry_default_params(params, state.paths, gui_prefs);
-
     try
     {
-        TomlIO toml_io;
-		
         if (argc == 4) //runnning from command line
         {
-            // Load parameters from file using original TomlIO class
-            
-           if (toml_io.LoadParametersFromTomlFile(argv[2], params, state.paths, gui_prefs))
+            // CLI settings: built-in defaults + the given file only (independent of the working directory)
+            OdometryConfig config{};
+            RunPaths paths;
+            GuiPreferences gui;
+            TomlIO toml_io;
+            if (!fs::is_regular_file(argv[2]) || !toml_io.LoadParametersFromTomlFile(argv[2], config, paths, gui))
             {
-                std::cout << "Parameters loaded OK from: " << argv[2] << std::endl;
+                std::cerr << "Cannot load parameters from: '" << argv[2] << "'" << std::endl;
+                return 1;
             }
-
-            std::string working_directory;
-            std::vector<WorkerData> worker_data;
+            std::cout << "Parameters loaded OK from: " << argv[2] << std::endl;
 
             std::chrono::time_point<std::chrono::system_clock> start, end;
             start = std::chrono::system_clock::now();
 
+            std::vector<std::string> input_file_names;
+            for (const auto &entry : fs::directory_iterator(argv[1]))
+            {
+                if (!entry.is_directory())
+                {
+                    std::cout << entry.path() << std::endl;
+                    input_file_names.push_back(entry.path().string());
+                }
+            }
+
+            OdometryPipeline pipeline(config, paths, full_debug_messages);
             std::atomic<bool> loPause{false};
-            step1(argv[1],
-                  params,
-                  state,
-                  pointsPerFile,
-                  imu_data,
-                  working_directory,
-                  trajectory,
-                  worker_data,
-                  loPause);
+            std::atomic<float> progress{0.0f};
+            if (pipeline.load(input_file_names, loPause))
+                std::cout << "step_1_done" << std::endl;
 
-            step2(worker_data, params, state, loPause);
-
-            if (params.use_loop_closure)
-                run_loop_closure(worker_data, params);
-
-            if (params.use_consistency && params.num_constistency_iter > 0)
-                run_consistency(worker_data, params);
+            pipeline.run_all(progress, loPause);
 
             end = std::chrono::system_clock::now();
             std::chrono::duration<double> elapsed_seconds = end - start;
@@ -1882,11 +1843,13 @@ int main(int argc, char *argv[])
                       << std::ctime(&end_time)
                       << "Elapsed time: " << formatTime(elapsed_seconds.count()).c_str() << "s\n";
 
-            save_result(worker_data, params, state, gui_prefs, argv[3], elapsed_seconds.count());
+            pipeline.save(argv[3], gui, elapsed_seconds.count());
         }
         else //full GUI mode
         {
             std::cout << argv[0] << " input_folder parameters(*.toml) output_folder" << std::endl;
+
+            set_lidar_odometry_default_params(params, state.paths, gui_prefs);
 
              
 
