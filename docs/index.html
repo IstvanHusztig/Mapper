@@ -128,6 +128,8 @@
   <a class="indent" href="#p-mmc">motion_model_correction</a>
   <a class="indent" href="#p-ahrs">madgwick_filter</a>
   <a class="indent" href="#p-ext">lidar_imu_extrinsics</a>
+  <a class="indent" href="#p-imu">imu_translation</a>
+  <a class="indent" href="#p-loop">loop_closure</a>
   <a class="indent" href="#p-cons">consistency</a>
   <a class="indent" href="#p-perf">performance</a>
   <a class="indent" href="#p-robust">robust_lidar_odometry</a>
@@ -145,13 +147,13 @@
 
 <p>The program is a <b>LiDAR-inertial odometry</b>. The IMU gives a fast but drifting estimate of how the sensor rotated. The LiDAR sees the surroundings, which do not move. The program cuts the recording into short windows of about 0.4 s. Each window's trajectory is adjusted until its points line up with the map built from all previous windows, without contradicting the IMU more than its noise allows. Every point keeps its own timestamp and gets its own pose, so the motion during a sweep is compensated (deskewed).</p>
 
-<div class="note"><b>Values on this page</b>The values shown are those of <code>settings/lidar-vertical.toml</code>, tuned on datasets 42 and 43 (handheld L2, about 893 Hz IMU, 64k points/s) and on a static recording. The measurements behind them are in <code>openspec/changes/archive/2026-09-30-gyro-bias-estimation/baseline.md</code>.</div>
+<div class="note"><b>Values on this page</b>The values shown are those of <code>settings/lidar-vertical.toml</code>, tuned on datasets 42 and 43 (handheld L2, about 893 Hz IMU, 64k points/s, short cave walks), on a static recording and on b1 (a 4-minute walk over three floors of a building with a one-sided corridor, stairwells and revisited rooms). The measurements behind them are in <code>openspec/changes/archive/2026-09-30-gyro-bias-estimation/baseline.md</code>.</div>
 
 <h2 id="inputs">Inputs and outputs</h2>
 <div class="table-wrap"><table>
 <tr><th>File in input folder</th><th>Content</th><th>Required</th></tr>
 <tr><td>lidar*.laz / *.las</td><td>Points with x, y, z (sensor frame, metres), intensity, <code>gps_time</code> (ns) and <code>user_data</code> = LiDAR id</td><td>yes</td></tr>
-<tr><td>imu*.csv</td><td><code>gyroX gyroY gyroZ</code> (rad/s), <code>accX accY accZ</code> (g), <code>imuId</code>, <code>timestamp</code> (ns, same clock as the points), <code>timestampUnix</code>. <b>Every</b> <code>.csv</code> in the folder is read as IMU data.</td><td>yes</td></tr>
+<tr><td>imu*.csv</td><td><code>gyroX gyroY gyroZ</code> (rad/s), <code>accX accY accZ</code> (g), <code>imuId</code>, <code>timestamp</code> (ns, same clock as the points), <code>timestampUnix</code>. <b>Every</b> <code>.csv</code> in the folder is read as IMU data. The timestamps must be strictly increasing and should be steady; recordings with bursty or stepped timestamps can be repaired with <code>tools/fix_imu_timestamps.py</code>.</td><td>yes</td></tr>
 <tr><td>*.json</td><td>LiDAR extrinsic calibration per serial number (multi-LiDAR rigs). Without it, only the lever arm is applied.</td><td>no</td></tr>
 <tr><td>*.sn</td><td>LiDAR id → serial number mapping</td><td>no</td></tr>
 </table></div>
@@ -244,7 +246,7 @@
 <ul>
 <li>The window's first node is placed exactly on the previous window's last node.</li>
 <li>Rotations follow the IMU's relative rotations between nodes, <b>minus the gyro bias</b> estimated so far (bias × Δt per step).</li>
-<li>Positions follow a <b>constant velocity</b>: the velocity over the last 20 nodes of the previous window (<code>use_motion_from_previous_step</code>). The IMU accelerometer is not integrated for position.</li>
+<li>Positions follow a <b>constant velocity</b>: the velocity over the last 20 nodes of the previous window (<code>use_motion_from_previous_step</code>). The accelerometer is not integrated into the guess; where the LiDAR geometry is blind in one direction, it enters the optimization instead (step 6).</li>
 </ul>
 <p>This guess is also stored as the <b>motion model</b>: the IMU "measurement" the optimizer compares against.</p>
 <div class="params"><span>use_motion_from_previous_step</span><span>use_gyro_bias_estimation</span></div>
@@ -259,6 +261,7 @@
 <li><b>Point to map (NDT, coarse grid):</b> the same with the 0.4 m grid, for points between <code>min_distance_lidar_outdoor_grid</code> and <code>max_distance_lidar</code>.</li>
 <li><b>IMU motion model:</b> between consecutive nodes, the relative pose should match the guess. Translation is held tightly (<code>*_x/y/z_1_sigma_m</code>). Rotation may deviate by <code>max(k × ARW × √Δt, floor)</code> per axis, i.e. about what the gyro can drift in that Δt (time-scaled rotation prior). The gyro bias enters here: the IMU step is corrected by −bias × Δt.</li>
 <li><b>Velocity continuity:</b> the velocity may only change as much as <code>acc_1_sigma_mps2</code> allows, including across the boundary to the previous window.</li>
+<li><b>Accelerometer (blind stretches only):</b> when the previous window's points left one translation direction unconstrained (a corridor turnaround, a stairwell), the velocity-continuity term is replaced by the measured acceleration: the change of velocity between nodes about 10 ms apart must match <i>R · f − g</i> minus an acceleration offset <i>e</i>. <i>e</i> is 3 extra unknowns that absorb tilt and accelerometer bias errors, carried from window to window like the gyro bias, and calibrated from the LiDAR trajectory while the geometry is good. The translation prior is loosened to <code>imu_degenerate_translation_sigma_m</code> in those windows, and the term switches off after <code>imu_degenerate_max_duration_s</code>. See <a href="#p-imu">[imu_translation]</a>.</li>
 <li><b>Fixed start:</b> node 0 is locked to the previous window's end (<code>fix_origin</code> sigmas, 1e-6).</li>
 <li><b>Bias prior:</b> the bias stays near the previous window's estimate, within its uncertainty grown by the bias random walk.</li>
 </ul>
@@ -288,6 +291,16 @@
 <div class="params"><span>threshould_output_filter</span><span>min_counter_concatenated_trajectory_nodes</span></div>
 </li>
 </ol>
+
+<div class="note"><b>Loop closure (after step 8, before the consistency pass)</b>With <code>use_loop_closure = true</code> the command-line mode corrects the finished trajectory when you come back to a place you have already scanned (<code>app/loop_closure.cpp</code>):
+<ol>
+<li>The windows are grouped into <b>segments</b> of <code>loop_closure_segment_windows</code> windows (12 ≈ 5 s), each with its points in world coordinates.</li>
+<li><b>Revisit candidates</b>: for every segment, the closest earlier segment that is at least <code>loop_closure_min_time_gap_s</code> older, within <code>loop_closure_search_radius_m</code> horizontally and <code>loop_closure_max_vertical_offset_m</code> vertically (so different floors are not confused).</li>
+<li><b>Registration</b>: the later segment is aligned to the earlier one and its neighbours, first by a voxel-overlap search over yaw (±10°) and translation (±<code>loop_closure_max_correction_m</code>), then by point-to-distribution refinement. It is accepted only if at least <code>loop_closure_min_fitness</code> of its points overlap the earlier visit, the overlap did not get worse, and the correction stays within the search range and 15°.</li>
+<li><b>Pose graph</b>: the segment poses are optimized with odometry edges between consecutive segments and the accepted loop edges, the first segment fixed.</li>
+<li>The correction of each segment is <b>interpolated onto every trajectory node</b>, so the trajectory bends smoothly instead of jumping.</li>
+</ol>
+The log lists every candidate with its overlap before/after and the correction. Errors larger than the search range (for example a 20° heading failure) are rejected on purpose; they come from the odometry and have to be fixed there.</div>
 
 <div class="warn"><b>Optional: consistency pass (between steps 8 and 9)</b>With <code>use_consistency = true</code> the command-line mode runs <code>run_consistency</code> after the odometry, before the export (the GUI has a button for it). It re-optimizes <b>the whole trajectory at once</b>, <code>num_constistency_iter</code> times: every node is pulled towards a smooth trajectory (relative-pose prior between consecutive nodes), and points from <b>all</b> windows must agree with one NDT map built from the whole recording. This can remove residual misalignment between windows, such as a wall seen at the start and again at the end, but it is slow and it can also smear the trajectory if the smoothness prior is too strong. Two variants (<code>use_mutliple_gaussian</code>):
 <ul>
@@ -340,7 +353,9 @@ See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 <tr><td>gyro_arw_x / y / z_deg_sqrt_s</td><td class="val">0.028 / 0.042 / 0.057</td><td>Gyro angle random walk (noise density) in °/√s, measured on a 17 s static L2 recording. Axes map to ω (roll), φ (pitch), κ (yaw).</td></tr>
 <tr><td>rotation_sigma_inflation_k <span class="badge b-key">key</span></td><td class="val">4.0</td><td>Multiplier on the pure gyro noise, which covers timestamp jitter, vibration and model error. Tuned: 12 leaves visible jitter, 4 gives the sharpest maps, 2 and 1 over-trust the IMU and blur walls.</td></tr>
 <tr><td>rotation_sigma_floor_deg</td><td class="val">0.002°</td><td>Lower bound of the per-step rotation sigma, so that near-zero Δt does not produce infinite weights.</td></tr>
-<tr><td>lidar_odometry_motion_model_x/y/z_1_sigma_m</td><td class="val">1e-4 m</td><td>Allowed deviation of the <b>relative translation</b> between consecutive nodes from the constant-velocity guess. Very tight: position changes mainly through the velocity prior and the first node.</td></tr>
+<tr><td>rotation_sigma_inflation_k_turn <span class="badge b-off">inactive</span></td><td class="val">0 (off)</td><td>In windows turning faster than <code>turn_rate_threshold_deg_s</code> about the vertical, this replaces <code>rotation_sigma_inflation_k</code>, i.e. the gyro is trusted more in tight turns. Tested with 1.0 / 30 °/s: on b1 the stairwell heading followed the gyro within 2° and the rooms closed, but a lifted floor appeared on the return to the 2nd floor and 42/43 lost 1.6–1.9% sharpness, so it is not in the file.</td></tr>
+<tr><td>turn_rate_threshold_deg_s</td><td class="val">30 °/s</td><td>Mean rotation rate about the vertical (from the IMU) above which a window counts as a turn. Only used with <code>rotation_sigma_inflation_k_turn</code> &gt; 0.</td></tr>
+<tr><td>lidar_odometry_motion_model_x/y/z_1_sigma_m</td><td class="val">1e-4 m</td><td>Allowed deviation of the <b>relative translation</b> between consecutive nodes from the constant-velocity guess. Very tight: position changes mainly through the velocity prior and the first node. It flattens about half of the real up-and-down walking motion (measured against the accelerometer on 42). In windows where the accelerometer term is active, <code>imu_degenerate_translation_sigma_m</code> is used instead.</td></tr>
 <tr><td>lidar_odometry_motion_model_acc_1_sigma_mps2</td><td class="val">1.0 m/s²</td><td>Velocity-continuity prior: how fast the velocity may change, also across window boundaries (avoids velocity kinks every window). 0 disables it.</td></tr>
 <tr><td>lidar_odometry_motion_model_om/fi/ka_1_sigma_deg <span class="badge b-off">inactive</span></td><td class="val">0.1 / 0.1 / 0.15°</td><td>Constant rotation sigma per node, only used when <code>use_time_scaled_rotation_sigma = false</code>. These values caused the ghost walls: every ~1 ms node could turn 0.15°.</td></tr>
 </table></div>
@@ -380,6 +395,38 @@ See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 <div class="table-wrap"><table>
 <tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr>
 <tr><td>lidar_imu_lever_arm_x / y / z_m</td><td class="val">0.00667 / −0.014655 / 0.007698</td><td>Offset added to every point to express it at the IMU origin (Unitree L2 datasheet values mapped to NWU). Applied only when no calibration <code>.json</code> is present. No rotation is applied, since dLidar already delivers points in the IMU axes.</td></tr>
+</table></div>
+
+<h3 id="p-imu">[imu_translation]</h3>
+<p>Use of the accelerometer for the translation. Walking produces only about 0.2 m/s² of acceleration, while a 1° tilt error already leaves 0.17 m/s² of gravity in it, and position is its double integral. So the accelerometer is used only where the LiDAR is blind in a direction, only for a limited time, and with an offset that is estimated alongside.</p>
+<div class="table-wrap"><table>
+<tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr>
+<tr><td>use_imu_acceleration_term <span class="badge b-key">key</span></td><td class="val">true</td><td>Accelerometer as a soft measurement of the change of velocity inside the window optimization (see step 6). The initial guess stays constant velocity, so a wrong acceleration cannot run away.</td></tr>
+<tr><td>imu_acceleration_only_when_degenerate <span class="badge b-key">key</span></td><td class="val">true</td><td>Activate the term only after a window whose geometry left a translation direction unconstrained. false = in every window (fixed the doubled rooms of b1 as well, but cost 1–2% sharpness on 42/43).</td></tr>
+<tr><td>imu_degenerate_information_ratio</td><td class="val">0.3</td><td>Blindness test: smallest / largest eigenvalue of Σ n·nᵀ over the surface normals the window's points were matched to. Rooms measured 0.36–0.86 on b1, the corridor turnaround and the stair climb 0.16–0.3. The ratio of the NDT information itself does not work: the small Gaussians also pin points along flat walls.</td></tr>
+<tr><td>imu_degenerate_max_duration_s</td><td class="val">15 s</td><td>After this long inside one blind stretch the term switches off again; the accelerometer error grows with time.</td></tr>
+<tr><td>imu_degenerate_translation_sigma_m</td><td class="val">3e-4 m</td><td>Translation prior between nodes while the term is active (instead of 1e-4). With 1e-4 the prior overrules the accelerometer; 1e-3 diverged on b1.</td></tr>
+<tr><td>imu_acceleration_sigma_mps2</td><td class="val">0.5 m/s²</td><td>Accuracy assumed for the measured acceleration.</td></tr>
+<tr><td>imu_acceleration_span_s</td><td class="val">0.01 s</td><td>Spacing of the node triples of the acceleration term (evens out IMU sample bursts).</td></tr>
+<tr><td>imu_acceleration_offset_initial_sigma_mps2</td><td class="val">0.1 m/s²</td><td>Prior sigma of the offset <i>e</i> at the start of a blind stretch (gravity was calibrated just before).</td></tr>
+<tr><td>imu_acceleration_offset_rw_mps2_sqrt_s</td><td class="val">0.05</td><td>Random walk of <i>e</i>: its prior sigma grows by this × √(window duration).</td></tr>
+<tr><td>use_imu_translation_prediction <span class="badge b-off">inactive</span></td><td class="val">false</td><td>Experimental: integrate the accelerometer into the initial guess itself. Diverged or drifted on the test recordings, kept for reference.</td></tr>
+<tr><td>use_zero_velocity_detection, zero_velocity_acc_threshold_mps2, zero_velocity_gyro_threshold_deg_s <span class="badge b-off">inactive</span></td><td class="val">false, 0.3, 3.0</td><td>Predict a window without motion when the device rests (50 ms-averaged acceleration below the threshold, rotation below the threshold). Detected 35 of 39 windows of a static recording and none while walking; no walking recording had a real stop yet.</td></tr>
+</table></div>
+
+<h3 id="p-loop">[loop_closure]</h3>
+<p>Automatic loop closure after the odometry, described in the note after step 8 of the <a href="#pipeline">pipeline</a>. On b1 it reduced the offset of the revisited rooms from 0.4–0.7 m to 0.1 m; 42 and 43 have no revisits and stay unchanged.</p>
+<div class="table-wrap"><table>
+<tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr>
+<tr><td>use_loop_closure <span class="badge b-key">key</span></td><td class="val">true</td><td>Run loop closure in the command-line mode, before the consistency pass and the export.</td></tr>
+<tr><td>loop_closure_segment_windows</td><td class="val">12</td><td>Windows per segment (≈ 5 s). A segment is moved as a unit in the pose graph; the correction is interpolated between segments.</td></tr>
+<tr><td>loop_closure_min_time_gap_s</td><td class="val">30 s</td><td>Minimum time between two visits to count as a revisit (shorter gaps are already consistent through the odometry).</td></tr>
+<tr><td>loop_closure_search_radius_m</td><td class="val">8 m</td><td>Maximum horizontal distance between the centres of the two segments.</td></tr>
+<tr><td>loop_closure_max_vertical_offset_m</td><td class="val">1.5 m</td><td>Maximum vertical distance, so that rooms on different floors are not matched.</td></tr>
+<tr><td>loop_closure_max_correction_m</td><td class="val">6 m</td><td>Search range of the registration and upper limit of an accepted correction (rotation limit 15°).</td></tr>
+<tr><td>loop_closure_min_fitness <span class="badge b-key">key</span></td><td class="val">0.5</td><td>Share of the later segment's points that must overlap the earlier visit (0.2 m voxels) after alignment. Lower accepts more loops, including wrong ones.</td></tr>
+<tr><td>loop_closure_odometry_sigma_m / _deg</td><td class="val">0.1 m / 0.5°</td><td>Uncertainty of the odometry between consecutive segments in the pose graph.</td></tr>
+<tr><td>loop_closure_edge_sigma_m / _deg</td><td class="val">0.05 m / 0.3°</td><td>Uncertainty of an accepted loop. Smaller than the odometry, so a loop pulls the trajectory together.</td></tr>
 </table></div>
 
 <h3 id="p-cons">[consistency]</h3>
@@ -429,7 +476,10 @@ See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 <tr><td style="font-family:inherit;white-space:normal">Bias clamp warnings</td><td>Poor LiDAR geometry, or points on the operator</td><td>Raise <code>filter_threshold_xy_inner</code> / <code>min_distance_lidar</code>, and check the first second of the recording.</td></tr>
 <tr><td style="font-family:inherit;white-space:normal">Walls slightly doubled between windows or passes</td><td>Residual window-to-window offsets</td><td>Make sure <code>use_consistency = true</code> (about 6–7% sharper on the test recordings, +20–30 s).</td></tr>
 <tr><td style="font-family:inherit;white-space:normal">Feature-poor tunnel drifts</td><td>Too few constraints</td><td>Lower <code>decimation</code>, raise <code>max_distance_lidar</code>, or try <code>threshold_nr_poses</code> = 720.</td></tr>
-<tr><td style="font-family:inherit;white-space:normal">Results differ between runs</td><td>Multithreading</td><td><code>useMultithread = false</code>.</td></tr>
+<tr><td style="font-family:inherit;white-space:normal">Results differ between runs</td><td>Multithreading, or windows cut by the time limit</td><td><code>useMultithread = false</code>; check that no window hits <code>real_time_threshold_seconds</code>.</td></tr>
+<tr><td style="font-family:inherit;white-space:normal">A revisited room appears twice, shifted</td><td>Distance not observable in between (e.g. a one-sided corridor)</td><td>Keep <code>use_loop_closure</code> on. While recording, pause briefly at a feature-rich spot before and after long featureless stretches.</td></tr>
+<tr><td style="font-family:inherit;white-space:normal">A floor or room is lifted, rotated, or far off after stairs</td><td>Odometry failure in a stairwell (beyond what loop closure accepts)</td><td>Repair the IMU timestamps (<code>tools/fix_imu_timestamps.py</code>); keep <code>imu_acceleration_only_when_degenerate</code> on.</td></tr>
+<tr><td style="font-family:inherit;white-space:normal">Processing is slow</td><td>All 100 iterations run in every window</td><td><code>convergence_delta_threshold = 1e-2</code> (3–4× faster, about 1% less sharp).</td></tr>
 </table></div>
 <p>Use <code>tools/eval_odometry.py</code> to compare runs objectively: jitter, heading agreement with the gyro, end-of-window spikes, and map sharpness (occupied cells in a height section). See <code>tools/README.md</code>.</p>
 
@@ -441,6 +491,8 @@ See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 <tr><td style="font-family:inherit;white-space:normal"><b>Map rebuild ignored <code>decimation</code></b>: the result of <code>decimate()</code> was discarded, so the rebuilt map kept every point of the newer half</td><td>The reduced cloud is now used.</td><td>None measurable (±0.5%, within run-to-run noise), even with a rebuild every 2 m. It makes each rebuild smaller, so long walks use less memory and run faster (42 with rebuilds every 2 m: 183 s → 145 s). With the default 200 m, the map is never rebuilt on the test recordings.</td></tr>
 <tr><td style="font-family:inherit;white-space:normal"><b>Tail of the recording dropped</b>: the last output chunk was not written if it had ≤ 10 windows (up to ~4 s)</td><td><code>min_counter_concatenated_trajectory_nodes</code> = 0.</td><td>None. It only affects completeness: the last seconds of the walk are now in the export.</td></tr>
 <tr><td style="font-family:inherit;white-space:normal"><b><code>bounding_box_*</code>, <code>number_of_buckets*</code></b> look like settings</td><td>Documented as unused.</td><td>None. The grid is hashed and unbounded.</td></tr>
+<tr><td style="font-family:inherit;white-space:normal"><b>Optimizer scanned a dense 2166×2166 matrix every iteration</b></td><td>Only the populated band (neighbouring nodes, bias and offset unknowns) is converted to sparse form.</td><td>None, the result is bit-identical. About 35% less time per window (42: 132 s → 93 s).</td></tr>
+<tr><td style="font-family:inherit;white-space:normal"><b>Doubled rooms after a featureless corridor</b> (b1: 2.9–4.3 m offset)</td><td>Steadier gyro bias (rw 0.005), accelerometer term in blind stretches, loop closure.</td><td>Revisited rooms 0.1 m apart instead of 2.9 m; sharpness of the first visit unchanged.</td></tr>
 </table></div>
 
 <h3>Consistency pass, measured</h3>
@@ -457,7 +509,9 @@ See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 <h2 id="limits">Known limitations</h2>
 <ul>
 <li><b>Initial map is not motion-compensated.</b> The first ~60k points are placed with the first pose only.</li>
-<li><b>dLidar IMU timestamps.</b> Current recordings are strictly increasing, but samples inside a batch are stamped only about 0.02 ms apart instead of about 1.13 ms. Heading is unaffected, but most steps hit <code>rotation_sigma_floor_deg</code>. This should be fixed in dLidar.</li>
+<li><b>dLidar IMU timestamps.</b> Older recordings stamp samples in bursts (about 0.02 ms apart, then several ms gaps); newer ones are steady after startup but still have a buffer dump in the first ~2 s and clock corrections applied as jumps (0.77–0.9 ms steps instead of 1.2 ms). <code>tools/fix_imu_timestamps.py</code> repairs both offline; on b1 the repaired timestamps avoided an odometry failure in a stairwell. This should be fixed in dLidar.</li>
+<li><b>Stairwells.</b> On b1 the heading drifted up to ~10° between floors with several settings, and the return from the 1st to the 2nd floor failed in some runs by 20–90°, which is beyond what loop closure accepts. Repaired timestamps avoided it in the tests; more multi-floor recordings are needed to tune this.</li>
+<li><b>Loop closure</b> only corrects revisits it can register (≥ 50% overlap, ≤ 6 m, ≤ 15°). It runs only in the command-line mode.</li>
 </ul>
 </main>
 </div>

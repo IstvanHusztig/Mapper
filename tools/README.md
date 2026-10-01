@@ -38,3 +38,27 @@ python tools/eval_odometry.py "<dataset_folder>" "<result_folder_A>" "<result_fo
 | cells 3/5/10cm | occupied top-view cells of the Z section, for the same scene | lower = sharper |
 
 The IMU timestamps must be strictly increasing. Recordings from dLidar builds before the timestamp fix must be repaired first.
+
+## fix_imu_timestamps.py
+
+Rebuilds a steady sample clock for an `imu*.csv` whose timestamps are arrival times (bursts of samples ~0.02 ms apart followed by gaps, or clock corrections applied as jumps). Pure Python 3.
+
+```
+python tools/fix_imu_timestamps.py "<input_folder>/imu.csv" -o "<new_folder>/imu.csv"
+```
+
+- Every sample is acquired no later than its own arrival and no later than any later arrival minus the periods in between. The new time of each sample is the tightest such bound over the next `--window` seconds (default 0.5). Dropped samples only make the bound looser, so they need no special handling.
+- The sample period is fitted from the lower edge of the arrival times over the whole file.
+- `timestamp` gets the new time, `timestampUnix` is shifted by the same amount; all other columns are copied verbatim. A partial last line (recording cut off) is dropped. The original file is never modified.
+- It prints the step statistics before and after and how much later the samples arrived than their new time.
+- Write the output into a **new** input folder together with copies of the LAZ files: every `.csv` in an input folder is read as IMU data.
+
+## merge_chunks.sh
+
+Merges the chunk clouds of a result folder into one LAZ in world coordinates, using the CloudCompare command line. Each `scan_lio_N.laz` is stored relative to its chunk's first pose; `session_poses.mrp` holds those poses.
+
+```
+tools/merge_chunks.sh "<result_folder>" ["<output.laz>"]
+```
+
+The default output is `<result_folder>/scan_lio_merged.laz`. Set `CLOUDCOMPARE` if CloudCompare is not installed in `C:\Program Files\CloudCompare`.

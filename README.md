@@ -25,7 +25,7 @@ lidar_odometry_step_1 <input_folder> settings/lidar-vertical.toml <output_folder
 - Any other number of arguments opens the GUI (freeglut + ImGui).
 - Output: `scan_lio_*.laz` (the point cloud), `trajectory_lio_*.csv` (one pose per IMU sample), `session.mjs` with pose files, the parameters used (`HDMapping_params_*.toml`) and processing results (`HDMapping_results_*.json`, including the estimated gyro bias per window).
 
-The IMU timestamps must be strictly increasing. Recordings from dLidar builds before the timestamp fix must be repaired first.
+The IMU timestamps must be strictly increasing. Recordings from dLidar builds before the timestamp fix should be repaired first: `python tools/fix_imu_timestamps.py <input>/imu.csv -o <new_folder>/imu.csv` (copy the LAZ files next to it; never leave two IMU CSVs in one input folder).
 
 ## What happens to the points (short version)
 
@@ -48,8 +48,9 @@ IMU samples ──> AHRS orientation ──> initial trajectory ─────�
 3. **Windows:** the IMU poses are cut into windows of `threshold_nr_poses` poses. Every point is attached to the pose just before its timestamp (at most 10 ms), so each point gets its own pose (motion compensation). A voxel-decimated copy (`decimation`) is used for optimization.
 4. **Optimization:** window by window, all poses of the window (and the gyro bias) are adjusted so that the points fit the map, a hierarchical NDT grid of Gaussians built from all previous windows, while staying close to what the IMU measured.
 5. **Map update and hand-off:** the optimized points are added to the map, the last poses of the window are re-derived from the IMU, and the next window starts where this one ended.
-6. **Optional consistency pass** (`use_consistency = true`, on in `settings/lidar-vertical.toml`): the whole trajectory is re-optimized against one map of the entire recording. On the test recordings it gave about 6–7% sharper walls for about 20–30 s more runtime.
-7. **Export:** every original (non-decimated) point is transformed with its own optimized pose and written to LAZ.
+6. **Loop closure** (`use_loop_closure = true`, on in `settings/lidar-vertical.toml`): places visited twice, at least 30 s apart, are recognised, aligned, and the trajectory in between is bent so both visits coincide (doubled rooms after a featureless corridor).
+7. **Optional consistency pass** (`use_consistency = true`, on in `settings/lidar-vertical.toml`): the whole trajectory is re-optimized against one map of the entire recording. On the test recordings it gave about 6–7% sharper walls for about 20–30 s more runtime.
+8. **Export:** every original (non-decimated) point is transformed with its own optimized pose and written to LAZ.
 
 ## Repository layout
 
@@ -60,5 +61,7 @@ IMU samples ──> AHRS orientation ──> initial trajectory ─────�
 | `3rdparty/` | vendored dependencies |
 | `settings/` | `lidar-vertical.toml` (tuned for the L2) and sensor notes |
 | `tools/eval_odometry.py` | quality metrics (jitter, heading, map sharpness) for result folders |
+| `tools/fix_imu_timestamps.py` | repairs bursty or stepped IMU timestamps of older dLidar recordings |
+| `tools/merge_chunks.sh` | merges the `scan_lio_N.laz` chunks of a result into one LAZ in world coordinates (CloudCompare) |
 | `docs/` | HTML documentation |
 | `openspec/` | specifications and archived changes (design decisions, measurements) |
