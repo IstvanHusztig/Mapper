@@ -95,6 +95,11 @@ Each step is one OpenSpec change, validated against the baseline.
 1. **Split config from state:** `OdometryConfig` vs runtime state; the TOML file format is kept.
 2. **Extract `OdometryPipeline`** out of `lidar_odometry_gui.cpp`; CLI and GUI both call it; the
    globals go away.
+   - This also fixes a known GUI/CLI gap: today the GUI never runs loop closure, which the CLI
+     does. On 44 the CLI result with loop closure is the better one.
+   - After this step, the GUI's "Compute all" must run exactly the CLI sequence (step 2 → loop
+     closure → consistency) and produce output bit-identical to the baseline.
+   - The CLI output must not change.
 3. **Logger and ProgressReporter ports:** remove `std::cout` and the atomics from the pipeline.
 4. **I/O ports:** `RecordingSource`, `PointStore`, `ResultSink`, `ConfigRepository`, with adapters.
 5. **Domain model:** `Window`, `Trajectory`, `GyroBiasState`; option structs for the optimizer.
