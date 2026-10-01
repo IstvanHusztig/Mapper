@@ -123,9 +123,12 @@ public:
         {"rgd_sf_sigma_om_deg", &LidarOdometryParams::rgd_sf_sigma_om_deg},
         {"rgd_sf_sigma_fi_deg", &LidarOdometryParams::rgd_sf_sigma_fi_deg},
         {"rgd_sf_sigma_ka_deg", &LidarOdometryParams::rgd_sf_sigma_ka_deg},
-        {"max_distance_lidar_rigid_sf", &LidarOdometryParams::max_distance_lidar_rigid_sf},
-        {"current_output_dir", &LidarOdometryParams::current_output_dir},
-        {"working_directory_preview", &LidarOdometryParams::working_directory_preview}};
+        {"max_distance_lidar_rigid_sf", &LidarOdometryParams::max_distance_lidar_rigid_sf}};
+
+    // [paths] keys, stored in RunPaths
+    const std::map<std::string, std::string RunPaths::*> RUN_PATH_POINTERS = {
+        {"current_output_dir", &RunPaths::current_output_dir},
+        {"working_directory_preview", &RunPaths::working_directory_preview}};
 
     // Special handling for TaitBryanPose members
     const std::map<std::string, double TaitBryanPose::*> MOTION_MODEL_CORRECTION_POINTERS = {
@@ -152,7 +155,7 @@ public:
         {"paths", {"current_output_dir", "working_directory_preview"}},
         { "misc", {"clear_color"} } };
 
-    bool SaveParametersToTomlFile(const std::string &filepath, LidarOdometryParams &params);
+    bool SaveParametersToTomlFile(const std::string &filepath, const LidarOdometryParams &params, const RunPaths &paths, const GuiPreferences &gui);
     
     // Version validation and handling functions
     struct VersionInfo {
@@ -169,7 +172,7 @@ public:
     template <typename T>
     void set_if_exists(NDT::GridParameters &grid, const toml::table *tbl, const std::string &key, T NDT::GridParameters::*member);
     void read_grid_params(NDT::GridParameters &grid, const toml::table *grid_tbl);
-    bool LoadParametersFromTomlFile(const std::string &filepath, LidarOdometryParams &params);
+    bool LoadParametersFromTomlFile(const std::string &filepath, LidarOdometryParams &params, RunPaths &paths, GuiPreferences &gui);
 };
 
 #endif

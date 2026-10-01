@@ -1598,10 +1598,10 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
             update_rgd(params.in_out_params_outdoor, state.buckets_outdoor, pp, state.m_g.translation());
         }
 
-        if (!fs::exists(params.working_directory_preview))
+        if (!fs::exists(state.paths.working_directory_preview))
         {
-            std::cout << "Creating folder: " << params.working_directory_preview << "\n";
-            fs::create_directory(params.working_directory_preview);
+            std::cout << "Creating folder: " << state.paths.working_directory_preview << "\n";
+            fs::create_directory(state.paths.working_directory_preview);
         }
 
         MotionModelRotationOptions rotation_options = get_motion_model_rotation_options(params);
@@ -2124,7 +2124,7 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
                 points_to_vector(
                     intermediate_points, worker_data[i].intermediate_trajectory,
                     0, nullptr, global_pointcloud, intensity, timestamps, false, params.save_index_pose);
-                std::string fn = params.working_directory_preview + "/temp_point_cloud_" + std::to_string(i) + ".laz";
+                std::string fn = state.paths.working_directory_preview + "/temp_point_cloud_" + std::to_string(i) + ".laz";
                 exportLaz(fn.c_str(), global_pointcloud, intensity, timestamps);
             }
             auto acc_distance_tmp = acc_distance;

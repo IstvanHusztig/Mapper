@@ -16,10 +16,10 @@ Every step ends with: both presets build `lidar_odometry_step_1` and `lidar_odom
 
 ## 3. SettingsDocument and TOML I/O
 
-- [ ] 3.1 Add `GuiPreferences` (`float clear_color[4]`) and `SettingsDocument { config; paths; gui; }`; move `clear_color`, `current_output_dir` and `working_directory_preview` out of params (the latter two into `RunPaths`); the GUI converts `clear_color` to and from `ImVec4` where it uses it
-- [ ] 3.2 Change `TomlIO` load/save to `SettingsDocument` (`POINTERS` into the config, a small `RunPaths` key table, `[misc] clear_color` from `gui`); `CATEGORIES` unchanged; `save_parameters_toml` builds the document from the config, `state.paths` and the GUI prefs
-- [ ] 3.3 CLI and GUI: load a `SettingsDocument`, start the state's `paths` from the document's `[paths]`; update the round-trip smoke test; verify the golden TOML test still passes byte for byte
-- [ ] 3.4 Run the step checks and commit
+- [x] 3.1 Add `GuiPreferences` (`float clear_color[4]`) (no `SettingsDocument`, see design.md findings); move `clear_color`, `current_output_dir` and `working_directory_preview` out of params (the latter two into `RunPaths`); the GUI converts `clear_color` to and from `ImVec4` where it uses it
+- [x] 3.2 Change `TomlIO` load/save to take config, `RunPaths` and `GuiPreferences` (`POINTERS` into the config, a small `RunPaths` key table, `[misc] clear_color` from `gui`); `CATEGORIES` unchanged; `save_parameters_toml` builds the document from the config, `state.paths` and the GUI prefs
+- [x] 3.3 CLI and GUI: load into config, `state.paths` and `gui_prefs`; update the round-trip smoke test; verify the golden TOML test still passes byte for byte
+- [x] 3.4 Run the step checks and commit
 
 ## 4. Rename and const
 

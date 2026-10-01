@@ -23,12 +23,12 @@ std::string read_bytes(const fs::path &p)
     return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
 }
 
-void check_golden(LidarOdometryParams &params, const std::string &golden_name)
+void check_golden(LidarOdometryParams &params, const RunPaths &paths, const GuiPreferences &gui, const std::string &golden_name)
 {
     params.build_date = "GOLDEN"; // __DATE__ of the build otherwise
     TomlIO toml_io;
     const fs::path out = fs::temp_directory_path() / ("lidar_odometry_tests_" + golden_name);
-    REQUIRE(toml_io.SaveParametersToTomlFile(out.string(), params));
+    REQUIRE(toml_io.SaveParametersToTomlFile(out.string(), params, paths, gui));
     const std::string written = read_bytes(out);
     fs::remove(out);
 
@@ -46,13 +46,15 @@ void check_golden(LidarOdometryParams &params, const std::string &golden_name)
 TEST_CASE("default parameters are saved as the golden TOML")
 {
     LidarOdometryParams params;
-    check_golden(params, "default_params.golden.toml");
+    check_golden(params, RunPaths{}, GuiPreferences{}, "default_params.golden.toml");
 }
 
 TEST_CASE("settings/lidar-vertical.toml is saved as the golden TOML")
 {
     LidarOdometryParams params;
+    RunPaths paths;
+    GuiPreferences gui;
     TomlIO toml_io;
-    REQUIRE(toml_io.LoadParametersFromTomlFile((repo_dir / "settings" / "lidar-vertical.toml").string(), params));
-    check_golden(params, "lidar_vertical.golden.toml");
+    REQUIRE(toml_io.LoadParametersFromTomlFile((repo_dir / "settings" / "lidar-vertical.toml").string(), params, paths, gui));
+    check_golden(params, paths, gui, "lidar_vertical.golden.toml");
 }

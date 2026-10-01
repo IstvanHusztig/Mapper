@@ -138,7 +138,7 @@ bool load_data(std::vector<std::string>& input_file_names,
         // --- Working directories
 
         fs::path wdp = fs::path(working_directory) / "preview";
-        params.working_directory_preview = wdp.string();
+        state.paths.working_directory_preview = wdp.string();
         fs::path wdp_cache = fs::path(working_directory) / "cache";
         state.paths.working_directory_cache = wdp_cache.string();
 
@@ -616,7 +616,7 @@ namespace
     };
 } // namespace
 
-void save_result(std::vector<WorkerData> &worker_data, LidarOdometryParams &params, const OdometryState &state, fs::path outwd, double elapsed_time_s)
+void save_result(std::vector<WorkerData> &worker_data, LidarOdometryParams &params, const OdometryState &state, const GuiPreferences &gui, fs::path outwd, double elapsed_time_s)
 {
     std::filesystem::create_directory(outwd);
     // concatenate data
@@ -887,7 +887,7 @@ void save_result(std::vector<WorkerData> &worker_data, LidarOdometryParams &para
     fs.close();
 
     // Save parameters to TOML file (loadable parameters only)
-    save_parameters_toml(params, outwd, elapsed_time_s);
+    save_parameters_toml(params, state.paths, gui, outwd, elapsed_time_s);
 
     // Save processing results and complex data to JSON file
     save_processing_results_json(params, state, outwd, elapsed_time_s, &worker_data);
@@ -949,7 +949,7 @@ void load_reference_point_clouds(std::vector<std::string> input_file_names, Lida
     state.buckets_indoor = state.reference_buckets;
 }
 
-void save_parameters_toml(const LidarOdometryParams &params, const fs::path &outwd, double elapsed_seconds)
+void save_parameters_toml(const LidarOdometryParams &params, const RunPaths &paths, const GuiPreferences &gui, const fs::path &outwd, double elapsed_seconds)
 {
     // Get current date and time
     auto now = std::chrono::system_clock::now();
@@ -970,10 +970,7 @@ void save_parameters_toml(const LidarOdometryParams &params, const fs::path &out
         // Use existing TomlIO class to save loadable parameters
         TomlIO toml_io;
 
-        // Make a non-const copy for the TomlIO class (it needs non-const reference)
-        LidarOdometryParams params_copy = params;
-
-        bool success = toml_io.SaveParametersToTomlFile(toml_path.string(), params_copy);
+        bool success = toml_io.SaveParametersToTomlFile(toml_path.string(), params, paths, gui);
 
         if (success)
         {
@@ -1022,8 +1019,8 @@ void save_processing_results_json(const LidarOdometryParams &params, const Odome
         // Processing results and computed values
         results["trajectory_results"]["total_length_calculated"] = state.total_length_of_calculated_trajectory;
         results["trajectory_results"]["consecutive_distance"] = state.consecutive_distance;
-        results["directory_info"]["current_output_dir"] = params.current_output_dir;
-        results["directory_info"]["working_directory_preview"] = params.working_directory_preview;
+        results["directory_info"]["current_output_dir"] = state.paths.current_output_dir;
+        results["directory_info"]["working_directory_preview"] = state.paths.working_directory_preview;
 
         // Complex data structures that can't be easily loaded back as parameters
         // NDT grid parameters (read-only results)

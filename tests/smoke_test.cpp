@@ -15,8 +15,10 @@ TEST_CASE("default parameters round-trip through TOML")
 {
     TomlIO toml_io;
     LidarOdometryParams defaults;
+    RunPaths paths;
+    GuiPreferences gui;
     const fs::path file = fs::temp_directory_path() / "lidar_odometry_tests_roundtrip.toml";
-    REQUIRE(toml_io.SaveParametersToTomlFile(file.string(), defaults));
+    REQUIRE(toml_io.SaveParametersToTomlFile(file.string(), defaults, paths, gui));
 
     LidarOdometryParams loaded;
     for (const auto &[name, member] : toml_io.POINTERS)
@@ -30,7 +32,7 @@ TEST_CASE("default parameters round-trip through TOML")
                 loaded.*ptr += 3;
         }, member);
 
-    REQUIRE(toml_io.LoadParametersFromTomlFile(file.string(), loaded));
+    REQUIRE(toml_io.LoadParametersFromTomlFile(file.string(), loaded, paths, gui));
     fs::remove(file);
 
     for (const auto &[name, member] : toml_io.POINTERS)

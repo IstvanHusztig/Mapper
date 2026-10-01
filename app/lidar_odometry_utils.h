@@ -19,9 +19,6 @@
 #include <python-scripts/constraints/smoothness_tait_bryan_wc_jacobian.h>
 #include <python-scripts/point-to-point-metrics/point_to_point_source_to_target_tait_bryan_wc_jacobian_simplified.h>
 #include <common/include/cauchy.h>
-#if WITH_GUI == 1
-#include <imgui.h>
-#endif
 
 namespace fs = std::filesystem;
 
@@ -207,14 +204,6 @@ struct LidarOdometryParams
     double rgd_sf_sigma_fi_deg = 0.01;
     double rgd_sf_sigma_ka_deg = 0.01;
 
-    //paths
-    std::string current_output_dir = "";
-    std::string working_directory_preview = "";
-
-#if WITH_GUI == 1
-    ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
-#endif
-
     bool use_remove_imu_bias_from_first_stationary_scan = true;
 
     //ablation study
@@ -225,10 +214,18 @@ struct LidarOdometryParams
     bool save_index_pose = false;
 };
 
-// folders of one run
+// folders of one run; current_output_dir and working_directory_preview are the [paths] section of the TOML
 struct RunPaths
 {
-    std::string working_directory_cache = ""; // <input folder>/cache: per-window point caches written by step 1
+    std::string current_output_dir = "";
+    std::string working_directory_preview = ""; // <input folder>/preview
+    std::string working_directory_cache = "";   // <input folder>/cache: per-window point caches written by step 1
+};
+
+// GUI-only settings, stored in the [misc] section of the TOML
+struct GuiPreferences
+{
+    float clear_color[4] = {0.45f, 0.55f, 0.60f, 1.00f}; // background RGBA
 };
 
 // what a run produces and consumes (the settings are in LidarOdometryParams)

@@ -22,7 +22,7 @@ read-only config.
     `working_directory_preview` and `working_directory_cache`. Functions that change it take it
     explicitly.
   - **`GuiPreferences`**: `clear_color` (as plain floats, so no ImGui type in shared headers).
-- **TOML I/O works on a `SettingsDocument`** (`OdometryConfig` + `[paths]` + `GuiPreferences`),
+- **TOML I/O takes the three parts** (`OdometryConfig`, `RunPaths` for `[paths]`, `GuiPreferences`),
   so the file format, the section and key order, and the values written to the output
   `HDMapping_params_*.toml` stay exactly the same.
 - Read-only helpers get `const` parameters where they never write (`update_rgd`,

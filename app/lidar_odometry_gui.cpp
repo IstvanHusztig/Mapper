@@ -159,6 +159,7 @@ Eigen::Affine3d stretch_gizmo_m = Eigen::Affine3d::Identity();
 
 LidarOdometryParams params;
 OdometryState state;
+GuiPreferences gui_prefs;
 Session session;
 
 std::vector<std::vector<Point3Di>> pointsPerFile;
@@ -173,11 +174,11 @@ std::chrono::time_point<std::chrono::system_clock> loStep2StartTime;
 
 ///////////////////////////////////////////////////////////////////////////////////
 
-void set_lidar_odometry_default_params(LidarOdometryParams &params)
+void set_lidar_odometry_default_params(LidarOdometryParams &params, RunPaths &paths, GuiPreferences &gui)
 {
     TomlIO toml_io;
 
-    toml_io.LoadParametersFromTomlFile("default_settings.toml", params);
+    toml_io.LoadParametersFromTomlFile("default_settings.toml", params, paths, gui);
 
 }
 
@@ -283,7 +284,7 @@ void step2(const std::atomic<bool> &loPause)
 void save_results(bool info, double elapsed_seconds)
 {
     fs::path outwd = get_next_result_path(working_directory);
-    save_result(worker_data, params, state, outwd, elapsed_seconds);
+    save_result(worker_data, params, state, gui_prefs, outwd, elapsed_seconds);
     if (info)
     {
         std::string message_info = "Results saved to folder: '" + outwd.string() + "'";
@@ -1416,7 +1417,7 @@ void display()
                 {
                     lastPar = 1;
 
-                    set_lidar_odometry_default_params(params);
+                    set_lidar_odometry_default_params(params, state.paths, gui_prefs);
 
                     std::cout << "clicked: Set parameters for velocity up to 8km/h, tiny spaces" << std::endl;
                 }
@@ -1581,7 +1582,7 @@ void display()
                         {
                             // Use the original TomlIO class for loading parameters in GUI
                             TomlIO toml_io;
-                            toml_io.LoadParametersFromTomlFile(input_file_names[0], params);
+                            toml_io.LoadParametersFromTomlFile(input_file_names[0], params, state.paths, gui_prefs);
                             std::cout << "Parameters loaded from: " << input_file_names[0] << std::endl;
                         }
                         catch (const std::exception& e)
@@ -1600,7 +1601,7 @@ void display()
                     {
                         // Use the original TomlIO class for saving parameters in GUI
                         TomlIO toml_io;
-                        bool success = toml_io.SaveParametersToTomlFile(output_file_name, params);
+                        bool success = toml_io.SaveParametersToTomlFile(output_file_name, params, state.paths, gui_prefs);
                         if (success)
                             std::cout << "Parameters file generated: " << output_file_name << std::endl;
                         else
@@ -1659,9 +1660,9 @@ void display()
 
                 ImGui::Text("Colors:");
 
-                ImGui::ColorEdit3("Background", (float *)&params.clear_color, ImGuiColorEditFlags_NoInputs);
+                ImGui::ColorEdit3("Background", gui_prefs.clear_color, ImGuiColorEditFlags_NoInputs);
 
-                bg_color = params.clear_color;
+                bg_color = ImVec4(gui_prefs.clear_color[0], gui_prefs.clear_color[1], gui_prefs.clear_color[2], gui_prefs.clear_color[3]);
 
                 ImGui::Separator();
 
@@ -1834,7 +1835,7 @@ void mouse(int glut_button, int state, int x, int y)
 
 int main(int argc, char *argv[])
 {
-    set_lidar_odometry_default_params(params);
+    set_lidar_odometry_default_params(params, state.paths, gui_prefs);
 
     try
     {
@@ -1844,7 +1845,7 @@ int main(int argc, char *argv[])
         {
             // Load parameters from file using original TomlIO class
             
-           if (toml_io.LoadParametersFromTomlFile(argv[2], params))
+           if (toml_io.LoadParametersFromTomlFile(argv[2], params, state.paths, gui_prefs))
             {
                 std::cout << "Parameters loaded OK from: " << argv[2] << std::endl;
             }
@@ -1881,7 +1882,7 @@ int main(int argc, char *argv[])
                       << std::ctime(&end_time)
                       << "Elapsed time: " << formatTime(elapsed_seconds.count()).c_str() << "s\n";
 
-            save_result(worker_data, params, state, argv[3], elapsed_seconds.count());
+            save_result(worker_data, params, state, gui_prefs, argv[3], elapsed_seconds.count());
         }
         else //full GUI mode
         {

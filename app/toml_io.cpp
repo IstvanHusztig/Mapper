@@ -2,7 +2,7 @@
 #include <iostream>
 #include <sstream>
 
-bool TomlIO::SaveParametersToTomlFile(const std::string &filepath, LidarOdometryParams &params)
+bool TomlIO::SaveParametersToTomlFile(const std::string &filepath, const LidarOdometryParams &params, const RunPaths &paths, const GuiPreferences &gui)
 {
     toml::table tbl;
     for (const auto &[category, attributes] : CATEGORIES)
@@ -13,17 +13,19 @@ bool TomlIO::SaveParametersToTomlFile(const std::string &filepath, LidarOdometry
             if (attribute == "in_out_params_indoor" || attribute == "in_out_params_outdoor")
                 continue;
 
-#if WITH_GUI == 1
             if (attribute == "clear_color")
             {
-                const ImVec4& c = params.clear_color;
-                cat_tbl.insert(attribute, toml::array{ c.x, c.y, c.z, c.w });
+                const float *c = gui.clear_color;
+                cat_tbl.insert(attribute, toml::array{ c[0], c[1], c[2], c[3] });
                 continue;
             }
-#else
-            if (attribute == "clear_color")
-                continue; // Skip GUI-only parameter when building without GUI
-#endif
+
+            auto path_it = RUN_PATH_POINTERS.find(attribute);
+            if (path_it != RUN_PATH_POINTERS.end())
+            {
+                cat_tbl.insert(attribute, paths.*(path_it->second));
+                continue;
+            }
             
             // Check if it's a motion_model_correction parameter
             auto motion_it = MOTION_MODEL_CORRECTION_POINTERS.find(attribute);
@@ -131,7 +133,7 @@ void TomlIO::read_grid_params(NDT::GridParameters &grid, const toml::table *grid
     set_if_exists(grid, grid_tbl, "resolution_Z", &NDT::GridParameters::resolution_Z);
 }
 
-bool TomlIO::LoadParametersFromTomlFile(const std::string &filepath, LidarOdometryParams &params)
+bool TomlIO::LoadParametersFromTomlFile(const std::string &filepath, LidarOdometryParams &params, RunPaths &paths, GuiPreferences &gui)
 {
     toml::table tbl;
     try
@@ -169,6 +171,15 @@ bool TomlIO::LoadParametersFromTomlFile(const std::string &filepath, LidarOdomet
                 }
                 continue;
             }
+
+            auto path_it = RUN_PATH_POINTERS.find(attribute);
+            if (path_it != RUN_PATH_POINTERS.end())
+            {
+                auto attr_it = cat_tbl->find(attribute);
+                if (attr_it != cat_tbl->end())
+                    paths.*(path_it->second) = attr_it->second.value_or(std::string{});
+                continue;
+            }
             
             auto it = POINTERS.find(attribute);
             if (it == POINTERS.end())
@@ -193,19 +204,15 @@ bool TomlIO::LoadParametersFromTomlFile(const std::string &filepath, LidarOdomet
                         } }, it->second);
         }
 
-#if WITH_GUI == 1
         if (cat_tbl && cat_tbl->contains("clear_color"))
         {
             auto arr = cat_tbl->at("clear_color").as_array();
             if (arr && arr->size() == 4)
             {
-                params.clear_color.x = static_cast<float>(arr->at(0).as_floating_point()->get());
-                params.clear_color.y = static_cast<float>(arr->at(1).as_floating_point()->get());
-                params.clear_color.z = static_cast<float>(arr->at(2).as_floating_point()->get());
-                params.clear_color.w = static_cast<float>(arr->at(3).as_floating_point()->get());
+                for (size_t i = 0; i < 4; i++)
+                    gui.clear_color[i] = static_cast<float>(arr->at(i).as_floating_point()->get());
             }
         }
-#endif
     }
     read_grid_params(params.in_out_params_indoor, tbl["in_out_params_indoor"].as_table());
     read_grid_params(params.in_out_params_outdoor, tbl["in_out_params_outdoor"].as_table());

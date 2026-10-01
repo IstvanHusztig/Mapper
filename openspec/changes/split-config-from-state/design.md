@@ -133,3 +133,15 @@ See proposal.md for the motivation. What the code does today:
   it, the core headers pull in freeglut, so the tests use its include path and
   `FREEGLUT_LIB_PRAGMAS=0`. This goes away once `clear_color` leaves the shared header (task 3.1)
   and once `core` headers stop depending on GUI (later roadmap steps).
+- **No `SettingsDocument` (deviation from decision 2).** `TomlIO` load and save take the three
+  parts directly, `(LidarOdometryParams/OdometryConfig&, RunPaths&, GuiPreferences&)`, with
+  `const&` for saving.
+  - The GUI and CLI keep them in separate places (`params`, `state.paths`, `gui_prefs`), so a
+    wrapper struct would only add copies back and forth.
+  - Everything else is as designed: `[paths]` goes through `RUN_PATH_POINTERS`, `[misc]
+    clear_color` through `GuiPreferences`, and `CATEGORIES` is unchanged. The golden TOML test is
+    byte-identical.
+- **The test target no longer needs `WITH_GUI`** or any GUI headers, now that `clear_color` is
+  plain floats and `#if WITH_GUI` is gone from the TOML layer and `lidar_odometry_utils.h`. The
+  golden TOML (including `clear_color`) is still byte-identical, which shows the TOML layer is
+  GUI-free.
