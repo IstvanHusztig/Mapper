@@ -29,7 +29,7 @@ Every step ends with: both presets build `lidar_odometry_step_1` and `lidar_odom
 
 ## 5. Integration
 
-- [ ] 5.1 Full 44: run in the background and verify IDENTICAL with `tools/baseline/44.manifest.json`
-- [ ] 5.2 GUI check on `44_short`, **done by the user** (the GUI can't be driven from the CLI): repeat exactly the clicks of the pre-refactor run `44_short/lio_result_0` (2026-10-01 21:56, manifest `44_short_gui_before.manifest.json` in this change) with the refactored Release build; verify with `compare_baseline.py` that the new GUI output is IDENTICAL on all 11 files
-- [ ] 5.3 Update `CLAUDE.md` (type names and the Parameters paragraph: `OdometryConfig`, `OdometryState`, `SettingsDocument`; where TOML fields are registered) and mark step 1 done in `docs/ARCHITECTURE.md`; commit
-- [ ] 5.4 Run `openspec validate split-config-from-state --strict` and confirm it passes
+- [x] 5.1 Full 44: run in the background and verify IDENTICAL with `tools/baseline/44.manifest.json`
+- [x] 5.2 GUI check on `44_short`, **done by the user** (the GUI can't be driven from the CLI): repeat exactly the clicks of the pre-refactor run `44_short/lio_result_0` (2026-10-01 21:56, manifest `44_short_gui_before.manifest.json` in this change) with the refactored Release build; verify with `compare_baseline.py` that the new GUI output is IDENTICAL on all 11 files
+- [x] 5.3 Update `CLAUDE.md` (type names and the Parameters paragraph: `OdometryConfig`, `OdometryState`, `SettingsDocument`; where TOML fields are registered) and mark step 1 done in `docs/ARCHITECTURE.md`; commit
+- [x] 5.4 Run `openspec validate split-config-from-state --strict` and confirm it passes

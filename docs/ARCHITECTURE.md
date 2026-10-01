@@ -9,7 +9,7 @@ own OpenSpec change.
 The app works and is validated on real scans, but its structure is inherited from HDMapping:
 
 - the pipeline, the GUI and the CLI share file-scope globals in `app/lidar_odometry_gui.cpp`;
-- `LidarOdometryParams` mixes settings with runtime state;
+- `LidarOdometryParams` mixed settings with runtime state (fixed in step 1);
 - the optimizers print to the console and read/write cache files;
 - nothing can be tested in isolation.
 
@@ -53,10 +53,10 @@ infrastructure and UI at the edge, and all source dependencies pointing inward.
 
 ## 4. Problems in today's code this addresses
 
-- `LidarOdometryParams` (`app/lidar_odometry_utils.h`) holds settings **and** runtime state
+- ✅ `LidarOdometryParams` (`app/lidar_odometry_utils.h`) held settings **and** runtime state
   (`reference_buckets`, `buckets_indoor`/`buckets_outdoor`, `m_g`, `initial_points`, paths,
-  `ImVec4 clear_color`) → split into an immutable `OdometryConfig` (grouped by section) plus
-  pipeline state.
+  `ImVec4 clear_color`). Step 1 split it into `OdometryConfig` (passed `const&`),
+  `OdometryState` and `GuiPreferences`. Grouping `OdometryConfig` by section is left to step 5.
 - `WorkerData` (`core/include/structures.h`) carries cache file names and a GUI `show` flag
   → a domain `Window` plus the `PointStore` port; view flags move to the GUI.
 - Globals in `lidar_odometry_gui.cpp` (`params`, `worker_data`, `imu_data`, `trajectory`,
@@ -92,7 +92,9 @@ Each step is one OpenSpec change, validated against the baseline.
    manifests for `44` and `44_short` in `tools/baseline/`, the `cut_recording` tool, and doctest
    with the `lidar_odometry_tests` target. Two identical runs were confirmed bit-identical on both
    datasets. See `tools/README.md`.
-1. **Split config from state:** `OdometryConfig` vs runtime state; the TOML file format is kept.
+1. ✅ **Split config from state** (done 2026-10-01): `OdometryConfig` (const in the pipeline),
+   `OdometryState` (incl. `RunPaths`) and `GuiPreferences`; the TOML file is byte-identical
+   (golden test in `tests/`).
 2. **Extract `OdometryPipeline`** out of `lidar_odometry_gui.cpp`; CLI and GUI both call it; the
    globals go away.
    - This also fixes a known GUI/CLI gap: today the GUI never runs loop closure, which the CLI
