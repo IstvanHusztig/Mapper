@@ -315,7 +315,7 @@ std::vector<std::tuple<std::pair<double, double>, FusionVector, FusionVector>> l
     return all_data;
 }
 
-std::vector<Point3Di> load_point_cloud(const std::string &lazFile, bool ommit_points_with_timestamp_equals_zero, double filter_threshold_xy_inner, double filter_threshold_xy_outer, const std::unordered_map<int, Eigen::Affine3d> &calibrations,
+std::vector<Point3Di> load_point_cloud(const std::string &lazFile, bool ommit_points_with_timestamp_equals_zero, double filter_threshold_xy_inner, double filter_threshold_xy_outer,
                                        const Eigen::Vector3d &lever_arm)
 {
     std::vector<Point3Di> points;
@@ -362,26 +362,11 @@ std::vector<Point3Di> load_point_cloud(const std::string &lazFile, bool ommit_po
         Point3Di p;
         int id = point->user_data;
 
-        if (!calibrations.empty())
-        {
-            if (!calibrations.contains(id))
-            {
-                continue;
-            }
-        }
-
+        // Apply the mapped Unitree L2 IMU lever arm offset for standard NWU frame
+        // Original Native: X=-0.007698 (Down), Y=-0.014655 (Left), Z=0.00667 (Front)
+        // Mapped NWU: X=Front, Y=Left, Z=Up
         Eigen::Affine3d calibration = Eigen::Affine3d::Identity();
-        if (calibrations.empty())
-        {
-            // Apply the mapped Unitree L2 IMU lever arm offset for standard NWU frame
-            // Original Native: X=-0.007698 (Down), Y=-0.014655 (Left), Z=0.00667 (Front)
-            // Mapped NWU: X=Front, Y=Left, Z=Up
-            calibration.translation() = lever_arm;
-        }
-        else
-        {
-            calibration = calibrations.at(id);
-        }
+        calibration.translation() = lever_arm;
 
         const Eigen::Vector3d pf(
             header->x_offset + header->x_scale_factor * static_cast<double>(point->X),
@@ -419,204 +404,6 @@ std::vector<Point3Di> load_point_cloud(const std::string &lazFile, bool ommit_po
 
     laszip_close_reader(laszip_reader);
     return points;
-}
-
-std::unordered_map<int, std::string> MLvxCalib::GetIdToSnMapping(const std::string &filename)
-{
-    if (!std::filesystem::exists(filename))
-    {
-        std::cout << "!std::filesystem::exists(filename) '" << filename << "'" << std::endl;
-        return std::unordered_map<int, std::string>();
-    }
-    std::unordered_map<int, std::string> dataMap;
-    std::ifstream fst(filename);
-    std::string line;
-    while (std::getline(fst, line))
-    {
-        std::istringstream iss(line);
-        int key;
-        std::string value;
-
-        if (iss >> key >> value)
-        {
-            dataMap[key] = value;
-        }
-        else
-        {
-            std::cerr << "Failed to parse line: " << line << std::endl;
-        }
-    }
-    return dataMap;
-}
-
-inline bool JsonGetBool(
-    const nlohmann::json& obj,
-    const char* key,
-    bool defaultValue = false)
-{
-    if (!obj.contains(key))
-        return defaultValue;
-
-    const auto& v = obj.at(key);
-
-    if (v.is_boolean())
-        return v.get<bool>();
-
-    if (v.is_string())
-    {
-        std::string s = v.get<std::string>();
-        std::transform(s.begin(), s.end(), s.begin(), ::toupper);
-        return (s == "TRUE" || s == "1" || s == "YES");
-    }
-
-    return defaultValue;
-}
-
-std::unordered_map<std::string, Eigen::Affine3d> MLvxCalib::GetCalibrationFromFile(const std::string &filename)
-{
-    std::unordered_map<std::string, Eigen::Affine3d> dataMap;
-    std::ifstream file;
-    using json = nlohmann::json;
-    json jsonData;
-
-    file.open(filename);
-    if (!file)
-    {
-        std::cerr << "Cannot open file '" << filename << "'" << std::endl;
-        return {};
-    }
-
-    try
-    {
-        jsonData = json::parse(file);
-    }
-    catch (const json::exception& e)
-    {
-		std::cerr << "JSON parsing error in file '" << filename << "': " << e.what() << std::endl;
-        return {};
-    }
-
-    if (!jsonData.contains("calibration"))
-        return {};
-
-    // Iterate through the JSON object and parse each value into Eigen::Affine3d
-    for (auto &calibrationEntry : jsonData["calibration"].items())
-    {
-        const std::string &lidarSn = calibrationEntry.key();
-        Eigen::Matrix4d value;
-
-        bool identity = JsonGetBool(calibrationEntry.value(),"identity", false);
-        if (identity)
-        {
-            dataMap[lidarSn] = Eigen::Matrix4d::Identity();
-            continue;
-        }
-
-        assert(calibrationEntry.value().contains("data"));
-        const auto matrixRawData = calibrationEntry.value()["data"];
-        assert(matrixRawData.size() == 16);
-        // Populate the Eigen::Affine3d matrix from the JSON array
-        for (int i = 0; i < 4; ++i)
-        {
-            for (int j = 0; j < 4; ++j)
-            {
-                value(i, j) = matrixRawData[i * 4 + j]; // default is row-major order
-            }
-        }
-
-        if (calibrationEntry.value().contains("order"))
-        {
-            std::string order = calibrationEntry.value()["order"].get<std::string>();
-            std::transform(order.begin(), order.end(), order.begin(), ::toupper);
-            if (order == "COLUMN")
-                value = value.transpose();
-        }
-
-        bool inverted = JsonGetBool(calibrationEntry.value(),"inverted", false);
-        if (inverted)
-            value = value.inverse();
-
-        dataMap[lidarSn] = value;
-    }
-
-    // check for blacklisted
-    if (jsonData.contains("blacklist"))
-    {
-        json blacklist = jsonData["blacklist"];
-        for (const auto &item : blacklist)
-        {
-            std::string blacklistedSn = item.get<std::string>();
-            // erase rather than store a zero matrix, to avoid dealing with zero matrices later on
-            dataMap.erase(blacklistedSn);
-        }
-    }
-    return dataMap;
-}
-
-std::string MLvxCalib::GetImuSnToUse(const std::string &filename)
-{
-    std::ifstream file;
-    using json = nlohmann::json;
-    json jsonData;
-
-    file.open(filename);
-    if (!file)
-    {
-        std::cerr << "Cannot open file '" << filename << "'" << std::endl;
-        return {};
-    }
-
-    try
-    {
-        jsonData = json::parse(file);
-    }
-    catch (const json::exception& e)
-    {
-        std::cerr << "JSON parsing error in file '" << filename << "': " << e.what() << std::endl;
-        return {};
-    }
-
-    if (!jsonData.contains("imuToUse"))
-        return {};
-    if (!jsonData["imuToUse"].is_string())
-        return {};
-
-    return jsonData["imuToUse"].get<std::string>();
-}
-
-std::unordered_map<int, Eigen::Affine3d> MLvxCalib::CombineIntoCalibration(const std::unordered_map<int, std::string> &idToSn, const std::unordered_map<std::string, Eigen::Affine3d> &calibration)
-{
-    if (calibration.empty())
-    {
-        return std::unordered_map<int, Eigen::Affine3d>();
-    }
-    std::unordered_map<int, Eigen::Affine3d> dataMap;
-    for (const auto &[id, sn] : idToSn)
-    {
-        const auto &affine = calibration.at(sn);
-        dataMap[id] = affine;
-    }
-    return dataMap;
-}
-
-int MLvxCalib::GetImuIdToUse(const std::unordered_map<int, std::string> &idToSn, const std::string &snToUse)
-{
-    if (snToUse.empty() || idToSn.empty())
-    {
-        std::cout << "snToUse.empty() || idToSn.empty()" << std::endl;
-        std::cout << "(int)snToUse.empty()" << (int)snToUse.empty() << std::endl;
-        std::cout << "(int)idToSn.empty()" << (int)idToSn.empty() << std::endl;
-        std::cout << __FILE__ << " " << __LINE__ << std::endl;
-        return 0;
-    }
-    for (const auto &[id, sn] : idToSn)
-    {
-        if (snToUse == sn)
-        {
-            return id;
-        }
-    }
-    return 0;
 }
 
 fs::path get_next_result_path(const std::string working_directory)

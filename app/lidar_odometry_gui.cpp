@@ -167,6 +167,8 @@ std::atomic<bool> loRunning{false};
 std::atomic<float> loProgress{0.0};
 std::atomic<bool> loPause{false};
 std::chrono::time_point<std::chrono::system_clock> loStartTime;
+// start of the odometry (step 2) only: the remaining time is extrapolated from it, loading is not part of the progress
+std::chrono::time_point<std::chrono::system_clock> loStep2StartTime;
 
 ///////////////////////////////////////////////////////////////////////////////////
 
@@ -575,7 +577,10 @@ void settings_gui()
         if (step_1_done && !step_2_done)
         {
             if (ImGui::Button("Compute all"))
+            {
+                loStep2StartTime = std::chrono::system_clock::now();
                 step2(loPause);
+            }
 
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip("Press this button for automatic LiDAR odometry calculation -> it will produce trajectory");
@@ -1075,10 +1080,10 @@ void progress_window()
     float progress = loProgress.load();
     double estimatedTimeRemaining = 0.0;
 
-    if (progress > 0.01f && progress < 100.0f)
+    if (progress > 0.01f && progress < 1.0f)
     { // Only estimate when we have meaningful progress
-        double totalEstimatedTime = elapsedSeconds / progress;
-        estimatedTimeRemaining = totalEstimatedTime - elapsedSeconds;
+        const double step2Seconds = std::chrono::duration<double>(currentTime - loStep2StartTime).count();
+        estimatedTimeRemaining = step2Seconds / progress - step2Seconds;
     }
 
     // Format progress text with time information
@@ -1150,6 +1155,7 @@ void openData()
             {
                 std::chrono::time_point<std::chrono::system_clock> start, end;
                 start = std::chrono::system_clock::now();
+                loStep2StartTime = start;
 
                 step2(loPause);
 

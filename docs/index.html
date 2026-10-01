@@ -154,8 +154,7 @@
 <tr><th>File in input folder</th><th>Content</th><th>Required</th></tr>
 <tr><td>lidar*.laz / *.las</td><td>Points with x, y, z (sensor frame, metres), intensity, <code>gps_time</code> (ns) and <code>user_data</code> = LiDAR id</td><td>yes</td></tr>
 <tr><td>imu*.csv</td><td><code>gyroX gyroY gyroZ</code> (rad/s), <code>accX accY accZ</code> (g), <code>imuId</code>, <code>timestamp</code> (ns, same clock as the points), <code>timestampUnix</code>. <b>Every</b> <code>.csv</code> in the folder is read as IMU data. The timestamps must be strictly increasing and should be steady; recordings with bursty or stepped timestamps can be repaired with <code>tools/fix_imu_timestamps.py</code>.</td><td>yes</td></tr>
-<tr><td>*.json</td><td>LiDAR extrinsic calibration per serial number (multi-LiDAR rigs). Without it, only the lever arm is applied.</td><td>no</td></tr>
-<tr><td>*.sn</td><td>LiDAR id → serial number mapping</td><td>no</td></tr>
+<tr><td>anything else</td><td>Ignored (e.g. <code>*.json</code>, <code>*.sn</code>). Only a single LiDAR is supported; there is no per-LiDAR calibration file.</td><td>no</td></tr>
 </table></div>
 <p>The run command is <code>lidar_odometry_step_1 &lt;input_folder&gt; settings/lidar-vertical.toml &lt;output_folder&gt;</code>. The output folder receives <code>scan_lio_N.laz</code> (the map), <code>trajectory_lio_N.csv</code> (one pose per IMU sample, 4×3 matrix plus the raw IMU angles), <code>session.mjs</code> with <code>session_poses.mrp</code> (loadable in HDMapping), the parameters used (<code>HDMapping_params_*.toml</code>) and <code>HDMapping_results_*.json</code> (trajectory length, grid info, and the gyro bias per window in <code>gyro_bias_per_window</code>).</p>
 
@@ -202,7 +201,7 @@
 <div class="where">load_data / load_point_cloud · app/lidar_odometry.cpp, app/lidar_odometry_utils.cpp</div>
 <p>Each point is read with its position in the <b>sensor frame</b>, its intensity and its timestamp. Then:</p>
 <ul>
-<li>If a calibration <code>.json</code> exists, the point is transformed with that LiDAR's extrinsics. Otherwise it is shifted by the LiDAR→IMU <b>lever arm</b> (translation only), so that points and IMU share one origin. The L2 data from dLidar is already in the IMU axes (NWU: x forward, y left, z up).</li>
+<li>Each point is shifted by the LiDAR→IMU <b>lever arm</b> (translation only), so that points and IMU share one origin. The L2 data from dLidar is already in the IMU axes (NWU: x forward, y left, z up).</li>
 <li>Points with timestamp 0 are dropped.</li>
 <li>Points whose <b>horizontal</b> distance √(x²+y²) in the sensor frame is below <code>filter_threshold_xy_inner</code> (the handle, your hand, the housing) or above <code>filter_threshold_xy_outer</code> are dropped.</li>
 <li>The points of each file are sorted by time. The IMU CSVs are read, merged and sorted by time.</li>
@@ -396,7 +395,7 @@ See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 <h3 id="p-ext">[lidar_imu_extrinsics]</h3>
 <div class="table-wrap"><table>
 <tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr>
-<tr><td>lidar_imu_lever_arm_x / y / z_m</td><td class="val">0.00667 / −0.014655 / 0.007698</td><td>Offset added to every point to express it at the IMU origin (Unitree L2 datasheet values mapped to NWU). Applied only when no calibration <code>.json</code> is present. No rotation is applied, since dLidar already delivers points in the IMU axes.</td></tr>
+<tr><td>lidar_imu_lever_arm_x / y / z_m</td><td class="val">0.00667 / −0.014655 / 0.007698</td><td>Offset added to every point to express it at the IMU origin (Unitree L2 datasheet values mapped to NWU). No rotation is applied, since dLidar already delivers points in the IMU axes.</td></tr>
 </table></div>
 
 <h3 id="p-imu">[imu_translation]</h3>

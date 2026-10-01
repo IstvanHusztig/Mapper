@@ -10,14 +10,14 @@ There are no tests, linters, or CI in this repo.
 
 ## Build
 
-Requires CMake >= 4.0. On Windows the existing `build/` tree uses the "Visual Studio 18 2026" generator; `out/build/x64-Debug` is from Visual Studio's CMake integration.
+Requires CMake >= 4.0. `CMakePresets.json` defines exactly two configurations, `x64-Release` and `x64-Debug` (Ninja + cl, build trees `out/build/<preset>`); Visual Studio uses them via Open Folder. Do not add other build trees. From a shell, `vcvars64.bat` must be loaded first (cl/ninja on PATH):
 
 ```
-cmake -S . -B build
-cmake --build build --config Release --target lidar_odometry_step_1
+cmake --preset x64-Release
+cmake --build --preset x64-Release --target lidar_odometry_step_1
 ```
 
-- Output: `build/bin/<Config>/lidar_odometry_step_1.exe` (multi-config) or `build/bin/lidar_odometry_step_1`. On Windows, runtime DLLs (TBB etc.) and `app/default_settings.toml` are copied next to the exe post-build.
+- Output: `out/build/<preset>/bin/lidar_odometry_step_1.exe`. On Windows, runtime DLLs (TBB etc.) and `app/default_settings.toml` are copied next to the exe post-build. Debug is unoptimized and many times slower; always process data with Release.
 - `-DHD_CPU_OPTIMIZATION=AUTO|INTEL|AMD|ARM|GENERIC` selects release optimization flags (AMD on MSVC adds `/fp:fast`).
 - The version (`HDMAPPING_VERSION_MAJOR/MINOR/PATCH`) is defined in the root `CMakeLists.txt`; `shared/include/HDMapping/Version.hpp` errors if it's missing.
 
@@ -26,7 +26,7 @@ cmake --build build --config Release --target lidar_odometry_step_1
 - **Headless / CLI:** `lidar_odometry_step_1 <input_folder> <params.toml> <output_folder>` — exactly 3 args triggers batch mode (step1 → step2 → save_result).
 - **GUI:** any other argument count opens the freeglut + ImGui window.
 
-The input folder is scanned non-recursively; `load_data` (`app/lidar_odometry.cpp`) sorts files by extension: `.laz`/`.las` point clouds, `.csv` IMU data, `.json` LiDAR calibration, `.sn` serial-number mapping.
+The input folder is scanned non-recursively; `load_data` (`app/lidar_odometry.cpp`) sorts files by extension: `.laz`/`.las` point clouds, `.csv` IMU data; everything else is ignored. There is no multi-LiDAR calibration: points are only shifted by the lever arm (`lidar_imu_lever_arm_*`).
 
 ## Architecture
 

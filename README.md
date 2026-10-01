@@ -8,12 +8,14 @@ A standalone build of the `lidar_odometry_step_1` application from [HDMapping](h
 
 Requires CMake ≥ 4.0 and a C++20 compiler. All dependencies are vendored in `3rdparty/`; only OpenGL/GLU come from the system.
 
+`CMakePresets.json` defines two configurations, `x64-Release` (optimized, use it for processing) and `x64-Debug` (unoptimized, many times slower, for debugging only). In Visual Studio (Open Folder), pick one in the configuration dropdown; Run / Ctrl+F5 rebuilds changed sources first. From a Developer Command Prompt:
+
 ```
-cmake -S . -B build
-cmake --build build --config Release --target lidar_odometry_step_1
+cmake --preset x64-Release
+cmake --build --preset x64-Release --target lidar_odometry_step_1
 ```
 
-The executable is written to `build/bin/Release/lidar_odometry_step_1.exe` (Windows) or `build/bin/lidar_odometry_step_1`.
+The executable is written to `out/build/x64-Release/bin/lidar_odometry_step_1.exe` (or `out/build/x64-Debug/bin/...`).
 
 ## Run
 
@@ -21,7 +23,7 @@ The executable is written to `build/bin/Release/lidar_odometry_step_1.exe` (Wind
 lidar_odometry_step_1 <input_folder> settings/lidar-vertical.toml <output_folder>
 ```
 
-- `<input_folder>`: one recording. The files `lidar*.laz` and `imu*.csv` are required; `*.json` (LiDAR calibration) and `*.sn` (serial numbers) are optional. The folder is scanned non-recursively, and **every** `.csv` in it is read as IMU data, so keep other CSV files out of it.
+- `<input_folder>`: one recording. The files `lidar*.laz` and `imu*.csv` are required; other files are ignored. The folder is scanned non-recursively, and **every** `.csv` in it is read as IMU data, so keep other CSV files out of it.
 - Any other number of arguments opens the GUI (freeglut + ImGui).
 - Output: `scan_lio_*.laz` (the point cloud in chunks), `scan_lio_merged.laz` (all chunks in one file, world coordinates, with `export_merged_laz = true`), `trajectory_lio_*.csv` (one pose per IMU sample), `session.mjs` with pose files, the parameters used (`HDMapping_params_*.toml`) and processing results (`HDMapping_results_*.json`, including the estimated gyro bias per window).
 

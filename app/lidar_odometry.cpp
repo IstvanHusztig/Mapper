@@ -15,8 +15,6 @@ bool load_data(std::vector<std::string>& input_file_names,
     std::sort(input_file_names.begin(), input_file_names.end());
 
     std::vector<std::string> csv_files, laz_files;
-    std::string sn_file;
-    std::string calibrationFile;
 
     std::cout << "Loading data..\n--------------\n";
 
@@ -28,31 +26,8 @@ bool load_data(std::vector<std::string>& input_file_names,
 
         if (ext == ".csv")
             csv_files.push_back(fileName);
-        else if (ext == ".json")
-        {
-            std::string stem = fs::path(fileName).filename().stem().string(); // get filename without extension
-
-            // skip files not related to calibration
-            if (!stem.starts_with("status") && !stem.starts_with("cam0") && !stem.starts_with("cam1"))
-                if (calibrationFile.empty())
-                    calibrationFile = fileName;
-                else
-                    std::cout << "Unexpected JSON file found (" << fileName << "). Ignored..\n";
-        }
         else if ((ext == ".laz") || (ext == ".las"))
             laz_files.push_back(fileName);
-        else if (ext == ".mjc")
-        {
-            if (calibrationFile.empty())
-                calibrationFile = fileName;
-            else
-                std::cout << "Unexpected calibration file found (" << fileName << "). Ignored.." << std::endl;
-        }
-        else if ((ext == ".sn") && sn_file.empty())
-        {
-            sn_file = fileName;
-            std::cout << "Only using first SN file found\n";
-        }
     }
 
     auto get4index = [](const std::string& path) -> std::string {
@@ -128,55 +103,8 @@ bool load_data(std::vector<std::string>& input_file_names,
             return false;
         }
 
-        // --- Calibration and IMU setup
-        const auto preloadedCalibration = MLvxCalib::GetCalibrationFromFile(calibrationFile);
-        const std::string imuSnToUse = MLvxCalib::GetImuSnToUse(calibrationFile);
-        const auto idToSn = MLvxCalib::GetIdToSnMapping(sn_file);
-
-        if (!preloadedCalibration.empty())
-        {
-            std::cout << "Loaded calibration for:\n";
-            for (const auto& [sn, _] : preloadedCalibration)
-                std::cout << " -> " << sn << "\n";
-
-            bool hasError = false;
-
-            for (const auto& [id, sn] : idToSn)
-            {
-                if (preloadedCalibration.find(sn) == preloadedCalibration.end())
-                {
-                    std::cerr << "WRONG CALIBRATION FILE! THE SERIAL NUMBER SHOULD BE " << sn << "!!!\n";
-                    hasError = true;
-                }
-            }
-
-            if (!hasError && preloadedCalibration.find(imuSnToUse) == preloadedCalibration.end())
-            {
-                std::cerr << "MISSING CALIBRATION FOR imuSnToUse: " << imuSnToUse << "!!!\n";
-                std::cerr << "Available serial numbers in calibration file are:\n";
-                for (const auto& [snKey, _] : preloadedCalibration)
-                    std::cerr << "  - " << snKey << "\n";
-
-                hasError = true;
-            }
-
-            if (hasError)
-            {
-                std::cerr << "Press ENTER to exit...\n";
-                std::cin.get();
-                std::exit(EXIT_FAILURE);
-            }
-        }
-        else
-        {
-            std::cout << "There is no calibration file in folder!" << std::endl;
-            std::cout << "IGNORE THIS MESSAGE IF YOU ONLY HAVE 1 LiDAR" << std::endl;
-        }
-
-        const int imuNumberToUse = MLvxCalib::GetImuIdToUse(idToSn, imuSnToUse);
-        // --- Load IMU data (still sequential, could parallelize later)
-        std::cout << "loading IMU data from 'imu****.csv' using ID " << imuNumberToUse
-            << " from reference '" << sn_file << "' ..\n";
+        // --- Load IMU data
+        std::cout << "loading IMU data from 'imu****.csv' ..\n";
 
         std::size_t minSize = std::min(laz_files.size(), csv_files.size());
         // Each thread loads into its own local vector
@@ -187,7 +115,7 @@ bool load_data(std::vector<std::string>& input_file_names,
             [&](const tbb::blocked_range<size_t>& range) {
                 for (size_t i = range.begin(); i < range.end(); ++i)
                 {
-                    imuChunks[i] = load_imu(csv_files[i].c_str(), imuNumberToUse);
+                    imuChunks[i] = load_imu(csv_files[i].c_str(), 0);
                 }
             });
 
@@ -201,17 +129,8 @@ bool load_data(std::vector<std::string>& input_file_names,
                 return std::get<0>(a).first < std::get<0>(b).first;
             });
 
-        // --- Precompute calibration once (major optimization)
-        const auto combinedCalibration = MLvxCalib::CombineIntoCalibration(idToSn, preloadedCalibration);
-
         std::cout << "Loading point clouds (" << minSize << " files)..\n";
         std::cout << "total   - filter = kept\n-----------------------\n";
-
-        if (debugMsg) //if true this will break parallelism
-        {
-            for (const auto& [id, calib] : combinedCalibration)
-                std::cout << " id : " << id << "\n" << calib.matrix() << "\n";
-        }
 
         pointsPerFile.resize(minSize);
 
@@ -227,7 +146,7 @@ bool load_data(std::vector<std::string>& input_file_names,
             {
                 const std::string& fn = laz_files[i];
 
-                auto data = load_point_cloud(fn.c_str(), true, params.filter_threshold_xy_inner, params.filter_threshold_xy_outer, combinedCalibration, get_lidar_imu_lever_arm(params));
+                auto data = load_point_cloud(fn.c_str(), true, params.filter_threshold_xy_inner, params.filter_threshold_xy_outer, get_lidar_imu_lever_arm(params));
 
                 std::sort(data.begin(), data.end(), [](const Point3Di& a, const Point3Di& b)
                     { return a.timestamp < b.timestamp; });
@@ -1020,7 +939,7 @@ void load_reference_point_clouds(std::vector<std::string> input_file_names, Lida
     for (size_t i = 0; i < input_file_names.size(); i++)
     {
         std::cout << "loading reference point cloud from: " << input_file_names[i] << std::endl;
-        auto pp = load_point_cloud(input_file_names[i].c_str(), false, 0, 10000, {}, get_lidar_imu_lever_arm(params));
+        auto pp = load_point_cloud(input_file_names[i].c_str(), false, 0, 10000, get_lidar_imu_lever_arm(params));
         std::cout << "loaded " << pp.size() << " reference points" << std::endl;
         params.reference_points.insert(std::end(params.reference_points), std::begin(pp), std::end(pp));
     }
