@@ -288,7 +288,8 @@
 <h3>Export</h3>
 <div class="where">save_result · app/lidar_odometry.cpp</div>
 <p>All <b>original</b> points (not the decimated ones) are transformed with their own optimized node pose. Points whose sensor-frame distance is below <code>threshould_output_filter</code> are removed from the export. Windows are grouped into chunks of 51, and each chunk becomes one <code>scan_lio_N.laz</code>, expressed relative to the chunk's first pose, with that pose stored in the session files. The remaining windows form a final, shorter chunk, which is written if it has more than <code>min_counter_concatenated_trajectory_nodes</code> windows (default 0, so it is always written).</p>
-<div class="params"><span>threshould_output_filter</span><span>min_counter_concatenated_trajectory_nodes</span></div>
+<p>With <code>export_merged_laz = true</code> all chunks are additionally written into one <code>scan_lio_merged.laz</code> in world coordinates.</p>
+<div class="params"><span>threshould_output_filter</span><span>min_counter_concatenated_trajectory_nodes</span><span>export_merged_laz</span></div>
 </li>
 </ol>
 
@@ -319,6 +320,7 @@ See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 <tr><td>filter_threshold_xy_outer</td><td class="val">25.0 m</td><td>At load: drop points beyond this horizontal radius. The L2 reaches 30 m at 90 % reflectivity and 15 m on dark rock.</td></tr>
 <tr><td>decimation <span class="badge b-key">key</span></td><td class="val">0.03 m</td><td>Voxel size for the copy of each window used in the optimization (the first point per cube is kept). Smaller means more points, slower but more constraints. The export always uses all points.</td></tr>
 <tr><td>threshould_output_filter</td><td class="val">0.4 m</td><td>Export only: drop points closer than this 3-D distance to the sensor.</td></tr>
+<tr><td>export_merged_laz</td><td class="val">true</td><td>Export only: also write <code>scan_lio_merged.laz</code>, all chunks in one file in world coordinates, streamed chunk by chunk (no extra memory). The chunk files and the session are written as before. Same result as <code>tools/merge_chunks.sh</code>, without CloudCompare.</td></tr>
 <tr><td>min_counter_concatenated_trajectory_nodes</td><td class="val">0</td><td>Export only: the last output chunk is written only if it contains more than this many windows (1 window ≈ 0.4 s). 0 keeps the tail of the recording. The old value 10 silently dropped up to 4 s at the end.</td></tr>
 </table></div>
 

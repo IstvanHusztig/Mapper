@@ -23,7 +23,7 @@ lidar_odometry_step_1 <input_folder> settings/lidar-vertical.toml <output_folder
 
 - `<input_folder>`: one recording. The files `lidar*.laz` and `imu*.csv` are required; `*.json` (LiDAR calibration) and `*.sn` (serial numbers) are optional. The folder is scanned non-recursively, and **every** `.csv` in it is read as IMU data, so keep other CSV files out of it.
 - Any other number of arguments opens the GUI (freeglut + ImGui).
-- Output: `scan_lio_*.laz` (the point cloud), `trajectory_lio_*.csv` (one pose per IMU sample), `session.mjs` with pose files, the parameters used (`HDMapping_params_*.toml`) and processing results (`HDMapping_results_*.json`, including the estimated gyro bias per window).
+- Output: `scan_lio_*.laz` (the point cloud in chunks), `scan_lio_merged.laz` (all chunks in one file, world coordinates, with `export_merged_laz = true`), `trajectory_lio_*.csv` (one pose per IMU sample), `session.mjs` with pose files, the parameters used (`HDMapping_params_*.toml`) and processing results (`HDMapping_results_*.json`, including the estimated gyro bias per window).
 
 The IMU timestamps must be strictly increasing. Recordings from dLidar builds before the timestamp fix should be repaired first: `python tools/fix_imu_timestamps.py <input>/imu.csv -o <new_folder>/imu.csv` (copy the LAZ files next to it; never leave two IMU CSVs in one input folder).
 

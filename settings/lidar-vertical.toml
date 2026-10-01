@@ -25,6 +25,8 @@ decimation = 0.03
 filter_threshold_xy_inner = 0.35
 filter_threshold_xy_outer = 25.0
 min_counter_concatenated_trajectory_nodes = 0
+# also write scan_lio_merged.laz: all chunks in one file, world coordinates
+export_merged_laz = true
 threshould_output_filter = 0.4
 
 [gyro_bias_estimation]

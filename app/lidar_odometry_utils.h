@@ -125,6 +125,9 @@ struct LidarOdometryParams
     // revisits = segments at least loop_closure_min_time_gap_s apart in time and within loop_closure_search_radius_m
     // horizontally (loop_closure_max_vertical_offset_m vertically); registered revisits with an overlap of at least
     // loop_closure_min_fitness become pose-graph edges
+    // export: also write all chunks into one scan_lio_merged.laz in world coordinates
+    bool export_merged_laz = false;
+
     bool use_loop_closure = false;
     int loop_closure_segment_windows = 12;
     double loop_closure_min_time_gap_s = 30.0;
