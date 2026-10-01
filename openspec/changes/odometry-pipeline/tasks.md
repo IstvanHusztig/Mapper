@@ -14,10 +14,10 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
 
 ## 3. GUI on the pipeline
 
-- [ ] 3.1 Replace the globals `worker_data`, `trajectory`, `imu_data`, `pointsPerFile`, `state` with `OdometryPipeline pipeline{params}` and rename the references (watch `mouse(…, int state, …)`); a new folder gets a fresh pipeline; verify it compiles with the old globals deleted
-- [ ] 3.2 Simple flow (`openData`): `load`, then on the thread `run_all` → `save`; advanced flow: "Compute all" → `run_all`, remove the consistency button and its tooltip, and have "Save result" pass the elapsed time since "Compute all"
-- [ ] 3.3 GUI defaults: `set_lidar_odometry_default_params` takes a path; the GUI start-up and the "1 Velocity < 8km/h" preset use `<exe folder>/default_settings.toml`; verify by starting the GUI with another working directory and checking the console line that the file next to the exe was loaded
-- [ ] 3.4 Run the step checks and commit
+- [x] 3.1 Replace the globals `worker_data`, `trajectory`, `imu_data`, `pointsPerFile`, `state` with `OdometryPipeline pipeline{params}` and rename the references (watch `mouse(…, int state, …)`); a new folder gets a fresh pipeline; verify it compiles with the old globals deleted
+- [x] 3.2 Simple flow (`openData`): `load`, then on the thread `run_all` → `save`; advanced flow: "Compute all" → `run_all`, remove the consistency button and its tooltip, and have "Save result" pass the elapsed time since "Compute all"
+- [x] 3.3 GUI defaults: `set_lidar_odometry_default_params` resolves `<exe folder>/default_settings.toml` itself (`exe_folder()`); the GUI start-up and the "1 Velocity < 8km/h" preset use `<exe folder>/default_settings.toml`; verify by starting the GUI with another working directory and checking the console line that the file next to the exe was loaded
+- [x] 3.4 Run the step checks and commit
 
 ## 4. Integration
 

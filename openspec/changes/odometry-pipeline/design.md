@@ -119,3 +119,21 @@ See proposal.md for the motivation. Current state:
     results JSON, `session.mjs`, both pose files, all LAZ and trajectories. Only
     `point_sizes_per_chunk.json` matched.
   - The run took 109 s instead of about 200 s, because the optimizer stopped earlier.
+- **CLI after the change (task 2.3):** `44_short` is IDENTICAL both from the repo root and with
+  the planted `default_settings.toml` as the working directory. A missing or unparsable TOML
+  exits 1 without creating the output folder.
+- **GUI wiring as built (tasks 3.1–3.3):**
+  - A rename script touched only code tokens. It skipped string literals, comments, member
+    accesses, `mouse(…, int state, …)` and the CLI block, and renamed 63 `worker_data`, 57 `state`,
+    3 `imu_data`, 2 `pointsPerFile` and 2 `trajectory`. The old globals are deleted, so it
+    compiles only if nothing stale is left.
+  - "Load data"/`openData` builds a fresh `OdometryPipeline(params, pipeline.state.paths, …)`
+    before `load`.
+  - `step2()` calls `run_all`, so post-processing runs even if the odometry reports a failure, as
+    in the CLI.
+  - The "Use multiple Gaussians" checkbox (a consistency setting) moved from after "Compute all"
+    to before it, because consistency now runs inside "Compute all".
+  - `set_lidar_odometry_default_params` resolves the exe folder itself (`exe_folder()`, using
+    `GetModuleFileNameW`) instead of taking a path, since both of its callers want the same file.
+    Started from the scratch folder with the planted file, the GUI logged "Default settings
+    loaded from: '…\out\build\x64-Release\bin\default_settings.toml'".

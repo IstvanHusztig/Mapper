@@ -9,7 +9,6 @@
 
 #include "lidar_odometry_utils.h"
 #include "lidar_odometry.h"
-#include "loop_closure.h"
 #include "odometry_pipeline.h"
 #include <export_laz.h>
 
@@ -143,7 +142,6 @@ bool calculations_failed = false;
 
 int lastPar = 1;
 
-std::vector<WorkerData> worker_data;
 
 std::string working_directory = "";
 bool initial_transformation_gizmo = false;
@@ -159,28 +157,44 @@ bool gizmo_stretch_interval = false;
 Eigen::Affine3d stretch_gizmo_m = Eigen::Affine3d::Identity();
 
 OdometryConfig params;
-OdometryState state;
 GuiPreferences gui_prefs;
+OdometryPipeline pipeline{params}; // the current run (data shown and edited by the GUI)
 Session session;
 
-std::vector<std::vector<Point3Di>> pointsPerFile;
-Imu imu_data;
-Trajectory trajectory;
 std::atomic<bool> loRunning{false};
 std::atomic<float> loProgress{0.0};
 std::atomic<bool> loPause{false};
+double compute_all_seconds = 0.0; // duration of the advanced GUI's "Compute all", written with the result
 std::chrono::time_point<std::chrono::system_clock> loStartTime;
 // start of the odometry (step 2) only: the remaining time is extrapolated from it, loading is not part of the progress
 std::chrono::time_point<std::chrono::system_clock> loStep2StartTime;
 
 ///////////////////////////////////////////////////////////////////////////////////
 
+// folder of the running executable (the build copies default_settings.toml next to it)
+fs::path exe_folder()
+{
+#ifdef _WIN32
+    wchar_t buffer[MAX_PATH];
+    const DWORD n = GetModuleFileNameW(nullptr, buffer, MAX_PATH);
+    if (n > 0 && n < MAX_PATH)
+        return fs::path(std::wstring(buffer, n)).parent_path();
+#endif
+    return fs::current_path();
+}
+
+// GUI defaults: default_settings.toml next to the exe, independent of the working directory
 void set_lidar_odometry_default_params(OdometryConfig &params, RunPaths &paths, GuiPreferences &gui)
 {
+    const fs::path file = exe_folder() / "default_settings.toml";
+    if (!fs::is_regular_file(file))
+    {
+        std::cout << "Default settings not found: '" << file.string() << "' (using built-in defaults)" << std::endl;
+        return;
+    }
     TomlIO toml_io;
-
-    toml_io.LoadParametersFromTomlFile("default_settings.toml", params, paths, gui);
-
+    if (toml_io.LoadParametersFromTomlFile(file.string(), params, paths, gui))
+        std::cout << "Default settings loaded from: '" << file.string() << "'" << std::endl;
 }
 
 // Helper function to format time in human-readable format
@@ -250,11 +264,11 @@ void step1(const std::atomic<bool> &loPause)
             if (entry.is_regular_file())
                 input_file_names.push_back(entry.path().string());
 
-        if (load_data(input_file_names, params, state, pointsPerFile, imu_data, full_debug_messages))
+        // a fresh run: nothing from a previous folder carries over (the [paths] loaded with the settings do)
+        pipeline = OdometryPipeline(params, pipeline.state.paths, full_debug_messages);
+        if (pipeline.load(input_file_names, loPause))
         {
             working_directory = fs::path(input_file_names[0]).parent_path().string();
-            calculate_trajectory(trajectory, imu_data, params.fusionConventionNwu, params.fusionConventionEnu, params.fusionConventionNed, params.ahrs_gain, full_debug_messages, params.use_remove_imu_bias_from_first_stationary_scan);
-            compute_step_1(pointsPerFile, params, state, trajectory, worker_data, loPause, &imu_data);
             step_1_done = true;
         }
         else
@@ -273,10 +287,10 @@ void step1(const std::atomic<bool> &loPause)
     }
 }
 
+// odometry + post-processing (loop closure, consistency), the same stages as the CLI
 void step2(const std::atomic<bool> &loPause)
 {
-    double ts_failure = 0.0;
-    if (compute_step_2(worker_data, params, state, ts_failure, loProgress, loPause, full_debug_messages))
+    if (pipeline.run_all(loProgress, loPause))
         step_2_done = true;
     else
         calculations_failed = true;
@@ -285,7 +299,7 @@ void step2(const std::atomic<bool> &loPause)
 void save_results(bool info, double elapsed_seconds)
 {
     fs::path outwd = get_next_result_path(working_directory);
-    save_result(worker_data, params, state, gui_prefs, outwd, elapsed_seconds);
+    pipeline.save(outwd, gui_prefs, elapsed_seconds);
     if (info)
     {
         std::string message_info = "Results saved to folder: '" + outwd.string() + "'";
@@ -583,31 +597,22 @@ void settings_gui()
             {
                 loStep2StartTime = std::chrono::system_clock::now();
                 step2(loPause);
+                compute_all_seconds = std::chrono::duration<double>(std::chrono::system_clock::now() - loStep2StartTime).count();
             }
 
             if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("Press this button for automatic LiDAR odometry calculation -> it will produce trajectory");
+                ImGui::SetTooltip("Press this button for automatic LiDAR odometry calculation (with loop closure and consistency when enabled) -> it will produce trajectory");
+
+            // used by the consistency pass inside Compute all
+            ImGui::Checkbox("Use multiple Gaussians for each bucket", &params.use_mutliple_gaussian);
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Multiple Gaussians suppose to work better in floor plan indoor scenarios (multiple neighbouring rooms)");
         }
 
         if (step_1_done && step_2_done)
         {
-            if (ImGui::Button("Point cloud consistency and trajectory smoothness"))
-                run_consistency(worker_data, params);
-            if (ImGui::IsItemHovered())
-            {
-                ImGui::BeginTooltip();
-				ImGui::Text("This process makes trajectory smooth, point cloud will be more consistent");
-                ImGui::SetTooltip("Press optionally before pressing 'Save result'");
-                ImGui::EndTooltip();
-            }
-                
-            ImGui::SameLine();
-            ImGui::Checkbox("Use multiple Gaussians for each bucket", &params.use_mutliple_gaussian);
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("Multiple Gaussians suppose to work better in floor plan indoor scenarios (multiple neighbouring rooms)");
-
             if (ImGui::Button("Save result"))
-                save_results(true, 0.0);
+                save_results(true, compute_all_seconds);
 
             ImGui::SameLine();
             ImGui::Text("Press this button for saving resulting trajectory and point clouds as single session for 'multi_view_tls_registration_step_2' program");
@@ -621,7 +626,7 @@ void settings_gui()
 
                 if (output_file_name.size() > 0)
                 {
-                    session.fill_session_from_worker_data(worker_data, false, true, true, params.threshould_output_filter);
+                    session.fill_session_from_worker_data(pipeline.worker_data, false, true, true, params.threshould_output_filter);
                     save_all_to_las(session, output_file_name, true, true);
                 }
             }
@@ -692,7 +697,7 @@ void settings_gui()
 
                 if (output_file_name.size() > 0)
                 {
-                    save_trajectory_to_ascii(worker_data, output_file_name);
+                    save_trajectory_to_ascii(pipeline.worker_data, output_file_name);
                 }
             }
 
@@ -707,7 +712,7 @@ void settings_gui()
                 if (input_file_names.size() > 0)
                 {
                     show_reference_points = true;
-                    load_reference_point_clouds(input_file_names, params, state);
+                    load_reference_point_clouds(input_file_names, params, pipeline.state);
                 }
             }
 
@@ -721,33 +726,33 @@ void settings_gui()
 
                 if (ImGui::Button("Filter reference buckets"))
                 {
-                    filter_reference_buckets(params, state);
+                    filter_reference_buckets(params, pipeline.state);
                 }
             }
 
-            if (state.initial_points.size() > 0)
+            if (pipeline.state.initial_points.size() > 0)
             {
                 ImGui::NewLine();
                 ImGui::Text("Manipulate initial transformation:");
                 ImGui::Checkbox("Show gizmo", &initial_transformation_gizmo);
                 if (initial_transformation_gizmo)
                 {
-                    m_gizmo[0] = (float)state.m_g(0, 0);
-                    m_gizmo[1] = (float)state.m_g(1, 0);
-                    m_gizmo[2] = (float)state.m_g(2, 0);
-                    m_gizmo[3] = (float)state.m_g(3, 0);
-                    m_gizmo[4] = (float)state.m_g(0, 1);
-                    m_gizmo[5] = (float)state.m_g(1, 1);
-                    m_gizmo[6] = (float)state.m_g(2, 1);
-                    m_gizmo[7] = (float)state.m_g(3, 1);
-                    m_gizmo[8] = (float)state.m_g(0, 2);
-                    m_gizmo[9] = (float)state.m_g(1, 2);
-                    m_gizmo[10] = (float)state.m_g(2, 2);
-                    m_gizmo[11] = (float)state.m_g(3, 2);
-                    m_gizmo[12] = (float)state.m_g(0, 3);
-                    m_gizmo[13] = (float)state.m_g(1, 3);
-                    m_gizmo[14] = (float)state.m_g(2, 3);
-                    m_gizmo[15] = (float)state.m_g(3, 3);
+                    m_gizmo[0] = (float)pipeline.state.m_g(0, 0);
+                    m_gizmo[1] = (float)pipeline.state.m_g(1, 0);
+                    m_gizmo[2] = (float)pipeline.state.m_g(2, 0);
+                    m_gizmo[3] = (float)pipeline.state.m_g(3, 0);
+                    m_gizmo[4] = (float)pipeline.state.m_g(0, 1);
+                    m_gizmo[5] = (float)pipeline.state.m_g(1, 1);
+                    m_gizmo[6] = (float)pipeline.state.m_g(2, 1);
+                    m_gizmo[7] = (float)pipeline.state.m_g(3, 1);
+                    m_gizmo[8] = (float)pipeline.state.m_g(0, 2);
+                    m_gizmo[9] = (float)pipeline.state.m_g(1, 2);
+                    m_gizmo[10] = (float)pipeline.state.m_g(2, 2);
+                    m_gizmo[11] = (float)pipeline.state.m_g(3, 2);
+                    m_gizmo[12] = (float)pipeline.state.m_g(0, 3);
+                    m_gizmo[13] = (float)pipeline.state.m_g(1, 3);
+                    m_gizmo[14] = (float)pipeline.state.m_g(2, 3);
+                    m_gizmo[15] = (float)pipeline.state.m_g(3, 3);
                 }
                 else
                 {
@@ -755,13 +760,13 @@ void settings_gui()
                     {
                         for (int i = 0; i < 30; i++)
                         {
-                            align_to_reference(params.in_out_params_indoor, state.initial_points, state.m_g, state.reference_buckets);
+                            align_to_reference(params.in_out_params_indoor, pipeline.state.initial_points, pipeline.state.m_g, pipeline.state.reference_buckets);
                         }
                     }
                 }
             }
 
-            if (worker_data.size() > 0)
+            if (pipeline.worker_data.size() > 0)
             {
                 ImGui::NewLine();
 
@@ -776,27 +781,27 @@ void settings_gui()
                 if (index_begin < 0)
                     index_begin = 0;
                 if (index_begin >= index_end)
-                    index_begin = std::min(index_end, static_cast<int>(worker_data.size() - 1));
+                    index_begin = std::min(index_end, static_cast<int>(pipeline.worker_data.size() - 1));
 
                 ImGui::SameLine();
                 ImGui::Text(" to: ");
                 ImGui::SameLine();
 
                 int prev = index_end;
-                ImGui::SliderInt("##ts", &index_end, index_begin, static_cast<int>(worker_data.size() - 1));
+                ImGui::SliderInt("##ts", &index_end, index_begin, static_cast<int>(pipeline.worker_data.size() - 1));
                 if (ImGui::IsItemHovered())
-                    ImGui::SetTooltip("max %zu", worker_data.size() - 1);
+                    ImGui::SetTooltip("max %zu", pipeline.worker_data.size() - 1);
                 ImGui::SameLine();
                 ImGui::InputInt("##ti", &index_end, 1, 5);
                 if (ImGui::IsItemHovered())
-                    ImGui::SetTooltip("max %zu", worker_data.size() - 1);
+                    ImGui::SetTooltip("max %zu", pipeline.worker_data.size() - 1);
                 if (index_end < index_begin)
                     index_end = index_begin;
-                if (index_end >= worker_data.size() - 1)
-                    index_end = worker_data.size() - 1;
+                if (index_end >= pipeline.worker_data.size() - 1)
+                    index_end = pipeline.worker_data.size() - 1;
                 if (prev != index_end)
                 {
-                    stretch_gizmo_m = worker_data[index_end].intermediate_trajectory[0];
+                    stretch_gizmo_m = pipeline.worker_data[index_end].intermediate_trajectory[0];
                 }
 
                 ImGui::PopItemWidth();
@@ -804,17 +809,17 @@ void settings_gui()
                 ImGui::Text("Selection: ");
                 if (ImGui::Button("Select all"))
                 {
-                    for (size_t k = 0; k < worker_data.size(); k++)
+                    for (size_t k = 0; k < pipeline.worker_data.size(); k++)
                     {
-                        worker_data[k].show = true;
+                        pipeline.worker_data[k].show = true;
                     }
                 }
                 ImGui::SameLine();
                 if (ImGui::Button("Unselect"))
                 {
-                    for (size_t k = 0; k < worker_data.size(); k++)
+                    for (size_t k = 0; k < pipeline.worker_data.size(); k++)
                     {
-                        worker_data[k].show = false;
+                        pipeline.worker_data[k].show = false;
                     }
                 }
 
@@ -822,8 +827,8 @@ void settings_gui()
                 ImGui::SameLine();
                 if (ImGui::Button("<from, to>"))
                 {
-                    for (size_t k = 0; k < worker_data.size(); k++)
-                        worker_data[k].show = (k >= index_begin && k <= index_end);
+                    for (size_t k = 0; k < pipeline.worker_data.size(); k++)
+                        pipeline.worker_data[k].show = (k >= index_begin && k <= index_end);
                 }
 
                 if (ImGui::Button("<from - 1, to - 1>"))
@@ -833,20 +838,20 @@ void settings_gui()
                         index_begin--;
                         index_end--;
 
-                        for (size_t k = 0; k < worker_data.size(); k++)
-                            worker_data[k].show = (k >= index_begin && k <= index_end);
+                        for (size_t k = 0; k < pipeline.worker_data.size(); k++)
+                            pipeline.worker_data[k].show = (k >= index_begin && k <= index_end);
                     }
                 }
                 ImGui::SameLine();
                 if (ImGui::Button("<from + 1, to + 1>"))
                 {
-                    if (index_begin + 1 < worker_data.size() && index_end + 1 < worker_data.size())
+                    if (index_begin + 1 < pipeline.worker_data.size() && index_end + 1 < pipeline.worker_data.size())
                     {
                         index_begin++;
                         index_end++;
 
-                        for (size_t k = 0; k < worker_data.size(); k++)
-                            worker_data[k].show = (k >= index_begin && k <= index_end);
+                        for (size_t k = 0; k < pipeline.worker_data.size(); k++)
+                            pipeline.worker_data[k].show = (k >= index_begin && k <= index_end);
                     }
                 }
 
@@ -857,20 +862,20 @@ void settings_gui()
                         index_begin -= 10;
                         index_end -= 10;
 
-                        for (size_t k = 0; k < worker_data.size(); k++)
-                            worker_data[k].show = (k >= index_begin && k <= index_end);
+                        for (size_t k = 0; k < pipeline.worker_data.size(); k++)
+                            pipeline.worker_data[k].show = (k >= index_begin && k <= index_end);
                     }
                 }
                 ImGui::SameLine();
                 if (ImGui::Button("<from + 10, to + 10>"))
                 {
-                    if (index_begin + 10 < worker_data.size() && index_end + 10 < worker_data.size())
+                    if (index_begin + 10 < pipeline.worker_data.size() && index_end + 10 < pipeline.worker_data.size())
                     {
                         index_begin += 10;
                         index_end += 10;
 
-                        for (size_t k = 0; k < worker_data.size(); k++)
-                            worker_data[k].show = (k >= index_begin && k <= index_end);
+                        for (size_t k = 0; k < pipeline.worker_data.size(); k++)
+                            pipeline.worker_data[k].show = (k >= index_begin && k <= index_end);
                     }
                 }
 
@@ -880,7 +885,7 @@ void settings_gui()
                     Eigen::Affine3d pose;
                     if (output_file_name.size() > 0)
                     {
-                        session.fill_session_from_worker_data(worker_data, true, false, false, params.threshould_output_filter);
+                        session.fill_session_from_worker_data(pipeline.worker_data, true, false, false, params.threshould_output_filter);
                         save_all_to_las(session, output_file_name, false, true);
                     }
                     // TODO: give value to pose even if output_file_name is wrong
@@ -931,9 +936,9 @@ void settings_gui()
 
                 if (gizmo_stretch_interval)
                 {
-                    if (index_end < worker_data.size())
+                    if (index_end < pipeline.worker_data.size())
                     {
-                        if (worker_data[index_end].intermediate_trajectory.size() > 0)
+                        if (pipeline.worker_data[index_end].intermediate_trajectory.size() > 0)
                         {
                             m_gizmo[0] = (float)stretch_gizmo_m(0, 0);
                             m_gizmo[1] = (float)stretch_gizmo_m(1, 0);
@@ -956,9 +961,9 @@ void settings_gui()
 
                     if (ImGui::Button("Accept Gizmo (only translation)"))
                     {
-                        if (index_end < worker_data.size())
+                        if (index_end < pipeline.worker_data.size())
                         {
-                            if (worker_data[index_end].intermediate_trajectory.size() > 0)
+                            if (pipeline.worker_data[index_end].intermediate_trajectory.size() > 0)
                             {
                                 Eigen::Affine3d current_gizmo = Eigen::Affine3d::Identity();
                                 current_gizmo(0, 0) = m_gizmo[0];
@@ -978,23 +983,23 @@ void settings_gui()
                                 current_gizmo(2, 3) = m_gizmo[14];
                                 current_gizmo(3, 3) = m_gizmo[15];
 
-                                auto first_pose = worker_data[index_begin].intermediate_trajectory[0];
+                                auto first_pose = pipeline.worker_data[index_begin].intermediate_trajectory[0];
 
                                 Eigen::Vector3d translation = current_gizmo.translation() - first_pose.translation();
 
                                 float number_all_nodes_inside_interval = 0;
                                 for (int i = index_begin; i < index_end; i++)
                                 {
-                                    number_all_nodes_inside_interval += (float)worker_data[i].intermediate_trajectory.size();
+                                    number_all_nodes_inside_interval += (float)pipeline.worker_data[i].intermediate_trajectory.size();
                                 }
 
                                 std::vector<std::vector<Eigen::Affine3d>> all_poses;
-                                for (size_t i = 0; i < worker_data.size(); i++)
+                                for (size_t i = 0; i < pipeline.worker_data.size(); i++)
                                 {
                                     std::vector<Eigen::Affine3d> poses;
-                                    for (size_t j = 0; j < worker_data[i].intermediate_trajectory.size(); j++)
+                                    for (size_t j = 0; j < pipeline.worker_data[i].intermediate_trajectory.size(); j++)
                                     {
-                                        poses.push_back(worker_data[i].intermediate_trajectory[j]);
+                                        poses.push_back(pipeline.worker_data[i].intermediate_trajectory[j]);
                                     }
                                     all_poses.push_back(poses);
                                 }
@@ -1005,9 +1010,9 @@ void settings_gui()
 
                                 for (int i = index_begin; i < index_end; i++)
                                 {
-                                    for (size_t j = 0; j < worker_data[i].intermediate_trajectory.size(); j++)
+                                    for (size_t j = 0; j < pipeline.worker_data[i].intermediate_trajectory.size(); j++)
                                     {
-                                        TaitBryanPose pose = pose_tait_bryan_from_affine_matrix(worker_data[i].intermediate_trajectory[j]);
+                                        TaitBryanPose pose = pose_tait_bryan_from_affine_matrix(pipeline.worker_data[i].intermediate_trajectory[j]);
 
                                         pose.px = first_pose.translation().x() + translation.x() * (counter / number_all_nodes_inside_interval);
                                         pose.py = first_pose.translation().y() + translation.y() * (counter / number_all_nodes_inside_interval);
@@ -1015,15 +1020,15 @@ void settings_gui()
 
                                         counter += 1.0f;
 
-                                        worker_data[i].intermediate_trajectory[j] = affine_matrix_from_pose_tait_bryan(pose);
+                                        pipeline.worker_data[i].intermediate_trajectory[j] = affine_matrix_from_pose_tait_bryan(pose);
 
-                                        last_m = worker_data[i].intermediate_trajectory[j];
+                                        last_m = pipeline.worker_data[i].intermediate_trajectory[j];
                                     }
                                 }
 
-                                for (size_t i = index_end; i < worker_data.size(); i++)
+                                for (size_t i = index_end; i < pipeline.worker_data.size(); i++)
                                 {
-                                    for (size_t j = 0; j < worker_data[i].intermediate_trajectory.size(); j++)
+                                    for (size_t j = 0; j < pipeline.worker_data[i].intermediate_trajectory.size(); j++)
                                     {
                                         Eigen::Affine3d m_update = Eigen::Affine3d::Identity();
 
@@ -1036,7 +1041,7 @@ void settings_gui()
                                             m_update = all_poses[i][j - 1].inverse() * all_poses[i][j];
                                         }
                                         last_m = last_m * m_update;
-                                        worker_data[i].intermediate_trajectory[j] = last_m;
+                                        pipeline.worker_data[i].intermediate_trajectory[j] = last_m;
                                     }
                                 }
                             }
@@ -1048,7 +1053,7 @@ void settings_gui()
                 ImGui::NewLine();
                 ImGui::Text("Show/hide individual scans:");
 
-                int n_items = (int)worker_data.size();
+                int n_items = (int)pipeline.worker_data.size();
                 int digits = (n_items > 0) ? (int)std::log10(n_items - 1) + 1 : 1;
 
                 for (int i = 0; i < n_items; i++)
@@ -1056,7 +1061,7 @@ void settings_gui()
                     std::stringstream ss;
                     ss << "[" << std::setw(digits) << std::setfill('0') << i << "]";
 
-                    ImGui::Checkbox(ss.str().c_str(), &worker_data[i].show);
+                    ImGui::Checkbox(ss.str().c_str(), &pipeline.worker_data[i].show);
 
                     // Arrange checkboxes in rows of 5
                     if ((i + 1) % 5 != 0)
@@ -1172,7 +1177,7 @@ void openData()
                 std::ostringstream oss;
                 oss << "Data saved to folder:\n'" << working_directory << "\\lio_result_*'\n"
                     << "Calculated trajectory length: "
-                    << std::fixed << std::setprecision(1) << state.total_length_of_calculated_trajectory << "[m]\n"
+                    << std::fixed << std::setprecision(1) << pipeline.state.total_length_of_calculated_trajectory << "[m]\n"
                     << "Elapsed time: " << formatTime(elapsed_seconds.count()).c_str();
 
                 [[maybe_unused]]
@@ -1229,9 +1234,9 @@ void display()
         glColor3d(0.0, 1.0, 0.0);
         glPointSize(point_size);
         glBegin(GL_POINTS);
-        for (const auto &p : state.initial_points)
+        for (const auto &p : pipeline.state.initial_points)
         {
-            auto pp = state.m_g * p.point;
+            auto pp = pipeline.state.m_g * p.point;
             glVertex3d(pp.x(), pp.y(), pp.z());
         }
         glEnd();
@@ -1241,15 +1246,15 @@ void display()
     {
         glColor3f(1, 0, 0);
         glBegin(GL_POINTS);
-        for (size_t i = 0; i < state.reference_points.size(); i += dec_reference_points)
-            glVertex3f(state.reference_points[i].point.x(), state.reference_points[i].point.y(), state.reference_points[i].point.z());
+        for (size_t i = 0; i < pipeline.state.reference_points.size(); i += dec_reference_points)
+            glVertex3f(pipeline.state.reference_points[i].point.x(), pipeline.state.reference_points[i].point.y(), pipeline.state.reference_points[i].point.z());
         glEnd();
     }
 
     if (show_trajectory_as_axes)
     {
         glBegin(GL_LINES);
-        for (const auto &wd : worker_data)
+        for (const auto &wd : pipeline.worker_data)
         {
             for (const auto &it : wd.intermediate_trajectory)
             {
@@ -1274,7 +1279,7 @@ void display()
         glPointSize(3);
         glColor3f(0, 1, 1);
         glBegin(GL_POINTS);
-        for (const auto &wd : worker_data)
+        for (const auto &wd : pipeline.worker_data)
         {
             for (const auto &it : wd.intermediate_trajectory)
                 glVertex3f(it(0, 3), it(1, 3), it(2, 3));
@@ -1284,9 +1289,9 @@ void display()
 
         glColor3f(1, 0, 0);
         glBegin(GL_LINES);
-        if (worker_data.size() > 0)
+        if (pipeline.worker_data.size() > 0)
         {
-            const auto &wd = worker_data[worker_data.size() - 1];
+            const auto &wd = pipeline.worker_data[pipeline.worker_data.size() - 1];
             if (wd.intermediate_trajectory.size() > 0)
             {
                 const auto &it = wd.intermediate_trajectory[wd.intermediate_trajectory.size() - 1];
@@ -1308,20 +1313,20 @@ void display()
     {
         glColor3f(1, 0, 0);
         glBegin(GL_POINTS);
-        for (const auto &b : state.reference_buckets)
+        for (const auto &b : pipeline.state.reference_buckets)
             glVertex3f(b.second.mean.x(), b.second.mean.y(), b.second.mean.z());
         glEnd();
     }
 
-    if (worker_data.size() > 0)
+    if (pipeline.worker_data.size() > 0)
     {
-        if (index_begin < worker_data.size())
+        if (index_begin < pipeline.worker_data.size())
         {
             glColor3f(1, 1, 0);
             glBegin(GL_LINES);
-            if (worker_data[index_begin].intermediate_trajectory.size() > 0)
+            if (pipeline.worker_data[index_begin].intermediate_trajectory.size() > 0)
             {
-                auto p = worker_data[index_begin].intermediate_trajectory[0].translation();
+                auto p = pipeline.worker_data[index_begin].intermediate_trajectory[0].translation();
                 glVertex3f(p.x() - 1, p.y(), p.z());
                 glVertex3f(p.x() + 1, p.y(), p.z());
 
@@ -1334,13 +1339,13 @@ void display()
             glEnd();
         }
 
-        if (index_end < worker_data.size())
+        if (index_end < pipeline.worker_data.size())
         {
             glColor3f(0, 1, 1);
             glBegin(GL_LINES);
-            if (worker_data[index_end].intermediate_trajectory.size() > 0)
+            if (pipeline.worker_data[index_end].intermediate_trajectory.size() > 0)
             {
-                auto p = worker_data[index_end].intermediate_trajectory[0].translation();
+                auto p = pipeline.worker_data[index_end].intermediate_trajectory[0].translation();
                 glVertex3f(p.x() - 1, p.y(), p.z());
                 glVertex3f(p.x() + 1, p.y(), p.z());
 
@@ -1381,7 +1386,7 @@ void display()
                 {
                     lastPar = 1;
 
-                    set_lidar_odometry_default_params(params, state.paths, gui_prefs);
+                    set_lidar_odometry_default_params(params, pipeline.state.paths, gui_prefs);
 
                     std::cout << "clicked: Set parameters for velocity up to 8km/h, tiny spaces" << std::endl;
                 }
@@ -1546,7 +1551,7 @@ void display()
                         {
                             // Use the original TomlIO class for loading parameters in GUI
                             TomlIO toml_io;
-                            toml_io.LoadParametersFromTomlFile(input_file_names[0], params, state.paths, gui_prefs);
+                            toml_io.LoadParametersFromTomlFile(input_file_names[0], params, pipeline.state.paths, gui_prefs);
                             std::cout << "Parameters loaded from: " << input_file_names[0] << std::endl;
                         }
                         catch (const std::exception& e)
@@ -1565,7 +1570,7 @@ void display()
                     {
                         // Use the original TomlIO class for saving parameters in GUI
                         TomlIO toml_io;
-                        bool success = toml_io.SaveParametersToTomlFile(output_file_name, params, state.paths, gui_prefs);
+                        bool success = toml_io.SaveParametersToTomlFile(output_file_name, params, pipeline.state.paths, gui_prefs);
                         if (success)
                             std::cout << "Parameters file generated: " << output_file_name << std::endl;
                         else
@@ -1674,22 +1679,22 @@ void display()
 
         ImGuizmo::Manipulate(&modelview[0], &projection[0], ImGuizmo::TRANSLATE | ImGuizmo::ROTATE_Z | ImGuizmo::ROTATE_X | ImGuizmo::ROTATE_Y, ImGuizmo::WORLD, m_gizmo, NULL);
 
-        state.m_g(0, 0) = m_gizmo[0];
-        state.m_g(1, 0) = m_gizmo[1];
-        state.m_g(2, 0) = m_gizmo[2];
-        state.m_g(3, 0) = m_gizmo[3];
-        state.m_g(0, 1) = m_gizmo[4];
-        state.m_g(1, 1) = m_gizmo[5];
-        state.m_g(2, 1) = m_gizmo[6];
-        state.m_g(3, 1) = m_gizmo[7];
-        state.m_g(0, 2) = m_gizmo[8];
-        state.m_g(1, 2) = m_gizmo[9];
-        state.m_g(2, 2) = m_gizmo[10];
-        state.m_g(3, 2) = m_gizmo[11];
-        state.m_g(0, 3) = m_gizmo[12];
-        state.m_g(1, 3) = m_gizmo[13];
-        state.m_g(2, 3) = m_gizmo[14];
-        state.m_g(3, 3) = m_gizmo[15];
+        pipeline.state.m_g(0, 0) = m_gizmo[0];
+        pipeline.state.m_g(1, 0) = m_gizmo[1];
+        pipeline.state.m_g(2, 0) = m_gizmo[2];
+        pipeline.state.m_g(3, 0) = m_gizmo[3];
+        pipeline.state.m_g(0, 1) = m_gizmo[4];
+        pipeline.state.m_g(1, 1) = m_gizmo[5];
+        pipeline.state.m_g(2, 1) = m_gizmo[6];
+        pipeline.state.m_g(3, 1) = m_gizmo[7];
+        pipeline.state.m_g(0, 2) = m_gizmo[8];
+        pipeline.state.m_g(1, 2) = m_gizmo[9];
+        pipeline.state.m_g(2, 2) = m_gizmo[10];
+        pipeline.state.m_g(3, 2) = m_gizmo[11];
+        pipeline.state.m_g(0, 3) = m_gizmo[12];
+        pipeline.state.m_g(1, 3) = m_gizmo[13];
+        pipeline.state.m_g(2, 3) = m_gizmo[14];
+        pipeline.state.m_g(3, 3) = m_gizmo[15];
     }
 
     if (gizmo_stretch_interval)
@@ -1756,9 +1761,9 @@ void display()
 
 void on_exit(){
     // remove cache
-    std::cout << "remove cache: '" << state.paths.working_directory_cache << "' START" << std::endl;
-    std::filesystem::remove_all(state.paths.working_directory_cache);
-    std::cout << "remove cache: '" << state.paths.working_directory_cache << "' FINISHED" << std::endl;
+    std::cout << "remove cache: '" << pipeline.state.paths.working_directory_cache << "' START" << std::endl;
+    std::filesystem::remove_all(pipeline.state.paths.working_directory_cache);
+    std::cout << "remove cache: '" << pipeline.state.paths.working_directory_cache << "' FINISHED" << std::endl;
 }
 
 void mouse(int glut_button, int state, int x, int y)
@@ -1849,7 +1854,7 @@ int main(int argc, char *argv[])
         {
             std::cout << argv[0] << " input_folder parameters(*.toml) output_folder" << std::endl;
 
-            set_lidar_odometry_default_params(params, state.paths, gui_prefs);
+            set_lidar_odometry_default_params(params, pipeline.state.paths, gui_prefs);
 
              
 
