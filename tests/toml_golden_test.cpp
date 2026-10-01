@@ -23,7 +23,7 @@ std::string read_bytes(const fs::path &p)
     return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
 }
 
-void check_golden(LidarOdometryParams &params, const RunPaths &paths, const GuiPreferences &gui, const std::string &golden_name)
+void check_golden(OdometryConfig &params, const RunPaths &paths, const GuiPreferences &gui, const std::string &golden_name)
 {
     params.build_date = "GOLDEN"; // __DATE__ of the build otherwise
     TomlIO toml_io;
@@ -45,13 +45,13 @@ void check_golden(LidarOdometryParams &params, const RunPaths &paths, const GuiP
 
 TEST_CASE("default parameters are saved as the golden TOML")
 {
-    LidarOdometryParams params;
+    OdometryConfig params;
     check_golden(params, RunPaths{}, GuiPreferences{}, "default_params.golden.toml");
 }
 
 TEST_CASE("settings/lidar-vertical.toml is saved as the golden TOML")
 {
-    LidarOdometryParams params;
+    OdometryConfig params;
     RunPaths paths;
     GuiPreferences gui;
     TomlIO toml_io;

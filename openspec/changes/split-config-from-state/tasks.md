@@ -23,9 +23,9 @@ Every step ends with: both presets build `lidar_odometry_step_1` and `lidar_odom
 
 ## 4. Rename and const
 
-- [ ] 4.1 Rename `LidarOdometryParams` to `OdometryConfig` everywhere (types only, no logic change); verify `grep LidarOdometryParams` finds nothing outside archived OpenSpec changes
-- [ ] 4.2 Make pipeline functions take `const OdometryConfig&` (the functions listed in design.md Goals); make the grid-parameter arguments of `update_rgd`, `update_rgd_spherical_coordinates`, `align_to_reference`, `optimize_lidar_odometry` and `optimize_sf*` `const&`; record in design.md any that turn out to write
-- [ ] 4.3 Run the step checks and commit
+- [x] 4.1 Rename `LidarOdometryParams` to `OdometryConfig` everywhere (types only, no logic change); verify `grep LidarOdometryParams` finds nothing outside archived OpenSpec changes
+- [x] 4.2 Make pipeline functions take `const OdometryConfig&` (the functions listed in design.md Goals); make the grid-parameter arguments of `update_rgd`, `update_rgd_spherical_coordinates`, `align_to_reference`, `optimize_lidar_odometry` and `optimize_sf*` `const&`; record in design.md any that turn out to write
+- [x] 4.3 Run the step checks and commit
 
 ## 5. Integration
 

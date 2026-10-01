@@ -145,3 +145,9 @@ See proposal.md for the motivation. What the code does today:
   plain floats and `#if WITH_GUI` is gone from the TOML layer and `lidar_odometry_utils.h`. The
   golden TOML (including `clear_color`) is still byte-identical, which shows the TOML layer is
   GUI-free.
+- **`const` everywhere it was planned, with no exceptions.** None of `load_data`,
+  `compute_step_1`/`2`, `run_consistency`, `Consistency`/`Consistency2`, the reference-cloud
+  functions, `save_result`, `update_rgd`, `update_rgd_spherical_coordinates`,
+  `align_to_reference`, `optimize_lidar_odometry` or `optimize_sf2` writes to the config or the
+  grid parameters (the compiler accepted every `const`). Only TOML loading,
+  `HandleMissingVersion` and `set_lidar_odometry_default_params` write to an `OdometryConfig`.

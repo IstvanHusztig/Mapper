@@ -2,7 +2,7 @@
 #include <iostream>
 #include <sstream>
 
-bool TomlIO::SaveParametersToTomlFile(const std::string &filepath, const LidarOdometryParams &params, const RunPaths &paths, const GuiPreferences &gui)
+bool TomlIO::SaveParametersToTomlFile(const std::string &filepath, const OdometryConfig &params, const RunPaths &paths, const GuiPreferences &gui)
 {
     toml::table tbl;
     for (const auto &[category, attributes] : CATEGORIES)
@@ -133,7 +133,7 @@ void TomlIO::read_grid_params(NDT::GridParameters &grid, const toml::table *grid
     set_if_exists(grid, grid_tbl, "resolution_Z", &NDT::GridParameters::resolution_Z);
 }
 
-bool TomlIO::LoadParametersFromTomlFile(const std::string &filepath, LidarOdometryParams &params, RunPaths &paths, GuiPreferences &gui)
+bool TomlIO::LoadParametersFromTomlFile(const std::string &filepath, OdometryConfig &params, RunPaths &paths, GuiPreferences &gui)
 {
     toml::table tbl;
     try
@@ -297,7 +297,7 @@ bool TomlIO::IsVersionCompatible(const std::string &file_version, const std::str
     return (file_parts[0] == current_parts[0]) && (file_parts[1] == current_parts[1]);
 }
 
-void TomlIO::HandleMissingVersion(LidarOdometryParams &params) {
+void TomlIO::HandleMissingVersion(OdometryConfig &params) {
     // Set current version information for missing version configs
     params.software_version = get_software_version();
     params.config_version = "1.0";

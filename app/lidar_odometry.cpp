@@ -7,7 +7,7 @@ namespace fs = std::filesystem;
 const float RAD_TO_DEG = 180.0f / M_PI;
 
 bool load_data(std::vector<std::string>& input_file_names,
-    LidarOdometryParams& params,
+    const OdometryConfig &params,
     OdometryState& state,
     std::vector<std::vector<Point3Di>>& pointsPerFile,
     Imu& imu_data,
@@ -335,7 +335,7 @@ void calculate_trajectory(
 }
 
 bool compute_step_1(
-    std::vector<std::vector<Point3Di>>& pointsPerFile, LidarOdometryParams& params, OdometryState& state, Trajectory& trajectory, std::vector<WorkerData>& worker_data, const std::atomic<bool>& pause, const Imu* imu_data)
+    std::vector<std::vector<Point3Di>>& pointsPerFile, const OdometryConfig &params, OdometryState& state, Trajectory& trajectory, std::vector<WorkerData>& worker_data, const std::atomic<bool>& pause, const Imu* imu_data)
 {
     int number_of_initial_points = 0;
     double timestamp_begin = 0.0;
@@ -528,7 +528,7 @@ bool compute_step_1(
     return true;
 }
 
-void run_consistency(std::vector<WorkerData> &worker_data, LidarOdometryParams &params)
+void run_consistency(std::vector<WorkerData> &worker_data, const OdometryConfig &params)
 {
     std::cout << "Point cloud consistency and trajectory smoothness START" << std::endl;
     for (int i = 0; i < params.num_constistency_iter; i++)
@@ -616,7 +616,7 @@ namespace
     };
 } // namespace
 
-void save_result(std::vector<WorkerData> &worker_data, LidarOdometryParams &params, const OdometryState &state, const GuiPreferences &gui, fs::path outwd, double elapsed_time_s)
+void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &params, const OdometryState &state, const GuiPreferences &gui, fs::path outwd, double elapsed_time_s)
 {
     std::filesystem::create_directory(outwd);
     // concatenate data
@@ -893,7 +893,7 @@ void save_result(std::vector<WorkerData> &worker_data, LidarOdometryParams &para
     save_processing_results_json(params, state, outwd, elapsed_time_s, &worker_data);
 }
 
-void filter_reference_buckets(LidarOdometryParams &params, OdometryState &state)
+void filter_reference_buckets(const OdometryConfig &params, OdometryState &state)
 {
     NDTBucketMapType reference_buckets_out;
     for (const auto &b : state.reference_buckets)
@@ -932,7 +932,7 @@ void save_trajectory_to_ascii(std::vector<WorkerData> &worker_data, std::string 
     file.close();
 }
 
-void load_reference_point_clouds(std::vector<std::string> input_file_names, LidarOdometryParams &params, OdometryState &state)
+void load_reference_point_clouds(std::vector<std::string> input_file_names, const OdometryConfig &params, OdometryState &state)
 {
     state.reference_buckets.clear();
     state.reference_points.clear();
@@ -949,7 +949,7 @@ void load_reference_point_clouds(std::vector<std::string> input_file_names, Lida
     state.buckets_indoor = state.reference_buckets;
 }
 
-void save_parameters_toml(const LidarOdometryParams &params, const RunPaths &paths, const GuiPreferences &gui, const fs::path &outwd, double elapsed_seconds)
+void save_parameters_toml(const OdometryConfig &params, const RunPaths &paths, const GuiPreferences &gui, const fs::path &outwd, double elapsed_seconds)
 {
     // Get current date and time
     auto now = std::chrono::system_clock::now();
@@ -987,7 +987,7 @@ void save_parameters_toml(const LidarOdometryParams &params, const RunPaths &pat
     }
 }
 
-void save_processing_results_json(const LidarOdometryParams &params, const OdometryState &state, const fs::path &outwd, double elapsed_seconds,
+void save_processing_results_json(const OdometryConfig &params, const OdometryState &state, const fs::path &outwd, double elapsed_seconds,
                                   const std::vector<WorkerData> *worker_data)
 {
     // Get current date and time

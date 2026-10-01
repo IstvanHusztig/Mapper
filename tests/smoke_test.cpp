@@ -14,13 +14,13 @@ namespace fs = std::filesystem;
 TEST_CASE("default parameters round-trip through TOML")
 {
     TomlIO toml_io;
-    LidarOdometryParams defaults;
+    OdometryConfig defaults;
     RunPaths paths;
     GuiPreferences gui;
     const fs::path file = fs::temp_directory_path() / "lidar_odometry_tests_roundtrip.toml";
     REQUIRE(toml_io.SaveParametersToTomlFile(file.string(), defaults, paths, gui));
 
-    LidarOdometryParams loaded;
+    OdometryConfig loaded;
     for (const auto &[name, member] : toml_io.POINTERS)
         std::visit([&](auto ptr) {
             using T = std::remove_reference_t<decltype(loaded.*ptr)>;

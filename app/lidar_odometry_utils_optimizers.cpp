@@ -57,7 +57,7 @@ namespace
 
 void optimize_sf2(std::vector<Point3Di> &intermediate_points, std::vector<Point3Di> &intermediate_points_sf, std::vector<Eigen::Affine3d> &intermediate_trajectory,
                   const std::vector<Eigen::Affine3d> &intermediate_trajectory_motion_model,
-                  NDT::GridParameters &rgd_params, bool useMultithread, double wx,
+                  const NDT::GridParameters &rgd_params, bool useMultithread, double wx,
                   double wy,
                   double wz,
                   double wom,
@@ -606,8 +606,8 @@ void optimize_rigid_sf(
 void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points,
                              std::vector<Eigen::Affine3d> &intermediate_trajectory,
                              std::vector<Eigen::Affine3d> &intermediate_trajectory_motion_model,
-                             NDT::GridParameters &rgd_params_indoor, NDTBucketMapType &buckets_indoor,
-                             NDT::GridParameters &rgd_params_outdoor, NDTBucketMapType &buckets_outdoor, bool multithread,
+                             const NDT::GridParameters &rgd_params_indoor, NDTBucketMapType &buckets_indoor,
+                             const NDT::GridParameters &rgd_params_outdoor, NDTBucketMapType &buckets_outdoor, bool multithread,
                              double min_distance, double min_distance_outdoor_grid, double max_distance, double &delta,
                              double lm_factor,
                              TaitBryanPose motion_model_correction,
@@ -1330,7 +1330,7 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points,
     }
 }
 
-void align_to_reference(NDT::GridParameters &rgd_params, std::vector<Point3Di> &initial_points, Eigen::Affine3d &m_g, NDTBucketMapType &reference_buckets)
+void align_to_reference(const NDT::GridParameters &rgd_params, std::vector<Point3Di> &initial_points, Eigen::Affine3d &m_g, NDTBucketMapType &reference_buckets)
 {
     Eigen::SparseMatrix<double> AtPAndt(6, 6);
     Eigen::SparseMatrix<double> AtPBndt(6, 1);
@@ -1414,7 +1414,7 @@ void align_to_reference(NDT::GridParameters &rgd_params, std::vector<Point3Di> &
         std::cout << "align_to_reference FAILED" << std::endl;
 }
 
-MotionModelRotationOptions get_motion_model_rotation_options(const LidarOdometryParams &params)
+MotionModelRotationOptions get_motion_model_rotation_options(const OdometryConfig &params)
 {
     MotionModelRotationOptions o;
     o.time_scaled_sigma = params.use_time_scaled_rotation_sigma;
@@ -1567,7 +1567,7 @@ namespace
     }
 } // namespace
 
-bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &params, OdometryState &state, double &ts_failure, std::atomic<float> &loProgress, const std::atomic<bool> &pause, bool debugMsg)
+bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &params, OdometryState &state, double &ts_failure, std::atomic<float> &loProgress, const std::atomic<bool> &pause, bool debugMsg)
 {
     if (worker_data.size() != 0)
     {
@@ -2246,7 +2246,7 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
     return true;
 }
 
-void Consistency(std::vector<WorkerData> &worker_data, LidarOdometryParams &params)
+void Consistency(std::vector<WorkerData> &worker_data, const OdometryConfig &params)
 {
     std::vector<Eigen::Affine3d> trajectory;
     std::vector<std::pair<double, double>> timestamps;
@@ -2585,7 +2585,7 @@ void Consistency(std::vector<WorkerData> &worker_data, LidarOdometryParams &para
         worker_data[indexes[i].first].intermediate_trajectory[indexes[i].second] = trajectory[i];
 }
 
-void Consistency2(std::vector<WorkerData> &worker_data, LidarOdometryParams &params)
+void Consistency2(std::vector<WorkerData> &worker_data, const OdometryConfig &params)
 {
     std::vector<Eigen::Affine3d> trajectory;
     std::vector<std::pair<double, double>> timestamps;

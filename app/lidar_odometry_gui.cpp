@@ -157,7 +157,7 @@ int index_end = -1;
 bool gizmo_stretch_interval = false;
 Eigen::Affine3d stretch_gizmo_m = Eigen::Affine3d::Identity();
 
-LidarOdometryParams params;
+OdometryConfig params;
 OdometryState state;
 GuiPreferences gui_prefs;
 Session session;
@@ -174,7 +174,7 @@ std::chrono::time_point<std::chrono::system_clock> loStep2StartTime;
 
 ///////////////////////////////////////////////////////////////////////////////////
 
-void set_lidar_odometry_default_params(LidarOdometryParams &params, RunPaths &paths, GuiPreferences &gui)
+void set_lidar_odometry_default_params(OdometryConfig &params, RunPaths &paths, GuiPreferences &gui)
 {
     TomlIO toml_io;
 
@@ -1190,7 +1190,7 @@ void openData()
 }
 
 void step1(const std::string &folder,
-           LidarOdometryParams &params,
+           const OdometryConfig &params,
            OdometryState &state,
            std::vector<std::vector<Point3Di>> &pointsPerFile,
            Imu &imu_data,
@@ -1219,7 +1219,7 @@ void step1(const std::string &folder,
     }
 }
 
-void step2(std::vector<WorkerData> &worker_data, LidarOdometryParams &params, OdometryState &state, const std::atomic<bool> &loPause)
+void step2(std::vector<WorkerData> &worker_data, const OdometryConfig &params, OdometryState &state, const std::atomic<bool> &loPause)
 {
     double ts_failure = 0.0;
     std::atomic<float> loProgress;

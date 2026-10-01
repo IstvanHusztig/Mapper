@@ -36,7 +36,7 @@ inline std::string get_software_version() {
     #endif
 }
 
-struct LidarOdometryParams
+struct OdometryConfig
 {
     // version information - automatically generated from CMake build system
     std::string software_version = get_software_version();
@@ -228,7 +228,7 @@ struct GuiPreferences
     float clear_color[4] = {0.45f, 0.55f, 0.60f, 1.00f}; // background RGBA
 };
 
-// what a run produces and consumes (the settings are in LidarOdometryParams)
+// what a run produces and consumes (the settings are in OdometryConfig)
 struct OdometryState
 {
     Eigen::Affine3d m_g = Eigen::Affine3d::Identity(); // pose of the first trajectory node
@@ -242,7 +242,7 @@ struct OdometryState
     RunPaths paths;
 };
 
-inline Eigen::Vector3d get_lidar_imu_lever_arm(const LidarOdometryParams &params)
+inline Eigen::Vector3d get_lidar_imu_lever_arm(const OdometryConfig &params)
 {
     return Eigen::Vector3d(params.lidar_imu_lever_arm_x_m, params.lidar_imu_lever_arm_y_m, params.lidar_imu_lever_arm_z_m);
 }
@@ -254,10 +254,10 @@ unsigned long long int get_rgd_index(const Eigen::Vector3d p, const Eigen::Vecto
 std::vector<Point3Di> decimate(const std::vector<Point3Di> &points, double bucket_x, double bucket_y, double bucket_z);
 
 // this function updates each bucket (mean value, covariance) in regular grid decomposition
-void update_rgd(NDT::GridParameters &rgd_params, NDTBucketMapType &buckets,
+void update_rgd(const NDT::GridParameters &rgd_params, NDTBucketMapType &buckets,
                 std::vector<Point3Di> &points_global, Eigen::Vector3d viewport = Eigen::Vector3d(0, 0, 0));
 
-void update_rgd_spherical_coordinates(NDT::GridParameters &rgd_params, NDTBucketMapType &buckets,
+void update_rgd_spherical_coordinates(const NDT::GridParameters &rgd_params, NDTBucketMapType &buckets,
                                       std::vector<Point3Di> &points_global, std::vector<Eigen::Vector3d> &points_global_spherical);
 
 //! This function load inertial measurement unit data.
@@ -283,7 +283,7 @@ bool save_poses(const std::string file_name, std::vector<Eigen::Affine3d> m_pose
 
 fs::path get_next_result_path(const std::string working_directory);
 
-// rotation part of the motion model: time-scaled sigma and online gyro bias (see LidarOdometryParams)
+// rotation part of the motion model: time-scaled sigma and online gyro bias (see OdometryConfig)
 struct MotionModelRotationOptions
 {
     bool time_scaled_sigma = false;
@@ -297,9 +297,9 @@ struct MotionModelRotationOptions
     double bias_max_rad_s = 0.0;                                  // per-axis clamp, 0 = none
 };
 
-MotionModelRotationOptions get_motion_model_rotation_options(const LidarOdometryParams &params);
+MotionModelRotationOptions get_motion_model_rotation_options(const OdometryConfig &params);
 
-// translation part of the motion model: accelerometer as a soft measurement of the change of velocity (see LidarOdometryParams)
+// translation part of the motion model: accelerometer as a soft measurement of the change of velocity (see OdometryConfig)
 struct MotionModelTranslationImuOptions
 {
     bool enabled = false;
@@ -317,8 +317,8 @@ struct MotionModelTranslationImuOptions
 // gyro_bias / gyro_bias_cov are updated only when rotation_options.estimate_bias is set
 void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, std::vector<Eigen::Affine3d> &intermediate_trajectory,
                              std::vector<Eigen::Affine3d> &intermediate_trajectory_motion_model,
-                             NDT::GridParameters &rgd_params_indoor, NDTBucketMapType &buckets_indoor,
-                             NDT::GridParameters &rgd_params_outdoor, NDTBucketMapType &buckets_outdoor,
+                             const NDT::GridParameters &rgd_params_indoor, NDTBucketMapType &buckets_indoor,
+                             const NDT::GridParameters &rgd_params_outdoor, NDTBucketMapType &buckets_outdoor,
                              bool useMultithread, double min_distance, double min_distance_outdoor_grid, double max_distance, double &delta, double lm_factor, TaitBryanPose motion_model_correction,
                              double lidar_odometry_motion_model_x_1_sigma_m,
                              double lidar_odometry_motion_model_y_1_sigma_m,
@@ -350,13 +350,13 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, std::ve
 
 void optimize_sf2(std::vector<Point3Di> &intermediate_points, std::vector<Point3Di> &intermediate_points_sf, std::vector<Eigen::Affine3d> &intermediate_trajectory,
                   const std::vector<Eigen::Affine3d> &intermediate_trajectory_motion_model,
-                  NDT::GridParameters &rgd_params, bool useMultithread, double wx, double wy, double wz, double wom, double wfi, double wka);
+                  const NDT::GridParameters &rgd_params, bool useMultithread, double wx, double wy, double wz, double wom, double wfi, double wka);
 
 // this function registers initial point cloud to geoferenced point cloud
-void align_to_reference(NDT::GridParameters &rgd_params, std::vector<Point3Di> &initial_points, Eigen::Affine3d &m_g, NDTBucketMapType &buckets);
+void align_to_reference(const NDT::GridParameters &rgd_params, std::vector<Point3Di> &initial_points, Eigen::Affine3d &m_g, NDTBucketMapType &buckets);
 
-bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &params, OdometryState &state, double &ts_failure, std::atomic<float> &loProgress, const std::atomic<bool> &pause, bool debugMsg);
+bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &params, OdometryState &state, double &ts_failure, std::atomic<float> &loProgress, const std::atomic<bool> &pause, bool debugMsg);
 
-void Consistency(std::vector<WorkerData> &worker_data, LidarOdometryParams &params);
-void Consistency2(std::vector<WorkerData> &worker_data, LidarOdometryParams &params);
+void Consistency(std::vector<WorkerData> &worker_data, const OdometryConfig &params);
+void Consistency2(std::vector<WorkerData> &worker_data, const OdometryConfig &params);
 #endif

@@ -229,7 +229,7 @@ namespace
 
     // Gauss-Newton on the segment poses: odometry edges between consecutive segments, loop edges, first pose fixed
     std::vector<Eigen::Affine3d> optimize_pose_graph(const std::vector<Eigen::Affine3d> &initial, const std::vector<LoopEdge> &loops,
-                                                     const LidarOdometryParams &params)
+                                                     const OdometryConfig &params)
     {
         const int n = static_cast<int>(initial.size());
         std::vector<Eigen::Matrix<double, 6, 1>> odo(n > 0 ? n - 1 : 0);
@@ -295,7 +295,7 @@ namespace
     }
 } // namespace
 
-int run_loop_closure(std::vector<WorkerData> &worker_data, const LidarOdometryParams &params)
+int run_loop_closure(std::vector<WorkerData> &worker_data, const OdometryConfig &params)
 {
     const int windows_per_segment = std::max(1, params.loop_closure_segment_windows);
     const int n_windows = static_cast<int>(worker_data.size());

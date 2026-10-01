@@ -50,7 +50,7 @@ std::vector<Point3Di> decimate(const std::vector<Point3Di>& points, double bucke
     return out;
 }
 
-void update_rgd(NDT::GridParameters &rgd_params, NDTBucketMapType &buckets,
+void update_rgd(const NDT::GridParameters &rgd_params, NDTBucketMapType &buckets,
                 std::vector<Point3Di> &points_global, Eigen::Vector3d viewport)
 {
     Eigen::Vector3d b(rgd_params.resolution_X, rgd_params.resolution_Y, rgd_params.resolution_Z);
@@ -125,7 +125,7 @@ void update_rgd(NDT::GridParameters &rgd_params, NDTBucketMapType &buckets,
     }
 }
 
-void update_rgd_spherical_coordinates(NDT::GridParameters &rgd_params, NDTBucketMapType &buckets,
+void update_rgd_spherical_coordinates(const NDT::GridParameters &rgd_params, NDTBucketMapType &buckets,
                                       std::vector<Point3Di> &points_global, std::vector<Eigen::Vector3d> &points_global_spherical)
 {
     Eigen::Vector3d b(rgd_params.resolution_X, rgd_params.resolution_Y, rgd_params.resolution_Z);
