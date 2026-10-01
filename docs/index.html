@@ -135,6 +135,7 @@
   <a class="indent" href="#p-robust">robust_lidar_odometry</a>
   <a class="indent" href="#p-misc">debug, paths, misc, version</a>
   <div class="group">More</div>
+  <a href="#practice">Best practices</a>
   <a href="#tuning">Tuning cheat sheet</a>
   <a href="#fixes">Fixes and map sharpness</a>
   <a href="#limits">Known limitations</a>
@@ -467,6 +468,23 @@ See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 <tr><td>clear_color <span class="badge b-gui">GUI only</span></td><td class="val">RGBA</td><td>Background colour of the 3-D view.</td></tr>
 <tr><td>software_version, config_version, build_date</td><td class="val">0.95.0</td><td>Compatibility check when loading: the file counts as compatible when major and minor version match the program (0.95); otherwise a warning is printed.</td></tr>
 </table></div>
+
+<h2 id="practice">Best practices</h2>
+<p>Most of the map quality is decided while recording. The odometry can only correct what it can observe twice, so plan the walk so that every part of the building is seen again later.</p>
+<h3>Recording</h3>
+<ul>
+<li><b>Walk a loop on every floor.</b> Come back to a place you have already scanned on the same floor (a room, a corridor junction, the stair landing) at least 30 s after the first visit, and pass within a few metres of where you walked before. Each such revisit lets <a href="#p-loop">loop closure</a> pull that floor into line. A floor walked only once cannot be corrected: on b1 the 1st floor, walked once, stayed rotated by about 4.5° because the heading errors on the way down and back up the stairs cancelled out, so no loop exposed it. Recording 44, with loops on every floor, came out well aligned.</li>
+<li><b>Close the loop on the floor, not only through the stairs.</b> A revisit on another floor is not matched (<code>loop_closure_max_vertical_offset_m</code> = 1.5 m), so each floor needs its own revisit.</li>
+<li><b>Pause at feature-rich spots</b> briefly before and after long featureless stretches (one-sided corridors, open halls), so the distance across them is anchored at both ends.</li>
+<li><b>Hold still for a moment at the start.</b> The initial map is not motion-compensated (see <a href="#limits">Known limitations</a>), and keep yourself out of the scanner's near field in the first second.</li>
+<li><b>Take stairs steadily</b> and look around at each landing; stairwells are where the odometry is weakest.</li>
+</ul>
+<h3>Processing</h3>
+<ul>
+<li>Use the Release build and the command-line mode with <code>settings/lidar-vertical.toml</code>. Loop closure and the consistency pass only run in the command-line mode.</li>
+<li>For dLidar recordings, repair the IMU timestamps first with <code>tools/fix_imu_timestamps.py</code>.</li>
+<li>Check the result per floor: walls seen on different passes should overlap as one surface. If a room appears twice or a floor is rotated, see the <a href="#tuning">tuning cheat sheet</a>.</li>
+</ul>
 
 <h2 id="tuning">Tuning cheat sheet</h2>
 <div class="table-wrap"><table>
