@@ -117,6 +117,9 @@ Each step is one OpenSpec change, validated against the baseline.
 - **Test framework: doctest**, vendored under `3rdparty/` (single header, fast to compile).
 - **Baseline: `raw data/44`.** The validated scan (loops on every floor) with
   `settings/lidar-vertical.toml` is the golden reference.
+- **Short cut for intermediate checks.** `44_short` (the first 30 s of 44, about 3–4 min to
+  process) has its own manifest and checks every intermediate commit. The full 44 (about 30 min)
+  runs once at the end of each change, because only it exercises loop closure.
 - **Refactors must be bit-identical.** A pure refactor step must reproduce the baseline output
   exactly (trajectories, LAZ, results JSON apart from timing fields). This relies on
   `useMultithread = false` keeping the run deterministic. Only a change that deliberately alters
