@@ -210,17 +210,7 @@ struct LidarOdometryParams
     //paths
     std::string current_output_dir = "";
     std::string working_directory_preview = "";
-    std::string working_directory_cache = "";
-    
-    //other
-    Eigen::Affine3d m_g = Eigen::Affine3d::Identity();
-    std::vector<Point3Di> initial_points;
-    double consecutive_distance = 0.0;
-    std::vector<Point3Di> reference_points;
-    NDTBucketMapType reference_buckets;
-    double total_length_of_calculated_trajectory = 0.0;
-    NDTBucketMapType buckets_indoor;
-    NDTBucketMapType buckets_outdoor;
+
 #if WITH_GUI == 1
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 #endif
@@ -233,6 +223,26 @@ struct LidarOdometryParams
     bool ablation_study_use_hierarchical_rgd = true;
     bool ablation_study_use_view_point_and_normal_vectors = true;
     bool save_index_pose = false;
+};
+
+// folders of one run
+struct RunPaths
+{
+    std::string working_directory_cache = ""; // <input folder>/cache: per-window point caches written by step 1
+};
+
+// what a run produces and consumes (the settings are in LidarOdometryParams)
+struct OdometryState
+{
+    Eigen::Affine3d m_g = Eigen::Affine3d::Identity(); // pose of the first trajectory node
+    std::vector<Point3Di> initial_points;
+    double consecutive_distance = 0.0;
+    std::vector<Point3Di> reference_points;
+    NDTBucketMapType reference_buckets;
+    double total_length_of_calculated_trajectory = 0.0;
+    NDTBucketMapType buckets_indoor;
+    NDTBucketMapType buckets_outdoor;
+    RunPaths paths;
 };
 
 inline Eigen::Vector3d get_lidar_imu_lever_arm(const LidarOdometryParams &params)
@@ -348,7 +358,7 @@ void optimize_sf2(std::vector<Point3Di> &intermediate_points, std::vector<Point3
 // this function registers initial point cloud to geoferenced point cloud
 void align_to_reference(NDT::GridParameters &rgd_params, std::vector<Point3Di> &initial_points, Eigen::Affine3d &m_g, NDTBucketMapType &buckets);
 
-bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &params, double &ts_failure, std::atomic<float> &loProgress, const std::atomic<bool> &pause, bool debugMsg);
+bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &params, OdometryState &state, double &ts_failure, std::atomic<float> &loProgress, const std::atomic<bool> &pause, bool debugMsg);
 
 void Consistency(std::vector<WorkerData> &worker_data, LidarOdometryParams &params);
 void Consistency2(std::vector<WorkerData> &worker_data, LidarOdometryParams &params);

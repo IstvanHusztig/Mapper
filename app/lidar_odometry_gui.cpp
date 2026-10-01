@@ -158,6 +158,7 @@ bool gizmo_stretch_interval = false;
 Eigen::Affine3d stretch_gizmo_m = Eigen::Affine3d::Identity();
 
 LidarOdometryParams params;
+OdometryState state;
 Session session;
 
 std::vector<std::vector<Point3Di>> pointsPerFile;
@@ -247,11 +248,11 @@ void step1(const std::atomic<bool> &loPause)
             if (entry.is_regular_file())
                 input_file_names.push_back(entry.path().string());
 
-        if (load_data(input_file_names, params, pointsPerFile, imu_data, full_debug_messages))
+        if (load_data(input_file_names, params, state, pointsPerFile, imu_data, full_debug_messages))
         {
             working_directory = fs::path(input_file_names[0]).parent_path().string();
             calculate_trajectory(trajectory, imu_data, params.fusionConventionNwu, params.fusionConventionEnu, params.fusionConventionNed, params.ahrs_gain, full_debug_messages, params.use_remove_imu_bias_from_first_stationary_scan);
-            compute_step_1(pointsPerFile, params, trajectory, worker_data, loPause, &imu_data);
+            compute_step_1(pointsPerFile, params, state, trajectory, worker_data, loPause, &imu_data);
             step_1_done = true;
         }
         else
@@ -273,7 +274,7 @@ void step1(const std::atomic<bool> &loPause)
 void step2(const std::atomic<bool> &loPause)
 {
     double ts_failure = 0.0;
-    if (compute_step_2(worker_data, params, ts_failure, loProgress, loPause, full_debug_messages))
+    if (compute_step_2(worker_data, params, state, ts_failure, loProgress, loPause, full_debug_messages))
         step_2_done = true;
     else
         calculations_failed = true;
@@ -282,7 +283,7 @@ void step2(const std::atomic<bool> &loPause)
 void save_results(bool info, double elapsed_seconds)
 {
     fs::path outwd = get_next_result_path(working_directory);
-    save_result(worker_data, params, outwd, elapsed_seconds);
+    save_result(worker_data, params, state, outwd, elapsed_seconds);
     if (info)
     {
         std::string message_info = "Results saved to folder: '" + outwd.string() + "'";
@@ -704,7 +705,7 @@ void settings_gui()
                 if (input_file_names.size() > 0)
                 {
                     show_reference_points = true;
-                    load_reference_point_clouds(input_file_names, params);
+                    load_reference_point_clouds(input_file_names, params, state);
                 }
             }
 
@@ -718,33 +719,33 @@ void settings_gui()
 
                 if (ImGui::Button("Filter reference buckets"))
                 {
-                    filter_reference_buckets(params);
+                    filter_reference_buckets(params, state);
                 }
             }
 
-            if (params.initial_points.size() > 0)
+            if (state.initial_points.size() > 0)
             {
                 ImGui::NewLine();
                 ImGui::Text("Manipulate initial transformation:");
                 ImGui::Checkbox("Show gizmo", &initial_transformation_gizmo);
                 if (initial_transformation_gizmo)
                 {
-                    m_gizmo[0] = (float)params.m_g(0, 0);
-                    m_gizmo[1] = (float)params.m_g(1, 0);
-                    m_gizmo[2] = (float)params.m_g(2, 0);
-                    m_gizmo[3] = (float)params.m_g(3, 0);
-                    m_gizmo[4] = (float)params.m_g(0, 1);
-                    m_gizmo[5] = (float)params.m_g(1, 1);
-                    m_gizmo[6] = (float)params.m_g(2, 1);
-                    m_gizmo[7] = (float)params.m_g(3, 1);
-                    m_gizmo[8] = (float)params.m_g(0, 2);
-                    m_gizmo[9] = (float)params.m_g(1, 2);
-                    m_gizmo[10] = (float)params.m_g(2, 2);
-                    m_gizmo[11] = (float)params.m_g(3, 2);
-                    m_gizmo[12] = (float)params.m_g(0, 3);
-                    m_gizmo[13] = (float)params.m_g(1, 3);
-                    m_gizmo[14] = (float)params.m_g(2, 3);
-                    m_gizmo[15] = (float)params.m_g(3, 3);
+                    m_gizmo[0] = (float)state.m_g(0, 0);
+                    m_gizmo[1] = (float)state.m_g(1, 0);
+                    m_gizmo[2] = (float)state.m_g(2, 0);
+                    m_gizmo[3] = (float)state.m_g(3, 0);
+                    m_gizmo[4] = (float)state.m_g(0, 1);
+                    m_gizmo[5] = (float)state.m_g(1, 1);
+                    m_gizmo[6] = (float)state.m_g(2, 1);
+                    m_gizmo[7] = (float)state.m_g(3, 1);
+                    m_gizmo[8] = (float)state.m_g(0, 2);
+                    m_gizmo[9] = (float)state.m_g(1, 2);
+                    m_gizmo[10] = (float)state.m_g(2, 2);
+                    m_gizmo[11] = (float)state.m_g(3, 2);
+                    m_gizmo[12] = (float)state.m_g(0, 3);
+                    m_gizmo[13] = (float)state.m_g(1, 3);
+                    m_gizmo[14] = (float)state.m_g(2, 3);
+                    m_gizmo[15] = (float)state.m_g(3, 3);
                 }
                 else
                 {
@@ -752,7 +753,7 @@ void settings_gui()
                     {
                         for (int i = 0; i < 30; i++)
                         {
-                            align_to_reference(params.in_out_params_indoor, params.initial_points, params.m_g, params.reference_buckets);
+                            align_to_reference(params.in_out_params_indoor, state.initial_points, state.m_g, state.reference_buckets);
                         }
                     }
                 }
@@ -1169,7 +1170,7 @@ void openData()
                 std::ostringstream oss;
                 oss << "Data saved to folder:\n'" << working_directory << "\\lio_result_*'\n"
                     << "Calculated trajectory length: "
-                    << std::fixed << std::setprecision(1) << params.total_length_of_calculated_trajectory << "[m]\n"
+                    << std::fixed << std::setprecision(1) << state.total_length_of_calculated_trajectory << "[m]\n"
                     << "Elapsed time: " << formatTime(elapsed_seconds.count()).c_str();
 
                 [[maybe_unused]]
@@ -1189,6 +1190,7 @@ void openData()
 
 void step1(const std::string &folder,
            LidarOdometryParams &params,
+           OdometryState &state,
            std::vector<std::vector<Point3Di>> &pointsPerFile,
            Imu &imu_data,
            std::string &working_directory,
@@ -1207,20 +1209,20 @@ void step1(const std::string &folder,
         }
     }
 
-    if (load_data(input_file_names, params, pointsPerFile, imu_data, full_debug_messages))
+    if (load_data(input_file_names, params, state, pointsPerFile, imu_data, full_debug_messages))
     {
         working_directory = fs::path(input_file_names[0]).parent_path().string();
         calculate_trajectory(trajectory, imu_data, params.fusionConventionNwu, params.fusionConventionEnu, params.fusionConventionNed, params.ahrs_gain, full_debug_messages, params.use_remove_imu_bias_from_first_stationary_scan);
-        compute_step_1(pointsPerFile, params, trajectory, worker_data, loPause, &imu_data);
+        compute_step_1(pointsPerFile, params, state, trajectory, worker_data, loPause, &imu_data);
         std::cout << "step_1_done" << std::endl;
     }
 }
 
-void step2(std::vector<WorkerData> &worker_data, LidarOdometryParams &params, const std::atomic<bool> &loPause)
+void step2(std::vector<WorkerData> &worker_data, LidarOdometryParams &params, OdometryState &state, const std::atomic<bool> &loPause)
 {
     double ts_failure = 0.0;
     std::atomic<float> loProgress;
-    compute_step_2(worker_data, params, ts_failure, loProgress, loPause, full_debug_messages);
+    compute_step_2(worker_data, params, state, ts_failure, loProgress, loPause, full_debug_messages);
 }
 
 void display()
@@ -1262,9 +1264,9 @@ void display()
         glColor3d(0.0, 1.0, 0.0);
         glPointSize(point_size);
         glBegin(GL_POINTS);
-        for (const auto &p : params.initial_points)
+        for (const auto &p : state.initial_points)
         {
-            auto pp = params.m_g * p.point;
+            auto pp = state.m_g * p.point;
             glVertex3d(pp.x(), pp.y(), pp.z());
         }
         glEnd();
@@ -1274,8 +1276,8 @@ void display()
     {
         glColor3f(1, 0, 0);
         glBegin(GL_POINTS);
-        for (size_t i = 0; i < params.reference_points.size(); i += dec_reference_points)
-            glVertex3f(params.reference_points[i].point.x(), params.reference_points[i].point.y(), params.reference_points[i].point.z());
+        for (size_t i = 0; i < state.reference_points.size(); i += dec_reference_points)
+            glVertex3f(state.reference_points[i].point.x(), state.reference_points[i].point.y(), state.reference_points[i].point.z());
         glEnd();
     }
 
@@ -1341,7 +1343,7 @@ void display()
     {
         glColor3f(1, 0, 0);
         glBegin(GL_POINTS);
-        for (const auto &b : params.reference_buckets)
+        for (const auto &b : state.reference_buckets)
             glVertex3f(b.second.mean.x(), b.second.mean.y(), b.second.mean.z());
         glEnd();
     }
@@ -1707,22 +1709,22 @@ void display()
 
         ImGuizmo::Manipulate(&modelview[0], &projection[0], ImGuizmo::TRANSLATE | ImGuizmo::ROTATE_Z | ImGuizmo::ROTATE_X | ImGuizmo::ROTATE_Y, ImGuizmo::WORLD, m_gizmo, NULL);
 
-        params.m_g(0, 0) = m_gizmo[0];
-        params.m_g(1, 0) = m_gizmo[1];
-        params.m_g(2, 0) = m_gizmo[2];
-        params.m_g(3, 0) = m_gizmo[3];
-        params.m_g(0, 1) = m_gizmo[4];
-        params.m_g(1, 1) = m_gizmo[5];
-        params.m_g(2, 1) = m_gizmo[6];
-        params.m_g(3, 1) = m_gizmo[7];
-        params.m_g(0, 2) = m_gizmo[8];
-        params.m_g(1, 2) = m_gizmo[9];
-        params.m_g(2, 2) = m_gizmo[10];
-        params.m_g(3, 2) = m_gizmo[11];
-        params.m_g(0, 3) = m_gizmo[12];
-        params.m_g(1, 3) = m_gizmo[13];
-        params.m_g(2, 3) = m_gizmo[14];
-        params.m_g(3, 3) = m_gizmo[15];
+        state.m_g(0, 0) = m_gizmo[0];
+        state.m_g(1, 0) = m_gizmo[1];
+        state.m_g(2, 0) = m_gizmo[2];
+        state.m_g(3, 0) = m_gizmo[3];
+        state.m_g(0, 1) = m_gizmo[4];
+        state.m_g(1, 1) = m_gizmo[5];
+        state.m_g(2, 1) = m_gizmo[6];
+        state.m_g(3, 1) = m_gizmo[7];
+        state.m_g(0, 2) = m_gizmo[8];
+        state.m_g(1, 2) = m_gizmo[9];
+        state.m_g(2, 2) = m_gizmo[10];
+        state.m_g(3, 2) = m_gizmo[11];
+        state.m_g(0, 3) = m_gizmo[12];
+        state.m_g(1, 3) = m_gizmo[13];
+        state.m_g(2, 3) = m_gizmo[14];
+        state.m_g(3, 3) = m_gizmo[15];
     }
 
     if (gizmo_stretch_interval)
@@ -1789,9 +1791,9 @@ void display()
 
 void on_exit(){
     // remove cache
-    std::cout << "remove cache: '" << params.working_directory_cache << "' START" << std::endl;
-    std::filesystem::remove_all(params.working_directory_cache);
-    std::cout << "remove cache: '" << params.working_directory_cache << "' FINISHED" << std::endl;
+    std::cout << "remove cache: '" << state.paths.working_directory_cache << "' START" << std::endl;
+    std::filesystem::remove_all(state.paths.working_directory_cache);
+    std::cout << "remove cache: '" << state.paths.working_directory_cache << "' FINISHED" << std::endl;
 }
 
 void mouse(int glut_button, int state, int x, int y)
@@ -1856,6 +1858,7 @@ int main(int argc, char *argv[])
             std::atomic<bool> loPause{false};
             step1(argv[1],
                   params,
+                  state,
                   pointsPerFile,
                   imu_data,
                   working_directory,
@@ -1863,7 +1866,7 @@ int main(int argc, char *argv[])
                   worker_data,
                   loPause);
 
-            step2(worker_data, params, loPause);
+            step2(worker_data, params, state, loPause);
 
             if (params.use_loop_closure)
                 run_loop_closure(worker_data, params);
@@ -1878,7 +1881,7 @@ int main(int argc, char *argv[])
                       << std::ctime(&end_time)
                       << "Elapsed time: " << formatTime(elapsed_seconds.count()).c_str() << "s\n";
 
-            save_result(worker_data, params, argv[3], elapsed_seconds.count());
+            save_result(worker_data, params, state, argv[3], elapsed_seconds.count());
         }
         else //full GUI mode
         {

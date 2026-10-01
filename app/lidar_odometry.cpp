@@ -8,6 +8,7 @@ const float RAD_TO_DEG = 180.0f / M_PI;
 
 bool load_data(std::vector<std::string>& input_file_names,
     LidarOdometryParams& params,
+    OdometryState& state,
     std::vector<std::vector<Point3Di>>& pointsPerFile,
     Imu& imu_data,
     bool debugMsg)
@@ -139,7 +140,7 @@ bool load_data(std::vector<std::string>& input_file_names,
         fs::path wdp = fs::path(working_directory) / "preview";
         params.working_directory_preview = wdp.string();
         fs::path wdp_cache = fs::path(working_directory) / "cache";
-        params.working_directory_cache = wdp_cache.string();
+        state.paths.working_directory_cache = wdp_cache.string();
 
         // --- Parallel load of LAZ files
         tbb::parallel_for(size_t(0), minSize, [&](size_t i)
@@ -334,20 +335,20 @@ void calculate_trajectory(
 }
 
 bool compute_step_1(
-    std::vector<std::vector<Point3Di>>& pointsPerFile, LidarOdometryParams& params, Trajectory& trajectory, std::vector<WorkerData>& worker_data, const std::atomic<bool>& pause, const Imu* imu_data)
+    std::vector<std::vector<Point3Di>>& pointsPerFile, LidarOdometryParams& params, OdometryState& state, Trajectory& trajectory, std::vector<WorkerData>& worker_data, const std::atomic<bool>& pause, const Imu* imu_data)
 {
     int number_of_initial_points = 0;
     double timestamp_begin = 0.0;
 
     // Step 1: Pre-reserve to avoid vector reallocations
-    params.initial_points.reserve(params.threshold_initial_points);
+    state.initial_points.reserve(params.threshold_initial_points);
 
     for (const auto& pp : pointsPerFile)
     {
         for (const auto& p : pp)
         {
             number_of_initial_points++;
-            params.initial_points.push_back(p);
+            state.initial_points.push_back(p);
             if (number_of_initial_points > params.threshold_initial_points)
             {
                 timestamp_begin = p.timestamp;
@@ -404,7 +405,7 @@ bool compute_step_1(
     worker_data.clear();
     worker_data.reserve(n_iter);
 
-    std::filesystem::path wdp_cache = params.working_directory_cache;
+    std::filesystem::path wdp_cache = state.paths.working_directory_cache;
 
     if (!fs::exists(wdp_cache))
     {
@@ -523,7 +524,7 @@ bool compute_step_1(
     std::cout << "\rrunning iterations: " << n_iter << " (done)" << std::flush;
     std::cout << std::endl;
 
-    params.m_g = worker_data[0].intermediate_trajectory[0];
+    state.m_g = worker_data[0].intermediate_trajectory[0];
     return true;
 }
 
@@ -615,7 +616,7 @@ namespace
     };
 } // namespace
 
-void save_result(std::vector<WorkerData> &worker_data, LidarOdometryParams &params, fs::path outwd, double elapsed_time_s)
+void save_result(std::vector<WorkerData> &worker_data, LidarOdometryParams &params, const OdometryState &state, fs::path outwd, double elapsed_time_s)
 {
     std::filesystem::create_directory(outwd);
     // concatenate data
@@ -661,7 +662,7 @@ void save_result(std::vector<WorkerData> &worker_data, LidarOdometryParams &para
         counter++;
         if (counter > 50)
         {
-            std::filesystem::path path = params.working_directory_cache;
+            std::filesystem::path path = state.paths.working_directory_cache;
             std::string fn = "session_chunk_" + std::to_string(original_points_to_save_counter) + ".cache";
             path /= fn;
             wd.original_points_to_save_cache_file_name = path;
@@ -689,7 +690,7 @@ void save_result(std::vector<WorkerData> &worker_data, LidarOdometryParams &para
 
     if (counter > params.min_counter_concatenated_trajectory_nodes)
     {
-        std::filesystem::path path = params.working_directory_cache;
+        std::filesystem::path path = state.paths.working_directory_cache;
         std::string fn = "session_chunk_" + std::to_string(original_points_to_save_counter) + ".cache";
         path /= fn;
         wd.original_points_to_save_cache_file_name = path;
@@ -856,7 +857,7 @@ void save_result(std::vector<WorkerData> &worker_data, LidarOdometryParams &para
     j["initial_poses_file_name"] = path.string();
     j["out_poses_file_name"] = path2.string();
     j["lidar_odometry_version"] = HDMAPPING_VERSION_STRING;
-    j["length of trajectory[m]"] = params.total_length_of_calculated_trajectory;
+    j["length of trajectory[m]"] = state.total_length_of_calculated_trajectory;
     j["elapsed time seconds"] = elapsed_time_s;
     if (params.save_index_pose){
         j["index_poses_path"] = index_poses_path.string();
@@ -889,13 +890,13 @@ void save_result(std::vector<WorkerData> &worker_data, LidarOdometryParams &para
     save_parameters_toml(params, outwd, elapsed_time_s);
 
     // Save processing results and complex data to JSON file
-    save_processing_results_json(params, outwd, elapsed_time_s, &worker_data);
+    save_processing_results_json(params, state, outwd, elapsed_time_s, &worker_data);
 }
 
-void filter_reference_buckets(LidarOdometryParams &params)
+void filter_reference_buckets(LidarOdometryParams &params, OdometryState &state)
 {
     NDTBucketMapType reference_buckets_out;
-    for (const auto &b : params.reference_buckets)
+    for (const auto &b : state.reference_buckets)
     {
         if (b.second.number_of_points > 10)
         {
@@ -914,7 +915,7 @@ void filter_reference_buckets(LidarOdometryParams &params)
             }
         }
     }
-    params.reference_buckets = reference_buckets_out;
+    state.reference_buckets = reference_buckets_out;
 }
 
 void save_trajectory_to_ascii(std::vector<WorkerData> &worker_data, std::string output_file_name)
@@ -931,21 +932,21 @@ void save_trajectory_to_ascii(std::vector<WorkerData> &worker_data, std::string 
     file.close();
 }
 
-void load_reference_point_clouds(std::vector<std::string> input_file_names, LidarOdometryParams &params)
+void load_reference_point_clouds(std::vector<std::string> input_file_names, LidarOdometryParams &params, OdometryState &state)
 {
-    params.reference_buckets.clear();
-    params.reference_points.clear();
+    state.reference_buckets.clear();
+    state.reference_points.clear();
 
     for (size_t i = 0; i < input_file_names.size(); i++)
     {
         std::cout << "loading reference point cloud from: " << input_file_names[i] << std::endl;
         auto pp = load_point_cloud(input_file_names[i].c_str(), false, 0, 10000, get_lidar_imu_lever_arm(params));
         std::cout << "loaded " << pp.size() << " reference points" << std::endl;
-        params.reference_points.insert(std::end(params.reference_points), std::begin(pp), std::end(pp));
+        state.reference_points.insert(std::end(state.reference_points), std::begin(pp), std::end(pp));
     }
 
-    update_rgd(params.in_out_params_indoor, params.reference_buckets, params.reference_points);
-    params.buckets_indoor = params.reference_buckets;
+    update_rgd(params.in_out_params_indoor, state.reference_buckets, state.reference_points);
+    state.buckets_indoor = state.reference_buckets;
 }
 
 void save_parameters_toml(const LidarOdometryParams &params, const fs::path &outwd, double elapsed_seconds)
@@ -989,7 +990,7 @@ void save_parameters_toml(const LidarOdometryParams &params, const fs::path &out
     }
 }
 
-void save_processing_results_json(const LidarOdometryParams &params, const fs::path &outwd, double elapsed_seconds,
+void save_processing_results_json(const LidarOdometryParams &params, const OdometryState &state, const fs::path &outwd, double elapsed_seconds,
                                   const std::vector<WorkerData> *worker_data)
 {
     // Get current date and time
@@ -1019,8 +1020,8 @@ void save_processing_results_json(const LidarOdometryParams &params, const fs::p
         results["processing_info"]["elapsed_time_seconds"] = elapsed_seconds;
 
         // Processing results and computed values
-        results["trajectory_results"]["total_length_calculated"] = params.total_length_of_calculated_trajectory;
-        results["trajectory_results"]["consecutive_distance"] = params.consecutive_distance;
+        results["trajectory_results"]["total_length_calculated"] = state.total_length_of_calculated_trajectory;
+        results["trajectory_results"]["consecutive_distance"] = state.consecutive_distance;
         results["directory_info"]["current_output_dir"] = params.current_output_dir;
         results["directory_info"]["working_directory_preview"] = params.working_directory_preview;
 
@@ -1071,7 +1072,7 @@ void save_processing_results_json(const LidarOdometryParams &params, const fs::p
         }
 
         // Transformation matrix (if needed for debugging)
-        auto &m_g = params.m_g;
+        auto &m_g = state.m_g;
         for (int i = 0; i < 4; ++i)
         {
             for (int j = 0; j < 4; ++j)

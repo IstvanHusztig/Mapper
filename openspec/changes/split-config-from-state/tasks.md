@@ -9,14 +9,14 @@ Every step ends with: both presets build `lidar_odometry_step_1` and `lidar_odom
 
 ## 2. OdometryState
 
-- [ ] 2.1 Add `OdometryState` (with `RunPaths paths`) and move `m_g`, `initial_points`, `reference_points`, `reference_buckets`, `buckets_indoor`, `buckets_outdoor`, `consecutive_distance`, `total_length_of_calculated_trajectory`, `working_directory_preview`, `working_directory_cache` out of `LidarOdometryParams`; keep `current_output_dir` in params for now
-- [ ] 2.2 Add an `OdometryState&` (or `const&` for readers) parameter to `load_data`, `compute_step_1`, `compute_step_2`, `run_consistency`, `filter_reference_buckets`, `load_reference_point_clouds`, `save_result`, `save_parameters_toml`, `save_processing_results_json`, and to whatever else the compiler flags; keep every copy a copy
-- [ ] 2.3 CLI and GUI: add an `OdometryState` next to `params` (a global `state` in the GUI) and pass it; verify the build has no remaining references to the moved fields on params
-- [ ] 2.4 Run the step checks and commit
+- [x] 2.1 Add `OdometryState` (with `RunPaths paths`) and move `m_g`, `initial_points`, `reference_points`, `reference_buckets`, `buckets_indoor`, `buckets_outdoor`, `consecutive_distance`, `total_length_of_calculated_trajectory`, `working_directory_cache` out of `LidarOdometryParams`; keep the TOML-persisted `[paths]` fields (`working_directory_preview`, `current_output_dir`) in params until 3.1
+- [x] 2.2 Add an `OdometryState&` (or `const&` for readers) parameter to `load_data`, `compute_step_1`, `compute_step_2`, `run_consistency`, `filter_reference_buckets`, `load_reference_point_clouds`, `save_result`, `save_parameters_toml`, `save_processing_results_json`, and to whatever else the compiler flags; keep every copy a copy
+- [x] 2.3 CLI and GUI: add an `OdometryState` next to `params` (a global `state` in the GUI) and pass it; verify the build has no remaining references to the moved fields on params
+- [x] 2.4 Run the step checks and commit
 
 ## 3. SettingsDocument and TOML I/O
 
-- [ ] 3.1 Add `GuiPreferences` (`float clear_color[4]`) and `SettingsDocument { config; paths; gui; }`; move `clear_color` and `current_output_dir` out of params; the GUI converts `clear_color` to and from `ImVec4` where it uses it
+- [ ] 3.1 Add `GuiPreferences` (`float clear_color[4]`) and `SettingsDocument { config; paths; gui; }`; move `clear_color`, `current_output_dir` and `working_directory_preview` out of params (the latter two into `RunPaths`); the GUI converts `clear_color` to and from `ImVec4` where it uses it
 - [ ] 3.2 Change `TomlIO` load/save to `SettingsDocument` (`POINTERS` into the config, a small `RunPaths` key table, `[misc] clear_color` from `gui`); `CATEGORIES` unchanged; `save_parameters_toml` builds the document from the config, `state.paths` and the GUI prefs
 - [ ] 3.3 CLI and GUI: load a `SettingsDocument`, start the state's `paths` from the document's `[paths]`; update the round-trip smoke test; verify the golden TOML test still passes byte for byte
 - [ ] 3.4 Run the step checks and commit

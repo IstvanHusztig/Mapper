@@ -1567,7 +1567,7 @@ namespace
     }
 } // namespace
 
-bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &params, double &ts_failure, std::atomic<float> &loProgress, const std::atomic<bool> &pause, bool debugMsg)
+bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &params, OdometryState &state, double &ts_failure, std::atomic<float> &loProgress, const std::atomic<bool> &pause, bool debugMsg)
 {
     if (worker_data.size() != 0)
     {
@@ -1576,7 +1576,7 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
         double acc_distance = 0.0;
         std::vector<Point3Di> points_global;
 
-        Eigen::Affine3d m_last = params.m_g;
+        Eigen::Affine3d m_last = state.m_g;
         auto tmp = worker_data[0].intermediate_trajectory;
 
         worker_data[0].intermediate_trajectory[0] = m_last;
@@ -1588,14 +1588,14 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
         }
         worker_data[0].intermediate_trajectory_motion_model = worker_data[0].intermediate_trajectory;
 
-        auto pp = params.initial_points;
+        auto pp = state.initial_points;
         for (int i = 0; i < pp.size(); i++)
-            pp[i].point = params.m_g * pp[i].point;
+            pp[i].point = state.m_g * pp[i].point;
 
-        update_rgd(params.in_out_params_indoor, params.buckets_indoor, pp, params.m_g.translation());
+        update_rgd(params.in_out_params_indoor, state.buckets_indoor, pp, state.m_g.translation());
 
         if (params.ablation_study_use_hierarchical_rgd){
-            update_rgd(params.in_out_params_outdoor, params.buckets_outdoor, pp, params.m_g.translation());
+            update_rgd(params.in_out_params_outdoor, state.buckets_outdoor, pp, state.m_g.translation());
         }
 
         if (!fs::exists(params.working_directory_preview))
@@ -1935,7 +1935,7 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
                 optimize_rigid_sf(intermediate_points,
                                   worker_data[i].intermediate_trajectory,
                                   worker_data[i].intermediate_trajectory_motion_model,
-                                  params.buckets_indoor,
+                                  state.buckets_indoor,
                                   params.distance_bucket_rigid_sf,
                                   params.polar_angle_deg_rigid_sf,
                                   params.azimutal_angle_deg_rigid_sf,
@@ -1965,8 +1965,8 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
                 iter_end = iter;
                 delta = 100000.0;
                 optimize_lidar_odometry(intermediate_points, worker_data[i].intermediate_trajectory, worker_data[i].intermediate_trajectory_motion_model,
-                                        params.in_out_params_indoor, params.buckets_indoor,
-                                        params.in_out_params_outdoor, params.buckets_outdoor,
+                                        params.in_out_params_indoor, state.buckets_indoor,
+                                        params.in_out_params_outdoor, state.buckets_outdoor,
                                         params.useMultithread, params.min_distance_lidar, params.min_distance_lidar_outdoor_grid, params.max_distance_lidar, delta,
                                         lm_factor,
                                         params.motion_model_correction,
@@ -2168,10 +2168,10 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
 
             if (acc_distance > params.sliding_window_trajectory_length_threshold)
             {
-                if (params.reference_points.size() == 0)
+                if (state.reference_points.size() == 0)
                 {
-                    params.buckets_indoor.clear();
-                    params.buckets_outdoor.clear();
+                    state.buckets_indoor.clear();
+                    state.buckets_outdoor.clear();
                 }
 
                 std::vector<Point3Di> points_global_new;
@@ -2187,10 +2187,10 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
                     points_global = decimate(points_global, params.decimation, params.decimation, params.decimation);
                 }
 
-                update_rgd(params.in_out_params_indoor, params.buckets_indoor, points_global, worker_data[i].intermediate_trajectory[0].translation());
+                update_rgd(params.in_out_params_indoor, state.buckets_indoor, points_global, worker_data[i].intermediate_trajectory[0].translation());
                 if (params.ablation_study_use_hierarchical_rgd)
                 {
-                    update_rgd(params.in_out_params_outdoor, params.buckets_outdoor, points_global, worker_data[i].intermediate_trajectory[0].translation());
+                    update_rgd(params.in_out_params_outdoor, state.buckets_outdoor, points_global, worker_data[i].intermediate_trajectory[0].translation());
                 }
             }
             else
@@ -2202,10 +2202,10 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
                     pp.point = worker_data[i].intermediate_trajectory[intermediate_points[j].index_pose] * pp.point;
                     pg.push_back(pp);
                 }
-                update_rgd(params.in_out_params_indoor, params.buckets_indoor, pg, worker_data[i].intermediate_trajectory[0].translation());
+                update_rgd(params.in_out_params_indoor, state.buckets_indoor, pg, worker_data[i].intermediate_trajectory[0].translation());
                 if (params.ablation_study_use_hierarchical_rgd)
                 {
-                    update_rgd(params.in_out_params_outdoor, params.buckets_outdoor, pg, worker_data[i].intermediate_trajectory[0].translation());
+                    update_rgd(params.in_out_params_outdoor, state.buckets_outdoor, pg, worker_data[i].intermediate_trajectory[0].translation());
                 }
             }
 
@@ -2214,7 +2214,7 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
                 double translation = (worker_data[i - 1].intermediate_trajectory[0].translation() -
                                       worker_data[i - 2].intermediate_trajectory[0].translation())
                                          .norm();
-                params.consecutive_distance += translation;
+                state.consecutive_distance += translation;
             }
         }
 
@@ -2230,11 +2230,11 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
         std::cout << "finished computation at " << std::put_time(&local_tm, "%Y-%m-%d %H:%M:%S")
                   << ", elapsed time: " << std::setprecision(2) << elapsed_seconds.count() << "s\n";
 
-        params.total_length_of_calculated_trajectory = 0;
+        state.total_length_of_calculated_trajectory = 0;
         for (int i = 1; i < worker_data.size(); i++)
-            params.total_length_of_calculated_trajectory += (worker_data[i].intermediate_trajectory[0].translation() - worker_data[i - 1].intermediate_trajectory[0].translation()).norm();
+            state.total_length_of_calculated_trajectory += (worker_data[i].intermediate_trajectory[0].translation() - worker_data[i - 1].intermediate_trajectory[0].translation()).norm();
 
-        std::cout << "total_length_of_calculated_trajectory: " << params.total_length_of_calculated_trajectory << " [m]" << std::endl;
+        std::cout << "total_length_of_calculated_trajectory: " << state.total_length_of_calculated_trajectory << " [m]" << std::endl;
         if (use_zupt)
             std::cout << "zero-velocity detection: " << stationary_windows << " of " << worker_data.size() << " windows stationary" << std::endl;
         if (use_acc_term)
