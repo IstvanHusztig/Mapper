@@ -288,3 +288,19 @@ if (MSVC)
 endif()
 
 install(TARGETS lidar_odometry_step_1 DESTINATION bin)
+
+# unit tests: build the lidar_odometry_tests target, run with ctest --test-dir out/build/<preset>
+enable_testing()
+add_subdirectory(tests)
+
+# tools/cut_recording: cuts a time range of a recording into a new input folder (LASzip only)
+add_executable(cut_recording tools/cut_recording/cut_recording.cpp)
+target_include_directories(cut_recording PRIVATE ${LASZIP_INCLUDE_DIR}/LASzip/include)
+target_link_libraries(cut_recording PRIVATE ${PLATFORM_LASZIP_LIB})
+if(WIN32)
+  add_custom_command(
+    TARGET cut_recording
+    POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:cut_recording> $<TARGET_FILE_DIR:cut_recording>
+    COMMAND_EXPAND_LISTS)
+endif()

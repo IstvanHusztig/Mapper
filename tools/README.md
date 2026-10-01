@@ -62,3 +62,49 @@ tools/merge_chunks.sh "<result_folder>" ["<output.laz>"]
 ```
 
 The default output is `<result_folder>/scan_lio_merged.laz`. Set `CLOUDCOMPARE` if CloudCompare is not installed in `C:\Program Files\CloudCompare`.
+
+## Regression baseline (compare_baseline.py, cut_recording)
+
+Refactors must reproduce the output of the reference dataset bit for bit (see `docs/ARCHITECTURE.md`). Two reference datasets live next to the raw data, outside git:
+
+| dataset | what | run time (Release) | manifest |
+|---|---|---|---|
+| `raw data/44_short` | first 30 s of 44, made with `cut_recording` | about 3.5 min | `tools/baseline/44_short.manifest.json` |
+| `raw data/44` | the full recording (loops on every floor) | about 30 min | `tools/baseline/44.manifest.json` |
+
+Workflow: check **every intermediate commit on `44_short`**, and run the **full 44 once at the end of each change** (only the full recording exercises loop closure). Always run with the Release build and `settings/lidar-vertical.toml`, into a new output folder outside the input folder. Never run two jobs on the same input folder at the same time: they share its `cache/`. A stale `cache/` from an older build is harmless (every run rewrites it).
+
+```
+out/build/x64-Release/bin/lidar_odometry_step_1.exe "<raw data>/44_short" settings/lidar-vertical.toml "<raw data>/44_short_check"
+python tools/compare_baseline.py "<raw data>/44_short_check" tools/baseline/44_short.manifest.json
+```
+
+### compare_baseline.py
+
+Compares an output folder with a baseline output folder or a manifest. Pure Python 3.
+
+```
+python tools/compare_baseline.py <new_out> <baseline_dir | manifest.json> [--verbose]
+python tools/compare_baseline.py --write-manifest <out_dir> <manifest.json> --dataset 44 --params settings/lidar-vertical.toml
+```
+
+- Every file is compared by SHA-256. The only things normalized are the values that change on every run:
+  - the date-time in the `HDMapping_params_*`/`HDMapping_results_*` file names;
+  - `elapsed time seconds`, `elapsed_time_seconds`, `processing_date` and `build_date`, plus the `# Created on` line of the params TOML;
+  - absolute paths of the output and input folders, which become `<OUT>` and `<IN>`.
+
+  Everything else, including every LAZ and trajectory byte, must match.
+- It prints one line per `different`, `missing` or `extra` file. Exit code: 0 identical, 1 different, 2 usage or input error.
+- `--write-manifest` records the dataset, parameter file, commit and `HD_CPU_OPTIMIZATION` (`--cpu-optimization`, default `AUTO`). Only write a new manifest for a change that deliberately alters the numbers, and do it in that change's own commit.
+
+### cut_recording
+
+Cuts a time range of a recording into a new input folder. It is built with the app (CMake target `cut_recording`, LASzip only).
+
+```
+out/build/x64-Release/bin/cut_recording.exe "<raw data>/44" "<raw data>/44_short" 0 30
+```
+
+- Arguments: `<in_folder> <out_folder> <start_s> <duration_s>`, measured from the first IMU sample. It cuts every `.laz`/`.las` and `.csv` of the input folder and keeps their names.
+- Kept points are unchanged: the input header (point format, scale, offset) is reused, so the stored coordinates and every attribute are identical. After writing, every kept point is re-read and compared. IMU lines and the header line are copied byte for byte.
+- It refuses an output folder that already holds `.laz`, `.las` or `.csv` files. The input folder is never modified.

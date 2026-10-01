@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A standalone extraction of the `lidar_odometry_step_1` application from the HDMapping (hd-mapping) repository. It is a C++20 CMake project that builds a single executable, `lidar_odometry_step_1`, which computes LiDAR+IMU odometry from a folder of Mandeye-style recordings. All dependencies are vendored under `3rdparty/` (Eigen, freeglut, glew-cmake, LASzip, oneTBB, Fusion AHRS, imgui/ImGuizmo/implot, manif, nlohmann json, observation_equations, portable-file-dialogs) — no package manager, no network needed. Only OpenGL/GLU must come from the system.
 
-There are no tests, linters, or CI in this repo.
+There are no linters or CI. Unit tests use doctest (`3rdparty/doctest`), and refactors are checked against a golden baseline (see Testing).
 
 ## Build
 
@@ -20,6 +20,11 @@ cmake --build --preset x64-Release --target lidar_odometry_step_1
 - Output: `out/build/<preset>/bin/lidar_odometry_step_1.exe`. On Windows, runtime DLLs (TBB etc.) and `app/default_settings.toml` are copied next to the exe post-build. Debug is unoptimized and many times slower; always process data with Release.
 - `-DHD_CPU_OPTIMIZATION=AUTO|INTEL|AMD|ARM|GENERIC` selects release optimization flags (AMD on MSVC adds `/fp:fast`).
 - The version (`HDMAPPING_VERSION_MAJOR/MINOR/PATCH`) is defined in the root `CMakeLists.txt`; `shared/include/HDMapping/Version.hpp` errors if it's missing.
+
+## Testing
+
+- **Unit tests:** `cmake --build --preset x64-Release --target lidar_odometry_tests`, then `ctest --test-dir out/build/x64-Release` (vcvars loaded). Tests live in `tests/` and must run without recorded data or a display. They compile the app sources they need directly (today only `app/toml_io.cpp`) and don't link `core`.
+- **Golden baseline:** a pure refactor must reproduce the reference output bit for bit, compared with `tools/compare_baseline.py` against `tools/baseline/44_short.manifest.json` (every intermediate commit, about 3.5 min) and `tools/baseline/44.manifest.json` (once per change, about 30 min). The datasets are in `C:\Users\User\Downloads\dLidar\raw data\` (`44_short` was made with the `cut_recording` target). Run Release with `settings/lidar-vertical.toml`, and never run two jobs on the same input folder at once (they share its `cache/`). See `tools/README.md`.
 
 ## Run
 

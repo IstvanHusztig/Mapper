@@ -90,9 +90,11 @@ See proposal.md for the motivation. Observed facts that shape the approach:
    - It copies the input LAZ header (point format, scale, offset) and writes only the points in
      range, so the stored integer coordinates are unchanged. It copies the IMU header and the
      lines in range verbatim.
-   - The range is measured from the first IMU sample. The units are read from the data: the IMU
-     `timestamp` column is in ns, and the unit of the LAZ `gps_time` is checked against the
-     loaders in `app/lidar_odometry_utils.cpp` during implementation.
+   - The range is measured from the first IMU sample. Units, confirmed in
+     `app/lidar_odometry_utils.cpp`: `load_imu` divides the IMU `timestamp` column (ns) by 1e9,
+     and `load_point_cloud` uses the LAZ `gps_time` as-is, in seconds on the same clock. On 44,
+     0–30 s keeps 26,307 IMU lines and 1,888,527 of 16,953,548 points (11 % of the points for
+     10.7 % of the time).
    - The default cut is 0–30 s: at about 6.8× real time that should process in about 3–4 min,
      and it includes the stationary start that the IMU bias removal needs.
 
@@ -118,11 +120,30 @@ See proposal.md for the motivation. Observed facts that shape the approach:
   catches it.
 - [Normalizing by key could hide a real change in a normalized field] → Only the listed keys are
   normalized. The list lives in one place in the tool and is printed with `--verbose`.
-- [A `cache/` left in the input folder from an older build could change the result] → Check
-  whether the CLI reads the cache or only writes it. If it reads it, delete `44/cache` before each
-  baseline run and say so in `tools/README.md`.
+- [A `cache/` left in the input folder from an older build could change the result] → Checked:
+  `compute_step_1` (`app/lidar_odometry.cpp`) rewrites every cache file of the run before step 2,
+  loop closure, consistency or `save_result` read it, so stale files are never used and need no
+  deleting. Two runs **on the same input folder at the same time** would overwrite each other's
+  cache, so runs on one dataset are always sequential.
 - [Compiler or flag changes break bit-identity without any logic change] → The manifest records
   the commit and `HD_CPU_OPTIMIZATION`. A toolchain change sets a new baseline in its own commit.
+
+## Findings during implementation
+
+- Determinism confirmed: two Release runs each on `44_short` (200 s) and on `44` (1,929 s and
+  1,902 s) are identical on all files (11 and 35).
+- **The GUI and CLI paths differ.** `run_loop_closure` is called only from the CLI branch of
+  `main()` (`app/lidar_odometry_gui.cpp`). The GUI runs step 2 and, only when its button is
+  pressed, consistency, so it never runs loop closure.
+  - The GUI result `44/lio_result_0` (made 2026-10-01 12:30) matches the CLI baseline in the
+    params, the results JSON (including `gyro_bias_per_window`) and `session.mjs`, so step 2 is
+    identical.
+  - Its trajectories and LAZ files differ by up to 0.42 m, because the CLI applies 20 loop
+    closures.
+  - The baselines are CLI runs. Closing this gap is exactly roadmap step 2 ("one pipeline, two
+    front ends"). It is not fixed here because it changes the GUI's numbers.
+- Re-running `cmake --preset` rewrites the C++20 module-scan files and makes Ninja rebuild every
+  object. Build with `cmake --build --preset ...` alone (it reconfigures when needed).
 
 ## Migration Plan
 

@@ -88,9 +88,10 @@ doctest).
 
 Each step is one OpenSpec change, validated against the baseline.
 
-0. **Golden baseline and test harness:** a stored baseline run of `raw data/44`, a compare script
-   that checks it bit for bit (ignoring timing fields; first confirm that two identical runs
-   really match), and doctest vendored with a `tests` target.
+0. ✅ **Golden baseline and test harness** (done 2026-10-01): `tools/compare_baseline.py`,
+   manifests for `44` and `44_short` in `tools/baseline/`, the `cut_recording` tool, and doctest
+   with the `lidar_odometry_tests` target. Two identical runs were confirmed bit-identical on both
+   datasets. See `tools/README.md`.
 1. **Split config from state:** `OdometryConfig` vs runtime state; the TOML file format is kept.
 2. **Extract `OdometryPipeline`** out of `lidar_odometry_gui.cpp`; CLI and GUI both call it; the
    globals go away.
