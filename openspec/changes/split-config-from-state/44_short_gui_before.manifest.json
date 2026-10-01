@@ -1,0 +1,20 @@
+{
+  "dataset": "44_short-GUI",
+  "params": "settings/lidar-vertical.toml",
+  "commit": "5a3d600",
+  "hd_cpu_optimization": "AUTO",
+  "created": "2026-10-01",
+  "files": {
+    "HDMapping_params_0.95.0_<DATETIME>.toml": "28429cb34f6257aad5035718fe7003817585b02038195b306ce2b47a27e4a210",
+    "HDMapping_results_0.95.0_<DATETIME>.json": "a88c6efb7e0053ce8a0c956aae8f98456fc3c94f415e3e33340a30181f856941",
+    "point_sizes_per_chunk.json": "aa294b4d298e62209709b1aa747f7b9e405f8eb276d9b7d624734e3bcdbd39e4",
+    "scan_lio_0.laz": "7b31cff5eb9376cae78bbfd9b8b1023d3f71d7352111174da7929b6bf0200664",
+    "scan_lio_1.laz": "fa7de891f3269f88a488097267c60d6cf6f8659125d7d4bf18eb8faac7018351",
+    "scan_lio_merged.laz": "9e62edb7d1ae53f06b34bfcd5d89515e6d8aac37d89c4499712374d153ae3735",
+    "session.mjs": "9ed38613cc5a78c15453873b7bad025922a78b278c9620c661b52108621bb0ea",
+    "session_ini_poses.mri": "188465ccf857c7f62186c1794bfa08a62816886cde75456300e146b444b7fd1a",
+    "session_poses.mrp": "188465ccf857c7f62186c1794bfa08a62816886cde75456300e146b444b7fd1a",
+    "trajectory_lio_0.csv": "724243ed54275e226211f612d42ecfaf91d952a1c288759de2abb38577a95788",
+    "trajectory_lio_1.csv": "b9c5245d67a18a6a4efa50bf4dc52823a9afe82038cef5098e5597bcd6689f8c"
+  }
+}

@@ -4,8 +4,8 @@ Every step ends with: both presets build `lidar_odometry_step_1` and `lidar_odom
 
 ## 1. Golden TOML test (before any refactor)
 
-- [ ] 1.1 Add a compile definition with the repo path to `lidar_odometry_tests`, and a test that saves the default params and the loaded `settings/lidar-vertical.toml` (both with a fixed `build_date`) and compares them with `tests/data/default_settings.golden.toml` / `tests/data/lidar_vertical.golden.toml`; generate the golden files from the current code, check they contain `[paths]` and `[misc] clear_color`, and verify the test passes, and fails after editing one golden byte
-- [ ] 1.2 Run the step checks and commit
+- [x] 1.1 Add a compile definition with the repo path to `lidar_odometry_tests`, and a test that saves the default params and the loaded `settings/lidar-vertical.toml` (both with a fixed `build_date`) and compares them with `tests/data/default_params.golden.toml` / `tests/data/lidar_vertical.golden.toml`; generate the golden files from the current code, check they contain `[paths]` and `[misc] clear_color`, and verify the test passes, and fails after editing one golden byte
+- [x] 1.2 Run the step checks and commit
 
 ## 2. OdometryState
 
@@ -30,6 +30,6 @@ Every step ends with: both presets build `lidar_odometry_step_1` and `lidar_odom
 ## 5. Integration
 
 - [ ] 5.1 Full 44: run in the background and verify IDENTICAL with `tools/baseline/44.manifest.json`
-- [ ] 5.2 GUI smoke check on `44_short`, **done by the user** (the GUI can't be driven from the CLI): open, Compute all, save; then I verify with `compare_baseline.py` against `44_short_baseline` that the results JSON and `session.mjs` compare equal to `44_short_baseline` (the trajectories differ only because the GUI has no loop closure, which is expected until step 2)
+- [ ] 5.2 GUI check on `44_short`, **done by the user** (the GUI can't be driven from the CLI): repeat exactly the clicks of the pre-refactor run `44_short/lio_result_0` (2026-10-01 21:56, manifest `44_short_gui_before.manifest.json` in this change) with the refactored Release build; verify with `compare_baseline.py` that the new GUI output is IDENTICAL on all 11 files
 - [ ] 5.3 Update `CLAUDE.md` (type names and the Parameters paragraph: `OdometryConfig`, `OdometryState`, `SettingsDocument`; where TOML fields are registered) and mark step 1 done in `docs/ARCHITECTURE.md`; commit
 - [ ] 5.4 Run `openspec validate split-config-from-state --strict` and confirm it passes

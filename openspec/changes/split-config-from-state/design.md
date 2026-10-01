@@ -119,3 +119,17 @@ See proposal.md for the motivation. What the code does today:
   step 2, where the pipeline gets one explicit way to load its config.
 - [A large mechanical diff is hard to review] → One commit per step (a)–(e). Renames happen in a
   commit of their own (d), with no logic change.
+
+## Findings during implementation
+
+- **Uninitialized NDT grid parameters** (`NDT::GridParameters` has no default member values). A
+  non-global `LidarOdometryParams` wrote garbage bounding boxes to TOML, which made the
+  default-params golden test fail at random.
+  - The app's global `params` was zero-initialized statically, and `lidar-vertical.toml` doesn't
+    set the bounding boxes either, so the app always ran with zeros.
+  - Fixed by value-initializing (`{}`) in its own commit (1845a9d). `44_short` is unchanged, and
+    the new types keep the `{}`.
+- **The test target needs `WITH_GUI=1`** to save the same fields as the app (`clear_color`). With
+  it, the core headers pull in freeglut, so the tests use its include path and
+  `FREEGLUT_LIB_PRAGMAS=0`. This goes away once `clear_color` leaves the shared header (task 3.1)
+  and once `core` headers stop depending on GUI (later roadmap steps).
