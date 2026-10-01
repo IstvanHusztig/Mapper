@@ -218,6 +218,8 @@ set(SOURCES
   app/lidar_odometry_utils.h
   app/lidar_odometry_utils.cpp
   app/lidar_odometry_utils_optimizers.cpp
+  app/loop_closure.cpp
+  app/loop_closure.h
   app/toml.hpp
   app/toml_io.h
   app/toml_io.cpp

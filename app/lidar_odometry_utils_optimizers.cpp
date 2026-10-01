@@ -1632,6 +1632,7 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
             gravity_norm = sum / double(worker_data[0].imu_acc.size());
         }
         int stationary_windows = 0;
+        int turn_windows = 0;
 
         // accelerometer term: gravity in the odometry frame [accelerometer units], taken from the first window
         // (the recording starts at rest); the acceleration offset e is folded into it after every window
@@ -1801,6 +1802,29 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
             // so the bias is only estimated from the second window on
             MotionModelRotationOptions window_rotation_options = rotation_options;
             window_rotation_options.estimate_bias = rotation_options.estimate_bias && i > 0;
+
+            // tight turns: trust the gyro more (rotation about the vertical from the IMU-based initial guess)
+            if (params.rotation_sigma_inflation_k_turn > 0.0)
+            {
+                const auto &tr = worker_data[i].intermediate_trajectory;
+                const auto &ts = worker_data[i].intermediate_trajectory_timestamps;
+                if (tr.size() > 1 && ts.size() == tr.size())
+                {
+                    double yaw = 0.0;
+                    for (size_t k = 1; k < tr.size(); k++)
+                    {
+                        // world-frame rotation increment, its component about the vertical
+                        const Eigen::AngleAxisd aa(Eigen::Matrix3d(tr[k].linear() * tr[k - 1].linear().transpose()));
+                        yaw += aa.angle() * aa.axis().z();
+                    }
+                    const double duration = ts.back().first - ts.front().first;
+                    if (duration > 0.0 && std::abs(yaw) / duration > params.turn_rate_threshold_deg_s * DEG_TO_RAD)
+                    {
+                        window_rotation_options.inflation_k = params.rotation_sigma_inflation_k_turn;
+                        turn_windows++;
+                    }
+                }
+            }
 
             // accelerometer term (from the second window on, like the bias): offset prior grown by its random walk
             MotionModelTranslationImuOptions translation_imu_options;
@@ -2215,6 +2239,8 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, LidarOdometryParams &p
             std::cout << "zero-velocity detection: " << stationary_windows << " of " << worker_data.size() << " windows stationary" << std::endl;
         if (use_acc_term)
             std::cout << "accelerometer term: active in " << acc_term_windows << " of " << worker_data.size() << " windows" << std::endl;
+        if (params.rotation_sigma_inflation_k_turn > 0.0)
+            std::cout << "turn windows (gyro trusted more): " << turn_windows << " of " << worker_data.size() << std::endl;
     }
 
     return true;

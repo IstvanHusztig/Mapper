@@ -9,6 +9,7 @@
 
 #include "lidar_odometry_utils.h"
 #include "lidar_odometry.h"
+#include "loop_closure.h"
 #include <export_laz.h>
 
 #include <utils.hpp>
@@ -1857,6 +1858,9 @@ int main(int argc, char *argv[])
                   loPause);
 
             step2(worker_data, params, loPause);
+
+            if (params.use_loop_closure)
+                run_loop_closure(worker_data, params);
 
             if (params.use_consistency && params.num_constistency_iter > 0)
                 run_consistency(worker_data, params);

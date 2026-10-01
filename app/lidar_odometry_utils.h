@@ -115,6 +115,27 @@ struct LidarOdometryParams
     double gyro_arw_z_deg_sqrt_s = 0.057;
     double rotation_sigma_inflation_k = 4.0;   // covers model error beyond white gyro noise (timestamp jitter, vibration); tuned on datasets 42/43
     double rotation_sigma_floor_deg = 0.002;   // lower bound for near-zero dt
+    // in windows that turn faster than turn_rate_threshold_deg_s about the vertical (mean over the window, from the IMU),
+    // rotation_sigma_inflation_k_turn replaces rotation_sigma_inflation_k: tight turns (stairwells) trust the gyro more,
+    // since the LiDAR matching is weakest there; 0 = off
+    double rotation_sigma_inflation_k_turn = 0.0;
+    double turn_rate_threshold_deg_s = 30.0;
+
+    // loop closure after the odometry (see loop_closure.h): segments of loop_closure_segment_windows windows,
+    // revisits = segments at least loop_closure_min_time_gap_s apart in time and within loop_closure_search_radius_m
+    // horizontally (loop_closure_max_vertical_offset_m vertically); registered revisits with an overlap of at least
+    // loop_closure_min_fitness become pose-graph edges
+    bool use_loop_closure = false;
+    int loop_closure_segment_windows = 12;
+    double loop_closure_min_time_gap_s = 30.0;
+    double loop_closure_search_radius_m = 8.0;
+    double loop_closure_max_vertical_offset_m = 1.5;
+    double loop_closure_max_correction_m = 6.0;
+    double loop_closure_min_fitness = 0.5;
+    double loop_closure_odometry_sigma_m = 0.1;
+    double loop_closure_odometry_sigma_deg = 0.5;
+    double loop_closure_edge_sigma_m = 0.05;
+    double loop_closure_edge_sigma_deg = 0.3;
 
     // online gyro bias estimation (3 extra unknowns per window, carried across windows as a prior)
     bool use_gyro_bias_estimation = true;          // validated against a static recording (43/static)

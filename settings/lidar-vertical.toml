@@ -34,6 +34,20 @@ gyro_bias_rw_deg_s_sqrt_s = 0.005
 handoff_tail_nodes = 30
 use_gyro_bias_estimation = true
 
+[loop_closure]
+# revisits (>= 30 s apart, within 8 m) are registered and closed with a pose graph before the export
+use_loop_closure = true
+loop_closure_segment_windows = 12
+loop_closure_min_time_gap_s = 30.0
+loop_closure_search_radius_m = 8.0
+loop_closure_max_vertical_offset_m = 1.5
+loop_closure_max_correction_m = 6.0
+loop_closure_min_fitness = 0.5
+loop_closure_odometry_sigma_m = 0.1
+loop_closure_odometry_sigma_deg = 0.5
+loop_closure_edge_sigma_m = 0.05
+loop_closure_edge_sigma_deg = 0.3
+
 [imu_translation]
 # accelerometer as a soft measurement of the change of velocity, only where the LiDAR geometry does not
 # constrain the translation (corridor turnaround, stairwell), for at most 15 s per stretch; tested on b1/42/43
