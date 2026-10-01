@@ -8,7 +8,8 @@ own OpenSpec change.
 
 The app works and is validated on real scans, but its structure is inherited from HDMapping:
 
-- the pipeline, the GUI and the CLI share file-scope globals in `app/lidar_odometry_gui.cpp`;
+- the pipeline, the GUI and the CLI shared file-scope globals in `app/lidar_odometry_gui.cpp`
+  (fixed in step 2);
 - `LidarOdometryParams` mixed settings with runtime state (fixed in step 1);
 - the optimizers print to the console and read/write cache files;
 - nothing can be tested in isolation.
@@ -59,8 +60,10 @@ infrastructure and UI at the edge, and all source dependencies pointing inward.
   `OdometryState` and `GuiPreferences`. Grouping `OdometryConfig` by section is left to step 5.
 - `WorkerData` (`core/include/structures.h`) carries cache file names and a GUI `show` flag
   → a domain `Window` plus the `PointStore` port; view flags move to the GUI.
-- Globals in `lidar_odometry_gui.cpp` (`params`, `worker_data`, `imu_data`, `trajectory`,
-  `pointsPerFile`, step flags) → owned by `OdometryPipeline` or a GUI view-model.
+- ✅ Globals in `lidar_odometry_gui.cpp` (`params`, `worker_data`, `imu_data`, `trajectory`,
+  `pointsPerFile`, step flags). Step 2 moved the run data into `OdometryPipeline`. The GUI still
+  keeps `params`, `gui_prefs`, its current `pipeline` and UI state as file-scope globals for the
+  GLUT callbacks; a GUI view-model is left for later.
 - `optimize_lidar_odometry` takes about 40 positional arguments → option structs built from the
   config.
 - `lidar_odometry_utils_optimizers.cpp` (about 3,000 lines) mixes optimizer math, the window loop,
@@ -95,8 +98,9 @@ Each step is one OpenSpec change, validated against the baseline.
 1. ✅ **Split config from state** (done 2026-10-01): `OdometryConfig` (const in the pipeline),
    `OdometryState` (incl. `RunPaths`) and `GuiPreferences`; the TOML file is byte-identical
    (golden test in `tests/`).
-2. **Extract `OdometryPipeline`** out of `lidar_odometry_gui.cpp`; CLI and GUI both call it; the
-   globals go away.
+2. ✅ **Extract `OdometryPipeline`** (done 2026-10-01): `app/odometry_pipeline.{h,cpp}`. CLI and
+   GUI both run load → odometry → loop closure → consistency → save. The CLI ignores the working
+   directory's `default_settings.toml`, and the GUI loads it from the exe folder.
    - This also fixes a known GUI/CLI gap: today the GUI never runs loop closure, which the CLI
      does. On 44 the CLI result with loop closure is the better one.
    - After this step, the GUI's "Compute all" must run exactly the CLI sequence (step 2 → loop

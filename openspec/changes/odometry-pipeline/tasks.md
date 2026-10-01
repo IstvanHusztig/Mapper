@@ -21,7 +21,7 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
 
 ## 4. Integration
 
-- [ ] 4.1 Full 44 (background): verify IDENTICAL with `tools/baseline/44.manifest.json`
+- [x] 4.1 Full 44 (background): verify IDENTICAL with `tools/baseline/44.manifest.json`
 - [x] 4.2 GUI check, **done by the user**: start the Release GUI, load `settings/lidar-vertical.toml` (Load parameters), open `44_short`, let the simple flow finish and save; then I verify that the new `lio_result_*` is IDENTICAL with `44_short_baseline` on all 11 files
-- [ ] 4.3 Update `CLAUDE.md` (Run section: same stages in CLI and GUI, where the settings come from; Architecture: `OdometryPipeline`, remaining UI globals) and mark step 2 done in `docs/ARCHITECTURE.md`; commit
-- [ ] 4.4 Run `openspec validate odometry-pipeline --strict` and confirm it passes
+- [x] 4.3 Update `CLAUDE.md` (Run section: same stages in CLI and GUI, where the settings come from; Architecture: `OdometryPipeline`, remaining UI globals) and mark step 2 done in `docs/ARCHITECTURE.md`; commit
+- [x] 4.4 Run `openspec validate odometry-pipeline --strict` and confirm it passes

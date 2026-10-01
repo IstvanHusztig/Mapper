@@ -28,8 +28,8 @@ cmake --build --preset x64-Release --target lidar_odometry_step_1
 
 ## Run
 
-- **Headless / CLI:** `lidar_odometry_step_1 <input_folder> <params.toml> <output_folder>` — exactly 3 args triggers batch mode (step1 → step2 → save_result).
-- **GUI:** any other argument count opens the freeglut + ImGui window.
+- **Headless / CLI:** `lidar_odometry_step_1 <input_folder> <params.toml> <output_folder>`. Exactly 3 args triggers batch mode. The settings are the built-in defaults plus `<params.toml>` only, never a `default_settings.toml` from the working directory; an unreadable TOML exits 1.
+- **GUI:** any other argument count opens the freeglut + ImGui window. It loads `default_settings.toml` from the exe folder at start-up. "Compute all" and the simple one-click flow run the same stages as the CLI, so for the same input and settings the GUI result is identical to the CLI's.
 
 The input folder is scanned non-recursively; `load_data` (`app/lidar_odometry.cpp`) sorts files by extension: `.laz`/`.las` point clouds, `.csv` IMU data; everything else is ignored. There is no multi-LiDAR calibration: points are only shifted by the lever arm (`lidar_imu_lever_arm_*`).
 
@@ -37,11 +37,11 @@ The input folder is scanned non-recursively; `load_data` (`app/lidar_odometry.cp
 
 Target architecture (Clean Architecture, layers, ports, migration roadmap) is in `docs/ARCHITECTURE.md`; refactors should move the code toward it. What follows describes the current code.
 
-**Pipeline** (driven from `main()` / `step1()` / `step2()` in `app/lidar_odometry_gui.cpp`):
+**Pipeline:** `OdometryPipeline` (`app/odometry_pipeline.{h,cpp}`) owns one run's data (`points_per_file`, `imu`, `trajectory`, `worker_data`, `state`) and runs the stages `load` (1–3) → `run_odometry` (4) → `post_process` (loop closure if `use_loop_closure`, then consistency if `use_consistency`) → `save` (5). The CLI branch of `main()` and the GUI (global `pipeline`) both use it:
 1. `load_data` — read LAZ chunks + IMU CSV, apply calibration, decimate.
 2. `calculate_trajectory` — IMU-only orientation via Fusion AHRS (NWU/ENU/NED convention flags in params).
 3. `compute_step_1` — cut the data into `WorkerData` windows (points + intermediate trajectory per chunk).
-4. `compute_step_2` (`app/lidar_odometry_utils_optimizers.cpp`) — per-window scan-to-map optimization against an NDT-bucket reference map (`optimize_lidar_odometry`, `optimize_sf*`, `optimize_icp`), optional `Consistency`/`Consistency2` passes (`run_consistency`, run by the CLI when `use_consistency = true`).
+4. `compute_step_2` (`app/lidar_odometry_utils_optimizers.cpp`) — per-window scan-to-map optimization against an NDT-bucket reference map (`optimize_lidar_odometry`, `optimize_sf*`, `optimize_icp`), optional `Consistency`/`Consistency2` passes (`run_consistency`, run in `post_process` when `use_consistency = true`). Loop closure: `run_loop_closure` (`app/loop_closure.cpp`).
 5. `save_result` (`app/lidar_odometry.cpp`) — write session, trajectories, LAZ, `parameters.toml` and processing-results JSON to the output folder.
 
 **Settings and state** (all in `app/lidar_odometry_utils.h`):
@@ -49,7 +49,7 @@ Target architecture (Clean Architecture, layers, ports, migration roadmap) is in
 - `OdometryState` holds what a run produces: the NDT maps, `m_g`, the initial and reference points, the trajectory length, and `RunPaths` (the `[paths]` keys plus the cache folder). Functions that change it take it explicitly.
 - `GuiPreferences` holds GUI-only values (`clear_color`, saved in `[misc]`).
 
-Defaults are loaded by `set_lidar_odometry_default_params` (in `lidar_odometry_gui.cpp`) from `default_settings.toml` in the current directory. TOML I/O (`app/toml_io.h`) is table-driven and takes `(OdometryConfig, RunPaths, GuiPreferences)`. To make a new setting loadable and savable, add it to both `TomlIO::POINTERS` (name → `OdometryConfig` member pointer; only bool/double/int/string supported) and the right `CATEGORIES` section, then regenerate the golden TOML test files (`LO_UPDATE_GOLDEN=1`, in their own commit). `app/default_settings.toml` is the shipped config.
+GUI defaults are loaded by `set_lidar_odometry_default_params` (in `lidar_odometry_gui.cpp`) from `default_settings.toml` next to the exe; the CLI doesn't load it. TOML I/O (`app/toml_io.h`) is table-driven and takes `(OdometryConfig, RunPaths, GuiPreferences)`. To make a new setting loadable and savable, add it to both `TomlIO::POINTERS` (name → `OdometryConfig` member pointer; only bool/double/int/string supported) and the right `CATEGORIES` section, then regenerate the golden TOML test files (`LO_UPDATE_GOLDEN=1`, in their own commit). `app/default_settings.toml` is the shipped config.
 
 **IMU rotation prior and gyro bias** (in `optimize_lidar_odometry` / `compute_step_2`, all on by default):
 - `[motion_model_uncertainty]`: `use_time_scaled_rotation_sigma` replaces the constant `*_om/fi/ka_1_sigma_deg` with `max(rotation_sigma_inflation_k * gyro_arw_{x,y,z}_deg_sqrt_s * sqrt(dt), rotation_sigma_floor_deg)` per consecutive-node edge.
@@ -61,4 +61,4 @@ Defaults are loaded by `set_lidar_odometry_default_params` (in `lidar_odometry_g
 
 **Critical link-order constraint:** `CORE_SOURCE_FILES` in `CMakeLists.txt` is an explicit list that must mirror the original hd-mapping `core/CMakeLists.txt` — do **not** replace it with a glob or compile core sources directly into the exe. The app relies on static-archive semantics: `hash_utils.cpp` defines `get_index()`/`get_rgd_index()` that would collide with the app's own definitions, and `surface.cpp` duplicates globals from `pose_graph_slam.cpp` (so it is intentionally excluded). Adding a new `core/src/*.cpp` that the app needs means adding it to that list and checking for symbol collisions.
 
-GLEW is only used for headers (never initialized or linked). Much of the app code uses file-scope globals in `lidar_odometry_gui.cpp` (`params`, `state`, `gui_prefs`, point data, trajectory) shared between the GUI and CLI paths (removed in roadmap step 2).
+GLEW is only used for headers (never initialized or linked). The GUI keeps file-scope globals in `lidar_odometry_gui.cpp`, because GLUT callbacks need them: `params`, `gui_prefs`, the current `pipeline`, and UI state (view flags, gizmo, progress). The CLI branch of `main()` uses only locals.
