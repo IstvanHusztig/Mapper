@@ -30,6 +30,8 @@ The input folder is scanned non-recursively; `load_data` (`app/lidar_odometry.cp
 
 ## Architecture
 
+Target architecture (Clean Architecture, layers, ports, migration roadmap) is in `docs/ARCHITECTURE.md`; refactors should move the code toward it. What follows describes the current code.
+
 **Pipeline** (driven from `main()` / `step1()` / `step2()` in `app/lidar_odometry_gui.cpp`):
 1. `load_data` — read LAZ chunks + IMU CSV, apply calibration, decimate.
 2. `calculate_trajectory` — IMU-only orientation via Fusion AHRS (NWU/ENU/NED convention flags in params).

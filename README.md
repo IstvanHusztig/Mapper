@@ -4,6 +4,8 @@ A standalone build of the `lidar_odometry_step_1` application from [HDMapping](h
 
 **Full documentation:** open [`docs/index.html`](docs/index.html) in a browser. It covers the processing pipeline step by step and every parameter of `settings/lidar-vertical.toml`.
 
+**Architecture goals:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) describes the target Clean Architecture and the migration roadmap (draft).
+
 ## Build
 
 Requires CMake ≥ 4.0 and a C++20 compiler. All dependencies are vendored in `3rdparty/`; only OpenGL/GLU come from the system.
