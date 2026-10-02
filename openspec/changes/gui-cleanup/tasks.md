@@ -16,12 +16,12 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
 
 ## 3. Settings window and display
 
-- [ ] 3.1 Remove `settings_gui()` entirely, with View → Settings and `is_settings_gui` (design decision 4). Removed with it:
+- [x] 3.1 Remove `settings_gui()` entirely, with View → Settings and `is_settings_gui` (design decision 4). Removed with it:
   - the scan range tools (index from/to, Select all/Unselect, the range buttons, Export selected scans, Save RESSO file, the stretch gizmo, the per-window show/hide list);
   - `simple_gui`, every parameter field, "Set example", NWU/ENU/NED, "Load data", "Compute all", "Save result", "Save all point clouds to single las/laz file", "Save trajectory to ASCII", the reference clouds section, and the initial-transformation gizmo and "Align to reference".
 
   Verify both presets build.
-- [ ] 3.2 Display and view menu:
+- [x] 3.2 Display and view menu:
   - remove the drawing of the initial points, reference points/buckets, trajectory-as-axes and the from/to markers;
   - remove both gizmo branches and the ImGuizmo frame code in `display()`;
   - remove the View items "Points size", "Show initial points" and "Show trajectory as axes";
