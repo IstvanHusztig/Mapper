@@ -1323,7 +1323,7 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points,
             if ((p1 - p2).norm() < 1.0)
                 intermediate_trajectory[i] = affine_matrix_from_pose_tait_bryan(pose);
             else
-                std::cout << "big jump on trajectory: " << (p1 - p2).norm() << std::endl;
+                log_info(logger) << "big jump on trajectory: " << (p1 - p2).norm();
         }
         delta = 0.0;
         for (int i = 0; i < h_x.size(); i++)
@@ -1412,7 +1412,7 @@ void align_to_reference(const NDT::GridParameters &rgd_params, std::vector<Point
         m_g = affine_matrix_from_pose_tait_bryan(pose);
     }
     else
-        std::cout << "align_to_reference FAILED" << std::endl;
+        log_info(logger) << "align_to_reference FAILED";
 }
 
 MotionModelRotationOptions get_motion_model_rotation_options(const OdometryConfig &params)
@@ -1601,14 +1601,14 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
 
         if (!fs::exists(state.paths.working_directory_preview))
         {
-            std::cout << "Creating folder: " << state.paths.working_directory_preview << "\n";
+            log_info(logger) << "Creating folder: " << state.paths.working_directory_preview << "\n";
             fs::create_directory(state.paths.working_directory_preview);
         }
 
         MotionModelRotationOptions rotation_options = get_motion_model_rotation_options(params);
         if (rotation_options.estimate_bias && params.use_robust_and_accurate_lidar_odometry)
         {
-            std::cout << "gyro bias estimation is not supported with use_robust_and_accurate_lidar_odometry, disabled for this run" << std::endl;
+            log_info(logger) << "gyro bias estimation is not supported with use_robust_and_accurate_lidar_odometry, disabled for this run";
             rotation_options.estimate_bias = false;
         }
         const double bias_rw_rad = params.gyro_bias_rw_deg_s_sqrt_s * DEG_TO_RAD;
@@ -1622,7 +1622,7 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
         const bool use_imu_pred = params.use_imu_translation_prediction && have_acc;
         const bool use_zupt = params.use_zero_velocity_detection && have_acc;
         if ((params.use_imu_translation_prediction || params.use_zero_velocity_detection) && !have_acc)
-            std::cout << "no accelerometer data per node: IMU translation prediction / zero-velocity detection disabled" << std::endl;
+            log_info(logger) << "no accelerometer data per node: IMU translation prediction / zero-velocity detection disabled";
         // accelerometer reading of gravity [g]: mean magnitude over the first window (the recording starts at rest)
         double gravity_norm = 1.0;
         if (have_acc)
@@ -1688,7 +1688,7 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
 
                 if (prev_velocity.norm() > 10.0)
                 {
-                    std::cout << "!!!prev_velocity.norm() > 10.0!!!" << std::endl;
+                    log_info(logger) << "!!!prev_velocity.norm() > 10.0!!!";
                     prev_velocity = Eigen::Vector3d(0.0, 0.0, 0.0);
                     use_prev_velocity = false;
                 }
@@ -1707,7 +1707,7 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
 
                 if (mean_shift.norm() > 1.0)
                 {
-                    std::cout << "!!!mean_shift.norm() > 1.0!!!" << std::endl;
+                    log_info(logger) << "!!!mean_shift.norm() > 1.0!!!";
                     mean_shift = Eigen::Vector3d(0.0, 0.0, 0.0);
                 }
 
@@ -1757,7 +1757,7 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
                     {
                         stationary_windows++;
                         if (debugMsg)
-                            std::cout << "window " << i + 1 << " stationary (zero-velocity detection)\n";
+                            log_debug(logger) << "window " << i + 1 << " stationary (zero-velocity detection)\n";
                     }
                 }
                 else if ((use_acc_prior || use_acc_term) && ts.size() == new_trajectory.size())
@@ -1904,7 +1904,7 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
                         points_local_sf.push_back(p_sl);
                     }
                 }
-                std::cout << "optimize_sf2" << std::endl;
+                log_info(logger) << "optimize_sf2";
 
                 double wx = 1000000;
                 double wy = 1000000;
@@ -1998,7 +1998,7 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
                 if (iter % 10 == 0 && iter > 0)
                 {
                     if (debugMsg)
-                        std::cout << "\nlm_factor " << lm_factor << ", delta " << std::setprecision(10) << delta << "\n";
+                        log_debug(logger) << "\nlm_factor " << lm_factor << ", delta " << std::setprecision(10) << delta << "\n";
 
                     lm_factor *= 10.0;
                 }
@@ -2014,28 +2014,28 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
 
             std::chrono::duration<double> elapsed_seconds1 = end1 - start1;
 
-            std::cout << "finished at iteration " << iter_end + 1 << "/" << params.nr_iter;
-
-            std::cout << " optimizing worker_data " << i + 1 << "/" << worker_data.size()
-                      << " with acc_distance " << fixed << std::setprecision(2) << acc_distance << "[m] in "
-                      << fixed << std::setprecision(2) << elapsed_seconds1.count()
-                      << "[s], delta ";
-            if (delta >= params.convergence_delta_threshold)
-                std::cout << std::setprecision(10) << delta << "!!!";
-            else
-                std::cout << "< " << std::setprecision(1) << std::scientific << params.convergence_delta_threshold << std::defaultfloat;
-
-            std::cout << "\n";
+            {
+                auto msg = log_info(logger);
+                msg << "finished at iteration " << iter_end + 1 << "/" << params.nr_iter;
+                msg << " optimizing worker_data " << i + 1 << "/" << worker_data.size()
+                    << " with acc_distance " << fixed << std::setprecision(2) << acc_distance << "[m] in "
+                    << fixed << std::setprecision(2) << elapsed_seconds1.count()
+                    << "[s], delta ";
+                if (delta >= params.convergence_delta_threshold)
+                    msg << std::setprecision(10) << delta << "!!!";
+                else
+                    msg << "< " << std::setprecision(1) << std::scientific << params.convergence_delta_threshold;
+            }
 
             if (rotation_options.estimate_bias)
             {
                 const Eigen::Vector3d b_deg = worker_data[i].gyro_bias * RAD_TO_DEG;
                 const Eigen::Vector3d s_deg = worker_data[i].gyro_bias_cov.diagonal().cwiseMax(0.0).cwiseSqrt() * RAD_TO_DEG;
-                std::cout << "gyro bias [deg/s] window " << i + 1 << ": " << std::setprecision(3)
-                          << b_deg.x() << " " << b_deg.y() << " " << b_deg.z() << " (1-sigma "
-                          << s_deg.x() << " " << s_deg.y() << " " << s_deg.z() << ")\n";
+                log_info(logger) << "gyro bias [deg/s] window " << i + 1 << ": " << std::fixed << std::setprecision(3)
+                                 << b_deg.x() << " " << b_deg.y() << " " << b_deg.z() << " (1-sigma "
+                                 << s_deg.x() << " " << s_deg.y() << " " << s_deg.z() << ")";
                 if ((worker_data[i].gyro_bias.cwiseAbs().array() >= rotation_options.bias_max_rad_s * (1.0 - 1e-9)).any())
-                    std::cout << "WARNING: gyro bias clamped to +-" << params.gyro_bias_max_deg_s << " deg/s in window " << i + 1 << "\n";
+                    log_info(logger) << "WARNING: gyro bias clamped to +-" << params.gyro_bias_max_deg_s << " deg/s in window " << i + 1 << "\n";
 
                 carried_bias = worker_data[i].gyro_bias;
                 carried_bias_cov = worker_data[i].gyro_bias_cov;
@@ -2048,9 +2048,9 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
                 const double ratio = eig.eigenvalues().maxCoeff() > 0.0 ? eig.eigenvalues().minCoeff() / eig.eigenvalues().maxCoeff() : 0.0;
                 previous_window_degenerate = ratio < params.imu_degenerate_information_ratio;
                 const Eigen::Vector3d weak = eig.eigenvectors().col(0);
-                std::cout << "lidar translation information window " << i + 1 << ": ratio " << std::setprecision(4) << ratio
-                          << " weakest direction " << std::setprecision(2) << weak.x() << " " << weak.y() << " " << weak.z()
-                          << (translation_imu_options.enabled ? " | accelerometer term active" : "") << std::endl;
+                log_info(logger) << "lidar translation information window " << i + 1 << ": ratio " << std::fixed << std::setprecision(4) << ratio
+                                 << " weakest direction " << std::setprecision(2) << weak.x() << " " << weak.y() << " " << weak.z()
+                                 << (translation_imu_options.enabled ? " | accelerometer term active" : "");
 
                 // outside degenerate stretches: calibrate the gravity vector from the LiDAR-constrained trajectory
                 Eigen::Vector3d observed;
@@ -2071,9 +2071,9 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
                 carried_acc_offset_cov = acc_offset_cov;
                 {
                     const Eigen::Vector3d s = acc_offset_cov.diagonal().cwiseMax(0.0).cwiseSqrt();
-                    std::cout << "acceleration offset [m/s^2] window " << i + 1 << ": " << std::setprecision(3)
-                              << acc_offset.x() << " " << acc_offset.y() << " " << acc_offset.z() << " (1-sigma "
-                              << s.x() << " " << s.y() << " " << s.z() << ")" << std::endl;
+                    log_info(logger) << "acceleration offset [m/s^2] window " << i + 1 << ": " << std::fixed << std::setprecision(3)
+                                     << acc_offset.x() << " " << acc_offset.y() << " " << acc_offset.z() << " (1-sigma "
+                                     << s.x() << " " << s.y() << " " << s.z() << ")";
                 }
             }
 
@@ -2131,11 +2131,11 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
             if (!(acc_distance == acc_distance)) // NaN check
             {
                 worker_data[i].intermediate_trajectory = tmp_worker_data;
-                std::cout << "CHALLENGING DATA OCCURED!!!" << std::endl;
+                log_info(logger) << "CHALLENGING DATA OCCURED!!!";
                 acc_distance = acc_distance_tmp;
-                std::cout << "please split data set into subsets" << std::endl;
+                log_info(logger) << "please split data set into subsets";
                 ts_failure = worker_data[i].intermediate_trajectory_timestamps[0].first;
-                std::cout << "calculations canceled for TIMESTAMP: " << (long long int)worker_data[i].intermediate_trajectory_timestamps[0].first << std::endl;
+                log_info(logger) << "calculations canceled for TIMESTAMP: " << (long long int)worker_data[i].intermediate_trajectory_timestamps[0].first;
                 return false;
             }
 
@@ -2222,20 +2222,20 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
         std::time_t end_time = std::chrono::system_clock::to_time_t(end);
 
         std::tm local_tm = *std::localtime(&end_time);
-        std::cout << "finished computation at " << std::put_time(&local_tm, "%Y-%m-%d %H:%M:%S")
-                  << ", elapsed time: " << std::setprecision(2) << elapsed_seconds.count() << "s\n";
+        log_info(logger) << "finished computation at " << std::put_time(&local_tm, "%Y-%m-%d %H:%M:%S")
+                         << ", elapsed time: " << std::fixed << std::setprecision(2) << elapsed_seconds.count() << "s";
 
         state.total_length_of_calculated_trajectory = 0;
         for (int i = 1; i < worker_data.size(); i++)
             state.total_length_of_calculated_trajectory += (worker_data[i].intermediate_trajectory[0].translation() - worker_data[i - 1].intermediate_trajectory[0].translation()).norm();
 
-        std::cout << "total_length_of_calculated_trajectory: " << state.total_length_of_calculated_trajectory << " [m]" << std::endl;
+        log_info(logger) << "total_length_of_calculated_trajectory: " << state.total_length_of_calculated_trajectory << " [m]";
         if (use_zupt)
-            std::cout << "zero-velocity detection: " << stationary_windows << " of " << worker_data.size() << " windows stationary" << std::endl;
+            log_info(logger) << "zero-velocity detection: " << stationary_windows << " of " << worker_data.size() << " windows stationary";
         if (use_acc_term)
-            std::cout << "accelerometer term: active in " << acc_term_windows << " of " << worker_data.size() << " windows" << std::endl;
+            log_info(logger) << "accelerometer term: active in " << acc_term_windows << " of " << worker_data.size() << " windows";
         if (params.rotation_sigma_inflation_k_turn > 0.0)
-            std::cout << "turn windows (gyro trusted more): " << turn_windows << " of " << worker_data.size() << std::endl;
+            log_info(logger) << "turn windows (gyro trusted more): " << turn_windows << " of " << worker_data.size();
     }
 
     return true;
@@ -2250,7 +2250,7 @@ void Consistency(std::vector<WorkerData> &worker_data, const OdometryConfig &par
     std::vector<std::pair<int, int>> indexes;
     bool multithread = false;
 
-    std::cout << "preparing data START" << std::endl;
+    log_info(logger) << "preparing data START";
     for (int i = 0; i < worker_data.size(); i++)
     {
         for (int j = 0; j < worker_data[i].intermediate_trajectory.size(); j++)
@@ -2260,13 +2260,13 @@ void Consistency(std::vector<WorkerData> &worker_data, const OdometryConfig &par
             indexes.emplace_back(i, j);
         }
     }
-    std::cout << "preparing data FINISHED" << std::endl;
+    log_info(logger) << "preparing data FINISHED";
 
     for (int i = 0; i < worker_data.size(); i++)
     {
         std::vector<Point3Di> intermediate_points;
         if (!load_vector_data(worker_data[i].intermediate_points_cache_file_name.string(), intermediate_points))
-            std::cout << "problem with load_vector_data file '" << worker_data[i].intermediate_points_cache_file_name.string() << "'" << std::endl;
+            log_info(logger) << "problem with load_vector_data file '" << worker_data[i].intermediate_points_cache_file_name.string() << "'";
 
         for (int j = 0; j < intermediate_points.size(); j++)
             all_points_local.push_back(intermediate_points[j]);
@@ -2423,7 +2423,7 @@ void Consistency(std::vector<WorkerData> &worker_data, const OdometryConfig &par
 
     // ndt
 
-    std::cout << "NDT observations START" << std::endl;
+    log_info(logger) << "NDT observations START";
     for (size_t index_point_begin = 0; index_point_begin < all_points_local.size(); index_point_begin += 1000000)
     {
         NDTBucketMapType buckets;
@@ -2550,7 +2550,7 @@ void Consistency(std::vector<WorkerData> &worker_data, const OdometryConfig &par
             AtPB += AtPBndt;
         }
     }
-    std::cout << "NDT observations FINISHED" << std::endl;
+    log_info(logger) << "NDT observations FINISHED";
 
     Eigen::SimplicialCholesky<Eigen::SparseMatrix<double>> solver(AtPA);
     Eigen::SparseMatrix<double> x = solver.solve(AtPB);
@@ -2589,7 +2589,7 @@ void Consistency2(std::vector<WorkerData> &worker_data, const OdometryConfig &pa
     std::vector<std::pair<int, int>> indexes;
     bool multithread = true;
 
-    std::cout << "preparing data START" << std::endl;
+    log_info(logger) << "preparing data START";
     for (int i = 0; i < worker_data.size(); i++)
     {
         for (int j = 0; j < worker_data[i].intermediate_trajectory.size(); j++)
@@ -2599,13 +2599,13 @@ void Consistency2(std::vector<WorkerData> &worker_data, const OdometryConfig &pa
             indexes.emplace_back(i, j);
         }
     }
-    std::cout << "preparing data FINISHED" << std::endl;
+    log_info(logger) << "preparing data FINISHED";
 
     for (int i = 0; i < worker_data.size(); i++)
     {
         std::vector<Point3Di> intermediate_points;
         if (!load_vector_data(worker_data[i].intermediate_points_cache_file_name.string(), intermediate_points))
-            std::cout << "problem with load_vector_data for file '" << worker_data[i].intermediate_points_cache_file_name.string() << "'" << std::endl;
+            log_info(logger) << "problem with load_vector_data for file '" << worker_data[i].intermediate_points_cache_file_name.string() << "'";
 
         for (int j = 0; j < intermediate_points.size(); j++)
             all_points_local.push_back(intermediate_points[j]);
@@ -2759,7 +2759,7 @@ void Consistency2(std::vector<WorkerData> &worker_data, const OdometryConfig &pa
     tripletListP.clear();
     tripletListB.clear();
 
-    std::cout << "reindex data START" << std::endl;
+    log_info(logger) << "reindex data START";
 
     std::vector<Point3Di> points_local;
     std::vector<Point3Di> points_global;
@@ -2801,9 +2801,9 @@ void Consistency2(std::vector<WorkerData> &worker_data, const OdometryConfig &pa
         counter++;
     }
 
-    std::cout << "reindex data FINISHED" << std::endl;
+    log_info(logger) << "reindex data FINISHED";
 
-    std::cout << "build regular grid decomposition START" << std::endl;
+    log_info(logger) << "build regular grid decomposition START";
 
     std::vector<std::pair<unsigned long long int, unsigned int>> index_pairs;
     for (int i = 0; i < points_global.size(); i++)
@@ -2892,16 +2892,16 @@ void Consistency2(std::vector<WorkerData> &worker_data, const OdometryConfig &pa
                 bb.second.valid = false;
         }
     }
-    std::cout << "build regular grid decomposition FINISHED" << std::endl;
+    log_info(logger) << "build regular grid decomposition FINISHED";
 
-    std::cout << "ndt observations start START" << std::endl;
+    log_info(logger) << "ndt observations start START";
 
     counter = 0;
 
     for (int i = 0; i < points_global.size(); i++)
     {
         if (i % 10000 == 0)
-            std::cout << "computing " << i << " of " << points_global.size() << std::endl;
+            log_info(logger) << "computing " << i << " of " << points_global.size();
 
         if (points_local[i].point.norm() < params.consistency_min_distance)
             continue;
@@ -3033,7 +3033,7 @@ void Consistency2(std::vector<WorkerData> &worker_data, const OdometryConfig &pa
         AtPB += AtPBndt;
     }
 
-    std::cout << "ndt observations start FINISHED" << std::endl;
+    log_info(logger) << "ndt observations start FINISHED";
 
     Eigen::SimplicialCholesky<Eigen::SparseMatrix<double>> solver(AtPA);
     Eigen::SparseMatrix<double> x = solver.solve(AtPB);

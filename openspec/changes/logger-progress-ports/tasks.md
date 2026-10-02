@@ -50,7 +50,7 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
   - leave the trajectory `std::ofstream` writes (about lines 793/806) untouched.
 
   Verify the grep finds no console output calls. Run the step checks; commit.
-- [ ] 3.3 `app/lidar_odometry_utils_optimizers.cpp`:
+- [x] 3.3 `app/lidar_odometry_utils_optimizers.cpp`:
   - convert `compute_step_2`, `Consistency`, `Consistency2`, `optimize_lidar_odometry` (pass the `Logger&` through), `align_to_reference`;
   - the multi-statement `lm_factor`/`delta` output becomes one `LogMessage` per line;
   - drop the sticky `std::setprecision(10)` dependence: give any later message that printed doubles with it an explicit precision.
