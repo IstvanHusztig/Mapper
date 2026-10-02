@@ -11,6 +11,7 @@
 #include "lidar_odometry.h"
 #include "odometry_pipeline.h"
 #include "console_reporting.h"
+#include "folder_inputs.h"
 #include <export_laz.h>
 
 #include <utils.hpp>
@@ -341,14 +342,15 @@ bool select_input(std::string &input_folder_name, std::vector<std::string> &inpu
         working_directory = fs::path(input_file_names[0]).parent_path().string();
 
     gui_progress.reset();
-    pipeline = OdometryPipeline(params, console, gui_progress, pipeline.state.paths, full_debug_messages);
+    pipeline = OdometryPipeline(params, console, gui_progress, make_folder_inputs(input_file_names, console), pipeline.state.paths,
+                                full_debug_messages);
     return true;
 }
 
 // loads the recording into the current run; if that fails, tells the user and closes the program
 void load_input(const std::string &input_folder_name, const std::vector<std::string> &input_file_names)
 {
-    if (pipeline.load(input_file_names))
+    if (pipeline.load())
     {
         step_1_done = true;
         return;
@@ -1852,7 +1854,7 @@ void display()
 void on_exit(){
     // remove cache
     std::cout << "remove cache: '" << pipeline.state.paths.working_directory_cache << "' START" << std::endl;
-    std::filesystem::remove_all(pipeline.state.paths.working_directory_cache);
+    pipeline.clear_point_store();
     std::cout << "remove cache: '" << pipeline.state.paths.working_directory_cache << "' FINISHED" << std::endl;
 }
 
@@ -1924,8 +1926,8 @@ int main(int argc, char *argv[])
             }
 
             ConsoleReporter reporter;
-            OdometryPipeline pipeline(config, reporter, reporter, paths, full_debug_messages);
-            if (pipeline.load(input_file_names))
+            OdometryPipeline pipeline(config, reporter, reporter, make_folder_inputs(input_file_names, reporter), paths, full_debug_messages);
+            if (pipeline.load())
                 log_info(reporter) << "step_1_done";
 
             pipeline.run_all();

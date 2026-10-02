@@ -40,16 +40,16 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
 
 ## 4. Recording source and pipeline-owned inputs
 
-- [ ] 4.1 Add `app/mandeye_recording_source.{h,cpp}` (`MandeyeFolderSource`): move `load_imu` and `load_point_cloud` there from `lidar_odometry_utils.{h,cpp}` unchanged. `read_imu` and `read_points` call them, and `open` re-checks that the paired files exist. Verify both presets build.
-- [ ] 4.2 Add `app/folder_inputs.{h,cpp}` with `RunInputs` and `make_folder_inputs(file names, logger)` (design decision 4): pairing, then the three adapters on `<folder>/cache` and `<folder>/preview`, or empty inputs if pairing fails. Verify both presets build.
-- [ ] 4.3 Pipeline owns its inputs:
+- [x] 4.1 Add `app/mandeye_recording_source.{h,cpp}` (`MandeyeFolderSource`): move `load_imu` and `load_point_cloud` there from `lidar_odometry_utils.{h,cpp}` unchanged. `read_imu` and `read_points` call them, and `open` re-checks that the paired files exist. Verify both presets build.
+- [x] 4.2 Add `app/folder_inputs.{h,cpp}` with `RunInputs` and `make_folder_inputs(file names, logger)` (design decision 4): pairing, then the three adapters on `<folder>/cache` and `<folder>/preview`, or empty inputs if pairing fails. Verify both presets build.
+- [x] 4.3 Pipeline owns its inputs:
   - **Pipeline:** `OdometryPipeline(config, logger, progress, RunInputs, RunPaths, debug)`; `load()` takes no arguments and returns false for empty inputs or a failed `open`; it sets `state.paths` from the store's and sink's `location()`.
   - **`load_data`:** reads through `RecordingSource`; no pairing, paths or LASzip.
   - **CLI:** builds the inputs from the `argv[1]` listing.
   - **GUI:** `select_input` builds them for the picked folder; `on_exit` calls `pipeline.clear_point_store()`; the reference-cloud loader includes `mandeye_recording_source.h`.
 
   Verify:
-  - a CLI run on a folder with one file exits without an output folder, as before;
+  - a CLI run on a folder with one file exits without an output folder, as before; (Result: it crashes before and after this change with the same messages and no output folder; see design Risks.)
   - a grep for `laszip|ifstream|parent_path|fs::exists` in `load_data` finds nothing.
 
   Run the step checks. Commit.

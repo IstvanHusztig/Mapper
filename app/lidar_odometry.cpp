@@ -1,4 +1,5 @@
 #include "lidar_odometry.h"
+#include "mandeye_recording_source.h" // load_point_cloud for the GUI's reference clouds
 #include "tbb/tbb.h"
 #include <mutex>
 
@@ -6,175 +7,76 @@ namespace fs = std::filesystem;
 
 const float RAD_TO_DEG = 180.0f / M_PI;
 
-bool load_data(std::vector<std::string>& input_file_names,
+bool load_data(RecordingSource& recording,
+    PreviewSink& preview,
     const OdometryConfig &params,
-    OdometryState& state,
     std::vector<std::vector<Point3Di>>& pointsPerFile,
     Imu& imu_data,
     bool debugMsg,
-    PreviewSink& preview,
     Logger& logger)
 {
-    std::sort(input_file_names.begin(), input_file_names.end());
-
-    std::vector<std::string> csv_files, laz_files;
-
     log_info(logger) << "Loading data..\n--------------\n";
 
-    // --- Separate files by type
-    for (const auto& fileName : input_file_names)
-    {
-        std::string ext = fs::path(fileName).extension().string();
-        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+    // --- Load IMU data
+    log_info(logger) << "loading IMU data from 'imu****.csv' ..\n";
 
-        if (ext == ".csv")
-            csv_files.push_back(fileName);
-        else if ((ext == ".laz") || (ext == ".las"))
-            laz_files.push_back(fileName);
-    }
+    std::size_t minSize = recording.chunk_count();
+    // Each thread loads into its own local vector
+    std::vector<Imu> imuChunks(minSize);
 
-    auto get4index = [](const std::string& path) -> std::string {
-        auto s = fs::path(path).stem().string();
-        return s.size() > 4 ? s.substr(s.size() - 4) : s;
-        };
-
-    for (size_t i = 0; i < laz_files.size(); i++)
-    {
-        std::string lfs = get4index(laz_files[i]);
-
-        bool found = false;
-        for (size_t j = 0; j < csv_files.size(); j++)
-        {
-            std::string cfs = get4index(csv_files[j]);
-            if (lfs.compare(cfs) == 0)
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0, minSize),
+        [&](const tbb::blocked_range<size_t>& range) {
+            for (size_t i = range.begin(); i < range.end(); ++i)
             {
-                found = true;
-                break;
+                imuChunks[i] = recording.read_imu(i, logger);
             }
-        }
+        });
 
-        if (!found)
+    // Merge all chunks sequentially at the end
+    for (auto& chunk : imuChunks)
+        imu_data.insert(imu_data.end(), std::make_move_iterator(chunk.begin()), std::make_move_iterator(chunk.end()));
+
+    // Sort once after merging
+    std::sort(imu_data.begin(), imu_data.end(),
+        [](const auto& a, const auto& b) {
+            return std::get<0>(a).first < std::get<0>(b).first;
+        });
+
+    log_info(logger) << "Loading point clouds (" << minSize << " files)..\n";
+    log_info(logger) << "total   - filter = kept\n-----------------------\n";
+
+    pointsPerFile.resize(minSize);
+
+    PointFilter filter;
+    filter.omit_zero_timestamp = true;
+    filter.xy_inner = params.filter_threshold_xy_inner;
+    filter.xy_outer = params.filter_threshold_xy_outer;
+    filter.lever_arm = get_lidar_imu_lever_arm(params);
+
+    // --- Parallel load of LAZ files
+    tbb::parallel_for(size_t(0), minSize, [&](size_t i)
         {
-            log_info(logger) << "\n!!! there is no CSV file for: " << laz_files[i] << " !!! \n\n";
+            auto data = recording.read_points(i, filter, logger);
 
-            if (i < (laz_files.size() - 1))
-            {
-                log_info(logger) << "!!! can't continue with missmatched middle file pairs.. !!!\n\n";
-                return false;
-            }
-        }
-    }
+            std::sort(data.begin(), data.end(), [](const Point3Di& a, const Point3Di& b)
+                { return a.timestamp < b.timestamp; });
 
-    for (size_t i = 0; i < csv_files.size(); i++)
-    {
-        std::string lfs = get4index(csv_files[i]);
+            // Optional calibration validation (first file only)
+            if ((i == 0) && params.save_calibration_validation)
+                preview.calibration_validation(data, (size_t)params.calibration_validation_points, logger);
 
-        bool found = false;
-        for (size_t j = 0; j < laz_files.size(); j++)
-        {
-            std::string cfs = get4index(laz_files[j]);
-            if (lfs.compare(cfs) == 0)
-            {
-                found = true;
-                break;
-            }
-        }
+            // Store results
+            pointsPerFile[i] = std::move(data);
+        });
 
-        if (!found)
-        {
-            log_info(logger) << "\n!!! there is no LAZ file for: " << csv_files[i] << " !!! \n\n";
+    // --- Summary
+    size_t totalPoints = 0;
+    for (const auto& pp : pointsPerFile)
+        totalPoints += pp.size();
 
-            if (i < (csv_files.size() - 1))
-            {
-                log_info(logger) << "!!! can't continue with missmatched middle file pairs.. !!!\n\n";
-                return false;
-            }
-        }
-    }
-
-    if (input_file_names.size() >= 2)
-    {
-        std::string working_directory = fs::path(input_file_names.front()).parent_path().string();
-
-        if (laz_files.size() != csv_files.size())
-            log_info(logger) << "!!! file number issue. continuing but ignoring missmatched last file pair.. !!!\n";
-
-        // check if folder exists!
-        if (!fs::exists(working_directory))
-        {
-            log_error(logger) << "Folder '" << working_directory << "' does not exist.\n";
-            return false;
-        }
-
-        // --- Load IMU data
-        log_info(logger) << "loading IMU data from 'imu****.csv' ..\n";
-
-        std::size_t minSize = std::min(laz_files.size(), csv_files.size());
-        // Each thread loads into its own local vector
-        std::vector<std::vector<std::tuple<std::pair<double, double>, FusionVector, FusionVector>>> imuChunks(minSize);
-
-        tbb::parallel_for(
-            tbb::blocked_range<size_t>(0, minSize),
-            [&](const tbb::blocked_range<size_t>& range) {
-                for (size_t i = range.begin(); i < range.end(); ++i)
-                {
-                    imuChunks[i] = load_imu(csv_files[i].c_str(), 0, logger);
-                }
-            });
-
-        // Merge all chunks sequentially at the end
-        for (auto& chunk : imuChunks)
-            imu_data.insert(imu_data.end(), std::make_move_iterator(chunk.begin()), std::make_move_iterator(chunk.end()));
-
-        // Sort once after merging
-        std::sort(imu_data.begin(), imu_data.end(),
-            [](const auto& a, const auto& b) {
-                return std::get<0>(a).first < std::get<0>(b).first;
-            });
-
-        log_info(logger) << "Loading point clouds (" << minSize << " files)..\n";
-        log_info(logger) << "total   - filter = kept\n-----------------------\n";
-
-        pointsPerFile.resize(minSize);
-
-        // --- Working directories
-
-        fs::path wdp = fs::path(working_directory) / "preview";
-        state.paths.working_directory_preview = wdp.string();
-        fs::path wdp_cache = fs::path(working_directory) / "cache";
-        state.paths.working_directory_cache = wdp_cache.string();
-
-        // --- Parallel load of LAZ files
-        tbb::parallel_for(size_t(0), minSize, [&](size_t i)
-            {
-                const std::string& fn = laz_files[i];
-
-                auto data = load_point_cloud(fn.c_str(), true, params.filter_threshold_xy_inner, params.filter_threshold_xy_outer, get_lidar_imu_lever_arm(params), logger);
-
-                std::sort(data.begin(), data.end(), [](const Point3Di& a, const Point3Di& b)
-                    { return a.timestamp < b.timestamp; });
-
-                // Optional calibration validation (first file only)
-                if ((i == 0) && params.save_calibration_validation)
-                    preview.calibration_validation(data, (size_t)params.calibration_validation_points, logger);
-
-                // Store results
-                pointsPerFile[i] = std::move(data);
-            });
-
-        // --- Summary
-        size_t totalPoints = 0;
-        for (const auto& pp : pointsPerFile)
-            totalPoints += pp.size();
-
-        log_info(logger) << "TOTAL: " << totalPoints << "\n..loading finished.\n\n";
-        return true;
-    }
-    else
-    {
-        log_info(logger) << "Not enough files to continue: " << input_file_names.size();
-        return false;
-    }
+    log_info(logger) << "TOTAL: " << totalPoints << "\n..loading finished.\n\n";
+    return true;
 }
 
 void calculate_trajectory(

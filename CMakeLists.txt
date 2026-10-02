@@ -232,6 +232,10 @@ set(SOURCES
   app/disk_point_store.h
   app/folder_preview_sink.cpp
   app/folder_preview_sink.h
+  app/mandeye_recording_source.cpp
+  app/mandeye_recording_source.h
+  app/folder_inputs.cpp
+  app/folder_inputs.h
   app/toml.hpp
   app/toml_io.h
   app/toml_io.cpp

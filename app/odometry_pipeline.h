@@ -3,7 +3,6 @@
 #include "lidar_odometry.h"
 #include "run_reporting.h"
 
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -13,16 +12,19 @@
 //   -> post_process (loop closure if use_loop_closure, then consistency if use_consistency)
 //   -> save (save_result)
 // Each stage is reported to the ProgressReporter (with a pause checkpoint at its start); messages go to
-// the Logger. The config, logger and reporter must outlive the pipeline. The run's data members are public because
+// the Logger. The pipeline owns the run's inputs (recording, point store, preview). The config, logger and
+// reporter must outlive the pipeline. The run's data members are public because
 // the GUI views and edits them (trajectory gizmo, export).
 class OdometryPipeline
 {
 public:
     // initial_paths: the [paths] section loaded with the settings; the run fills in the working folders
-    OdometryPipeline(const OdometryConfig &config, Logger &logger, ProgressReporter &progress, RunPaths initial_paths = {}, bool debug = false);
+    // inputs: from make_folder_inputs; empty inputs make load() fail
+    OdometryPipeline(const OdometryConfig &config, Logger &logger, ProgressReporter &progress, RunInputs inputs = {},
+                     RunPaths initial_paths = {}, bool debug = false);
 
     // reads the recording, estimates the IMU orientation and cuts the windows; false if loading failed
-    bool load(std::vector<std::string> input_file_names);
+    bool load();
     // LiDAR odometry over all windows; false on failure
     bool run_odometry();
     // loop closure and the consistency pass, each only when enabled in the config
@@ -31,6 +33,9 @@ public:
     bool run_all();
     // writes the result folder (session, trajectories, LAZ, parameters TOML, results JSON)
     void save(const fs::path &output_folder, const GuiPreferences &gui, double elapsed_seconds);
+
+    // removes the run's stored points (the GUI at exit)
+    void clear_point_store();
 
     const OdometryConfig &config() const { return *config_; }
 
@@ -45,6 +50,5 @@ private:
     Logger *logger_;
     ProgressReporter *progress_;
     bool debug_;
-    std::unique_ptr<PointStore> point_store_;
-    std::unique_ptr<PreviewSink> preview_;
+    RunInputs inputs_;
 };

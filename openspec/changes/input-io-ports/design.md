@@ -142,7 +142,10 @@ See proposal.md for the motivation. Current state of the input-side I/O:
 - **[Pairing behaviour drifts while moving]:** → Move the code verbatim and cover the branches with the unit tests before switching `load_data` to it.
 - **[`/fp:fast` noise on 44]:** expected. The full run is judged with `--tolerance 1e-6` against `raw data/44_baseline` (decided in step 3). `44_short` must stay identical.
 - **[GUI lifetime]:** `pipeline = OdometryPipeline(...)` now moves owned adapters. `on_exit` calls `pipeline.clear_point_store()`, which does nothing with empty inputs.
-- **[Stale cache from older runs]:** the file names are unchanged and every run rewrites what it reads. No change.
+- **[Stale cache from older runs]:** every run rewrites what it reads. No change.
+- **[GUI exit removed a folder from the settings]** (found during apply): `on_exit` used to `remove_all(state.paths.working_directory_cache)` even when no data was loaded. That path can come from the `[paths]` section of a loaded TOML.
+  → Now `clear_point_store()` removes only the current run's cache, and does nothing before a folder is loaded.
+- **[Existing crash on a failed load]** (found during apply, not changed): the CLI calls `run_all` and `save` even when `load` fails. A folder with fewer than 2 files crashed (segmentation fault) before this change and still does, with the same messages in a different order and no output folder. This is out of scope for a pure refactor; reported to the user.
 
 ## Migration Plan
 

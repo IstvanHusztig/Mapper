@@ -12,6 +12,7 @@
 #include <structures.h>
 
 #include <cstddef>
+#include <memory>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -72,4 +73,14 @@ public:
                               const std::vector<unsigned short> &intensity, const std::vector<double> &timestamps) = 0;
     // where the preview is written (recorded in the outputs as working_directory_preview)
     virtual std::string location() const = 0;
+};
+
+// the input side of one run; all empty if the recording could not be opened
+struct RunInputs
+{
+    std::unique_ptr<RecordingSource> recording;
+    std::unique_ptr<PointStore> points;
+    std::unique_ptr<PreviewSink> preview;
+
+    bool complete() const { return recording && points && preview; }
 };

@@ -262,25 +262,6 @@ void update_rgd(const NDT::GridParameters &rgd_params, NDTBucketMapType &buckets
 void update_rgd_spherical_coordinates(const NDT::GridParameters &rgd_params, NDTBucketMapType &buckets,
                                       std::vector<Point3Di> &points_global, std::vector<Eigen::Vector3d> &points_global_spherical);
 
-//! This function load inertial measurement unit data.
-//! This function expects a file with the following format:
-//! timestamp angular_velocity_x angular_velocity_y angular_velocity_z linear_acceleration_x linear_acceleration_y linear_acceleration_z imu_id
-//! @note imu_id is an optional column, if not present, it is assumed that all data comes from the same IMU.
-//! @param imu_file - path to file with IMU data
-//! @param imuToUse - id number of IMU to use, the same index as in pointcloud return by @ref load_point_cloud
-//! @return vector of tuples (std::pair<timestamp, timestampUnix>, angular_velocity, linear_acceleration)
-std::vector<std::tuple<std::pair<double, double>, FusionVector, FusionVector>> load_imu(const std::string &imu_file, int imuToUse, Logger &logger);
-
-//! This function load point cloud from LAS/LAZ file.
-//! Each point is shifted by the LiDAR-IMU lever arm.
-//! @param lazFile - path to file with point cloud
-//! @param ommit_points_with_timestamp_equals_zero - if true, points with timestamp == 0 will be omited
-//! @param filter_threshold_xy - threshold for filtering points in xy plane
-//! @param lever_arm - LiDAR-IMU lever arm added to each point
-//! @return vector of points of @ref Point3Di type
-std::vector<Point3Di> load_point_cloud(const std::string &lazFile, bool ommit_points_with_timestamp_equals_zero, double filter_threshold_xy_inner, double filter_threshold_xy_outer,
-                                       const Eigen::Vector3d &lever_arm, Logger &logger);
-
 bool save_poses(const std::string file_name, std::vector<Eigen::Affine3d> m_poses, std::vector<std::string> filenames, Logger &logger);
 
 fs::path get_next_result_path(const std::string working_directory);
