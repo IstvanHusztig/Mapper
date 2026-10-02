@@ -23,7 +23,7 @@ cmake --build --preset x64-Release --target lidar_odometry_step_1
 
 ## Testing
 
-- **Unit tests:** `cmake --build --preset x64-Release --target lidar_odometry_tests`, then `ctest --test-dir out/build/x64-Release` (vcvars loaded). Tests live in `tests/` and must run without recorded data or a display. They compile the app sources they need directly (today `app/toml_io.cpp`, `app/console_reporting.cpp`, `app/recording_files.cpp` and `app/disk_point_store.cpp`) and don't link `core`.
+- **Unit tests:** `cmake --build --preset x64-Release --target lidar_odometry_tests`, then `ctest --test-dir out/build/x64-Release` (vcvars loaded). Tests live in `tests/` and must run without recorded data or a display. They compile the app sources they need directly (today `app/toml_io.cpp`, `app/toml_config_repository.cpp`, `app/console_reporting.cpp`, `app/recording_files.cpp` and `app/disk_point_store.cpp`) and don't link `core`.
 - **Golden baseline:** a pure refactor is compared with `tools/compare_baseline.py`:
   - `44_short` must be bit-identical with `tools/baseline/44_short.manifest.json`; check it on every intermediate commit (about 3.5 min).
   - The full 44 runs once per change (about 30 min). It must match `tools/baseline/44.manifest.json`, or else be within `--tolerance 1e-6` of the baseline folder `raw data/44_baseline`. The Release `/fp:fast` build can change the last bits of the long run when unrelated code changes. The datasets are in `C:\Users\User\Downloads\dLidar\raw data\` (`44_short` was made with the `cut_recording` target). Run Release with `settings/lidar-vertical.toml`, and never run two jobs on the same input folder at once (they share its `cache/`). See `tools/README.md`.
@@ -44,7 +44,7 @@ Target architecture (Clean Architecture, layers, ports, migration roadmap) is in
 2. `calculate_trajectory` — IMU-only orientation via Fusion AHRS (NWU/ENU/NED convention flags in params).
 3. `compute_step_1` — cut the data into `WorkerData` windows (points + intermediate trajectory per chunk).
 4. `compute_step_2` (`app/lidar_odometry_utils_optimizers.cpp`) — per-window scan-to-map optimization against an NDT-bucket reference map (`optimize_lidar_odometry`, `optimize_sf*`, `optimize_icp`), optional `Consistency`/`Consistency2` passes (`run_consistency`, run in `post_process` when `use_consistency = true`). Loop closure: `run_loop_closure` (`app/loop_closure.cpp`).
-5. `save_result` (`app/lidar_odometry.cpp`) — write session, trajectories, LAZ, `parameters.toml` and processing-results JSON to the output folder.
+5. `save_result` (`app/lidar_odometry.cpp`) — concatenate the windows into output chunks, place the points and compute the relative trajectories, and hand everything to the `ResultSink`. It does no file I/O.
 
 **Input I/O:** pipeline code has no file names, folders, LASzip calls or CSV parsing on the input side. It uses three ports from `app/input_ports.h`:
 - `RecordingSource` reads the LiDAR + IMU chunk pairs.
@@ -56,7 +56,15 @@ Target architecture (Clean Architecture, layers, ports, migration roadmap) is in
 - `DiskPointStore` (`<folder>/cache/*.cache`, window files numbered from 0);
 - `FolderPreviewSink` (`<folder>/preview`).
 
-The pipeline records the cache and preview folders in `state.paths` from the ports' `location()`. `WorkerData`'s `*_cache_file_name` fields are no longer used; they stay only because `core/src/session.cpp` reads one. The output folder (`save_result`) and the TOML I/O are still direct (roadmap step 4b).
+The pipeline records the cache and preview folders in `state.paths` from the ports' `location()`. `WorkerData`'s `*_cache_file_name` fields are no longer used; they stay only because `core/src/session.cpp` reads one. **Output I/O and settings:** two ports from `app/output_ports.h`:
+- `ResultSink` receives a finished run in a fixed order: point sizes, each chunk's cloud and `TrajectoryRow`s, the merged cloud, chunk poses, index poses, the `SessionSummary`, the parameters and the processing results.
+- `ConfigRepository` loads and saves `OdometryConfig` + `RunPaths` + `GuiPreferences` by location.
+
+Their adapters:
+- `FolderResultSink` (`app/folder_result_sink.{h,cpp}`) holds every output file name and format: the LAZ files and the merged LAZ writer, the trajectory CSV, `.mri`/`.mrp`, `index_poses.json`, `session.mjs`, and the parameters TOML (written through its `ConfigRepository`), plus the results JSON. It also has `get_next_result_path` (the GUI's `lio_result_<n>`).
+- `TomlConfigRepository` (`app/toml_config_repository.{h,cpp}`) wraps `TomlIO`.
+
+`OdometryPipeline::save(ResultSink&, gui, elapsed)` writes a run. The CLI builds a `FolderResultSink` on `argv[3]`, and the GUI builds one on the next `lio_result_<n>`. The CLI, the GUI defaults and Load/Save parameters load and save settings only through `TomlConfigRepository`; `TomlIO` is used only inside it.
 
 **Reporting:** pipeline code never writes to the console and has no progress atomics or sleeps. It uses two ports from `app/run_reporting.h`, passed in explicitly:
 - `Logger` for messages: `log_info(logger) << ...`, also `log_debug`, `log_warning`, `log_error`. Each message has its own stream, so it sets its own precision.
@@ -73,7 +81,7 @@ Logging is console only; nothing is written to the output folder.
 - `OdometryState` holds what a run produces: the NDT maps, `m_g`, the initial and reference points, the trajectory length, and `RunPaths` (the `[paths]` keys plus the cache folder). Functions that change it take it explicitly.
 - `GuiPreferences` holds GUI-only values (`clear_color`, saved in `[misc]`).
 
-GUI defaults are loaded by `set_lidar_odometry_default_params` (in `lidar_odometry_gui.cpp`) from `default_settings.toml` next to the exe; the CLI doesn't load it. TOML I/O (`app/toml_io.h`) is table-driven and takes `(OdometryConfig, RunPaths, GuiPreferences)`. To make a new setting loadable and savable, add it to both `TomlIO::POINTERS` (name → `OdometryConfig` member pointer; only bool/double/int/string supported) and the right `CATEGORIES` section, then regenerate the golden TOML test files (`LO_UPDATE_GOLDEN=1`, in their own commit). `app/default_settings.toml` is the shipped config.
+GUI defaults are loaded by `set_lidar_odometry_default_params` (in `lidar_odometry_gui.cpp`) from `default_settings.toml` next to the exe; the CLI doesn't load it. TOML I/O (`app/toml_io.h`, used only by `TomlConfigRepository`) is table-driven and takes `(OdometryConfig, RunPaths, GuiPreferences)`. To make a new setting loadable and savable, add it to both `TomlIO::POINTERS` (name → `OdometryConfig` member pointer; only bool/double/int/string supported) and the right `CATEGORIES` section, then regenerate the golden TOML test files (`LO_UPDATE_GOLDEN=1`, in their own commit). `app/default_settings.toml` is the shipped config.
 
 **IMU rotation prior and gyro bias** (in `optimize_lidar_odometry` / `compute_step_2`, all on by default):
 - `[motion_model_uncertainty]`: `use_time_scaled_rotation_sigma` replaces the constant `*_om/fi/ka_1_sigma_deg` with `max(rotation_sigma_inflation_k * gyro_arw_{x,y,z}_deg_sqrt_s * sqrt(dt), rotation_sigma_floor_deg)` per consecutive-node edge.

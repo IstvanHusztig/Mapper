@@ -1,7 +1,7 @@
 # Architecture goals
 
 Status: **in progress.** This is the target architecture for `lidar_odometry_step_1` and the
-plan for getting there. Each migration step is its own OpenSpec change; steps 0–3 and 4a are done (see
+plan for getting there. Each migration step is its own OpenSpec change; steps 0–4 are done (see
 the roadmap).
 
 ## Why
@@ -47,8 +47,8 @@ infrastructure and UI at the edge, and all source dependencies pointing inward.
   `*_cache_file_name` fields in `WorkerData`. ✅ step 4a
 - `PreviewSink`: preview output during a run (`calibrationValidation.asc`,
   `temp_point_cloud_<i>.laz`). ✅ step 4a
-- `ConfigRepository`: loads and saves `OdometryConfig` (TOML today).
-- `ResultSink`: session, trajectories, LAZ, `parameters.toml`, processing-results JSON.
+- `ConfigRepository`: loads and saves `OdometryConfig` (TOML today). ✅ step 4b
+- `ResultSink`: session, trajectories, LAZ, `parameters.toml`, processing-results JSON. ✅ step 4b
 - `ProgressReporter` / `Logger`: replace `std::cout` (about 100 calls in the pipeline) and the
   `std::atomic<float>` progress and pause flags.
 - `OrientationEstimator`: AHRS (Fusion) behind an interface.
@@ -119,7 +119,10 @@ Each step is one OpenSpec change, validated against the baseline.
      (`app/input_ports.h`) with the adapters `MandeyeFolderSource`, `DiskPointStore` and
      `FolderPreviewSink`. The pipeline owns them (`RunInputs`, `make_folder_inputs`). The pairing
      rules and the point store have unit tests.
-   - 4b. **Output side:** `ResultSink` (the output folder) and `ConfigRepository` (TOML).
+   - 4b. ✅ **Output side** (done 2026-10-02): `ResultSink` and `ConfigRepository`
+     (`app/output_ports.h`) with the adapters `FolderResultSink` (every output file name and
+     format) and `TomlConfigRepository`. `save_result` keeps only the computation, and the CLI and
+     GUI change settings only through the repository.
 5. **Domain model:** `Window`, `Trajectory`, `GyroBiasState`; option structs for the optimizer.
 6. **Split the optimizer file** into domain services; first unit tests on synthetic data.
 7. **Layered CMake targets and folders;** move the `core/` pieces touched so far.

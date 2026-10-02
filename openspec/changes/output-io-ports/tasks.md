@@ -71,10 +71,10 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
 
   Then I verify:
   - the result is IDENTICAL with the `44_short` manifest;
-  - the saved TOML equals one saved by the previous build (apart from the build date line), using `settings/lidar-vertical.toml` loaded the same way.
-- [ ] 5.3 Docs:
+  - the saved TOML equals the `HDMapping_params_*.toml` of that run's result folder. Both are written by `TomlConfigRepository` from the same settings and paths. (Changed during apply: the result TOML is already checked byte for byte against the baseline, so it is the reference; an older build isn't needed.)
+- [x] 5.3 Docs:
   - `CLAUDE.md` Architecture: the output ports and adapters, `save_result`'s role, settings through `ConfigRepository`. Testing: the new test source.
   - `docs/ARCHITECTURE.md`: mark roadmap step 4b done and update §3 Ports.
 
   Commit.
-- [ ] 5.4 Run `openspec validate output-io-ports --strict` and confirm it passes.
+- [x] 5.4 Run `openspec validate output-io-ports --strict` and confirm it passes.
