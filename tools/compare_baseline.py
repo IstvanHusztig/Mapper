@@ -7,6 +7,14 @@ Files are compared bit for bit after normalizing only the values that change fro
 
     python tools/compare_baseline.py <new_out> <baseline_dir | manifest.json>
     python tools/compare_baseline.py --write-manifest <out_dir> <manifest.json> --dataset 44 --params settings/lidar-vertical.toml
+    python tools/compare_baseline.py --tolerance 1e-6 <new_out> <baseline_dir>
+
+--tolerance (needs a baseline folder, not a manifest) accepts text files that differ only in numbers
+within the given absolute tolerance: trajectories, session, poses, JSON, TOML. Integers must still match
+exactly. LAZ files can't be compared point by point here; a differing LAZ is reported as derived (its points
+are the raw points placed with the trajectory) and passes only if every text file passes. Exit code 0 then
+means "identical or within tolerance". It is meant for the full 44 run, where /fp:fast builds can change
+the last bits of a result when unrelated code changes; 44_short stays bit-identical.
 """
 
 import argparse
@@ -116,6 +124,63 @@ def compare(new_hashes, ref_hashes):
     return lines
 
 
+NUMBER = re.compile(r"[-+]?(?:\d+\.\d*|\.\d+|\d+)(?:[eE][-+]?\d+)?")
+BINARY_FILE = re.compile(r"\.(laz|las)$", re.I)
+
+
+def normalized_content(folder, name, out_prefix, in_prefix):
+    with open(os.path.join(folder, name), "rb") as f:
+        data = f.read()
+    if TEXT_FILE.match(name):
+        data = normalize_text(name, data, out_prefix, in_prefix)
+    return data.decode("utf-8")
+
+
+def compare_numbers(new_text, ref_text, tolerance):
+    """(None, max |difference|) if the texts differ only in numbers within tolerance, else (reason, None)."""
+    new_parts, ref_parts = NUMBER.split(new_text), NUMBER.split(ref_text)
+    new_nums, ref_nums = NUMBER.findall(new_text), NUMBER.findall(ref_text)
+    if new_parts != ref_parts or len(new_nums) != len(ref_nums):
+        return "text other than numbers differs", None
+    worst = 0.0
+    for i, (a, b) in enumerate(zip(new_nums, ref_nums)):
+        if a == b:
+            continue
+        if re.fullmatch(r"[-+]?\d+", a) and re.fullmatch(r"[-+]?\d+", b):
+            return "integer %s != %s (number %d)" % (a, b, i + 1), None
+        d = abs(float(a) - float(b))
+        if d > tolerance:
+            return "%s vs %s (|difference| %.3g, number %d)" % (a, b, d, i + 1), None
+        worst = max(worst, d)
+    return None, worst
+
+
+def compare_with_tolerance(new_dir, ref_dir, lines, tolerance):
+    """Re-checks the files listed as different; returns the report lines and whether all of them pass."""
+    new_prefixes, ref_prefixes = find_prefixes(new_dir), find_prefixes(ref_dir)
+    new_names = {normalized_name(n): n for n in os.listdir(new_dir)}
+    ref_names = {normalized_name(n): n for n in os.listdir(ref_dir)}
+    report, ok, derived = [], True, []
+    for line in lines:
+        kind, name = line.split(None, 1)
+        if kind != "different":
+            report.append(line)
+            ok = False
+        elif BINARY_FILE.search(name):
+            derived.append(name)
+        else:
+            reason, worst = compare_numbers(normalized_content(new_dir, new_names[name], *new_prefixes),
+                                            normalized_content(ref_dir, ref_names[name], *ref_prefixes), tolerance)
+            if reason:
+                report.append("different  %s: %s" % (name, reason))
+                ok = False
+            else:
+                report.append("tolerance  %s (max |difference| %.3g)" % (name, worst))
+    for name in derived:
+        report.append("derived    %s (LAZ, not compared point by point)" % name)
+    return report, ok
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("new", help="output folder to check (or to write the manifest from)")
@@ -125,6 +190,8 @@ def main():
     ap.add_argument("--params", default="", help="parameter file recorded in the manifest")
     ap.add_argument("--cpu-optimization", default="AUTO", help="HD_CPU_OPTIMIZATION of the build, recorded in the manifest")
     ap.add_argument("--verbose", action="store_true", help="print the normalized fields and every file")
+    ap.add_argument("--tolerance", type=float, default=None,
+                    help="accept numbers in text files that differ by at most this much (needs a baseline folder)")
     args = ap.parse_args()
 
     if not os.path.isdir(args.new):
@@ -163,6 +230,20 @@ def main():
     if args.verbose:
         for name in sorted(new_hashes):
             print("  %s  %s" % (new_hashes[name][:12], name))
+    if lines and args.tolerance is not None:
+        if not os.path.isdir(args.reference):
+            print("error: --tolerance needs a baseline folder, not a manifest", file=sys.stderr)
+            return 2
+        report, ok = compare_with_tolerance(args.new, args.reference, lines, args.tolerance)
+        for line in report:
+            print(line)
+        total = len(set(new_hashes) | set(ref_hashes))
+        if ok:
+            print("WITHIN TOLERANCE %g: %d of %d files identical, the rest within tolerance or derived"
+                  % (args.tolerance, total - len(lines), total))
+            return 0
+        print("DIFFERENT: beyond tolerance %g" % args.tolerance)
+        return 1
     for line in lines:
         print(line)
     if lines:

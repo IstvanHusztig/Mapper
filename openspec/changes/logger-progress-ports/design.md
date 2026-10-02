@@ -43,7 +43,7 @@ See proposal.md for the motivation. Current state:
 
 **Goals:**
 - The pipeline functions listed above reach the console only through a `Logger`, and report stage, progress and pause only through a `ProgressReporter`.
-- Output files bit-identical, console wording kept.
+- Output files bit-identical on `44_short` and within 1e-6 on `44` (see Risks), console wording kept.
 - A visible "Loading" stage in the one-click GUI flow.
 
 **Non-Goals:**
@@ -135,6 +135,8 @@ See proposal.md for the motivation. Current state:
   → Accepted until step 5 (option structs).
 - **[Thread and GUI lifetime]:** the worker thread uses the global `GuiProgress` and `ConsoleReporter`.
   → Both are file-scope globals that outlive the detached thread, like `pipeline` does today.
+- **[/fp:fast makes the full run unstable at the last bit]:** found when the full 44 was run (task 5.1). With only console output changed, the trajectories moved by at most 1e-9 m and 30 of 35 files differed, while `44_short` stayed identical. The Release build uses `/fp:fast` with `/GL`, so the compiler may evaluate floating-point expressions in another order when nearby code changes. The diff has no computational change: besides log lines it only adds signature parameters and replaces the pause loops with checkpoints.
+  → The user chose a tolerance for 44: `compare_baseline.py --tolerance 1e-6` against the baseline folder. `44_short` stays bit-identical. Differing LAZ files are reported as derived. This is recorded in `docs/ARCHITECTURE.md` (Decisions) and in the `regression-baseline` delta.
 - **[Console diffs]:**
   - the extra `[stage]` lines;
   - default precision where the sticky `setprecision(10)` used to apply.

@@ -32,7 +32,7 @@ This blocks roadmap step 3 in `docs/ARCHITECTURE.md`. The application layer can'
   - Pause and Resume keep working, through a GUI `ProgressReporter` adapter that blocks at the checkpoint while paused.
   - In the simple one-click flow, loading moves onto the worker thread, so the window is visible (showing "Loading") while the data loads. The folder dialog stays on the main thread.
 - **Logging stays on the console only.** No log file is written to the output folder.
-- **The output files don't change:** the CLI output stays bit-identical to the `44_short` and `44` baselines. Console messages keep their wording. The console differs in two ways: there is one new `[stage] <name>` line per stage, and a precision set by one message no longer carries over to later ones.
+- **The output files don't change:** the CLI output stays bit-identical to the `44_short` baseline, and within 1e-6 of the `44` baseline. (The `/fp:fast` Release build may change the last bits of the long run when unrelated code changes; see the `regression-baseline` delta.) Console messages keep their wording. The console differs in two ways: there is one new `[stage] <name>` line per stage, and a precision set by one message no longer carries over to later ones.
 
 ## Capabilities
 
@@ -43,7 +43,7 @@ This blocks roadmap step 3 in `docs/ARCHITECTURE.md`. The application layer can'
   - Progress and log output never change the result files.
 
 ### Modified Capabilities
-- None. The `processing-pipeline` requirements (one sequence, GUI = CLI, settings sources) are unchanged.
+- `regression-baseline`: the full dataset may pass within a numeric tolerance (`compare_baseline.py --tolerance`), because `/fp:fast` builds are not bit-stable when unrelated code changes. `44_short` stays bit-identical. The `processing-pipeline` requirements are unchanged.
 
 ## Impact
 

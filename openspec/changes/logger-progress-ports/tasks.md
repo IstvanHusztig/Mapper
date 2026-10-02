@@ -82,7 +82,8 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
 
 ## 5. Integration
 
-- [ ] 5.1 Full 44 (background): verify IDENTICAL with `tools/baseline/44.manifest.json`.
+- [x] 5.1 Full 44 (background): verify IDENTICAL with `tools/baseline/44.manifest.json`. Result: DIFFERENT, 30 of 35 files, max 1e-9 (`/fp:fast`, see design Risks); the user chose a tolerance for 44.
+- [x] 5.1a Add `--tolerance` to `tools/compare_baseline.py` (numeric comparison of text outputs against the baseline folder; LAZ reported as derived). Document it in `tools/README.md`, `CLAUDE.md` and `docs/ARCHITECTURE.md` (Decisions). Verify that the 44 result passes at 1e-6 and fails at 1e-12.
 - [ ] 5.2 GUI check, **done by the user**:
   - start the Release GUI and load `settings/lidar-vertical.toml`;
   - open `44_short` with the one-click flow and check that the progress window shows Loading → Odometry (%) → Loop closure (if enabled) → Saving;

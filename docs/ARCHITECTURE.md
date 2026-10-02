@@ -26,8 +26,8 @@ infrastructure and UI at the edge, and all source dependencies pointing inward.
   consistency) can run in a unit test on synthetic data, without disk or GUI.
 - **One pipeline, two front ends:** CLI and GUI call the same use case; no globals are shared
   between them.
-- **Results don't change by accident:** each refactor step must reproduce the golden baseline on
-  `raw data/44` bit for bit (see Decisions).
+- **Results don't change by accident:** each refactor step must reproduce the golden baseline:
+  `44_short` bit for bit, the full `raw data/44` within 1e-6 (see Decisions).
 - **Incremental, never a rewrite:** strangler-style; the app builds and runs after every step.
 
 ## 2. Layers (inside → outside)
@@ -136,10 +136,15 @@ Each step is one OpenSpec change, validated against the baseline.
 - **Short cut for intermediate checks.** `44_short` (the first 30 s of 44, about 3–4 min to
   process) has its own manifest and checks every intermediate commit. The full 44 (about 30 min)
   runs once at the end of each change, because only it exercises loop closure.
-- **Refactors must be bit-identical.** A pure refactor step must reproduce the baseline output
-  exactly (trajectories, LAZ, results JSON apart from timing fields). This relies on
-  `useMultithread = false` keeping the run deterministic. Only a change that deliberately alters
-  numerical behaviour may use a tolerance, and it then sets a new baseline in its own commit.
+- **Refactors must be bit-identical on `44_short`.** A pure refactor step must reproduce the
+  `44_short` baseline exactly (trajectories, LAZ, results JSON apart from timing fields). This
+  relies on `useMultithread = false` keeping the run deterministic.
+- **The full 44 may differ within 1e-6.** The Release build on this machine uses `/fp:fast` with
+  whole-program optimization, so a change to unrelated code can change floating-point evaluation
+  order and the last bits of the 30-minute run (seen in step 3: at most 1e-9 m). A refactor
+  passes on 44 if every text output is within `--tolerance 1e-6` of the baseline folder (decided
+  2026-10-02). A change that deliberately alters numerical behaviour sets a new baseline in its
+  own commit.
 - **Domain names in code.** Use cases are `SplitIntoWindows`, `RunOdometry`, `CloseLoops` and so
   on. "Step 1" and "Step 2" remain only as GUI labels and in the user docs.
 

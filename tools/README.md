@@ -65,7 +65,7 @@ The default output is `<result_folder>/scan_lio_merged.laz`. Set `CLOUDCOMPARE` 
 
 ## Regression baseline (compare_baseline.py, cut_recording)
 
-Refactors must reproduce the output of the reference dataset bit for bit (see `docs/ARCHITECTURE.md`). Two reference datasets live next to the raw data, outside git:
+Refactors must reproduce `44_short` bit for bit, and the full 44 within a tolerance of 1e-6 (see `docs/ARCHITECTURE.md`). Two reference datasets live next to the raw data, outside git:
 
 | dataset | what | run time (Release) | manifest |
 |---|---|---|---|
@@ -78,6 +78,14 @@ Workflow: check **every intermediate commit on `44_short`**, and run the **full 
 out/build/x64-Release/bin/lidar_odometry_step_1.exe "<raw data>/44_short" settings/lidar-vertical.toml "<raw data>/44_short_check"
 python tools/compare_baseline.py "<raw data>/44_short_check" tools/baseline/44_short.manifest.json
 ```
+
+The full 44 is checked against the manifest first. If that reports differences, check it again with `--tolerance 1e-6` against the baseline output folder `raw data/44_baseline`, which must be kept for this:
+
+```
+python tools/compare_baseline.py --tolerance 1e-6 "<raw data>/44_check" "<raw data>/44_baseline"
+```
+
+Why the tolerance: the Release build with `HD_CPU_OPTIMIZATION=AUTO` on an AMD CPU uses `/fp:fast` with whole-program optimization. The compiler may then evaluate floating-point expressions in a different order when unrelated code changes, which changes the last bits of a long run. In step 3 (`logger-progress-ports`), changing only console output moved the 44 trajectories by at most 1e-9, while `44_short` stayed identical.
 
 ### compare_baseline.py
 
@@ -95,6 +103,7 @@ python tools/compare_baseline.py --write-manifest <out_dir> <manifest.json> --da
 
   Everything else, including every LAZ and trajectory byte, must match.
 - It prints one line per `different`, `missing` or `extra` file. Exit code: 0 identical, 1 different, 2 usage or input error.
+- `--tolerance <abs>` (needs a baseline folder) re-checks each differing text file (trajectories, session, poses, JSON, TOML) number by number. Text outside the numbers must match, integers must match exactly, and other numbers may differ by at most `<abs>`. It prints `tolerance <file> (max |difference| …)` for each accepted file. A differing LAZ can't be read here; it is listed as `derived` (its points are the raw points placed with the trajectory) and passes only if every text file passes. Exit code 0 then means identical or within tolerance.
 - `--write-manifest` records the dataset, parameter file, commit and `HD_CPU_OPTIMIZATION` (`--cpu-optimization`, default `AUTO`). Only write a new manifest for a change that deliberately alters the numbers, and do it in that change's own commit.
 
 ### cut_recording

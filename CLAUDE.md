@@ -24,7 +24,9 @@ cmake --build --preset x64-Release --target lidar_odometry_step_1
 ## Testing
 
 - **Unit tests:** `cmake --build --preset x64-Release --target lidar_odometry_tests`, then `ctest --test-dir out/build/x64-Release` (vcvars loaded). Tests live in `tests/` and must run without recorded data or a display. They compile the app sources they need directly (today `app/toml_io.cpp` and `app/console_reporting.cpp`) and don't link `core`.
-- **Golden baseline:** a pure refactor must reproduce the reference output bit for bit, compared with `tools/compare_baseline.py` against `tools/baseline/44_short.manifest.json` (every intermediate commit, about 3.5 min) and `tools/baseline/44.manifest.json` (once per change, about 30 min). The datasets are in `C:\Users\User\Downloads\dLidar\raw data\` (`44_short` was made with the `cut_recording` target). Run Release with `settings/lidar-vertical.toml`, and never run two jobs on the same input folder at once (they share its `cache/`). See `tools/README.md`.
+- **Golden baseline:** a pure refactor is compared with `tools/compare_baseline.py`:
+  - `44_short` must be bit-identical with `tools/baseline/44_short.manifest.json`; check it on every intermediate commit (about 3.5 min).
+  - The full 44 runs once per change (about 30 min). It must match `tools/baseline/44.manifest.json`, or else be within `--tolerance 1e-6` of the baseline folder `raw data/44_baseline`. The Release `/fp:fast` build can change the last bits of the long run when unrelated code changes. The datasets are in `C:\Users\User\Downloads\dLidar\raw data\` (`44_short` was made with the `cut_recording` target). Run Release with `settings/lidar-vertical.toml`, and never run two jobs on the same input folder at once (they share its `cache/`). See `tools/README.md`.
 
 ## Run
 
