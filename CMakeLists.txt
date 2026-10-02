@@ -222,6 +222,9 @@ set(SOURCES
   app/loop_closure.h
   app/odometry_pipeline.cpp
   app/odometry_pipeline.h
+  app/run_reporting.h
+  app/console_reporting.cpp
+  app/console_reporting.h
   app/toml.hpp
   app/toml_io.h
   app/toml_io.cpp

@@ -4,19 +4,19 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
 
 ## 1. Ports and the console adapter
 
-- [ ] 1.1 Add `app/run_reporting.h`:
+- [x] 1.1 Add `app/run_reporting.h`:
   - `LogLevel`, `Logger`, `RunStage` and `ProgressReporter` (design decision 1);
   - the `LogMessage` builder with `log_debug/info/warning/error(logger)` (design decision 2).
 
   Verify it compiles in the tests target without Eigen or any app header.
-- [ ] 1.2 Add `app/console_reporting.{h,cpp}` with `ConsoleReporter` (design decision 4):
+- [x] 1.2 Add `app/console_reporting.{h,cpp}` with `ConsoleReporter` (design decision 4):
   - one mutex;
   - stdout for Debug/Info, stderr for Warning/Error;
   - `[stage] <name>` lines;
   - the in-place `running iterations: i/n` counter during Loading, closed before any log line and at the next stage.
 
   Add it to `SOURCES` in `CMakeLists.txt`; verify both presets build.
-- [ ] 1.3 Add `tests/run_reporting_test.cpp` and compile `app/console_reporting.cpp` into `lidar_odometry_tests`. Cover:
+- [x] 1.3 Add `tests/run_reporting_test.cpp` and compile `app/console_reporting.cpp` into `lidar_odometry_tests`. Cover:
   - `LogMessage` makes one write per message, with no trailing newline;
   - level → stream routing;
   - 8 threads × 1000 lines all come out whole;
