@@ -1,6 +1,6 @@
 # Architecture goals
 
-Status: **in progress.** This is the target architecture for `lidar_odometry_step_1` and the
+Status: **in progress.** This is the target architecture for dMapper (`dMapper.exe`) and the
 plan for getting there. Each migration step is its own OpenSpec change; steps 0–4 are done (see
 the roadmap).
 
@@ -84,7 +84,7 @@ src/domain/          -> lib  lo_domain          (Eigen, manif, observation_equat
 src/application/     -> lib  lo_application     (lo_domain)
 src/infrastructure/  -> lib  lo_infrastructure  (lo_application, LASzip, TBB, Fusion, toml, json)
 src/presentation/cli, src/presentation/gui
-src/main.cpp         -> exe  lidar_odometry_step_1
+src/main.cpp         -> exe  dMapper
 tests/               -> unit tests on lo_domain / lo_application
 ```
 
@@ -119,7 +119,7 @@ Each step is one OpenSpec change, validated against the baseline.
    console.
 4. **I/O ports**, split into two changes:
    - 4a. ✅ **Input side** (done 2026-10-02): `RecordingSource`, `PointStore` and `PreviewSink`
-     (`app/input_ports.h`) with the adapters `MandeyeFolderSource`, `DiskPointStore` and
+     (`app/input_ports.h`) with the adapters `RecordingFolderSource`, `DiskPointStore` and
      `FolderPreviewSink`. The pipeline owns them (`RunInputs`, `make_folder_inputs`). The pairing
      rules and the point store have unit tests.
    - 4b. ✅ **Output side** (done 2026-10-02): `ResultSink` and `ConfigRepository`

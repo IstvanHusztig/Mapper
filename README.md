@@ -1,6 +1,6 @@
-# Mapper — LiDAR + IMU odometry (lidar_odometry_step_1)
+# dMapper — LiDAR + IMU mapping
 
-A standalone build of the `lidar_odometry_step_1` application from [HDMapping](https://github.com/MapsHD/HDMapping), tuned for a handheld **Unitree L2** recorded with **dLidar** (caves and outdoors). It turns a folder of LiDAR point clouds (`.laz`) and IMU samples (`.csv`) into a motion-compensated point cloud and a trajectory.
+dMapper started as a standalone build of the LiDAR odometry (step 1) application from [HDMapping](https://github.com/MapsHD/HDMapping), tuned for a handheld **Unitree L2** recorded with **dLidar** (caves and outdoors). It turns a folder of LiDAR point clouds (`.laz`) and IMU samples (`.csv`) into a motion-compensated point cloud and a trajectory.
 
 **Full documentation:** open [`docs/index.html`](docs/index.html) in a browser. It covers the processing pipeline step by step and every parameter of `settings/lidar-vertical.toml`.
 
@@ -14,15 +14,15 @@ Requires CMake ≥ 4.0 and a C++20 compiler. All dependencies are vendored in `3
 
 ```
 cmake --preset x64-Release
-cmake --build --preset x64-Release --target lidar_odometry_step_1
+cmake --build --preset x64-Release --target dMapper
 ```
 
-The executable is written to `out/build/x64-Release/bin/lidar_odometry_step_1.exe` (or `out/build/x64-Debug/bin/...`).
+The executable is written to `out/build/x64-Release/bin/dMapper.exe` (or `out/build/x64-Debug/bin/...`).
 
 ## Run
 
 ```
-lidar_odometry_step_1 <input_folder> settings/lidar-vertical.toml <output_folder>
+dMapper <input_folder> settings/lidar-vertical.toml <output_folder>
 ```
 
 - `<input_folder>`: one recording. The files `lidar*.laz` and `imu*.csv` are required; other files are ignored. The folder is scanned non-recursively, and **every** `.csv` in it is read as IMU data, so keep other CSV files out of it.

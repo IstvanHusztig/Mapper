@@ -35,7 +35,7 @@ Every code commit: both presets build `dMapper` (before task 1.1: `lidar_odometr
 
 ## 4. Docs
 
-- [ ] 4.1 Use the name dMapper and the command `dMapper <input_folder> <params.toml> <output_folder>` in:
+- [x] 4.1 Use the name dMapper and the command `dMapper <input_folder> <params.toml> <output_folder>` in:
   - `README.md` (title and build/run lines; the HDMapping attribution stays);
   - `CLAUDE.md` (What this is, Build, Run, Architecture: `RecordingFolderSource`, no "Mandeye-style");
   - `tools/README.md`;
@@ -45,7 +45,7 @@ Every code commit: both presets build `dMapper` (before task 1.1: `lidar_odometr
 
   Edit the Purpose of `openspec/specs/recording-cut/spec.md` to say "recording folder (lidar*.laz + imu*.csv)".
 
-  Verify that a grep for `lidar_odometry_step_1` outside `openspec/changes/archive/` finds nothing. Commit.
+  Verify that a grep for `lidar_odometry_step_1` outside `openspec/changes/` finds nothing. Commit. (Result: only `openspec/specs/regression-baseline/spec.md` remains, which this change's delta updates on archive.)
 
 ## 5. Integration
 

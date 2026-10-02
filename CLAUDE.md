@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A standalone extraction of the `lidar_odometry_step_1` application from the HDMapping (hd-mapping) repository. It is a C++20 CMake project that builds a single executable, `lidar_odometry_step_1`, which computes LiDAR+IMU odometry from a folder of Mandeye-style recordings. All dependencies are vendored under `3rdparty/` (Eigen, freeglut, glew-cmake, LASzip, oneTBB, Fusion AHRS, imgui/ImGuizmo/implot, manif, nlohmann json, observation_equations, portable-file-dialogs) — no package manager, no network needed. Only OpenGL/GLU must come from the system.
+dMapper started as a standalone extraction of the LiDAR odometry (step 1) application of the HDMapping (hd-mapping) repository. It is a C++20 CMake project that builds a single executable, `dMapper`, which computes LiDAR+IMU odometry from a recording folder (lidar*.laz + imu*.csv). All dependencies are vendored under `3rdparty/` (Eigen, freeglut, glew-cmake, LASzip, oneTBB, Fusion AHRS, imgui/ImGuizmo/implot, manif, nlohmann json, observation_equations, portable-file-dialogs) — no package manager, no network needed. Only OpenGL/GLU must come from the system.
 
 There are no linters or CI. Unit tests use doctest (`3rdparty/doctest`), and refactors are checked against a golden baseline (see Testing).
 
@@ -14,10 +14,10 @@ Requires CMake >= 4.0. `CMakePresets.json` defines exactly two configurations, `
 
 ```
 cmake --preset x64-Release
-cmake --build --preset x64-Release --target lidar_odometry_step_1
+cmake --build --preset x64-Release --target dMapper
 ```
 
-- Output: `out/build/<preset>/bin/lidar_odometry_step_1.exe`. On Windows, runtime DLLs (TBB etc.) and `app/default_settings.toml` are copied next to the exe post-build. Debug is unoptimized and many times slower; always process data with Release.
+- Output: `out/build/<preset>/bin/dMapper.exe` (the name is `APP_NAME` in `CMakeLists.txt`). On Windows, runtime DLLs (TBB etc.) and `app/default_settings.toml` are copied next to the exe post-build. Debug is unoptimized and many times slower; always process data with Release.
 - `-DHD_CPU_OPTIMIZATION=AUTO|INTEL|AMD|ARM|GENERIC` selects release optimization flags (AMD on MSVC adds `/fp:fast`).
 - The version (`HDMAPPING_VERSION_MAJOR/MINOR/PATCH`) is defined in the root `CMakeLists.txt`; `shared/include/HDMapping/Version.hpp` errors if it's missing.
 
@@ -30,8 +30,8 @@ cmake --build --preset x64-Release --target lidar_odometry_step_1
 
 ## Run
 
-- **Headless / CLI:** `lidar_odometry_step_1 <input_folder> <params.toml> <output_folder>`. Exactly 3 args triggers batch mode. The settings are the built-in defaults plus `<params.toml>` only, never a `default_settings.toml` from the working directory; an unreadable TOML exits 1.
-- **GUI:** any other argument count opens the freeglut + ImGui window. The menu bar has Start, View, Camera and Info:
+- **Headless / CLI:** `dMapper <input_folder> <params.toml> <output_folder>`. Exactly 3 args triggers batch mode. The settings are the built-in defaults plus `<params.toml>` only, never a `default_settings.toml` from the working directory; an unreadable TOML exits 1.
+- **GUI:** any other argument count opens the freeglut + ImGui window, titled "dMapper". The menu bar has Start, View, Camera and Info:
   - **Start → 1. Load parameters…** loads a TOML. This is the only way to change settings in the GUI; at start-up it loads `default_settings.toml` from the exe folder. The Start menu and the progress window show the active parameter file.
   - **Start → 2. Load data and process…** (Ctrl+O) picks the recording folder, then loads it on a worker thread, processes it with the same stages as the CLI, and saves `lio_result_<n>`. For the same input and settings the result is identical to the CLI's.
   - **View** has Show trajectory, compass/ruler and Lock Z; **Camera** has the fixed views and orthographic projection.
@@ -58,7 +58,7 @@ Target architecture (Clean Architecture, layers, ports, migration roadmap) is in
 - `PreviewSink` writes `calibrationValidation.asc` and `temp_point_cloud_<i>.laz`.
 
 `OdometryPipeline` owns them as `RunInputs`, built by `make_folder_inputs(files, logger)` (`app/folder_inputs.cpp`) for a recording folder. There is one adapter for each port:
-- `MandeyeFolderSource` (`app/mandeye_recording_source.{h,cpp}`, which also holds `load_imu` and `load_point_cloud`);
+- `RecordingFolderSource` (`app/recording_folder_source.{h,cpp}`, which also holds `load_imu` and `load_point_cloud`);
 - `DiskPointStore` (`<folder>/cache/*.cache`, window files numbered from 0);
 - `FolderPreviewSink` (`<folder>/preview`).
 

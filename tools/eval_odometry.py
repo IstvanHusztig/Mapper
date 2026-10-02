@@ -1,4 +1,4 @@
-"""Quality metrics for lidar_odometry_step_1 results (pure Python, no numpy).
+"""Quality metrics for dMapper results (pure Python, no numpy).
 
 Usage:
   python tools/eval_odometry.py <dataset_folder> <result_folder> [<result_folder> ...]

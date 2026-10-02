@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Cuts a time range out of a Mandeye-style recording (LAZ point clouds plus IMU CSV) into a new
+Cuts a time range out of a recording folder (lidar*.laz point clouds plus imu*.csv IMU data) into a new
 input folder without altering the kept data, so short reference datasets can be made for fast
 regression checks.
 

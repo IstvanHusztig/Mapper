@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare a lidar_odometry_step_1 output folder against a golden baseline.
+"""Compare a dMapper output folder against a golden baseline.
 
 The baseline is either another output folder or a manifest written with --write-manifest.
 Files are compared bit for bit after normalizing only the values that change from run to run

@@ -2,7 +2,7 @@
 
 ## eval_odometry.py
 
-Quality metrics for `lidar_odometry_step_1` results. Pure Python 3, with no extra packages.
+Quality metrics for dMapper results. Pure Python 3, with no extra packages.
 
 ### 1. Export the point cloud to ASCII (optional, needed for the cell metrics and PNG)
 
@@ -75,7 +75,7 @@ Refactors must reproduce `44_short` bit for bit, and the full 44 within a tolera
 Workflow: check **every intermediate commit on `44_short`**, and run the **full 44 once at the end of each change** (only the full recording exercises loop closure). Always run with the Release build and `settings/lidar-vertical.toml`, into a new output folder outside the input folder. Never run two jobs on the same input folder at the same time: they share its `cache/`. A stale `cache/` from an older build is harmless (every run rewrites it).
 
 ```
-out/build/x64-Release/bin/lidar_odometry_step_1.exe "<raw data>/44_short" settings/lidar-vertical.toml "<raw data>/44_short_check"
+out/build/x64-Release/bin/dMapper.exe "<raw data>/44_short" settings/lidar-vertical.toml "<raw data>/44_short_check"
 python tools/compare_baseline.py "<raw data>/44_short_check" tools/baseline/44_short.manifest.json
 ```
 

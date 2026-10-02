@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Merge the chunk point clouds of a lidar_odometry_step_1 result folder into one LAZ in world coordinates.
+# Merge the chunk point clouds of a dMapper result folder into one LAZ in world coordinates.
 # Each scan_lio_N.laz is stored relative to its chunk start pose; session_poses.mrp holds those poses.
 # Usage: tools/merge_chunks.sh <result_folder> [output.laz]
 set -euo pipefail
