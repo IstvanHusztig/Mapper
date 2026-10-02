@@ -40,7 +40,7 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
 
 ## 3. Convert the messages (one commit per file)
 
-- [ ] 3.1 `app/lidar_odometry_utils.cpp` (`load_imu`, `load_point_cloud`, `save_poses`):
+- [x] 3.1 `app/lidar_odometry_utils.cpp` (`load_imu`, `load_point_cloud`, `save_poses`):
   - the `fprintf(stderr, "DLL ERROR …")` and `std::cerr` lines become `log_error`;
   - the per-file `total - filter = kept` line becomes one `LogMessage`.
 

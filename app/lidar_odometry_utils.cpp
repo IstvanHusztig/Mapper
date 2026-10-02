@@ -182,11 +182,11 @@ bool save_poses(const std::string file_name, std::vector<Eigen::Affine3d> m_pose
     outfile.open(file_name);
     if (!outfile.good())
     {
-        std::cout << "can not save file: '" << file_name << "'" << std::endl;
-        std::cout << "if You can see only '' it means there is no filename assigned to poses, please read manual or contact me januszbedkowski@gmail.com" << std::endl;
-        std::cout << "To assign filename to poses please use following two buttons in multi_view_tls_registration_step_2" << std::endl;
-        std::cout << "1: update initial poses from RESSO file" << std::endl;
-        std::cout << "2: update poses from RESSO file" << std::endl;
+        log_info(logger) << "can not save file: '" << file_name << "'";
+        log_info(logger) << "if You can see only '' it means there is no filename assigned to poses, please read manual or contact me januszbedkowski@gmail.com";
+        log_info(logger) << "To assign filename to poses please use following two buttons in multi_view_tls_registration_step_2";
+        log_info(logger) << "1: update initial poses from RESSO file";
+        log_info(logger) << "2: update poses from RESSO file";
         return false;
     }
 
@@ -234,8 +234,8 @@ std::vector<std::tuple<std::pair<double, double>, FusionVector, FusionVector>> l
             is_legacy = false;
             if (!hasAccsColumns && !hasGyrosColumns && !hasUnixTimestampColumn)
             {
-                std::cerr << "Input csv file is missing one of the mandatory columns :\n";
-                std::cerr << "timestamp,timestampUnix,gyroX,gyroY,gyroZ,accX,accY,accZ";
+                log_error(logger) << "Input csv file is missing one of the mandatory columns :\n"
+                                  << "timestamp,timestampUnix,gyroX,gyroY,gyroZ,accX,accY,accZ";
                 return all_data;
             }
         }
@@ -309,7 +309,7 @@ std::vector<std::tuple<std::pair<double, double>, FusionVector, FusionVector>> l
     }
     catch (...)
     {
-        std::cout << "load_imu error for file: '" << imu_file << "'" << std::endl;
+        log_info(logger) << "load_imu error for file: '" << imu_file << "'";
     }
 
     return all_data;
@@ -322,27 +322,27 @@ std::vector<Point3Di> load_point_cloud(const std::string &lazFile, bool ommit_po
     laszip_POINTER laszip_reader;
     if (laszip_create(&laszip_reader))
     {
-        fprintf(stderr, "DLL ERROR: creating laszip reader\n");
+        log_error(logger) << "DLL ERROR: creating laszip reader";
         std::abort();
     }
 
     laszip_BOOL is_compressed = 0;
     if (laszip_open_reader(laszip_reader, lazFile.c_str(), &is_compressed))
     {
-        fprintf(stderr, "DLL ERROR: opening laszip reader for '%s'\n", lazFile.c_str());
+        log_error(logger) << "DLL ERROR: opening laszip reader for '" << lazFile << "'";
         std::abort();
     }
     laszip_header *header;
 
     if (laszip_get_header_pointer(laszip_reader, &header))
     {
-        fprintf(stderr, "DLL ERROR: getting header pointer from laszip reader\n");
+        log_error(logger) << "DLL ERROR: getting header pointer from laszip reader";
         std::abort();
     }
     laszip_point *point;
     if (laszip_get_point_pointer(laszip_reader, &point))
     {
-        fprintf(stderr, "DLL ERROR: getting point pointer from laszip reader\n");
+        log_error(logger) << "DLL ERROR: getting point pointer from laszip reader";
         std::abort();
     }
 
@@ -354,7 +354,7 @@ std::vector<Point3Di> load_point_cloud(const std::string &lazFile, bool ommit_po
 
         if (laszip_read_point(laszip_reader))
         {
-            fprintf(stderr, "DLL ERROR: reading point %u\n", j);
+            log_error(logger) << "DLL ERROR: reading point " << j;
             laszip_close_reader(laszip_reader);
             return points;
         }
@@ -395,12 +395,12 @@ std::vector<Point3Di> load_point_cloud(const std::string &lazFile, bool ommit_po
         }
     }
 
-    std::cout << header->number_of_point_records << " - " << counter_filtered_points << " = " << points.size();
-    if (counter_ts0 > 0)
     {
-        std::cout << " (points with 0 timestamp: " << counter_ts0 << ")";
+        auto msg = log_info(logger);
+        msg << header->number_of_point_records << " - " << counter_filtered_points << " = " << points.size();
+        if (counter_ts0 > 0)
+            msg << " (points with 0 timestamp: " << counter_ts0 << ")";
     }
-    std::cout << std::endl;
 
     laszip_close_reader(laszip_reader);
     return points;
