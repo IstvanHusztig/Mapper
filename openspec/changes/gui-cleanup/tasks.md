@@ -43,7 +43,7 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
 ## 5. Integration
 
 - [x] 5.1 Full 44 (background): verify IDENTICAL with `tools/baseline/44.manifest.json`, or `compare_baseline.py --tolerance 1e-6` against `raw data/44_baseline` passes. Result: within `--tolerance 1e-6`, max difference 1e-9 (30 of 35 files differ in the last bits, as in steps 3–4).
-- [ ] 5.2 GUI check, **done by the user**:
+- [x] 5.2 GUI check, **done by the user**:
   1. start the Release GUI; Start shows "Parameters: default_settings.toml";
   2. Start → 1. Load parameters → `settings/lidar-vertical.toml`; the line now names it;
   3. Start → 2. Load data and process → `44_short`; the progress window names the file; say which `lio_result_*` it saved to;
@@ -51,6 +51,8 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
   5. confirm that Presets, Parameters, the Settings window (settings fields, georeferencing, scan range tools), "Points size", "Show initial points", "Show trajectory as axes" and the colour picker are gone.
 
   Then I verify that the result is IDENTICAL with the `44_short` manifest.
+
+  Result: the first run, `lio_result_5`, differed by about 1–2 mm with identical settings. It took 567 s, against 197 s for the CLI, so some windows likely hit `real_time_threshold_seconds = 10`. That is an existing load dependence, not this change. A repeat with nothing else running, `lio_result_6`, is IDENTICAL with the manifest (11 files).
 - [x] 5.3 Docs:
   - `CLAUDE.md`, Run → GUI: the Start menu, settings only via TOML, the active file, no georeferencing or editing tools. Architecture: the GUI globals list.
   - `docs/ARCHITECTURE.md` §4: the GUI changes `OdometryConfig` only through `ConfigRepository`; georeferencing is a future separate module.
