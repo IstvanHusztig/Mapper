@@ -301,7 +301,7 @@ int run_loop_closure(std::vector<WorkerData> &worker_data, const OdometryConfig 
     const int n_windows = static_cast<int>(worker_data.size());
     if (n_windows < 2 * windows_per_segment)
         return 0;
-    std::cout << "loop closure START" << std::endl;
+    log_info(logger) << "loop closure START";
 
     // 1. segments with their world points
     std::vector<Segment> segments;
@@ -381,10 +381,10 @@ int run_loop_closure(std::vector<WorkerData> &worker_data, const OdometryConfig 
         // an already aligned revisit (no improvement possible) is a valid constraint as well
         const bool accepted = after >= params.loop_closure_min_fitness && after >= before - 0.02 &&
                               shift <= params.loop_closure_max_correction_m + 1.0 && angle <= 15.0;
-        std::cout << "loop candidate segments " << best_i << " -> " << j << " (t " << std::fixed << std::setprecision(1)
-                  << segments[best_i].t_begin - segments[0].t_begin << " s / " << segments[j].t_begin - segments[0].t_begin
-                  << " s): overlap " << std::setprecision(2) << before << " -> " << after << ", correction " << shift << " m "
-                  << std::setprecision(1) << angle << " deg" << (accepted ? " ACCEPTED" : " rejected") << std::endl;
+        log_info(logger) << "loop candidate segments " << best_i << " -> " << j << " (t " << std::fixed << std::setprecision(1)
+                         << segments[best_i].t_begin - segments[0].t_begin << " s / " << segments[j].t_begin - segments[0].t_begin
+                         << " s): overlap " << std::setprecision(2) << before << " -> " << after << ", correction " << shift << " m "
+                         << std::setprecision(1) << angle << " deg" << (accepted ? " ACCEPTED" : " rejected");
         if (accepted)
         {
             LoopEdge e;
@@ -398,7 +398,7 @@ int run_loop_closure(std::vector<WorkerData> &worker_data, const OdometryConfig 
 
     if (loops.empty())
     {
-        std::cout << "loop closure: no loops accepted, trajectory unchanged" << std::endl;
+        log_info(logger) << "loop closure: no loops accepted, trajectory unchanged";
         return 0;
     }
 
@@ -433,7 +433,7 @@ int run_loop_closure(std::vector<WorkerData> &worker_data, const OdometryConfig 
     double max_shift = 0.0;
     for (const auto &c : correction)
         max_shift = std::max(max_shift, c.translation().norm());
-    std::cout << "loop closure: " << loops.size() << " loop(s) accepted, largest segment correction " << std::setprecision(2)
-              << max_shift << " m" << std::endl;
+    log_info(logger) << "loop closure: " << loops.size() << " loop(s) accepted, largest segment correction " << std::fixed << std::setprecision(2)
+                     << max_shift << " m";
     return static_cast<int>(loops.size());
 }

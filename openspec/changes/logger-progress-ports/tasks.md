@@ -56,7 +56,7 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
   - drop the sticky `std::setprecision(10)` dependence: give any later message that printed doubles with it an explicit precision.
 
   Verify the grep finds no console output calls. Run the step checks; commit.
-- [ ] 3.4 `app/loop_closure.cpp`. Verify the grep finds no console output calls, and that a grep for `sleep_for|std::atomic` across `app/lidar_odometry*.cpp`, `app/loop_closure.cpp` and `app/odometry_pipeline.*` finds nothing. Run the step checks; commit.
+- [x] 3.4 `app/loop_closure.cpp`. Verify the grep finds no console output calls, and that a grep for `sleep_for|std::atomic` across `app/lidar_odometry*.cpp`, `app/loop_closure.cpp` and `app/odometry_pipeline.*` finds nothing. Run the step checks; commit.
 
 ## 4. GUI
 
