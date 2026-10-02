@@ -69,3 +69,7 @@ IMU samples ──> AHRS orientation ──> initial trajectory ─────�
 | `tools/merge_chunks.sh` | merges the `scan_lio_N.laz` chunks of a result into one LAZ in world coordinates (CloudCompare) |
 | `docs/` | HTML documentation |
 | `openspec/` | specifications and archived changes (design decisions, measurements) |
+
+## Acknowledgements
+
+Janusz Będkowski, the author of [HDMapping](https://github.com/MapsHD/HDMapping), helped a lot with getting this project started. I am thankful for his help.
