@@ -4,9 +4,9 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
 
 ## 1. Ports and file pairing
 
-- [ ] 1.1 Add `app/input_ports.h` with `PointFilter`, `RecordingSource`, `PointSet`, `PointStore`, `PreviewSink` (design decision 1), and move the `Imu` alias there (`lidar_odometry.h` includes it). Verify both presets build.
-- [ ] 1.2 Add `app/recording_files.{h,cpp}` with `pair_recording_files`: steps 1–4 of design Context, copied verbatim from `load_data`, with the same messages. Add it to `SOURCES`. `load_data` doesn't use it yet. Verify both presets build.
-- [ ] 1.3 Add `tests/recording_files_test.cpp` and compile `recording_files.cpp` into the tests. Cover:
+- [x] 1.1 Add `app/input_ports.h` with `PointFilter`, `RecordingSource`, `PointSet`, `PointStore`, `PreviewSink` (design decision 1), and move the `Imu` alias there (`lidar_odometry.h` includes it). Verify both presets build.
+- [x] 1.2 Add `app/recording_files.{h,cpp}` with `pair_recording_files`: steps 1–4 of design Context, copied verbatim from `load_data`, with the same messages. Add it to `SOURCES`. `load_data` doesn't use it yet. Verify both presets build.
+- [x] 1.3 Add `tests/recording_files_test.cpp` and compile `recording_files.cpp` into the tests. Cover:
   - matching pairs;
   - upper-case `.LAZ`/`.CSV`;
   - other files ignored;

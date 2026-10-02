@@ -225,6 +225,9 @@ set(SOURCES
   app/run_reporting.h
   app/console_reporting.cpp
   app/console_reporting.h
+  app/input_ports.h
+  app/recording_files.cpp
+  app/recording_files.h
   app/toml.hpp
   app/toml_io.h
   app/toml_io.cpp

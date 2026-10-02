@@ -4,8 +4,10 @@ add_executable(lidar_odometry_tests
   smoke_test.cpp
   toml_golden_test.cpp
   run_reporting_test.cpp
+  recording_files_test.cpp
   ${REPOSITORY_DIRECTORY}/app/toml_io.cpp
-  ${REPOSITORY_DIRECTORY}/app/console_reporting.cpp)
+  ${REPOSITORY_DIRECTORY}/app/console_reporting.cpp
+  ${REPOSITORY_DIRECTORY}/app/recording_files.cpp)
 
 target_include_directories(
   lidar_odometry_tests

@@ -10,9 +10,9 @@
 #include <iomanip>
 #include <sstream>
 #include "toml_io.h"
+#include "input_ports.h"
 
 using Trajectory = std::map<double, std::pair<Eigen::Matrix4d, double>>;
-using Imu = std::vector<std::tuple<std::pair<double, double>, FusionVector, FusionVector>>;
 
 bool load_data(std::vector<std::string>& input_file_names, const OdometryConfig &params, OdometryState& state, std::vector<std::vector<Point3Di>>& pointsPerFile, Imu& imu_data, bool debugMsg, Logger &logger);
 void calculate_trajectory(
