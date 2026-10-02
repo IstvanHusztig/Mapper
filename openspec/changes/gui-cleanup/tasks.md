@@ -14,17 +14,19 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
 
   Verify that a grep for `BeginMenu("Presets")|BeginMenu("Parameters")` finds nothing. Run the step checks. Commit.
 
-## 3. Settings window → Tools window, display
+## 3. Settings window and display
 
-- [ ] 3.1 Cut `settings_gui()` down to the scan range tools and rename it to the Tools window (design decision 4):
-  - a top-level Tools menu (after Start, before View) with "Scan range…", disabled with an "available after a run" tooltip until a run has finished; View → Settings is removed;
-  - removed: `simple_gui`, every parameter field, "Set example", NWU/ENU/NED, "Load data", "Compute all", "Save result", "Save all point clouds to single las/laz file", "Save trajectory to ASCII", the reference clouds section, and the initial-transformation gizmo and "Align to reference".
+- [ ] 3.1 Remove `settings_gui()` entirely, with View → Settings and `is_settings_gui` (design decision 4). Removed with it:
+  - the scan range tools (index from/to, Select all/Unselect, the range buttons, Export selected scans, Save RESSO file, the stretch gizmo, the per-window show/hide list);
+  - `simple_gui`, every parameter field, "Set example", NWU/ENU/NED, "Load data", "Compute all", "Save result", "Save all point clouds to single las/laz file", "Save trajectory to ASCII", the reference clouds section, and the initial-transformation gizmo and "Align to reference".
 
   Verify both presets build.
 - [ ] 3.2 Display and view menu:
-  - remove the drawing of the initial points, reference points/buckets and trajectory-as-axes, and their View items ("Show initial points", "Show trajectory as axes");
-  - remove the initial-transformation branch of the gizmo in `display()`;
-  - keep the stretch gizmo and the from/to markers.
+  - remove the drawing of the initial points, reference points/buckets, trajectory-as-axes and the from/to markers;
+  - remove both gizmo branches and the ImGuizmo frame code in `display()`;
+  - remove the View items "Points size", "Show initial points" and "Show trajectory as axes";
+  - remove the `session` object;
+  - keep the trajectory drawing and the compass/ruler.
 
   Verify both presets build. Run the step checks. Commit.
 
@@ -45,12 +47,12 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
   1. start the Release GUI; Start shows "Parameters: default_settings.toml";
   2. Start → 1. Load parameters → `settings/lidar-vertical.toml`; the line now names it;
   3. Start → 2. Load data and process → `44_short`; the progress window names the file; say which `lio_result_*` it saved to;
-  4. Tools → Scan range…: select a range and use Export selected scans;
-  5. confirm that Presets, Parameters, the settings fields, georeferencing, "Show initial points", "Show trajectory as axes" and the colour picker are gone.
+  4. the menu bar shows only Start, View (Show trajectory, Show compass/ruler, Lock Z) and Info;
+  5. confirm that Presets, Parameters, the Settings window (settings fields, georeferencing, scan range tools), "Points size", "Show initial points", "Show trajectory as axes" and the colour picker are gone.
 
   Then I verify that the result is IDENTICAL with the `44_short` manifest.
 - [ ] 5.3 Docs:
-  - `CLAUDE.md`, Run → GUI: the Start menu, settings only via TOML, the active file, the Tools window, no georeferencing. Architecture: the GUI globals list.
+  - `CLAUDE.md`, Run → GUI: the Start menu, settings only via TOML, the active file, no georeferencing or editing tools. Architecture: the GUI globals list.
   - `docs/ARCHITECTURE.md` §4: the GUI changes `OdometryConfig` only through `ConfigRepository`; georeferencing is a future separate module.
 
   Commit.

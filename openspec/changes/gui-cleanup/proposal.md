@@ -6,7 +6,7 @@ The GUI inherited from HDMapping offers four ways to set processing parameters: 
 
 The user decided (2026-10-02):
 - **Settings come only from a loaded TOML file.**
-- **The app concentrates on mapping.** Georeferencing will be a separate post-processing module applied to result folders.
+- **The app concentrates on mapping.** Georeferencing will be a separate post-processing module applied to result folders, and the HDMapping export and editing tools (for `multi_view_tls_registration`) are not used.
 - **The GUI is a simple Start workflow:** load parameters, then load data and process.
 
 ## What Changes
@@ -19,16 +19,16 @@ The user decided (2026-10-02):
 - **BREAKING** (GUI only): removed:
   - the **Presets** menu and the **Parameters** menu (all toggles, Set real time performance, Full processing messages, Save calibration validation file, Ablation study, Saving results with index pose, Save parameters). Load parameters moves to Start;
   - the **"Load & process scanning"** button (replaced by the Start menu);
-  - from the Settings window:
+  - the whole Settings window ("power user" window, View → Settings), which held:
     - every settings field (motion model correction, AHRS gain, NDT grids, sigmas, robust/rigid options, NWU/ENU/NED);
     - the advanced flow ("Load data", "Compute all", "Save result");
     - "Save all point clouds to single las/laz file" (duplicates `scan_lio_merged.laz`);
     - "Save trajectory to ASCII" (duplicates `trajectory_lio_*.csv`);
     - the reference point clouds, the initial-placement gizmo and "Align to reference" (georeferencing);
-  - from the View menu: "Show initial points", "Show trajectory as axes" and the Background colour picker.
+    - the scan range tools: index from/to, Select all/Unselect, Export selected scans, Save RESSO file, the stretch gizmo, and the per-window show/hide list. They exported parts of the result for HDMapping's `multi_view_tls_registration` and corrected drift by hand, and loop closure now corrects drift;
+  - from the View menu: "Points size" (it only sized the initial points and exported clouds), "Show initial points", "Show trajectory as axes", the Background colour picker and "Settings".
 - **Kept:**
-  - the scan range tools (index from/to, Select all/Unselect, Export selected scans, Save RESSO file, the stretch gizmo) in a **Tools** window opened from its own top-level **Tools** menu (Tools → Scan range…), available once a run has finished;
-  - View: Points size, Show trajectory, Show compass/ruler, Lock Z;
+  - the 3D view of the trajectory (it grows during a run), with View: Show trajectory, Show compass/ruler, Lock Z;
   - the Info button and the progress window with Pause/Resume.
 - **The background colour stays a setting**, as `[misc] clear_color` in the TOML. It is loaded and applied at start-up and on Load parameters, and saved with each result. There is no TOML format change, so the baselines and golden files stay valid.
 - **Debug messages** ("Full processing messages") are no longer switchable in the GUI; runs use the normal level. A TOML key can be added later if needed.
@@ -41,7 +41,7 @@ The user decided (2026-10-02):
   - the Start menu order;
   - settings only from loaded TOML files, with the active file shown;
   - no georeferencing in this app;
-  - the remaining tools and view options.
+  - the remaining view options.
 
 ### Modified Capabilities
 - `processing-pipeline`:
@@ -51,7 +51,7 @@ The user decided (2026-10-02):
 ## Impact
 
 - **Code:**
-  - `app/lidar_odometry_gui.cpp` (most of the change: about 700 lines of widgets and menus removed, the Start menu and Tools window added, unused globals deleted);
+  - `app/lidar_odometry_gui.cpp` (most of the change: the Settings window (about 750 lines), two menus, the gizmo code and the `session` object removed, the Start menu added, unused globals deleted);
   - `app/lidar_odometry.{h,cpp}` and `app/lidar_odometry_utils_optimizers.cpp`: `filter_reference_buckets`, `load_reference_point_clouds` and `align_to_reference` lose their only caller and are removed. `OdometryState::reference_points`/`reference_buckets` stay, because `compute_step_2` reads `reference_points` (always empty now); they go with the domain model in step 5.
 - **Docs:** `CLAUDE.md` (Run/GUI section), `docs/ARCHITECTURE.md` (§4: the GUI writes `OdometryConfig` only through `ConfigRepository`).
 - **Not touched:**
@@ -61,4 +61,4 @@ The user decided (2026-10-02):
 - **Validation:**
   - `44_short` CLI check on every commit;
   - unit tests;
-  - the user checks the GUI: the Start menu order and the active-file display; a run identical to the `44_short` baseline; the Tools window working after a run; and the removed items gone.
+  - the user checks the GUI: the Start menu order and the active-file display; a run identical to the `44_short` baseline; and the removed items gone.

@@ -29,7 +29,7 @@ See proposal.md for the motivation and the decisions. Current state of `app/lida
 ## Goals / Non-Goals
 
 **Goals:**
-- The GUI matches `specs/gui-workflow`: a Start menu, settings only from TOML, the active file shown, no georeferencing, and the kept tools and view options.
+- The GUI matches `specs/gui-workflow`: a Start menu, settings only from TOML, the active file shown, no georeferencing, no editing or partial export, and three view options.
 - After this change, the GUI changes `OdometryConfig` only through `ConfigRepository::load`.
 - CLI output and GUI results unchanged (`44_short` identical through the CLI and through the GUI).
 
@@ -64,16 +64,21 @@ See proposal.md for the motivation and the decisions. Current state of `app/lida
 3. **The background colour** is applied from `gui_prefs.clear_color` by a small `apply_background()` that sets `bg_color`. It is called after the start-up defaults and after each Load parameters. The View → Colors item goes. `[misc] clear_color` stays in the TOML: saved with each result, loaded with each file.
    - *Rejected:* dropping `GuiPreferences`. That would change the TOML format, the golden test files and both baseline manifests, for no user benefit.
 
-4. **The Tools window** is today's Settings window cut down to the scan range tools:
-   - it has its own top-level **Tools** menu in the menu bar, after Start and before View (user request), with one item, "Scan range…". The item is disabled until a run has finished (`pipeline.worker_data` non-empty) and while a run is going. It toggles `is_tools_window`;
-   - the disabled item's tooltip says "available after a run".
+4. **No Settings or Tools window** (user decision during proposal review: the scan range tools are removed too). The whole `settings_gui()` goes, along with:
+   - View → Settings and `is_settings_gui`;
+   - both gizmo branches in `display()` (initial transformation and stretch) and the ImGuizmo frame code;
+   - the from/to markers and `index_begin`/`index_end`/`gizmo_stretch_interval`/`stretch_gizmo_m`/`m_gizmo`;
+   - the `session` object (only filled for exports);
+   - View → Points size (it only sized the initial points and the session clouds).
 
-   The stretch gizmo code in `display()` stays. The initial-transformation branch of the gizmo (writing `m_g`) goes.
+   The 3D view keeps drawing the trajectory (points, plus the last pose's cross) and the compass/ruler.
+
+   *Earlier idea, dropped:* a top-level Tools menu with the scan range tools. The user removed those tools too, since HDMapping's registration tools aren't used, and loop closure now corrects drift.
 
 5. **Removal order** keeps every commit buildable and checkable:
    1. Start menu, active file, background colour;
    2. Presets and Parameters menus;
-   3. Settings window → Tools window (parameter fields, the advanced flow, duplicate exports and georeferencing removed), plus the display parts (initial points, reference points/buckets, trajectory as axes) and the initial-transformation gizmo;
+   3. the Settings window, the gizmos, the `session` object and the display parts (initial points, reference points/buckets, trajectory as axes, from/to markers);
    4. the unused globals and the three reference functions.
 
    The CLI branch passes `false` for debug instead of `full_debug_messages`.
@@ -82,9 +87,9 @@ See proposal.md for the motivation and the decisions. Current state of `app/lida
 
 ## Risks / Trade-offs
 
-- **[Removing too much from the 1,960-line file]:** for example a display path or the stretch gizmo that the Tools window still needs.
-  → Remove section by section in the order above, building after each section. The user checks the Tools window after a real run.
-- **[Hidden coupling through globals]:** `index_begin`/`index_end`, `gizmo_stretch_interval` and `stretch_gizmo_m` are shared by the Tools window and `display()`. They stay. Only globals whose last reader is removed are deleted (checked by the compiler as each one goes).
+- **[Removing too much from the 1,960-line file]:** for example the trajectory drawing, the progress window or the camera controls.
+  → Remove section by section in the order above, building after each section. The user checks a real run in the GUI at the end.
+- **[Hidden coupling through globals]:** a removed widget may share a global with code that stays (the camera, the keyboard shortcuts, `cor_window` in `core`). → Only globals whose last reader is removed are deleted (checked by the compiler as each one goes).
 - **[Users relied on in-GUI tweaking]:** the decision is deliberate (settings only via TOML). → The Info text and `CLAUDE.md` say where the settings come from.
 - **[Losing debug output in the GUI]:** accepted; can return as a TOML key.
 - **[Removing `align_to_reference` changes code generation of `lidar_odometry_utils_optimizers.cpp`]** under `/fp:fast`.

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Defines what the GUI offers for processing a recording: a short Start workflow, settings that come only from TOML files, and the few viewing and editing tools kept next to it.
+Defines what the GUI offers for processing a recording: a short Start workflow, settings that come only from TOML files, and a view of the trajectory. The app concentrates on mapping; georeferencing and editing are left to other tools.
 
 ## ADDED Requirements
 
@@ -42,21 +42,21 @@ The GUI SHALL NOT offer loading reference point clouds, placing the start pose b
 - **WHEN** the user opens every menu and window of the GUI
 - **THEN** there is no reference-cloud loading and no "Align to reference" action
 
-### Requirement: Remaining tools and view options
-The menu bar SHALL have its own Tools menu, after Start and before View. After a run has finished, its "Scan range…" item SHALL open the scan range tools; before that, the item is disabled:
-- choosing an index range;
-- Select all and Unselect;
-- Export selected scans;
-- Save RESSO file;
-- the stretch gizmo.
+### Requirement: No result editing or partial export in the GUI
+The GUI SHALL NOT offer selecting ranges of windows, exporting parts of a result, writing RESSO pose files, or moving parts of the trajectory by hand. The result folder written by a run is the GUI's only output.
 
-The View menu SHALL offer Points size, Show trajectory, Show compass/ruler and Lock Z. The Info button and the progress window with Pause and Resume SHALL remain.
+#### Scenario: After a run
+- **WHEN** a run has finished
+- **THEN** the GUI shows the trajectory, and there is no export or editing action
+
+### Requirement: Remaining view options
+The menu bar SHALL contain Start, View and Info. The View menu SHALL offer Show trajectory, Show compass/ruler and Lock Z. The progress window with Pause and Resume SHALL remain.
 
 The background colour SHALL come from the `[misc] clear_color` setting of the loaded parameters, with no colour picker in the GUI.
 
-#### Scenario: Tools after a run
-- **WHEN** a run has finished and the user opens Tools → Scan range…
-- **THEN** the scan range tools work on the finished run
+#### Scenario: Menu bar
+- **WHEN** the GUI has started
+- **THEN** the menu bar shows Start, View and Info, and nothing else
 
 #### Scenario: Background colour from the file
 - **WHEN** the user loads a TOML whose `[misc] clear_color` differs from the current one

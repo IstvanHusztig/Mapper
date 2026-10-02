@@ -22,4 +22,4 @@ The GUI SHALL NOT offer an action that runs the consistency pass on its own. Con
 
 #### Scenario: After a run
 - **WHEN** a run started with "Load data and process" has finished in the GUI
-- **THEN** the available actions are the scan range tools and the view options, with no consistency button
+- **THEN** the available actions are the Start menu and the view options, with no consistency button
