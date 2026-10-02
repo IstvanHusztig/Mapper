@@ -1,4 +1,4 @@
-#include "mandeye_recording_source.h"
+#include "recording_folder_source.h"
 
 #include "csv.hpp"
 
@@ -9,7 +9,7 @@
 
 namespace fs = std::filesystem;
 
-bool MandeyeFolderSource::open(Logger &logger)
+bool RecordingFolderSource::open(Logger &logger)
 {
     for (std::size_t i = 0; i < chunk_count(); i++)
         for (const std::string *name : {&files_.laz[i], &files_.csv[i]})
@@ -21,12 +21,12 @@ bool MandeyeFolderSource::open(Logger &logger)
     return true;
 }
 
-Imu MandeyeFolderSource::read_imu(std::size_t chunk, Logger &logger)
+Imu RecordingFolderSource::read_imu(std::size_t chunk, Logger &logger)
 {
     return load_imu(files_.csv[chunk].c_str(), 0, logger);
 }
 
-std::vector<Point3Di> MandeyeFolderSource::read_points(std::size_t chunk, const PointFilter &filter, Logger &logger)
+std::vector<Point3Di> RecordingFolderSource::read_points(std::size_t chunk, const PointFilter &filter, Logger &logger)
 {
     return load_point_cloud(files_.laz[chunk].c_str(), filter.omit_zero_timestamp, filter.xy_inner, filter.xy_outer, filter.lever_arm, logger);
 }

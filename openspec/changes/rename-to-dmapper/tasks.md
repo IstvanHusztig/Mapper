@@ -27,7 +27,7 @@ Every code commit: both presets build `dMapper` (before task 1.1: `lidar_odometr
 
 ## 3. Mandeye references in the code
 
-- [ ] 3.1 `git mv` `app/mandeye_recording_source.{h,cpp}` → `app/recording_folder_source.{h,cpp}`, and rename `MandeyeFolderSource` → `RecordingFolderSource` (`SOURCES` in `CMakeLists.txt`, `#include`s, `app/folder_inputs.{h,cpp}`).
+- [x] 3.1 `git mv` `app/mandeye_recording_source.{h,cpp}` → `app/recording_folder_source.{h,cpp}`, and rename `MandeyeFolderSource` → `RecordingFolderSource` (`SOURCES` in `CMakeLists.txt`, `#include`s, `app/folder_inputs.{h,cpp}`).
 
   Rewrite the comments in `recording_files.h`, `folder_inputs.h`, `recording_folder_source.h` and `tools/cut_recording/cut_recording.cpp` neutrally.
 

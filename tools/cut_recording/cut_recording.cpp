@@ -1,4 +1,4 @@
-// cut_recording: copies a time range of a Mandeye-style recording into a new input folder.
+// cut_recording: copies a time range of a recording folder (lidar*.laz + imu*.csv) into a new input folder.
 //
 //   cut_recording <in_folder> <out_folder> <start_s> <duration_s>
 //

@@ -2,7 +2,7 @@
 
 #include "disk_point_store.h"
 #include "folder_preview_sink.h"
-#include "mandeye_recording_source.h"
+#include "recording_folder_source.h"
 
 #include <filesystem>
 
@@ -18,6 +18,6 @@ RunInputs make_folder_inputs(std::vector<std::string> input_file_names, Logger &
     const fs::path folder = files.folder;
     inputs.points = std::make_unique<DiskPointStore>(folder / "cache");
     inputs.preview = std::make_unique<FolderPreviewSink>(folder / "preview");
-    inputs.recording = std::make_unique<MandeyeFolderSource>(std::move(files));
+    inputs.recording = std::make_unique<RecordingFolderSource>(std::move(files));
     return inputs;
 }

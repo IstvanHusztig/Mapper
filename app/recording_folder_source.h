@@ -1,6 +1,6 @@
 #pragma once
 
-// RecordingSource adapter for a Mandeye recording folder (infrastructure): LiDAR chunks (*.laz/*.las, LASzip)
+// RecordingSource adapter for a recording folder (infrastructure): LiDAR chunks (*.laz/*.las, LASzip)
 // paired with IMU chunks (*.csv).
 
 #include "input_ports.h"
@@ -9,10 +9,10 @@
 #include <string>
 #include <vector>
 
-class MandeyeFolderSource : public RecordingSource
+class RecordingFolderSource : public RecordingSource
 {
 public:
-    explicit MandeyeFolderSource(RecordingFiles files) : files_(std::move(files)) {}
+    explicit RecordingFolderSource(RecordingFiles files) : files_(std::move(files)) {}
 
     bool open(Logger &logger) override;
     std::size_t chunk_count() const override { return files_.pair_count(); }

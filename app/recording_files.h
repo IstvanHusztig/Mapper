@@ -1,6 +1,6 @@
 #pragma once
 
-// File layout of a Mandeye recording folder: LiDAR chunks (*.laz/*.las) paired with IMU chunks (*.csv).
+// File layout of a recording folder: LiDAR chunks (lidar*.laz/*.las) paired with IMU chunks (imu*.csv).
 
 #include "run_reporting.h"
 
