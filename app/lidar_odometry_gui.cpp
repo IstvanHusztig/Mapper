@@ -133,7 +133,6 @@ static const std::vector<ShortcutEntry> appShortcuts = {
 namespace fs = std::filesystem;
 
 bool is_settings_gui = false;
-bool full_debug_messages = false;
 bool show_reference_buckets = true;
 bool show_reference_points = false;
 int dec_reference_points = 100;
@@ -145,7 +144,6 @@ bool step_1_done = false;
 bool step_2_done = false;
 bool calculations_failed = false;
 
-int lastPar = 1;
 
 
 std::string working_directory = "";
@@ -384,8 +382,7 @@ bool select_input(std::string &input_folder_name, std::vector<std::string> &inpu
         working_directory = fs::path(input_file_names[0]).parent_path().string();
 
     gui_progress.reset();
-    pipeline = OdometryPipeline(params, console, gui_progress, make_folder_inputs(input_file_names, console), pipeline.state.paths,
-                                full_debug_messages);
+    pipeline = OdometryPipeline(params, console, gui_progress, make_folder_inputs(input_file_names, console), pipeline.state.paths);
     return true;
 }
 
@@ -1541,187 +1538,6 @@ void display()
 
                 ImGui::EndMenu();
             }
-            if (ImGui::BeginMenu("Presets"))
-            {
-                if (ImGui::MenuItem("1 Velocity < 8km/h, tiny spaces", nullptr, (lastPar == 1)))
-                {
-                    lastPar = 1;
-
-                    set_lidar_odometry_default_params(params, pipeline.state.paths, gui_prefs);
-
-                    std::cout << "clicked: Set parameters for velocity up to 8km/h, tiny spaces" << std::endl;
-                }
-                if (ImGui::MenuItem("2 Velocity < 8km/h, quick but less accurate/precise", nullptr, (lastPar == 2)))
-                {
-                    lastPar = 2;
-
-                    params.decimation = 0.03;
-                    params.in_out_params_indoor.resolution_X = 0.1;
-                    params.in_out_params_indoor.resolution_Y = 0.1;
-                    params.in_out_params_indoor.resolution_Z = 0.1;
-
-                    params.in_out_params_outdoor.resolution_X = 0.3;
-                    params.in_out_params_outdoor.resolution_Y = 0.3;
-                    params.in_out_params_outdoor.resolution_Z = 0.3;
-
-                    params.filter_threshold_xy_inner = 0.3;
-                    params.filter_threshold_xy_outer = 70.0;
-                    params.threshould_output_filter = 0.3;
-
-                    params.use_robust_and_accurate_lidar_odometry = false;
-                    params.distance_bucket = 0.2;
-                    params.polar_angle_deg = 10.0;
-                    params.azimutal_angle_deg = 10.0;
-                    params.robust_and_accurate_lidar_odometry_iterations = 20;
-
-                    params.max_distance_lidar = 30.0;
-                    params.nr_iter = 30;
-                    params.sliding_window_trajectory_length_threshold = 200;
-                    params.real_time_threshold_seconds = 0.3;
-
-                    std::cout << "clicked: Set parameters for velocity < 8km/h, quick but less accurate/precise" << std::endl;
-                }
-                if (ImGui::MenuItem("3 Velocity < 30 km/h, fast motion, open spaces", nullptr, (lastPar == 3)))
-                {
-                    lastPar = 3;
-
-                    params.decimation = 0.03;
-                    params.in_out_params_indoor.resolution_X = 0.3;
-                    params.in_out_params_indoor.resolution_Y = 0.3;
-                    params.in_out_params_indoor.resolution_Z = 0.3;
-
-                    params.in_out_params_outdoor.resolution_X = 0.5;
-                    params.in_out_params_outdoor.resolution_Y = 0.5;
-                    params.in_out_params_outdoor.resolution_Z = 0.5;
-
-                    params.filter_threshold_xy_inner = 3.0;
-                    params.filter_threshold_xy_outer = 70.0;
-                    params.threshould_output_filter = 3.0;
-
-                    params.use_robust_and_accurate_lidar_odometry = false;
-                    params.distance_bucket = 0.2;
-                    params.polar_angle_deg = 10.0;
-                    params.azimutal_angle_deg = 10.0;
-                    params.robust_and_accurate_lidar_odometry_iterations = 20;
-
-                    params.max_distance_lidar = 70.0;
-                    params.nr_iter = 500;
-                    params.sliding_window_trajectory_length_threshold = 200;
-                    params.real_time_threshold_seconds = 10;
-
-                    std::cout << "clicked: Set parameters for velocity < 30 km/h, fast motion, open spaces" << std::endl;
-                }
-                if (ImGui::MenuItem("4 Velocity < 8km/h, precise forestry", nullptr, (lastPar == 4)))
-                {
-                    lastPar = 4;
-
-                    params.decimation = 0.01;
-                    params.in_out_params_indoor.resolution_X = 0.1;
-                    params.in_out_params_indoor.resolution_Y = 0.1;
-                    params.in_out_params_indoor.resolution_Z = 0.1;
-
-                    params.in_out_params_outdoor.resolution_X = 0.3;
-                    params.in_out_params_outdoor.resolution_Y = 0.3;
-                    params.in_out_params_outdoor.resolution_Z = 0.3;
-
-                    params.filter_threshold_xy_inner = 1.5;
-                    params.filter_threshold_xy_outer = 70.0;
-                    params.threshould_output_filter = 1.5;
-
-                    params.use_robust_and_accurate_lidar_odometry = false;
-                    params.distance_bucket = 0.2;
-                    params.polar_angle_deg = 10.0;
-                    params.azimutal_angle_deg = 10.0;
-                    params.robust_and_accurate_lidar_odometry_iterations = 20;
-
-                    params.max_distance_lidar = 70.0;
-                    params.nr_iter = 500;
-                    params.sliding_window_trajectory_length_threshold = 10000;
-                    params.real_time_threshold_seconds = 10;
-
-                    std::cout << "clicked: Set parameters for velocity < 8km/h, precise forestry" << std::endl;
-                }
-
-                ImGui::EndMenu();
-            }
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("Set parameters for MANDEYE data processing");
-
-            if (ImGui::BeginMenu("Parameters"))
-            {
-
-                ImGui::MenuItem("Remove IMU bias from first stationary scan", nullptr, &params.use_remove_imu_bias_from_first_stationary_scan);
-                if (ImGui::IsItemHovered())
-                    ImGui::SetTooltip("IMU bias will be removed given there's a stationary period at the start of the recording");
-
-                ImGui::MenuItem("Multithread", nullptr, &params.useMultithread);
-                ImGui::SetNextItemWidth(ImGuiNumberWidth / 2);
-                ImGui::InputDouble("Time threshold [s]", &params.real_time_threshold_seconds, 0.0, 0.0, "%.1f");
-                if (ImGui::IsItemHovered())
-                {
-                    ImGui::BeginTooltip();
-                    ImGui::Text("Optimization timeout");
-                    ImGui::Text("smaller value gives faster calculations, less precise results");
-                    ImGui::Text("e.g.: 0.1 [s] will make processing time aprox equal to scan time");
-                    ImGui::Text("0.3 [s] will make processing time aprox equal to 3x scan time");
-                    ImGui::EndTooltip();
-                }
-                
-                if(ImGui::MenuItem("Set real time performance"))
-                    params.real_time_threshold_seconds = 0.1;
-                if (ImGui::IsItemHovered())
-                    ImGui::SetTooltip("For IMU 200Hz, 20 nodes in optimization window");
-
-                ImGui::Separator();
-
-                ImGui::Text("Debug:");
-
-                ImGui::MenuItem("Full processing messages", nullptr, &full_debug_messages);
-                if (ImGui::IsItemHovered())
-                    ImGui::SetTooltip("Show more messages during processing in console window");
-                ImGui::MenuItem("Save calibration validation file", nullptr, &params.save_calibration_validation);
-                if (ImGui::IsItemHovered())
-                    ImGui::SetTooltip("Save calibrated points from first laz file in 'calibrationValidation.asc' file");
-                ImGui::SetNextItemWidth(ImGuiNumberWidth);
-                ImGui::InputInt("Number of calibration validation points", &params.calibration_validation_points);
-
-                ImGui::Separator();
-                if (ImGui::BeginMenu("Ablation study"))
-                {
-                    ImGui::MenuItem("Use planarity", nullptr, &params.ablation_study_use_planarity);
-                    ImGui::MenuItem("Use norm", nullptr, &params.ablation_study_use_norm);
-                    ImGui::MenuItem("Use hierarchical RGD", nullptr, &params.ablation_study_use_hierarchical_rgd);
-                    ImGui::MenuItem("Use view point and normal vectors", nullptr, &params.ablation_study_use_view_point_and_normal_vectors);
-
-                    ImGui::EndMenu();
-                }
-
-                ImGui::Separator();
-
-                ImGui::MenuItem("Saving results with index pose", nullptr, &params.save_index_pose);
-
-                ImGui::Separator();
-
-                if (ImGui::MenuItem("Save parameters"))
-                {
-                    auto output_file_name = mandeye::fd::SaveFileDialog("Save parameters file", mandeye::fd::Toml_filter, ".toml");
-                    std::cout << "Parameters file to save: '" << output_file_name << "'" << std::endl;
-
-                    if (!output_file_name.empty())
-                    {
-                        TomlConfigRepository config_repository;
-                        bool success = config_repository.save(output_file_name, params, pipeline.state.paths, gui_prefs);
-                        if (success)
-                            std::cout << "Parameters file generated: " << output_file_name << std::endl;
-                        else
-                            std::cerr << "Failed to save parameters." << std::endl;
-                    }
-                }
-               
-                ImGui::EndMenu();
-            }
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("Processing parameter list");
 
             if (ImGui::BeginMenu("View"))
             {
@@ -1853,8 +1669,6 @@ void display()
 
     if (is_settings_gui)
     {
-        lastPar = 0;
-
         settings_gui();
     }
 
@@ -1954,7 +1768,7 @@ int main(int argc, char *argv[])
             }
 
             ConsoleReporter reporter;
-            OdometryPipeline pipeline(config, reporter, reporter, make_folder_inputs(input_file_names, reporter), paths, full_debug_messages);
+            OdometryPipeline pipeline(config, reporter, reporter, make_folder_inputs(input_file_names, reporter), paths);
             if (pipeline.load())
                 log_info(reporter) << "step_1_done";
 

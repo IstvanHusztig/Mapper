@@ -10,7 +10,7 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
 
 ## 2. Presets and Parameters menus
 
-- [ ] 2.1 Remove the Presets menu and the Parameters menu (Load parameters already lives in Start; Save parameters goes). The CLI branch passes `false` for debug. Remove `lastPar`, and `full_debug_messages` once it has no reader.
+- [x] 2.1 Remove the Presets menu and the Parameters menu (Load parameters already lives in Start; Save parameters goes). The CLI branch passes `false` for debug. Remove `lastPar`, and `full_debug_messages` once it has no reader.
 
   Verify that a grep for `BeginMenu("Presets")|BeginMenu("Parameters")` finds nothing. Run the step checks. Commit.
 
