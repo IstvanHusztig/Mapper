@@ -48,6 +48,8 @@
    - A 0.10 m voxel bounds the preview by the mapped volume. The full 44 cave run is expected at a few hundred thousand points: about 7 MB of floats, drawn in about 1 ms with client arrays. The measurement on 44 confirms this.
    - If the count exceeds 3 million, the builder stops adding and logs one line, a safety cap.
 
+6. **Display list instead of per-frame client arrays** (found during apply). The first version passed the whole cloud to OpenGL as client arrays every frame. On the full 44 run the GUI grew 1.3 → 5.8 GB during the odometry, while the CLI stayed flat at 1.1–1.5 GB; the peak was 8.7 GB against 4.5 GB. The cloud is now compiled into a display list, rebuilt at most once per second while points are added, and drawn with `glCallList`. The preview's size is logged after the odometry and after the final rebuild.
+
 ## Risks / Trade-offs
 
 - **[Reading `worker_data[i]` while the worker writes other windows]:** formally a data race on the vector contents. Only finished windows (`i < windows_done()`) are read, and nothing writes them until post-processing; the trajectory drawing already does the same.

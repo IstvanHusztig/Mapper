@@ -155,6 +155,8 @@ public:
         z_min_ = std::numeric_limits<float>::max();
         z_max_ = std::numeric_limits<float>::lowest();
         capped_ = false;
+        dirty_ = true;
+        compiled_at_ = {};
     }
 
     std::size_t next_window() const { return next_window_; }
@@ -167,21 +169,42 @@ public:
         for (std::size_t n = 0; n < windows_per_frame && next_window_ < limit && !capped_; n++)
             added |= add_window(run, next_window_++, logger);
         if (added)
+        {
             recolor();
+            dirty_ = true;
+        }
     }
 
-    void draw() const
+    std::size_t size() const { return xyz_.size() / 3; }
+
+    // Drawn from a display list: the points are handed to OpenGL only when the list is rebuilt (at most once per
+    // second while points are added), not every frame, so the driver doesn't keep copies of the whole cloud.
+    void draw()
     {
-        if (xyz_.empty())
+        const auto now = std::chrono::steady_clock::now();
+        if (dirty_ && now - compiled_at_ >= std::chrono::seconds(1))
+        {
+            if (list_ == 0)
+                list_ = glGenLists(1);
+            glNewList(list_, GL_COMPILE);
+            if (!xyz_.empty())
+            {
+                glEnableClientState(GL_VERTEX_ARRAY);
+                glEnableClientState(GL_COLOR_ARRAY);
+                glVertexPointer(3, GL_FLOAT, 0, xyz_.data());
+                glColorPointer(3, GL_FLOAT, 0, rgb_.data());
+                glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(xyz_.size() / 3));
+                glDisableClientState(GL_COLOR_ARRAY);
+                glDisableClientState(GL_VERTEX_ARRAY);
+            }
+            glEndList();
+            dirty_ = false;
+            compiled_at_ = now;
+        }
+        if (list_ == 0)
             return;
         glPointSize(2);
-        glEnableClientState(GL_VERTEX_ARRAY);
-        glEnableClientState(GL_COLOR_ARRAY);
-        glVertexPointer(3, GL_FLOAT, 0, xyz_.data());
-        glColorPointer(3, GL_FLOAT, 0, rgb_.data());
-        glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(xyz_.size() / 3));
-        glDisableClientState(GL_COLOR_ARRAY);
-        glDisableClientState(GL_VERTEX_ARRAY);
+        glCallList(list_);
         glPointSize(1);
     }
 
@@ -244,6 +267,9 @@ private:
     float z_min_ = std::numeric_limits<float>::max();
     float z_max_ = std::numeric_limits<float>::lowest();
     bool capped_ = false;
+    GLuint list_ = 0;
+    bool dirty_ = false;
+    std::chrono::steady_clock::time_point compiled_at_{};
 };
 
 PreviewCloud preview_cloud;
@@ -266,13 +292,21 @@ void update_preview()
     if (running)
     {
         if (gui_progress.stage() == RunStage::Odometry)
+        {
+            const std::size_t before = preview_cloud.next_window();
             preview_cloud.add_windows(pipeline, gui_progress.windows_done(), console);
+            if (before < pipeline.worker_data.size() && preview_cloud.next_window() >= pipeline.worker_data.size())
+                log_info(console) << "point cloud preview: " << preview_cloud.size() << " points after the odometry";
+        }
     }
     else if (preview_final_pending)
     {
         preview_cloud.add_windows(pipeline, pipeline.worker_data.size(), console);
         if (preview_cloud.next_window() >= pipeline.worker_data.size())
+        {
             preview_final_pending = false;
+            log_info(console) << "point cloud preview: " << preview_cloud.size() << " points (final)";
+        }
     }
 }
 std::chrono::time_point<std::chrono::system_clock> loStartTime;
