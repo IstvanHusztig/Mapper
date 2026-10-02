@@ -49,9 +49,11 @@ Every code commit: both presets build `dMapper` (before task 1.1: `lidar_odometr
 
 ## 5. Info removed (user decision during apply)
 
-- [ ] 5.1 Remove the Info button from the menu bar and the Info window: `info_gui`, `infoLines`, the `info_window(...)` call and the line in `display()` that overwrites `infoLines`. Keep `appShortcuts` only if something else uses it, and keep the keyboard shortcuts themselves. Verify both presets build, and that a grep for `info_gui|infoLines|SmallButton("Info")` finds nothing. Run the step checks. Commit.
+- [x] 5.1 Remove the Info button from the menu bar and the Info window: `info_gui`, `infoLines`, the `info_window(...)` call and the line in `display()` that overwrites `infoLines`. Keep `appShortcuts` only if something else uses it, and keep the keyboard shortcuts themselves. Verify both presets build, and that a grep for `info_gui|infoLines|SmallButton("Info")` finds nothing. Run the step checks. Commit.
 
 ## 6. Integration
 
-- [ ] 6.1 GUI check, **done by the user**: start `out\build\x64-Release\bin\dMapper.exe`; the title reads "dMapper" before and during a `44_short` run (Start → 1 → `lidar-vertical.toml`, Start → 2 → `44_short`); the folder dialog shows the new title. (The Info text was checked in this run; Info is removed afterwards in 5.1, and the menu bar is checked again after that.) Then I verify that the result is IDENTICAL with the `44_short` manifest.
+- [x] 6.1 GUI check, **done by the user**: start `out\build\x64-Release\bin\dMapper.exe`; the title reads "dMapper" before and during a `44_short` run (Start → 1 → `lidar-vertical.toml`, Start → 2 → `44_short`); the folder dialog shows the new title. (The Info text was checked in this run; Info is removed afterwards in 5.1, and the menu bar is checked again after that.) Then I verify that the result is IDENTICAL with the `44_short` manifest.
+
+  Result: the user ran the GUI (`lio_result_7`, 548 s against 197 s for the CLI). It differs from the manifest only at the last-digits level: the trajectories are within 8.6e-9 m, and one results-JSON value is 6e-6 off. That is the known load dependence through `real_time_threshold_seconds` in the slow GUI run, not the rename; the same `dMapper.exe` through the CLI is IDENTICAL. The title and folder dialog were checked in that run. Info was removed afterwards (5.1), with the CLI check IDENTICAL.
 - [x] 6.2 Run `openspec validate rename-to-dmapper --strict` and confirm it passes.

@@ -37,97 +37,6 @@
 
 std::string winTitle = "dMapper";
 
-// the second-to-last line is replaced in display() with where the results are saved
-std::vector<std::string> infoLines = {
-    "dMapper computes the trajectory and point cloud of a LiDAR + IMU recording (lidar*.laz + imu*.csv).",
-    "",
-    "Start -> 1. Load parameters, then Start -> 2. Load data and process.",
-    "",
-    "Each result folder holds session.mjs, the trajectories (trajectory_lio_*.csv) and the point clouds (scan_lio_*.laz, scan_lio_merged.laz)."};
-
-// App specific shortcuts (Type and Shortcut are just for easy reference)
-static const std::vector<ShortcutEntry> appShortcuts = {
-    {"Normal keys", "A", ""},
-    {"", "Ctrl+A", ""},
-    {"", "B", ""},
-    {"", "Ctrl+B", ""},
-    {"", "C", ""},
-    {"", "Ctrl+C", ""},
-    {"", "D", ""},
-    {"", "Ctrl+D", ""},
-    {"", "E", ""},
-    {"", "Ctrl+E", ""},
-    {"", "F", ""},
-    {"", "Ctrl+F", ""},
-    {"", "G", ""},
-    {"", "Ctrl+G", ""},
-    {"", "H", ""},
-    {"", "Ctrl+H", ""},
-    {"", "I", ""},
-    {"", "Ctrl+I", ""},
-    {"", "J", ""},
-    {"", "Ctrl+K", ""},
-    {"", "K", ""},
-    {"", "Ctrl+K", ""},
-    {"", "L", ""},
-    {"", "Ctrl+L", ""},
-    {"", "M", ""},
-    {"", "Ctrl+M", ""},
-    {"", "N", ""},
-    {"", "Ctrl+N", ""},
-    {"", "O", ""},
-    {"", "Ctrl+O", "Open data"},
-    {"", "P", ""},
-    {"", "Ctrl+P", ""},
-    {"", "Q", ""},
-    {"", "Ctrl+Q", ""},
-    {"", "R", ""},
-    {"", "Ctrl+R", ""},
-    {"", "Shift+R", ""},
-    {"", "S", ""},
-    {"", "Ctrl+S", ""},
-    {"", "Ctrl+Shift+S", ""},
-    {"", "T", ""},
-    {"", "Ctrl+T", ""},
-    {"", "U", ""},
-    {"", "Ctrl+U", ""},
-    {"", "V", ""},
-    {"", "Ctrl+V", ""},
-    {"", "W", ""},
-    {"", "Ctrl+W", ""},
-    {"", "X", ""},
-    {"", "Ctrl+X", ""},
-    {"", "Y", ""},
-    {"", "Ctrl+Y", ""},
-    {"", "Z", ""},
-    {"", "Ctrl+Z", ""},
-    {"", "Shift+Z", ""},
-    {"", "1-9", ""},
-    {"Special keys", "Up arrow", ""},
-    {"", "Shift + up arrow", ""},
-    {"", "Ctrl + up arrow", ""},
-    {"", "Down arrow", ""},
-    {"", "Shift + down arrow", ""},
-    {"", "Ctrl + down arrow", ""},
-    {"", "Left arrow", ""},
-    {"", "Shift + left arrow", ""},
-    {"", "Ctrl + left arrow", ""},
-    {"", "Right arrow", ""},
-    {"", "Shift + right arrow", ""},
-    {"", "Ctrl + right arrow", ""},
-    {"", "Pg down", ""},
-    {"", "Pg up", ""},
-    {"", "- key", ""},
-    {"", "+ key", ""},
-    {"Mouse related", "Left click + drag", ""},
-    {"", "Right click + drag", "n"},
-    {"", "Scroll", ""},
-    {"", "Shift + scroll", ""},
-    {"", "Shift + drag", ""},
-    {"", "Ctrl + left click", ""},
-    {"", "Ctrl + right click", ""},
-    {"", "Ctrl + middle click", ""} };
-
 namespace fs = std::filesystem;
 
 bool show_trajectory = true;
@@ -461,7 +370,6 @@ void progress_window()
 
 void openData()
 {
-    info_gui = false;
 
     std::string input_folder_name;
     std::vector<std::string> input_file_names;
@@ -642,19 +550,6 @@ void display()
 
             camMenu();
 
-            ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::CalcTextSize("Info").x - ImGui::GetStyle().ItemSpacing.x * 2 - ImGui::GetStyle().FramePadding.x * 2);
-
-            ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
-            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, 2));
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImGui::GetStyleColorVec4(ImGuiCol_Header));
-            if (ImGui::SmallButton("Info"))
-                info_gui = !info_gui;
-
-            ImGui::PopStyleVar(2);
-            ImGui::PopStyleColor(3);
-
             ImGui::EndMainMenuBar();
         }
     }
@@ -663,12 +558,6 @@ void display()
         progress_window();
 
     cor_window();
-
-    if (info_gui)
-    {
-        infoLines[infoLines.size() - 2] = "It saves session file in " + working_directory + "\\lio_result_*";
-        info_window(infoLines, appShortcuts);
-    }
 
     if (compass_ruler)
         drawMiniCompassWithRuler();
