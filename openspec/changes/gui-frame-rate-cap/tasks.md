@@ -10,7 +10,7 @@ Every code commit: both presets build `dMapper` and `lidar_odometry_tests`; `cte
 
 ## 2. Integration
 
-- [ ] 2.1 GUI check and measurement, **done by the user**, on an otherwise idle computer:
+- [x] 2.1 GUI check and measurement, **done by the user**, on an otherwise idle computer:
   1. start `dMapper.exe`;
   2. Start → 1 → `settings/lidar-vertical.toml`, Start → 2 → `44_short`;
   3. check that rotating and zooming the view and the Camera menu views still feel smooth when no run is going.
@@ -20,5 +20,7 @@ Every code commit: both presets build `dMapper` and `lidar_odometry_tests`; `cte
   - the result is IDENTICAL with the `44_short` manifest.
 
   If it is still slower, I report the numbers and stop for profiling, without changing the cap.
+
+  Result: `44_short/lio_result_8` from the GUI took 194.9 s, against about 197 s for the CLI (0.99×; before the cap 510–570 s). It is IDENTICAL with the manifest (11 files). The user reported it much faster.
 - [x] 2.2 Docs: `CLAUDE.md` (Architecture, GUI: the redraw is timer-driven, 10/60 fps). Commit.
 - [x] 2.3 Run `openspec validate gui-frame-rate-cap --strict` and confirm it passes.
