@@ -32,6 +32,11 @@ Every code commit: both presets build `dMapper` and `lidar_odometry_tests`; `cte
   - the result is IDENTICAL with the `44_short` manifest.
 
   Result: the user ran the GUI with the preview (`lio_result_9`) and reported the preview fine (growth, rebuild, toggle, smooth view). The run took 198.6 s against about 197 s for the CLI (1.0×; 194.9 s without the preview), and the result is IDENTICAL with the manifest (11 files).
-- [ ] 3.2 Optional, if the user wants it: a GUI run of the full `44`, checking smoothness and the memory of `dMapper.exe` (Task Manager) during and after the run. The result must be identical or within `--tolerance 1e-6` of `raw data/44_baseline`.
+- [x] 3.2 Optional, if the user wants it: a GUI run of the full `44`, checking smoothness and the memory of `dMapper.exe` (Task Manager) during and after the run. The result must be identical or within `--tolerance 1e-6` of `raw data/44_baseline`.
+
+  Results:
+  - **First version:** `44/lio_result_1`, within tolerance, 2,171 s. Memory grew 1.3 → 5.8 GB during the odometry, with an 8.7 GB peak; the CLI run on 44 (`44_cli_mem`, within tolerance, 1,921 s) stayed at 1.1–1.5 GB with a 4.5 GB peak.
+  - **After the display-list fix (design decision 6):** `44/lio_result_2`, within tolerance (max 1e-9), 1,970 s (1.03×). Memory grew 1.3 → 4.3 GB, with a 7.8 GB peak and 4.6 GB after the run.
+  - **Accepted by the user for now:** about 3 GB more than the CLI remains, cause not yet known (preview data or graphics driver). To be solved in a later change.
 - [x] 3.3 Docs: `CLAUDE.md` (GUI bullet: the live preview, how it's built, View → Show point cloud). Commit.
 - [x] 3.4 Run `openspec validate live-point-cloud-preview --strict` and confirm it passes.
