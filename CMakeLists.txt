@@ -239,6 +239,8 @@ set(SOURCES
   app/output_ports.h
   app/toml_config_repository.cpp
   app/toml_config_repository.h
+  app/folder_result_sink.cpp
+  app/folder_result_sink.h
   app/toml.hpp
   app/toml_io.h
   app/toml_io.cpp

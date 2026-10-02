@@ -481,9 +481,9 @@ namespace
     };
 } // namespace
 
-void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &params, const OdometryState &state, const GuiPreferences &gui, fs::path outwd, double elapsed_time_s, PointStore &point_store, Logger &logger)
+void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &params, const OdometryState &state, const GuiPreferences &gui, fs::path outwd, double elapsed_time_s, ResultSink &sink, PointStore &point_store, Logger &logger)
 {
-    std::filesystem::create_directory(outwd);
+    sink.begin();
     // concatenate data
     std::vector<WorkerData> worker_data_concatenated;
     WorkerData wd;
@@ -555,18 +555,7 @@ void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &par
         worker_data_concatenated.push_back(wd);
     }
 
-    fs::path point_sizes_path = outwd / "point_sizes_per_chunk.json";
-    nlohmann::json j_point_sizes = point_sizes_per_chunk;
-    std::ofstream out_point_sizes(point_sizes_path);
-    if (!out_point_sizes)
-    {
-        log_error(logger) << "Failed to open " << point_sizes_path << " for writing point sizes per chunk.\n";
-    }
-    else
-    {
-        out_point_sizes << j_point_sizes.dump(2);
-        out_point_sizes.close();
-    }
+    sink.point_sizes(point_sizes_per_chunk);
 
     std::vector<Eigen::Affine3d> m_poses;
     std::vector<std::string> file_names;
@@ -661,80 +650,23 @@ void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &par
         log_info(logger) << "saved " << merged.count() << " points to " << (outwd / "scan_lio_merged.laz");
     }
 
-    fs::path path(outwd);
-    path /= "session_ini_poses.mri";
-    save_poses(path.string(), m_poses, file_names, logger);
-    fs::path path2(outwd);
-    path2 /= "session_poses.mrp";
-    save_poses(path2.string(), m_poses, file_names, logger);
+    sink.chunk_poses(m_poses);
 
-    fs::path index_poses_path = outwd / "index_poses.json";
-    if (params.save_index_pose){
-        nlohmann::json j_index_poses = index_poses;
-        std::ofstream out_index(index_poses_path);
-        if (!out_index)
-        {
-            log_error(logger) << "Failed to open " << index_poses_path << " for writing index poses.\n";
-        }
-        else
-        {
-            out_index << j_index_poses.dump(2);
-            out_index.close();
-        }
-    }
+    if (params.save_index_pose)
+        sink.index_poses(index_poses);
 
-    fs::path path3(outwd);
-    path3 /= "session.mjs";
+    SessionSummary summary;
+    summary.trajectory_length_m = state.total_length_of_calculated_trajectory;
+    summary.elapsed_seconds = elapsed_time_s;
+    summary.decimation = params.decimation;
+    summary.threshold_nr_poses = params.threshold_nr_poses;
+    summary.index_poses = params.save_index_pose;
+    summary.chunk_count = worker_data_concatenated.size();
+    sink.session(summary);
 
-    // save session file
-    log_info(logger) << "saving file: '" << path3 << "'";
-
-    nlohmann::json jj;
-    nlohmann::json j;
-
-    j["offset_x"] = 0.0;
-    j["offset_y"] = 0.0;
-    j["offset_z"] = 0.0;
-    j["folder_name"] = outwd;
-    j["out_folder_name"] = outwd;
-    j["poses_file_name"] = path2.string();
-    j["initial_poses_file_name"] = path.string();
-    j["out_poses_file_name"] = path2.string();
-    j["lidar_odometry_version"] = HDMAPPING_VERSION_STRING;
-    j["length of trajectory[m]"] = state.total_length_of_calculated_trajectory;
-    j["elapsed time seconds"] = elapsed_time_s;
-    if (params.save_index_pose){
-        j["index_poses_path"] = index_poses_path.string();
-    }
-    j["point_sizes_path"] = point_sizes_path.string();
-    j["decimation"] = params.decimation;
-    j["threshold_nr_poses"] = params.threshold_nr_poses;
-
-    jj["Session Settings"] = j;
-
-    nlohmann::json jlaz_file_names;
-    for (int i = 0; i < worker_data_concatenated.size(); i++)
-    {
-        fs::path path(outwd);
-        std::string filename = ("scan_lio_" + std::to_string(i) + ".laz");
-        path /= filename;
-        log_info(logger) << "adding file: " << path;
-
-        nlohmann::json jfn{
-            {"file_name", path.string()}};
-        jlaz_file_names.push_back(jfn);
-    }
-    jj["laz_file_names"] = jlaz_file_names;
-
-    std::ofstream fs(path3.string());
-    fs << jj.dump(2);
-    fs.close();
-
-    // Save parameters to TOML file (loadable parameters only)
-    save_parameters_toml(params, state.paths, gui, outwd, elapsed_time_s, logger);
-
-    // Save processing results and complex data to JSON file
-    save_processing_results_json(params, state, outwd, elapsed_time_s, logger, &worker_data);
+    // parameters (loadable TOML) and the processing results report
+    sink.parameters(params, state.paths, gui);
+    sink.processing_results(params, state, worker_data, elapsed_time_s);
 }
 
 void filter_reference_buckets(const OdometryConfig &params, OdometryState &state)
@@ -791,153 +723,4 @@ void load_reference_point_clouds(std::vector<std::string> input_file_names, cons
 
     update_rgd(params.in_out_params_indoor, state.reference_buckets, state.reference_points);
     state.buckets_indoor = state.reference_buckets;
-}
-
-void save_parameters_toml(const OdometryConfig &params, const RunPaths &paths, const GuiPreferences &gui, const fs::path &outwd, double elapsed_seconds, Logger &logger)
-{
-    // Get current date and time
-    auto now = std::chrono::system_clock::now();
-    auto time_t = std::chrono::system_clock::to_time_t(now);
-    auto tm = *std::localtime(&time_t);
-
-    // Format: YYYY-MM-DD_HH-MM
-    std::ostringstream datetime_stream;
-    datetime_stream << std::put_time(&tm, "%Y-%m-%d_%H-%M");
-    std::string datetime_str = datetime_stream.str();
-
-    // Create filename with version info and datetime for TOML parameters
-    std::string toml_filename = "HDMapping_params_" + params.software_version + "_" + datetime_str + ".toml";
-    fs::path toml_path = outwd / toml_filename;
-
-    try
-    {
-        // Use existing TomlIO class to save loadable parameters
-        TomlIO toml_io;
-
-        bool success = toml_io.SaveParametersToTomlFile(toml_path.string(), params, paths, gui);
-
-        if (success)
-        {
-            log_info(logger) << "Parameters saved to TOML file: " << toml_path;
-        }
-        else
-        {
-            log_error(logger) << "Failed to save parameters to TOML file: " << toml_path;
-        }
-    }
-    catch (const std::exception &e)
-    {
-        log_error(logger) << "Error saving parameters to TOML file: " << e.what();
-    }
-}
-
-void save_processing_results_json(const OdometryConfig &params, const OdometryState &state, const fs::path &outwd, double elapsed_seconds,
-                                  Logger &logger, const std::vector<WorkerData> *worker_data)
-{
-    // Get current date and time
-    auto now = std::chrono::system_clock::now();
-    auto time_t = std::chrono::system_clock::to_time_t(now);
-    auto tm = *std::localtime(&time_t);
-
-    // Format: YYYY-MM-DD_HH-MM
-    std::ostringstream datetime_stream;
-    datetime_stream << std::put_time(&tm, "%Y-%m-%d_%H-%M");
-    std::string datetime_str = datetime_stream.str();
-
-    // Create filename for processing results and complex data
-    std::string json_filename = "HDMapping_results_" + params.software_version + "_" + datetime_str + ".json";
-    fs::path json_path = outwd / json_filename;
-
-    try
-    {
-        // Create JSON structure for processing results and complex data
-        nlohmann::json results;
-
-        // Processing metadata
-        results["processing_info"]["software_version"] = params.software_version;
-        results["processing_info"]["config_version"] = params.config_version;
-        results["processing_info"]["build_date"] = params.build_date;
-        results["processing_info"]["processing_date"] = datetime_str;
-        results["processing_info"]["elapsed_time_seconds"] = elapsed_seconds;
-
-        // Processing results and computed values
-        results["trajectory_results"]["total_length_calculated"] = state.total_length_of_calculated_trajectory;
-        results["trajectory_results"]["consecutive_distance"] = state.consecutive_distance;
-        results["directory_info"]["current_output_dir"] = state.paths.current_output_dir;
-        results["directory_info"]["working_directory_preview"] = state.paths.working_directory_preview;
-
-        // Complex data structures that can't be easily loaded back as parameters
-        // NDT grid parameters (read-only results)
-        results["ndt_grid_indoor"]["bounding_box_min_X"] = params.in_out_params_indoor.bounding_box_min_X;
-        results["ndt_grid_indoor"]["bounding_box_min_Y"] = params.in_out_params_indoor.bounding_box_min_Y;
-        results["ndt_grid_indoor"]["bounding_box_min_Z"] = params.in_out_params_indoor.bounding_box_min_Z;
-        results["ndt_grid_indoor"]["bounding_box_max_X"] = params.in_out_params_indoor.bounding_box_max_X;
-        results["ndt_grid_indoor"]["bounding_box_max_Y"] = params.in_out_params_indoor.bounding_box_max_Y;
-        results["ndt_grid_indoor"]["bounding_box_max_Z"] = params.in_out_params_indoor.bounding_box_max_Z;
-        results["ndt_grid_indoor"]["resolution_X"] = params.in_out_params_indoor.resolution_X;
-        results["ndt_grid_indoor"]["resolution_Y"] = params.in_out_params_indoor.resolution_Y;
-        results["ndt_grid_indoor"]["resolution_Z"] = params.in_out_params_indoor.resolution_Z;
-        results["ndt_grid_indoor"]["number_of_buckets"] = static_cast<long long>(params.in_out_params_indoor.number_of_buckets);
-
-        results["ndt_grid_outdoor"]["bounding_box_min_X"] = params.in_out_params_outdoor.bounding_box_min_X;
-        results["ndt_grid_outdoor"]["bounding_box_min_Y"] = params.in_out_params_outdoor.bounding_box_min_Y;
-        results["ndt_grid_outdoor"]["bounding_box_min_Z"] = params.in_out_params_outdoor.bounding_box_min_Z;
-        results["ndt_grid_outdoor"]["bounding_box_max_X"] = params.in_out_params_outdoor.bounding_box_max_X;
-        results["ndt_grid_outdoor"]["bounding_box_max_Y"] = params.in_out_params_outdoor.bounding_box_max_Y;
-        results["ndt_grid_outdoor"]["bounding_box_max_Z"] = params.in_out_params_outdoor.bounding_box_max_Z;
-        results["ndt_grid_outdoor"]["resolution_X"] = params.in_out_params_outdoor.resolution_X;
-        results["ndt_grid_outdoor"]["resolution_Y"] = params.in_out_params_outdoor.resolution_Y;
-        results["ndt_grid_outdoor"]["resolution_Z"] = params.in_out_params_outdoor.resolution_Z;
-        results["ndt_grid_outdoor"]["number_of_buckets"] = static_cast<long long>(params.in_out_params_outdoor.number_of_buckets);
-
-        // Motion model correction (complex structure)
-        results["motion_model_correction"]["om"] = params.motion_model_correction.om;
-        results["motion_model_correction"]["fi"] = params.motion_model_correction.fi;
-        results["motion_model_correction"]["ka"] = params.motion_model_correction.ka;
-
-        // Estimated gyro bias per window [deg/s] and its 1-sigma [deg/s]
-        if (worker_data && params.use_gyro_bias_estimation)
-        {
-            nlohmann::json track = nlohmann::json::array();
-            for (const auto &wd : *worker_data)
-            {
-                if (wd.intermediate_trajectory_timestamps.empty())
-                    continue;
-                const Eigen::Vector3d b = wd.gyro_bias * RAD_TO_DEG;
-                const Eigen::Vector3d s = wd.gyro_bias_cov.diagonal().cwiseMax(0.0).cwiseSqrt() * RAD_TO_DEG;
-                track.push_back({{"t_start_s", wd.intermediate_trajectory_timestamps.front().first},
-                                 {"bias_deg_s", {b.x(), b.y(), b.z()}},
-                                 {"sigma_deg_s", {s.x(), s.y(), s.z()}}});
-            }
-            results["gyro_bias_per_window"] = track;
-        }
-
-        // Transformation matrix (if needed for debugging)
-        auto &m_g = state.m_g;
-        for (int i = 0; i < 4; ++i)
-        {
-            for (int j = 0; j < 4; ++j)
-            {
-                results["transformation_matrix"][i][j] = m_g(i, j);
-            }
-        }
-
-        // Save JSON file
-        std::ofstream file(json_path);
-        if (file.is_open())
-        {
-            file << results.dump(4); // Pretty print with 4-space indentation
-            file.close();
-            log_info(logger) << "Processing results saved to JSON file: " << json_path;
-            log_info(logger) << "Processing time: " << fixed << std::setprecision(2) << elapsed_seconds << " [s]";
-        }
-        else
-        {
-            log_error(logger) << "Failed to create results JSON file: " << json_path;
-        }
-    }
-    catch (const std::exception &e)
-    {
-        log_error(logger) << "Error saving processing results to JSON file: " << e.what();
-    }
 }

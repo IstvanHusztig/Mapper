@@ -1,6 +1,8 @@
 #include "odometry_pipeline.h"
 
 #include "loop_closure.h"
+#include "folder_result_sink.h"
+#include "toml_config_repository.h"
 
 OdometryPipeline::OdometryPipeline(const OdometryConfig &config, Logger &logger, ProgressReporter &progress, RunInputs inputs,
                                    RunPaths initial_paths, bool debug)
@@ -62,7 +64,10 @@ bool OdometryPipeline::run_all()
 void OdometryPipeline::save(const fs::path &output_folder, const GuiPreferences &gui, double elapsed_seconds)
 {
     progress_->stage_started(RunStage::Saving);
-    save_result(worker_data, *config_, state, gui, output_folder, elapsed_seconds, *inputs_.points, *logger_);
+    // interim: the output folder's sink is built here until save() takes a ResultSink
+    TomlConfigRepository config_repository;
+    FolderResultSink sink(output_folder, config_repository, *logger_);
+    save_result(worker_data, *config_, state, gui, output_folder, elapsed_seconds, sink, *inputs_.points, *logger_);
 }
 
 void OdometryPipeline::clear_point_store()

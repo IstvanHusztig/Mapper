@@ -262,7 +262,6 @@ void update_rgd(const NDT::GridParameters &rgd_params, NDTBucketMapType &buckets
 void update_rgd_spherical_coordinates(const NDT::GridParameters &rgd_params, NDTBucketMapType &buckets,
                                       std::vector<Point3Di> &points_global, std::vector<Eigen::Vector3d> &points_global_spherical);
 
-bool save_poses(const std::string file_name, std::vector<Eigen::Affine3d> m_poses, std::vector<std::string> filenames, Logger &logger);
 
 fs::path get_next_result_path(const std::string working_directory);
 

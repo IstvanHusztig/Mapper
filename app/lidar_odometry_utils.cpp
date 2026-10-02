@@ -175,34 +175,6 @@ void update_rgd_spherical_coordinates(const NDT::GridParameters &rgd_params, NDT
     }
 }
 
-bool save_poses(const std::string file_name, std::vector<Eigen::Affine3d> m_poses, std::vector<std::string> filenames, Logger &logger)
-{
-    std::ofstream outfile;
-    outfile.open(file_name);
-    if (!outfile.good())
-    {
-        log_info(logger) << "can not save file: '" << file_name << "'";
-        log_info(logger) << "if You can see only '' it means there is no filename assigned to poses, please read manual or contact me januszbedkowski@gmail.com";
-        log_info(logger) << "To assign filename to poses please use following two buttons in multi_view_tls_registration_step_2";
-        log_info(logger) << "1: update initial poses from RESSO file";
-        log_info(logger) << "2: update poses from RESSO file";
-        return false;
-    }
-
-    outfile << m_poses.size() << std::endl;
-    for (size_t i = 0; i < m_poses.size(); i++)
-    {
-        outfile << filenames[i] << std::endl;
-        outfile << m_poses[i](0, 0) << " " << m_poses[i](0, 1) << " " << m_poses[i](0, 2) << " " << m_poses[i](0, 3) << std::endl;
-        outfile << m_poses[i](1, 0) << " " << m_poses[i](1, 1) << " " << m_poses[i](1, 2) << " " << m_poses[i](1, 3) << std::endl;
-        outfile << m_poses[i](2, 0) << " " << m_poses[i](2, 1) << " " << m_poses[i](2, 2) << " " << m_poses[i](2, 3) << std::endl;
-        outfile << "0 0 0 1" << std::endl;
-    }
-    outfile.close();
-
-    return true;
-}
-
 fs::path get_next_result_path(const std::string working_directory)
 {
     std::regex pattern(R"(lio_result_(\d+))");

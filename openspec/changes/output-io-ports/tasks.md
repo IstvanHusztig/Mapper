@@ -17,7 +17,7 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
 
 ## 2. Result sink: JSON, TOML and pose files
 
-- [ ] 2.1 Add `app/folder_result_sink.{h,cpp}` (`FolderResultSink(folder, ConfigRepository&, Logger&)`). Move these into it verbatim:
+- [x] 2.1 Add `app/folder_result_sink.{h,cpp}` (`FolderResultSink(folder, ConfigRepository&, Logger&)`). Move these into it verbatim:
   - `begin` (create the folder);
   - `point_sizes`;
   - `chunk_poses` (`save_poses` → `.mri` and `.mrp`, moved from `lidar_odometry_utils.cpp`);
