@@ -12,6 +12,7 @@ bool load_data(std::vector<std::string>& input_file_names,
     std::vector<std::vector<Point3Di>>& pointsPerFile,
     Imu& imu_data,
     bool debugMsg,
+    PreviewSink& preview,
     Logger& logger)
 {
     std::sort(input_file_names.begin(), input_file_names.end());
@@ -155,24 +156,7 @@ bool load_data(std::vector<std::string>& input_file_names,
 
                 // Optional calibration validation (first file only)
                 if ((i == 0) && params.save_calibration_validation)
-                {
-                    if (!fs::exists(wdp))
-                    {
-                        log_info(logger) << "Creating folder: " << wdp << "\n";
-                        fs::create_directory(wdp);
-                    }
-
-                    fs::path outFile = wdp / "calibrationValidation.asc";
-                    std::ofstream testPointcloud(outFile);
-                    if (!testPointcloud)
-                        log_error(logger) << "Failed to open file: " << outFile << "\n";
-                    else
-                        for (size_t j = 0; j < std::min(data.size(), (size_t)params.calibration_validation_points); ++j)
-                        {
-                            const auto& p = data[j];
-                            testPointcloud << p.point.x() << "\t" << p.point.y() << "\t" << p.point.z() << "\t" << p.intensity << "\t" << (int)p.lidarid << "\n";
-                        }
-                }
+                    preview.calibration_validation(data, (size_t)params.calibration_validation_points, logger);
 
                 // Store results
                 pointsPerFile[i] = std::move(data);

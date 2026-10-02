@@ -14,7 +14,7 @@
 
 using Trajectory = std::map<double, std::pair<Eigen::Matrix4d, double>>;
 
-bool load_data(std::vector<std::string>& input_file_names, const OdometryConfig &params, OdometryState& state, std::vector<std::vector<Point3Di>>& pointsPerFile, Imu& imu_data, bool debugMsg, Logger &logger);
+bool load_data(std::vector<std::string>& input_file_names, const OdometryConfig &params, OdometryState& state, std::vector<std::vector<Point3Di>>& pointsPerFile, Imu& imu_data, bool debugMsg, PreviewSink &preview, Logger &logger);
 void calculate_trajectory(
     Trajectory &trajectory, Imu &imu_data, bool fusionConventionNwu, bool fusionConventionEnu, bool fusionConventionNed, double ahrs_gain, bool debugMsg, bool use_removie_imu_bias_from_first_stationary_scan, Logger &logger);
 bool compute_step_1(

@@ -46,4 +46,5 @@ private:
     ProgressReporter *progress_;
     bool debug_;
     std::unique_ptr<PointStore> point_store_;
+    std::unique_ptr<PreviewSink> preview_;
 };

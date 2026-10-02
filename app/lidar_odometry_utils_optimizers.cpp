@@ -1568,7 +1568,7 @@ namespace
     }
 } // namespace
 
-bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &params, OdometryState &state, double &ts_failure, bool debugMsg, PointStore &point_store, Logger &logger, ProgressReporter &progress)
+bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &params, OdometryState &state, double &ts_failure, bool debugMsg, PointStore &point_store, PreviewSink &preview, Logger &logger, ProgressReporter &progress)
 {
     if (worker_data.size() != 0)
     {
@@ -1597,12 +1597,6 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
 
         if (params.ablation_study_use_hierarchical_rgd){
             update_rgd(params.in_out_params_outdoor, state.buckets_outdoor, pp, state.m_g.translation());
-        }
-
-        if (!fs::exists(state.paths.working_directory_preview))
-        {
-            log_info(logger) << "Creating folder: " << state.paths.working_directory_preview << "\n";
-            fs::create_directory(state.paths.working_directory_preview);
         }
 
         MotionModelRotationOptions rotation_options = get_motion_model_rotation_options(params);
@@ -2119,8 +2113,7 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
                 points_to_vector(
                     intermediate_points, worker_data[i].intermediate_trajectory,
                     0, nullptr, global_pointcloud, intensity, timestamps, false, params.save_index_pose);
-                std::string fn = state.paths.working_directory_preview + "/temp_point_cloud_" + std::to_string(i) + ".laz";
-                exportLaz(fn.c_str(), global_pointcloud, intensity, timestamps);
+                preview.window_cloud(i, global_pointcloud, intensity, timestamps);
             }
             auto acc_distance_tmp = acc_distance;
             acc_distance += ((worker_data[i].intermediate_trajectory[0].inverse()) *

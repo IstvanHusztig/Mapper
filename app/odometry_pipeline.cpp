@@ -2,6 +2,9 @@
 
 #include "loop_closure.h"
 #include "disk_point_store.h"
+#include "folder_preview_sink.h"
+
+#include <algorithm>
 
 OdometryPipeline::OdometryPipeline(const OdometryConfig &config, Logger &logger, ProgressReporter &progress, RunPaths initial_paths, bool debug)
     : config_(&config), logger_(&logger), progress_(&progress), debug_(debug)
@@ -14,7 +17,11 @@ bool OdometryPipeline::load(std::vector<std::string> input_file_names)
     const OdometryConfig &params = *config_;
     progress_->stage_started(RunStage::Loading);
     progress_->checkpoint();
-    if (!load_data(input_file_names, params, state, points_per_file, imu, debug_, *logger_))
+    // interim: the preview folder as load_data derives it (the parent of the first sorted file)
+    if (!input_file_names.empty())
+        preview_ = std::make_unique<FolderPreviewSink>(
+            fs::path(*std::min_element(input_file_names.begin(), input_file_names.end())).parent_path() / "preview");
+    if (input_file_names.empty() || !load_data(input_file_names, params, state, points_per_file, imu, debug_, *preview_, *logger_))
         return false;
     point_store_ = std::make_unique<DiskPointStore>(state.paths.working_directory_cache);
     calculate_trajectory(trajectory, imu, params.fusionConventionNwu, params.fusionConventionEnu, params.fusionConventionNed,
@@ -28,7 +35,7 @@ bool OdometryPipeline::run_odometry()
     progress_->stage_started(RunStage::Odometry);
     progress_->checkpoint();
     double ts_failure = 0.0;
-    return compute_step_2(worker_data, *config_, state, ts_failure, debug_, *point_store_, *logger_, *progress_);
+    return compute_step_2(worker_data, *config_, state, ts_failure, debug_, *point_store_, *preview_, *logger_, *progress_);
 }
 
 void OdometryPipeline::post_process()

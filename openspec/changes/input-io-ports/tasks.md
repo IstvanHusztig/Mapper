@@ -32,7 +32,7 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
 
 ## 3. Preview sink
 
-- [ ] 3.1 Add `app/folder_preview_sink.{h,cpp}` (`FolderPreviewSink`): `calibration_validation` writes `calibrationValidation.asc` with today's formatting; `window_cloud` writes `temp_point_cloud_<i>.laz` through `exportLaz`; the folder is created on the first write.
+- [x] 3.1 Add `app/folder_preview_sink.{h,cpp}` (`FolderPreviewSink`): `calibration_validation` writes `calibrationValidation.asc` with today's formatting; `window_cloud` writes `temp_point_cloud_<i>.laz` through `exportLaz`; the folder is created on the first write.
 
   Switch `load_data` (calibration validation) and `compute_step_2` (every 100th window) to a `PreviewSink&`. Until group 4, `OdometryPipeline` creates it on the preview folder.
 

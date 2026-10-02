@@ -230,6 +230,8 @@ set(SOURCES
   app/recording_files.h
   app/disk_point_store.cpp
   app/disk_point_store.h
+  app/folder_preview_sink.cpp
+  app/folder_preview_sink.h
   app/toml.hpp
   app/toml_io.h
   app/toml_io.cpp
