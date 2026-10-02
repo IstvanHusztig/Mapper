@@ -71,7 +71,7 @@ See proposal.md for the motivation and the decisions. Current state of `app/lida
    - the `session` object (only filled for exports);
    - View → Points size (it only sized the initial points and the session clouds).
 
-   The 3D view keeps drawing the trajectory (points, plus the last pose's cross) and the compass/ruler.
+   The 3D view keeps drawing the trajectory (points, plus the last pose's cross) and the compass/ruler. The Camera menu (`camMenu()` from `core`: fixed views, orthographic projection) stays; it was missed in the first survey and is a pure view aid.
 
    *Earlier idea, dropped:* a top-level Tools menu with the scan range tools. The user removed those tools too, since HDMapping's registration tools aren't used, and loop closure now corrects drift.
 

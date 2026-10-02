@@ -4,9 +4,9 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
 
 ## 1. Start menu, active parameter file, background colour
 
-- [ ] 1.1 Add the Start menu (design decision 1) first in the menu bar: "1. Load parameters…" (today's Load parameters code), "2. Load data and process…" (`openData`, Ctrl+O label), a separator and the disabled "Parameters: <file name>" line. Remove the "Load & process scanning" button. Verify both presets build.
-- [ ] 1.2 Add `active_parameters` (design decision 2). It is set by `set_lidar_odometry_default_params` when `default_settings.toml` loads, and by Load parameters on success. The progress window shows the file name, with the full path as a tooltip, captured when the run starts. Verify both presets build.
-- [ ] 1.3 Add `apply_background()` (design decision 3), called after the start-up defaults and after Load parameters. Remove View → Colors. Verify both presets build. Run the step checks. Commit.
+- [x] 1.1 Add the Start menu (design decision 1) first in the menu bar: "1. Load parameters…" (today's Load parameters code), "2. Load data and process…" (`openData`, Ctrl+O label), a separator and the disabled "Parameters: <file name>" line. Remove the "Load & process scanning" button. Verify both presets build.
+- [x] 1.2 Add `active_parameters` (design decision 2). It is set by `set_lidar_odometry_default_params` when `default_settings.toml` loads, and by Load parameters on success. The progress window shows the file name, with the full path as a tooltip, captured when the run starts. Verify both presets build.
+- [x] 1.3 Add `apply_background()` (design decision 3), called after the start-up defaults and after Load parameters. Remove View → Colors. Verify both presets build. Run the step checks. Commit.
 
 ## 2. Presets and Parameters menus
 
@@ -47,7 +47,7 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
   1. start the Release GUI; Start shows "Parameters: default_settings.toml";
   2. Start → 1. Load parameters → `settings/lidar-vertical.toml`; the line now names it;
   3. Start → 2. Load data and process → `44_short`; the progress window names the file; say which `lio_result_*` it saved to;
-  4. the menu bar shows only Start, View (Show trajectory, Show compass/ruler, Lock Z) and Info;
+  4. the menu bar shows only Start, View (Show trajectory, Show compass/ruler, Lock Z), Camera and Info;
   5. confirm that Presets, Parameters, the Settings window (settings fields, georeferencing, scan range tools), "Points size", "Show initial points", "Show trajectory as axes" and the colour picker are gone.
 
   Then I verify that the result is IDENTICAL with the `44_short` manifest.

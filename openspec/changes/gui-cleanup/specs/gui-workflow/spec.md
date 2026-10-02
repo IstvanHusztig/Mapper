@@ -50,13 +50,13 @@ The GUI SHALL NOT offer selecting ranges of windows, exporting parts of a result
 - **THEN** the GUI shows the trajectory, and there is no export or editing action
 
 ### Requirement: Remaining view options
-The menu bar SHALL contain Start, View and Info. The View menu SHALL offer Show trajectory, Show compass/ruler and Lock Z. The progress window with Pause and Resume SHALL remain.
+The menu bar SHALL contain Start, View, Camera and Info. The View menu SHALL offer Show trajectory, Show compass/ruler and Lock Z. The Camera menu (fixed views and orthographic projection, from `core`) stays as it is. The progress window with Pause and Resume SHALL remain.
 
 The background colour SHALL come from the `[misc] clear_color` setting of the loaded parameters, with no colour picker in the GUI.
 
 #### Scenario: Menu bar
 - **WHEN** the GUI has started
-- **THEN** the menu bar shows Start, View and Info, and nothing else
+- **THEN** the menu bar shows Start, View, Camera and Info, and nothing else
 
 #### Scenario: Background colour from the file
 - **WHEN** the user loads a TOML whose `[misc] clear_color` differs from the current one

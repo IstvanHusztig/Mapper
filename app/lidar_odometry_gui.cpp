@@ -239,6 +239,9 @@ GuiProgress gui_progress{console};
 OdometryPipeline pipeline{params, console, gui_progress}; // the current run (data shown and edited by the GUI)
 Session session;
 
+// where the current settings came from (shown in the Start menu and the progress window)
+std::string active_parameters = "built-in defaults";
+std::string run_parameters; // active_parameters when the current run started
 std::atomic<bool> loRunning{false}; // the one-click flow's worker thread is running (the progress window is shown)
 double compute_all_seconds = 0.0; // duration of the advanced GUI's "Compute all", written with the result
 std::chrono::time_point<std::chrono::system_clock> loStartTime;
@@ -268,7 +271,45 @@ void set_lidar_odometry_default_params(OdometryConfig &params, RunPaths &paths, 
     }
     TomlConfigRepository config_repository;
     if (config_repository.load(file.string(), params, paths, gui))
+    {
+        active_parameters = file.string();
         std::cout << "Default settings loaded from: '" << file.string() << "'" << std::endl;
+    }
+}
+
+// the view background comes from the loaded settings ([misc] clear_color)
+void apply_background()
+{
+    bg_color = ImVec4(gui_prefs.clear_color[0], gui_prefs.clear_color[1], gui_prefs.clear_color[2], gui_prefs.clear_color[3]);
+}
+
+// Start -> Load parameters: a TOML file overlaid on the current settings
+void load_parameters_file()
+{
+    auto input_file_names = mandeye::fd::OpenFileDialog("Load parameters file", mandeye::fd::Toml_filter, ".toml");
+    if (input_file_names.empty())
+        return;
+    try
+    {
+        TomlConfigRepository config_repository;
+        if (config_repository.load(input_file_names[0], params, pipeline.state.paths, gui_prefs))
+        {
+            active_parameters = input_file_names[0];
+            apply_background();
+        }
+        std::cout << "Parameters loaded from: " << input_file_names[0] << std::endl;
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Error loading TOML file: " << e.what() << std::endl;
+    }
+}
+
+// file name of a parameter source for display ("built-in defaults" stays as it is)
+std::string parameters_label(const std::string &source)
+{
+    const fs::path p(source);
+    return p.has_filename() && p.has_parent_path() ? p.filename().string() : source;
 }
 
 // Helper function to format time in human-readable format
@@ -1171,6 +1212,9 @@ void progress_window()
     ImGui::Begin("Progress", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
     ImGui::Text(("Working directory:\n'" + working_directory +  "'").c_str());
+    ImGui::Text("Parameters: %s", parameters_label(run_parameters).c_str());
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("%s", run_parameters.c_str());
 
     const double elapsedSeconds = std::chrono::duration<double>(std::chrono::system_clock::now() - loStartTime).count();
     const RunStage stage = gui_progress.stage();
@@ -1245,6 +1289,7 @@ void openData()
         // the progress window is shown from here on; loading runs on the worker thread so it stays visible
         loRunning.store(true);
         loStartTime = std::chrono::system_clock::now();
+        run_parameters = active_parameters;
 
         std::thread loThread(
             [input_folder_name, input_file_names]()
@@ -1475,6 +1520,27 @@ void display()
     {
         if (ImGui::BeginMainMenuBar())
         {
+            if (ImGui::BeginMenu("Start"))
+            {
+                if (ImGui::MenuItem("1. Load parameters..."))
+                    load_parameters_file();
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Load processing settings from a TOML file (the only way to change them)");
+
+                if (ImGui::MenuItem("2. Load data and process...", "Ctrl+O"))
+                    openData();
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Select the folder with the IMU *.csv and LiDAR *.laz files; it is loaded, processed and saved to lio_result_*");
+
+                ImGui::Separator();
+                ImGui::BeginDisabled();
+                ImGui::MenuItem(("Parameters: " + parameters_label(active_parameters)).c_str());
+                ImGui::EndDisabled();
+                if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                    ImGui::SetTooltip("%s", active_parameters.c_str());
+
+                ImGui::EndMenu();
+            }
             if (ImGui::BeginMenu("Presets"))
             {
                 if (ImGui::MenuItem("1 Velocity < 8km/h, tiny spaces", nullptr, (lastPar == 1)))
@@ -1636,25 +1702,6 @@ void display()
 
                 ImGui::Separator();
 
-                if (ImGui::MenuItem("Load parameters"))
-                {
-                    auto input_file_names = mandeye::fd::OpenFileDialog("Load parameters file", mandeye::fd::Toml_filter, ".toml");
-
-                    if (input_file_names.size() > 0)
-                    {
-                        try
-                        {
-                            TomlConfigRepository config_repository;
-                            config_repository.load(input_file_names[0], params, pipeline.state.paths, gui_prefs);
-                            std::cout << "Parameters loaded from: " << input_file_names[0] << std::endl;
-                        }
-                        catch (const std::exception& e)
-                        {
-                            std::cerr << "Error loading TOML file: " << e.what() << std::endl;
-                        }
-                    }
-                }
-
                 if (ImGui::MenuItem("Save parameters"))
                 {
                     auto output_file_name = mandeye::fd::SaveFileDialog("Save parameters file", mandeye::fd::Toml_filter, ".toml");
@@ -1675,19 +1722,6 @@ void display()
             }
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip("Processing parameter list");
-
-            ImGui::SameLine();
-            ImGui::Dummy(ImVec2(20, 0));
-            ImGui::SameLine();
-
-            if (ImGui::Button("Load & process scanning"))
-                openData();
-            if (ImGui::IsItemHovered())
-                ImGui::SetTooltip("Select folder from where to load data and start processing (Ctrl+O)");
-
-            ImGui::SameLine();
-            ImGui::Dummy(ImVec2(20, 0));
-            ImGui::SameLine();
 
             if (ImGui::BeginMenu("View"))
             {
@@ -1718,13 +1752,6 @@ void display()
 
                 ImGui::MenuItem("Lock Z", "Shift + Z", &lock_z, !is_ortho);
 
-                ImGui::Separator();
-
-                ImGui::Text("Colors:");
-
-                ImGui::ColorEdit3("Background", gui_prefs.clear_color, ImGuiColorEditFlags_NoInputs);
-
-                bg_color = ImVec4(gui_prefs.clear_color[0], gui_prefs.clear_color[1], gui_prefs.clear_color[2], gui_prefs.clear_color[3]);
 
                 ImGui::Separator();
 
@@ -1948,6 +1975,7 @@ int main(int argc, char *argv[])
             std::cout << argv[0] << " input_folder parameters(*.toml) output_folder" << std::endl;
 
             set_lidar_odometry_default_params(params, pipeline.state.paths, gui_prefs);
+            apply_background();
 
              
 
