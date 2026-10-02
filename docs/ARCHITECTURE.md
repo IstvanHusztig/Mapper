@@ -66,7 +66,10 @@ infrastructure and UI at the edge, and all source dependencies pointing inward.
 - ✅ Globals in `lidar_odometry_gui.cpp` (`params`, `worker_data`, `imu_data`, `trajectory`,
   `pointsPerFile`, step flags). Step 2 moved the run data into `OdometryPipeline`. The GUI still
   keeps `params`, `gui_prefs`, its current `pipeline` and UI state as file-scope globals for the
-  GLUT callbacks; a GUI view-model is left for later.
+  GLUT callbacks; a GUI view-model is left for later. Since the GUI cleanup (2026-10-02) the GUI
+  changes `OdometryConfig` only through `ConfigRepository` (Start → Load parameters). It has no
+  settings widgets and no georeferencing or editing tools. Georeferencing is planned as a
+  separate post-processing module on result folders.
 - `optimize_lidar_odometry` takes about 40 positional arguments → option structs built from the
   config.
 - `lidar_odometry_utils_optimizers.cpp` (about 3,000 lines) mixes optimizer math, the window loop,

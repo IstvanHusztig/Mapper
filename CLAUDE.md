@@ -31,7 +31,13 @@ cmake --build --preset x64-Release --target lidar_odometry_step_1
 ## Run
 
 - **Headless / CLI:** `lidar_odometry_step_1 <input_folder> <params.toml> <output_folder>`. Exactly 3 args triggers batch mode. The settings are the built-in defaults plus `<params.toml>` only, never a `default_settings.toml` from the working directory; an unreadable TOML exits 1.
-- **GUI:** any other argument count opens the freeglut + ImGui window. It loads `default_settings.toml` from the exe folder at start-up. "Compute all" and the simple one-click flow run the same stages as the CLI, so for the same input and settings the GUI result is identical to the CLI's. In the one-click flow the data loads on a worker thread. The progress window shows the current stage (Loading, Odometry with percentage and estimate, Loop closure, Consistency, Saving) and can pause the run.
+- **GUI:** any other argument count opens the freeglut + ImGui window. The menu bar has Start, View, Camera and Info:
+  - **Start → 1. Load parameters…** loads a TOML. This is the only way to change settings in the GUI; at start-up it loads `default_settings.toml` from the exe folder. The Start menu and the progress window show the active parameter file.
+  - **Start → 2. Load data and process…** (Ctrl+O) picks the recording folder, then loads it on a worker thread, processes it with the same stages as the CLI, and saves `lio_result_<n>`. For the same input and settings the result is identical to the CLI's.
+  - **View** has Show trajectory, compass/ruler and Lock Z; **Camera** has the fixed views and orthographic projection.
+  - The progress window shows the current stage (Loading, Odometry with percentage and estimate, Loop closure, Consistency, Saving) and can pause the run.
+  - The background colour comes from `[misc] clear_color` in the loaded TOML.
+  - There are no settings widgets, presets, georeferencing, or export/editing tools. Georeferencing is meant to be a separate post-processing module.
 
 The input folder is scanned non-recursively. `pair_recording_files` (`app/recording_files.cpp`) sorts the files and splits them by extension (`.laz`/`.las` point clouds, `.csv` IMU data); everything else is ignored. LAZ and CSV files are paired by sorted order, and each must have a partner with the same last four characters of the name. There is no multi-LiDAR calibration: points are only shifted by the lever arm (`lidar_imu_lever_arm_*`).
 
@@ -77,7 +83,7 @@ Their adapters:
 Logging is console only; nothing is written to the output folder.
 
 **Settings and state** (all in `app/lidar_odometry_utils.h`):
-- `OdometryConfig` holds every setting and is passed `const&` to the pipeline. Only TOML loading and the GUI's settings widgets write to it.
+- `OdometryConfig` holds every setting and is passed `const&` to the pipeline. Only TOML loading (`ConfigRepository`) writes to it; the GUI has no settings widgets.
 - `OdometryState` holds what a run produces: the NDT maps, `m_g`, the initial and reference points, the trajectory length, and `RunPaths` (the `[paths]` keys plus the cache folder). Functions that change it take it explicitly.
 - `GuiPreferences` holds GUI-only values (`clear_color`, saved in `[misc]`).
 
@@ -93,4 +99,4 @@ GUI defaults are loaded by `set_lidar_odometry_default_params` (in `lidar_odomet
 
 **Critical link-order constraint:** `CORE_SOURCE_FILES` in `CMakeLists.txt` is an explicit list that must mirror the original hd-mapping `core/CMakeLists.txt` — do **not** replace it with a glob or compile core sources directly into the exe. The app relies on static-archive semantics: `hash_utils.cpp` defines `get_index()`/`get_rgd_index()` that would collide with the app's own definitions, and `surface.cpp` duplicates globals from `pose_graph_slam.cpp` (so it is intentionally excluded). Adding a new `core/src/*.cpp` that the app needs means adding it to that list and checking for symbol collisions.
 
-GLEW is only used for headers (never initialized or linked). The GUI keeps file-scope globals in `lidar_odometry_gui.cpp`, because GLUT callbacks need them: `params`, `gui_prefs`, `console`, `gui_progress`, the current `pipeline`, and UI state (view flags, gizmo, `loRunning`). The CLI branch of `main()` uses only locals.
+GLEW is only used for headers (never initialized or linked). The GUI keeps file-scope globals in `lidar_odometry_gui.cpp`, because GLUT callbacks need them: `params`, `gui_prefs`, `console`, `gui_progress`, the current `pipeline`, `active_parameters`/`run_parameters`, and UI state (`show_trajectory`, `working_directory`, `loRunning`). The CLI branch of `main()` uses only locals.

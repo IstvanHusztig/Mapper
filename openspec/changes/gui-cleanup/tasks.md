@@ -51,9 +51,9 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
   5. confirm that Presets, Parameters, the Settings window (settings fields, georeferencing, scan range tools), "Points size", "Show initial points", "Show trajectory as axes" and the colour picker are gone.
 
   Then I verify that the result is IDENTICAL with the `44_short` manifest.
-- [ ] 5.3 Docs:
+- [x] 5.3 Docs:
   - `CLAUDE.md`, Run → GUI: the Start menu, settings only via TOML, the active file, no georeferencing or editing tools. Architecture: the GUI globals list.
   - `docs/ARCHITECTURE.md` §4: the GUI changes `OdometryConfig` only through `ConfigRepository`; georeferencing is a future separate module.
 
   Commit.
-- [ ] 5.4 Run `openspec validate gui-cleanup --strict` and confirm it passes.
+- [x] 5.4 Run `openspec validate gui-cleanup --strict` and confirm it passes.
