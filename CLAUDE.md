@@ -36,6 +36,7 @@ cmake --build --preset x64-Release --target dMapper
   - **Start → 2. Load data and process…** (Ctrl+O) picks the recording folder, then loads it on a worker thread, processes it with the same stages as the CLI, and saves `lio_result_<n>`. For the same input and settings the result is identical to the CLI's.
   - **View** has Show trajectory, compass/ruler and Lock Z; **Camera** has the fixed views and orthographic projection.
   - The progress window shows the current stage (Loading, Odometry with percentage and estimate, Loop closure, Consistency, Saving) and can pause the run.
+  - The window redraws on a timer (`schedule_redraw`): about 10 frames per second during a run and 60 otherwise, so the redraw doesn't slow the processing. A slower run would change results through `real_time_threshold_seconds`.
   - The background colour comes from `[misc] clear_color` in the loaded TOML.
   - There are no settings widgets, presets, georeferencing, or export/editing tools. Georeferencing is meant to be a separate post-processing module.
 

@@ -20,5 +20,5 @@ Every code commit: both presets build `dMapper` and `lidar_odometry_tests`; `cte
   - the result is IDENTICAL with the `44_short` manifest.
 
   If it is still slower, I report the numbers and stop for profiling, without changing the cap.
-- [ ] 2.2 Docs: `CLAUDE.md` (Architecture, GUI: the redraw is timer-driven, 10/60 fps). Commit.
-- [ ] 2.3 Run `openspec validate gui-frame-rate-cap --strict` and confirm it passes.
+- [x] 2.2 Docs: `CLAUDE.md` (Architecture, GUI: the redraw is timer-driven, 10/60 fps). Commit.
+- [x] 2.3 Run `openspec validate gui-frame-rate-cap --strict` and confirm it passes.
