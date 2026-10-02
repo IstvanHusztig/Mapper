@@ -19,7 +19,7 @@ The user decided (2026-10-02):
 
 - **BREAKING (command name):** the executable and CMake target become `dMapper` (`dMapper.exe`), and the CMake project is `dMapper`. Scripts and docs that call `lidar_odometry_step_1` change to `dMapper`.
 - **Window title:** exactly "dMapper", with no version and no folder name. The folder is already shown in the progress window. The version stays in the Windows file properties and the outputs.
-- **Info window text:** rewritten for dMapper: what it does, and where results go (`lio_result_*` with `session.mjs`, trajectories and LAZ files). No Mandeye and no `multi_view_tls_registration` workflow text.
+- **Info button and Info window removed** (user decision during apply). They held HDMapping/Mandeye workflow text and a keyboard shortcut list. The menu bar becomes Start, View, Camera. (First plan, superseded: rewrite the Info text.)
 - **Folder dialog title:** "Select recording folder (lidar*.laz + imu*.csv)".
 - **Windows version resource** (`app/resource.rc`):
   - ProductName and InternalName "dMapper", OriginalFilename `dMapper.exe`;
@@ -43,7 +43,7 @@ The user decided (2026-10-02):
 - None.
 
 ### Modified Capabilities
-- `gui-workflow`: adds the application name and the exact window title.
+- `gui-workflow`: adds the application name and the exact window title. "Remaining view options" drops the Info button from the menu bar.
 - `regression-baseline`: "Deterministic output for identical runs" names the CLI command, which becomes `dMapper`.
 
 ## Impact
