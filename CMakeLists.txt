@@ -236,6 +236,9 @@ set(SOURCES
   app/mandeye_recording_source.h
   app/folder_inputs.cpp
   app/folder_inputs.h
+  app/output_ports.h
+  app/toml_config_repository.cpp
+  app/toml_config_repository.h
   app/toml.hpp
   app/toml_io.h
   app/toml_io.cpp

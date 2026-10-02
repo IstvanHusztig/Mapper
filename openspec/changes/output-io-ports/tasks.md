@@ -4,14 +4,14 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
 
 ## 1. Ports and the config repository
 
-- [ ] 1.1 Add `app/output_ports.h` with `TrajectoryRow`, `SessionSummary`, `ResultSink` and `ConfigRepository` (design decision 1). Verify both presets build.
-- [ ] 1.2 Add `app/toml_config_repository.{h,cpp}` (`TomlConfigRepository`, calling `TomlIO` unchanged), and `tests/toml_config_repository_test.cpp`:
+- [x] 1.1 Add `app/output_ports.h` with `TrajectoryRow`, `SessionSummary`, `ResultSink` and `ConfigRepository` (design decision 1). Verify both presets build.
+- [x] 1.2 Add `app/toml_config_repository.{h,cpp}` (`TomlConfigRepository`, calling `TomlIO` unchanged), and `tests/toml_config_repository_test.cpp`:
   - a round trip of the defaults;
   - a round trip of a changed config (bool, int, double and string fields, `[paths]`, `[misc]` `clear_color`);
   - a missing file returns false.
 
   Verify `ctest` passes.
-- [ ] 1.3 Replace every `TomlIO toml_io;` outside `toml_io.cpp` and the adapter with `TomlConfigRepository`: CLI `main()`, `set_lidar_odometry_default_params`, Load parameters, Save parameters. Keep the CLI's exit-1 check and the GUI's try/catch.
+- [x] 1.3 Replace every `TomlIO toml_io;` outside `toml_io.cpp` and the adapter with `TomlConfigRepository`: CLI `main()`, `set_lidar_odometry_default_params`, Load parameters, Save parameters. Keep the CLI's exit-1 check and the GUI's try/catch.
 
   Verify that a grep for `TomlIO` in `app/lidar_odometry_gui.cpp` finds nothing, and that a CLI run with a missing TOML path still exits 1. Run the step checks. Commit.
 

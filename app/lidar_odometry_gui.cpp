@@ -24,7 +24,7 @@
 #include <pfd_wrapper.hpp>
 #include <ctime>
 #include <chrono>
-#include "toml_io.h"
+#include "toml_config_repository.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -265,8 +265,8 @@ void set_lidar_odometry_default_params(OdometryConfig &params, RunPaths &paths, 
         std::cout << "Default settings not found: '" << file.string() << "' (using built-in defaults)" << std::endl;
         return;
     }
-    TomlIO toml_io;
-    if (toml_io.LoadParametersFromTomlFile(file.string(), params, paths, gui))
+    TomlConfigRepository config_repository;
+    if (config_repository.load(file.string(), params, paths, gui))
         std::cout << "Default settings loaded from: '" << file.string() << "'" << std::endl;
 }
 
@@ -1641,9 +1641,8 @@ void display()
                     {
                         try
                         {
-                            // Use the original TomlIO class for loading parameters in GUI
-                            TomlIO toml_io;
-                            toml_io.LoadParametersFromTomlFile(input_file_names[0], params, pipeline.state.paths, gui_prefs);
+                            TomlConfigRepository config_repository;
+                            config_repository.load(input_file_names[0], params, pipeline.state.paths, gui_prefs);
                             std::cout << "Parameters loaded from: " << input_file_names[0] << std::endl;
                         }
                         catch (const std::exception& e)
@@ -1660,9 +1659,8 @@ void display()
 
                     if (!output_file_name.empty())
                     {
-                        // Use the original TomlIO class for saving parameters in GUI
-                        TomlIO toml_io;
-                        bool success = toml_io.SaveParametersToTomlFile(output_file_name, params, pipeline.state.paths, gui_prefs);
+                        TomlConfigRepository config_repository;
+                        bool success = config_repository.save(output_file_name, params, pipeline.state.paths, gui_prefs);
                         if (success)
                             std::cout << "Parameters file generated: " << output_file_name << std::endl;
                         else
@@ -1904,8 +1902,8 @@ int main(int argc, char *argv[])
             OdometryConfig config{};
             RunPaths paths;
             GuiPreferences gui;
-            TomlIO toml_io;
-            if (!fs::is_regular_file(argv[2]) || !toml_io.LoadParametersFromTomlFile(argv[2], config, paths, gui))
+            TomlConfigRepository config_repository;
+            if (!fs::is_regular_file(argv[2]) || !config_repository.load(argv[2], config, paths, gui))
             {
                 std::cerr << "Cannot load parameters from: '" << argv[2] << "'" << std::endl;
                 return 1;

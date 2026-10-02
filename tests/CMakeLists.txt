@@ -6,10 +6,12 @@ add_executable(lidar_odometry_tests
   run_reporting_test.cpp
   recording_files_test.cpp
   disk_point_store_test.cpp
+  toml_config_repository_test.cpp
   ${REPOSITORY_DIRECTORY}/app/toml_io.cpp
   ${REPOSITORY_DIRECTORY}/app/console_reporting.cpp
   ${REPOSITORY_DIRECTORY}/app/recording_files.cpp
-  ${REPOSITORY_DIRECTORY}/app/disk_point_store.cpp)
+  ${REPOSITORY_DIRECTORY}/app/disk_point_store.cpp
+  ${REPOSITORY_DIRECTORY}/app/toml_config_repository.cpp)
 
 target_include_directories(
   lidar_odometry_tests
