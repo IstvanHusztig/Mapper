@@ -455,6 +455,24 @@ void draw_run_data()
     }
 }
 
+// The next frame is scheduled instead of requested at once: about 10 frames per second during a run (so the
+// redraw doesn't take time from the processing) and about 60 otherwise. Mouse moves still redraw at once (core).
+bool redraw_scheduled = false;
+
+void redraw_timer(int)
+{
+    redraw_scheduled = false;
+    glutPostRedisplay();
+}
+
+void schedule_redraw()
+{
+    if (redraw_scheduled)
+        return;
+    redraw_scheduled = true;
+    glutTimerFunc(loRunning ? 100 : 16, redraw_timer, 0);
+}
+
 void display()
 { 
     ImGuiIO& io = ImGui::GetIO();
@@ -566,7 +584,7 @@ void display()
     ImGui_ImplOpenGL2_RenderDrawData(ImGui::GetDrawData());
 
     glutSwapBuffers();
-    glutPostRedisplay();
+    schedule_redraw();
 }
 
 void on_exit(){

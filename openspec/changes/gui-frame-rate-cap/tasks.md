@@ -4,7 +4,7 @@ Every code commit: both presets build `dMapper` and `lidar_odometry_tests`; `cte
 
 ## 1. Redraw timer
 
-- [ ] 1.1 In `app/lidar_odometry_gui.cpp`, replace the `glutPostRedisplay()` at the end of `display()` with `schedule_redraw()` (design decision 1): a `glutTimerFunc` of 100 ms while `loRunning`, 16 ms otherwise, guarded by `redraw_scheduled`.
+- [x] 1.1 In `app/lidar_odometry_gui.cpp`, replace the `glutPostRedisplay()` at the end of `display()` with `schedule_redraw()` (design decision 1): a `glutTimerFunc` of 100 ms while `loRunning`, 16 ms otherwise, guarded by `redraw_scheduled`.
 
   Verify that a grep for `glutPostRedisplay` in `app/lidar_odometry_gui.cpp` finds only the one in `redraw_timer`. Run the step checks. Commit.
 
