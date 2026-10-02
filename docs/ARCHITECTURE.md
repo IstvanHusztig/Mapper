@@ -1,7 +1,7 @@
 # Architecture goals
 
 Status: **in progress.** This is the target architecture for `lidar_odometry_step_1` and the
-plan for getting there. Each migration step is its own OpenSpec change; steps 0–3 are done (see
+plan for getting there. Each migration step is its own OpenSpec change; steps 0–3 and 4a are done (see
 the roadmap).
 
 ## Why
@@ -42,9 +42,11 @@ infrastructure and UI at the edge, and all source dependencies pointing inward.
 
 ## 3. Ports (first cut)
 
-- `RecordingSource`: lists and reads LiDAR chunks and IMU samples from an input folder.
+- `RecordingSource`: lists and reads LiDAR chunks and IMU samples from an input folder. ✅ step 4a
 - `PointStore`: keeps and fetches a window's points (in memory or in a disk cache); replaces the
-  `*_cache_file_name` fields in `WorkerData`.
+  `*_cache_file_name` fields in `WorkerData`. ✅ step 4a
+- `PreviewSink`: preview output during a run (`calibrationValidation.asc`,
+  `temp_point_cloud_<i>.laz`). ✅ step 4a
 - `ConfigRepository`: loads and saves `OdometryConfig` (TOML today).
 - `ResultSink`: session, trajectories, LAZ, `parameters.toml`, processing-results JSON.
 - `ProgressReporter` / `Logger`: replace `std::cout` (about 100 calls in the pipeline) and the
@@ -59,7 +61,8 @@ infrastructure and UI at the edge, and all source dependencies pointing inward.
   `ImVec4 clear_color`). Step 1 split it into `OdometryConfig` (passed `const&`),
   `OdometryState` and `GuiPreferences`. Grouping `OdometryConfig` by section is left to step 5.
 - `WorkerData` (`core/include/structures.h`) carries cache file names and a GUI `show` flag
-  → a domain `Window` plus the `PointStore` port; view flags move to the GUI.
+  → a domain `Window` plus the `PointStore` port; view flags move to the GUI. Since step 4a the
+  app no longer uses the cache file names; they go away with `Window` in step 5.
 - ✅ Globals in `lidar_odometry_gui.cpp` (`params`, `worker_data`, `imu_data`, `trajectory`,
   `pointsPerFile`, step flags). Step 2 moved the run data into `OdometryPipeline`. The GUI still
   keeps `params`, `gui_prefs`, its current `pipeline` and UI state as file-scope globals for the
@@ -111,7 +114,12 @@ Each step is one OpenSpec change, validated against the baseline.
    pipeline code has no `std::cout`, progress atomics or sleeps. The GUI progress window shows
    the current stage, and Pause blocks the run at its next checkpoint. Logging stays on the
    console.
-4. **I/O ports:** `RecordingSource`, `PointStore`, `ResultSink`, `ConfigRepository`, with adapters.
+4. **I/O ports**, split into two changes:
+   - 4a. ✅ **Input side** (done 2026-10-02): `RecordingSource`, `PointStore` and `PreviewSink`
+     (`app/input_ports.h`) with the adapters `MandeyeFolderSource`, `DiskPointStore` and
+     `FolderPreviewSink`. The pipeline owns them (`RunInputs`, `make_folder_inputs`). The pairing
+     rules and the point store have unit tests.
+   - 4b. **Output side:** `ResultSink` (the output folder) and `ConfigRepository` (TOML).
 5. **Domain model:** `Window`, `Trajectory`, `GyroBiasState`; option structs for the optimizer.
 6. **Split the optimizer file** into domain services; first unit tests on synthetic data.
 7. **Layered CMake targets and folders;** move the `core/` pieces touched so far.

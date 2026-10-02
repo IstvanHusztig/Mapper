@@ -23,7 +23,7 @@ cmake --build --preset x64-Release --target lidar_odometry_step_1
 
 ## Testing
 
-- **Unit tests:** `cmake --build --preset x64-Release --target lidar_odometry_tests`, then `ctest --test-dir out/build/x64-Release` (vcvars loaded). Tests live in `tests/` and must run without recorded data or a display. They compile the app sources they need directly (today `app/toml_io.cpp` and `app/console_reporting.cpp`) and don't link `core`.
+- **Unit tests:** `cmake --build --preset x64-Release --target lidar_odometry_tests`, then `ctest --test-dir out/build/x64-Release` (vcvars loaded). Tests live in `tests/` and must run without recorded data or a display. They compile the app sources they need directly (today `app/toml_io.cpp`, `app/console_reporting.cpp`, `app/recording_files.cpp` and `app/disk_point_store.cpp`) and don't link `core`.
 - **Golden baseline:** a pure refactor is compared with `tools/compare_baseline.py`:
   - `44_short` must be bit-identical with `tools/baseline/44_short.manifest.json`; check it on every intermediate commit (about 3.5 min).
   - The full 44 runs once per change (about 30 min). It must match `tools/baseline/44.manifest.json`, or else be within `--tolerance 1e-6` of the baseline folder `raw data/44_baseline`. The Release `/fp:fast` build can change the last bits of the long run when unrelated code changes. The datasets are in `C:\Users\User\Downloads\dLidar\raw data\` (`44_short` was made with the `cut_recording` target). Run Release with `settings/lidar-vertical.toml`, and never run two jobs on the same input folder at once (they share its `cache/`). See `tools/README.md`.
@@ -33,18 +33,30 @@ cmake --build --preset x64-Release --target lidar_odometry_step_1
 - **Headless / CLI:** `lidar_odometry_step_1 <input_folder> <params.toml> <output_folder>`. Exactly 3 args triggers batch mode. The settings are the built-in defaults plus `<params.toml>` only, never a `default_settings.toml` from the working directory; an unreadable TOML exits 1.
 - **GUI:** any other argument count opens the freeglut + ImGui window. It loads `default_settings.toml` from the exe folder at start-up. "Compute all" and the simple one-click flow run the same stages as the CLI, so for the same input and settings the GUI result is identical to the CLI's. In the one-click flow the data loads on a worker thread. The progress window shows the current stage (Loading, Odometry with percentage and estimate, Loop closure, Consistency, Saving) and can pause the run.
 
-The input folder is scanned non-recursively; `load_data` (`app/lidar_odometry.cpp`) sorts files by extension: `.laz`/`.las` point clouds, `.csv` IMU data; everything else is ignored. There is no multi-LiDAR calibration: points are only shifted by the lever arm (`lidar_imu_lever_arm_*`).
+The input folder is scanned non-recursively. `pair_recording_files` (`app/recording_files.cpp`) sorts the files and splits them by extension (`.laz`/`.las` point clouds, `.csv` IMU data); everything else is ignored. LAZ and CSV files are paired by sorted order, and each must have a partner with the same last four characters of the name. There is no multi-LiDAR calibration: points are only shifted by the lever arm (`lidar_imu_lever_arm_*`).
 
 ## Architecture
 
 Target architecture (Clean Architecture, layers, ports, migration roadmap) is in `docs/ARCHITECTURE.md`; refactors should move the code toward it. What follows describes the current code.
 
 **Pipeline:** `OdometryPipeline` (`app/odometry_pipeline.{h,cpp}`) owns one run's data (`points_per_file`, `imu`, `trajectory`, `worker_data`, `state`) and runs the stages `load` (1–3) → `run_odometry` (4) → `post_process` (loop closure if `use_loop_closure`, then consistency if `use_consistency`) → `save` (5). The CLI branch of `main()` and the GUI (global `pipeline`) both use it:
-1. `load_data` — read LAZ chunks + IMU CSV, apply calibration, decimate.
+1. `load_data` — read the LAZ chunks and IMU CSV through the `RecordingSource`, shift the points by the lever arm, and sort them.
 2. `calculate_trajectory` — IMU-only orientation via Fusion AHRS (NWU/ENU/NED convention flags in params).
 3. `compute_step_1` — cut the data into `WorkerData` windows (points + intermediate trajectory per chunk).
 4. `compute_step_2` (`app/lidar_odometry_utils_optimizers.cpp`) — per-window scan-to-map optimization against an NDT-bucket reference map (`optimize_lidar_odometry`, `optimize_sf*`, `optimize_icp`), optional `Consistency`/`Consistency2` passes (`run_consistency`, run in `post_process` when `use_consistency = true`). Loop closure: `run_loop_closure` (`app/loop_closure.cpp`).
 5. `save_result` (`app/lidar_odometry.cpp`) — write session, trajectories, LAZ, `parameters.toml` and processing-results JSON to the output folder.
+
+**Input I/O:** pipeline code has no file names, folders, LASzip calls or CSV parsing on the input side. It uses three ports from `app/input_ports.h`:
+- `RecordingSource` reads the LiDAR + IMU chunk pairs.
+- `PointStore` holds point sets between stages: each window's original and intermediate points, and the session chunks of `save_result`.
+- `PreviewSink` writes `calibrationValidation.asc` and `temp_point_cloud_<i>.laz`.
+
+`OdometryPipeline` owns them as `RunInputs`, built by `make_folder_inputs(files, logger)` (`app/folder_inputs.cpp`) for a recording folder. There is one adapter for each port:
+- `MandeyeFolderSource` (`app/mandeye_recording_source.{h,cpp}`, which also holds `load_imu` and `load_point_cloud`);
+- `DiskPointStore` (`<folder>/cache/*.cache`, window files numbered from 0);
+- `FolderPreviewSink` (`<folder>/preview`).
+
+The pipeline records the cache and preview folders in `state.paths` from the ports' `location()`. `WorkerData`'s `*_cache_file_name` fields are no longer used; they stay only because `core/src/session.cpp` reads one. The output folder (`save_result`) and the TOML I/O are still direct (roadmap step 4b).
 
 **Reporting:** pipeline code never writes to the console and has no progress atomics or sleeps. It uses two ports from `app/run_reporting.h`, passed in explicitly:
 - `Logger` for messages: `log_info(logger) << ...`, also `log_debug`, `log_warning`, `log_error`. Each message has its own stream, so it sets its own precision.

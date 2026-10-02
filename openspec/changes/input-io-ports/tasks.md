@@ -64,9 +64,9 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
   4. close the GUI and check that `44_short/cache` is gone.
 
   Then I verify that both results are IDENTICAL with the `44_short` manifest.
-- [ ] 5.3 Docs:
+- [x] 5.3 Docs:
   - `CLAUDE.md` Architecture: the input ports and adapters, `OdometryPipeline` owning `RunInputs`, and where `load_imu`/`load_point_cloud` live now. Testing: the new test sources.
   - `docs/ARCHITECTURE.md`: split roadmap step 4 into 4a (done) and 4b (`ResultSink`, `ConfigRepository`); add `PreviewSink` to §3 Ports; in §4, the `WorkerData` cache fields are unused (removed in step 5).
 
   Commit.
-- [ ] 5.4 Run `openspec validate input-io-ports --strict` and confirm it passes.
+- [x] 5.4 Run `openspec validate input-io-ports --strict` and confirm it passes.
