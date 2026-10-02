@@ -412,76 +412,7 @@ void run_consistency(std::vector<WorkerData> &worker_data, const OdometryConfig 
     log_info(logger) << "Point cloud consistency and trajectory smoothness FINISHED";
 }
 
-namespace
-{
-    // one LAZ with all chunks in world coordinates, written chunk by chunk (memory stays flat on long recordings);
-    // the header's point count and bounding box are filled in from the written points when it is closed
-    class MergedLazWriter
-    {
-    public:
-        explicit MergedLazWriter(Logger &logger) : logger_(&logger) {}
-
-        bool open(const std::string &filename)
-        {
-            if (laszip_create(&writer_))
-                return false;
-            laszip_header *header;
-            if (laszip_get_header_pointer(writer_, &header))
-                return false;
-            header->file_source_ID = 4711;
-            header->global_encoding = (1 << 0);
-            header->version_major = 1;
-            header->version_minor = 2;
-            header->point_data_format = 1;
-            header->point_data_record_length = 28;
-            header->x_scale_factor = header->y_scale_factor = header->z_scale_factor = 0.0001;
-            header->x_offset = header->y_offset = header->z_offset = 0.0;
-            if (laszip_open_writer(writer_, filename.c_str(), 1) || laszip_get_point_pointer(writer_, &point_))
-                return false;
-            open_ = true;
-            return true;
-        }
-
-        void write(const std::vector<Eigen::Vector3d> &points, const std::vector<unsigned short> &intensity, const std::vector<double> &timestamps)
-        {
-            if (!open_)
-                return;
-            for (size_t i = 0; i < points.size(); i++)
-            {
-                laszip_F64 coordinates[3] = {points[i].x(), points[i].y(), points[i].z()};
-                point_->intensity = intensity[i];
-                point_->gps_time = timestamps[i] * 1e9;
-                if (laszip_set_coordinates(writer_, coordinates) || laszip_write_point(writer_) || laszip_update_inventory(writer_))
-                {
-                    log_error(*logger_) << "merged LAZ: write error, file incomplete";
-                    close();
-                    return;
-                }
-                count_++;
-            }
-        }
-
-        void close()
-        {
-            if (!open_)
-                return;
-            laszip_close_writer(writer_);
-            laszip_destroy(writer_);
-            open_ = false;
-        }
-
-        long long count() const { return count_; }
-
-    private:
-        Logger *logger_;
-        laszip_POINTER writer_ = nullptr;
-        laszip_point *point_ = nullptr;
-        bool open_ = false;
-        long long count_ = 0;
-    };
-} // namespace
-
-void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &params, const OdometryState &state, const GuiPreferences &gui, fs::path outwd, double elapsed_time_s, ResultSink &sink, PointStore &point_store, Logger &logger)
+void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &params, const OdometryState &state, const GuiPreferences &gui, double elapsed_time_s, ResultSink &sink, PointStore &point_store, Logger &logger)
 {
     sink.begin();
     // concatenate data
@@ -558,19 +489,12 @@ void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &par
     sink.point_sizes(point_sizes_per_chunk);
 
     std::vector<Eigen::Affine3d> m_poses;
-    std::vector<std::string> file_names;
     std::vector<std::vector<int>> index_poses;
-    MergedLazWriter merged(logger);
-    if (params.export_merged_laz && !merged.open((outwd / "scan_lio_merged.laz").string()))
-        log_error(logger) << "can not open " << (outwd / "scan_lio_merged.laz") << " for writing";
+    if (params.export_merged_laz)
+        sink.open_merged_cloud();
 
     for (int i = 0; i < worker_data_concatenated.size(); i++)
     {
-        log_info(logger) << "------------------------";
-        fs::path path(outwd);
-        std::string filename = ("scan_lio_" + std::to_string(i) + ".laz");
-        path /= filename;
-        log_info(logger) << "saving to: " << path;
         std::vector<int> index_poses_i;
 
         std::vector<Eigen::Vector3d> global_pointcloud;
@@ -584,7 +508,7 @@ void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &par
         points_to_vector(
             original_points_to_save, worker_data_concatenated[i].intermediate_trajectory,
             params.threshould_output_filter, &index_poses_i, global_pointcloud, intensity, timestamps, true, params.save_index_pose);
-        exportLaz(path.string(), global_pointcloud, intensity, timestamps);
+        sink.chunk_cloud(i, global_pointcloud, intensity, timestamps);
 
         if (params.export_merged_laz)
         {
@@ -593,7 +517,7 @@ void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &par
             std::vector<Eigen::Vector3d> world(global_pointcloud.size());
             for (size_t k = 0; k < global_pointcloud.size(); k++)
                 world[k] = chunk_pose * global_pointcloud[k];
-            merged.write(world, intensity, timestamps);
+            sink.merged_cloud(world, intensity, timestamps);
         }
         
         if(params.save_index_pose){
@@ -601,54 +525,20 @@ void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &par
         }
         
         m_poses.push_back(worker_data_concatenated[i].intermediate_trajectory[0]);
-        file_names.push_back(filename);
 
-        // save trajectory
-        std::string trajectory_filename = ("trajectory_lio_" + std::to_string(i) + ".csv");
-        fs::path pathtrj(outwd);
-        pathtrj /= trajectory_filename;
-        log_info(logger) << "saving to: " << pathtrj;
-
-        std::ofstream outfile;
-        outfile.open(pathtrj);
-        if (!outfile.good())
-        {
-            log_info(logger) << "can not save file: " << pathtrj;
-            return;
-        }
-
-        outfile << "timestamp_nanoseconds pose00 pose01 pose02 pose03 pose10 pose11 pose12 pose13 pose20 pose21 pose22 pose23 timestampUnix_nanoseconds om_rad fi_rad ka_rad" << std::endl;
+        // trajectory, relative to the chunk's first node
+        std::vector<TrajectoryRow> rows;
+        rows.reserve(worker_data_concatenated[i].intermediate_trajectory.size());
         for (int j = 0; j < worker_data_concatenated[i].intermediate_trajectory.size(); j++)
         {
             auto pose = worker_data_concatenated[i].intermediate_trajectory[0].inverse() * worker_data_concatenated[i].intermediate_trajectory[j];
-
-            outfile
-                << std::setprecision(20) << worker_data_concatenated[i].intermediate_trajectory_timestamps[j].first * 1e9 << " " << std::setprecision(10)
-                << pose(0, 0) << " "
-                << pose(0, 1) << " "
-                << pose(0, 2) << " "
-                << pose(0, 3) << " "
-                << pose(1, 0) << " "
-                << pose(1, 1) << " "
-                << pose(1, 2) << " "
-                << pose(1, 3) << " "
-                << pose(2, 0) << " "
-                << pose(2, 1) << " "
-                << pose(2, 2) << " "
-                << pose(2, 3) << " "
-                << std::setprecision(20) << worker_data_concatenated[i].intermediate_trajectory_timestamps[j].second * 1e9 << " "
-                << worker_data_concatenated[i].imu_om_fi_ka[j].x() << " "
-                << worker_data_concatenated[i].imu_om_fi_ka[j].y() << " "
-                << worker_data_concatenated[i].imu_om_fi_ka[j].z() << " "
-                << std::endl;
+            rows.push_back({worker_data_concatenated[i].intermediate_trajectory_timestamps[j], pose, worker_data_concatenated[i].imu_om_fi_ka[j]});
         }
-        outfile.close();
+        if (!sink.chunk_trajectory(i, rows))
+            return;
     }
     if (params.export_merged_laz)
-    {
-        merged.close();
-        log_info(logger) << "saved " << merged.count() << " points to " << (outwd / "scan_lio_merged.laz");
-    }
+        sink.close_merged_cloud();
 
     sink.chunk_poses(m_poses);
 

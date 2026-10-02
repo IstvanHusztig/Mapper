@@ -24,6 +24,6 @@ bool compute_step_1(
 void run_consistency(std::vector<WorkerData>& worker_data, const OdometryConfig &params, PointStore &point_store, Logger &logger);
 void filter_reference_buckets(const OdometryConfig &params, OdometryState& state);
 void load_reference_point_clouds(std::vector<std::string> input_file_names, const OdometryConfig &params, OdometryState& state, Logger &logger);
-void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &params, const OdometryState &state, const GuiPreferences &gui, fs::path outwd, double elapsed_seconds, ResultSink &sink, PointStore &point_store, Logger &logger);
+void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &params, const OdometryState &state, const GuiPreferences &gui, double elapsed_seconds, ResultSink &sink, PointStore &point_store, Logger &logger);
 void save_trajectory_to_ascii(std::vector<WorkerData>& worker_data, std::string output_file_name);
 #endif

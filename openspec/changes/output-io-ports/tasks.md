@@ -36,7 +36,7 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
 
 ## 3. Result sink: clouds and trajectories
 
-- [ ] 3.1 Move into `FolderResultSink`:
+- [x] 3.1 Move into `FolderResultSink`:
   - `MergedLazWriter` (the merged LAZ: `open_merged_cloud`, `merged_cloud`, `close_merged_cloud` with the `saved <n> points` message);
   - `chunk_cloud` (`exportLaz` → `scan_lio_<i>.laz`, with the `------------------------` and `saving to:` lines);
   - `chunk_trajectory`: the CSV header and the rows with today's precisions; it returns false when the file can't be opened.

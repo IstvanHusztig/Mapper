@@ -157,8 +157,10 @@ bool FolderResultSink::open_merged_cloud()
 void FolderResultSink::chunk_cloud(std::size_t chunk, const std::vector<Eigen::Vector3d> &points,
                                    const std::vector<unsigned short> &intensity, const std::vector<double> &timestamps)
 {
+    log_info(*logger_) << "------------------------";
     fs::path path(outwd_);
     path /= chunk_laz_name(chunk);
+    log_info(*logger_) << "saving to: " << path;
     exportLaz(path.string(), points, intensity, timestamps);
 }
 

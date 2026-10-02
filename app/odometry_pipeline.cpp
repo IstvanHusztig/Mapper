@@ -67,7 +67,7 @@ void OdometryPipeline::save(const fs::path &output_folder, const GuiPreferences 
     // interim: the output folder's sink is built here until save() takes a ResultSink
     TomlConfigRepository config_repository;
     FolderResultSink sink(output_folder, config_repository, *logger_);
-    save_result(worker_data, *config_, state, gui, output_folder, elapsed_seconds, sink, *inputs_.points, *logger_);
+    save_result(worker_data, *config_, state, gui, elapsed_seconds, sink, *inputs_.points, *logger_);
 }
 
 void OdometryPipeline::clear_point_store()
