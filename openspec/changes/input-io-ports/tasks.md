@@ -19,14 +19,14 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
 
 ## 2. Point store
 
-- [ ] 2.1 Add `app/disk_point_store.{h,cpp}` (`DiskPointStore`, design decision 3): today's file names, folder created on the first save, `save_vector_data`/`load_vector_data`, `clear()` = `remove_all`. Add `tests/disk_point_store_test.cpp`:
+- [x] 2.1 Add `app/disk_point_store.{h,cpp}` (`DiskPointStore`, design decision 3): today's file names, folder created on the first save, `save_vector_data`/`load_vector_data`, `clear()` = `remove_all`. Add `tests/disk_point_store_test.cpp`:
   - round trip for each `PointSet`;
   - exact file names;
   - a missing index returns false;
   - `clear()` removes the folder.
 
   Verify `ctest` passes.
-- [ ] 2.2 Switch the cache users to a `PointStore&`: `compute_step_1`, `compute_step_2`, `Consistency`, `Consistency2`, `run_consistency`, `run_loop_closure` and `save_result` (session chunks). They no longer set or read `WorkerData::*_cache_file_name`. Until group 4, `OdometryPipeline` creates a `DiskPointStore` on `state.paths.working_directory_cache` after `load_data`.
+- [x] 2.2 Switch the cache users to a `PointStore&`: `compute_step_1`, `compute_step_2`, `Consistency`, `Consistency2`, `run_consistency`, `run_loop_closure` and `save_result` (session chunks). They no longer set or read `WorkerData::*_cache_file_name`. Until group 4, `OdometryPipeline` creates a `DiskPointStore` on `state.paths.working_directory_cache` after `load_data`.
 
   Verify that a grep for `_cache_file_name|save_vector_data|load_vector_data` in `app/lidar_odometry.cpp`, `app/lidar_odometry_utils_optimizers.cpp` and `app/loop_closure.cpp` finds nothing. Run the step checks. Commit.
 

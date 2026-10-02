@@ -20,6 +20,7 @@
 #include <python-scripts/point-to-point-metrics/point_to_point_source_to_target_tait_bryan_wc_jacobian_simplified.h>
 #include <common/include/cauchy.h>
 #include "run_reporting.h"
+#include "input_ports.h"
 
 namespace fs = std::filesystem;
 
@@ -357,8 +358,8 @@ void optimize_sf2(std::vector<Point3Di> &intermediate_points, std::vector<Point3
 // this function registers initial point cloud to geoferenced point cloud
 void align_to_reference(const NDT::GridParameters &rgd_params, std::vector<Point3Di> &initial_points, Eigen::Affine3d &m_g, NDTBucketMapType &buckets, Logger &logger);
 
-bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &params, OdometryState &state, double &ts_failure, bool debugMsg, Logger &logger, ProgressReporter &progress);
+bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &params, OdometryState &state, double &ts_failure, bool debugMsg, PointStore &point_store, Logger &logger, ProgressReporter &progress);
 
-void Consistency(std::vector<WorkerData> &worker_data, const OdometryConfig &params, Logger &logger);
-void Consistency2(std::vector<WorkerData> &worker_data, const OdometryConfig &params, Logger &logger);
+void Consistency(std::vector<WorkerData> &worker_data, const OdometryConfig &params, PointStore &point_store, Logger &logger);
+void Consistency2(std::vector<WorkerData> &worker_data, const OdometryConfig &params, PointStore &point_store, Logger &logger);
 #endif

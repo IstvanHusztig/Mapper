@@ -228,6 +228,8 @@ set(SOURCES
   app/input_ports.h
   app/recording_files.cpp
   app/recording_files.h
+  app/disk_point_store.cpp
+  app/disk_point_store.h
   app/toml.hpp
   app/toml_io.h
   app/toml_io.cpp

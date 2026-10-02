@@ -337,7 +337,7 @@ void calculate_trajectory(
 }
 
 bool compute_step_1(
-    std::vector<std::vector<Point3Di>>& pointsPerFile, const OdometryConfig &params, OdometryState& state, Trajectory& trajectory, std::vector<WorkerData>& worker_data, Logger& logger, ProgressReporter& progress, const Imu* imu_data)
+    std::vector<std::vector<Point3Di>>& pointsPerFile, const OdometryConfig &params, OdometryState& state, Trajectory& trajectory, std::vector<WorkerData>& worker_data, PointStore& point_store, Logger& logger, ProgressReporter& progress, const Imu* imu_data)
 {
     int number_of_initial_points = 0;
     double timestamp_begin = 0.0;
@@ -406,14 +406,6 @@ bool compute_step_1(
     const int n_iter = poses.size() / threshold;
     worker_data.clear();
     worker_data.reserve(n_iter);
-
-    std::filesystem::path wdp_cache = state.paths.working_directory_cache;
-
-    if (!fs::exists(wdp_cache))
-    {
-        log_info(logger) << "Creating folder: " << wdp_cache << "\n";
-        fs::create_directory(wdp_cache);
-    }
 
     for (size_t i = 0; i < n_iter; i++)
     {
@@ -494,28 +486,14 @@ bool compute_step_1(
             if (params.decimation > 0.0 && points.size() > 1000)
                 intermediate_points = decimate(points, params.decimation, params.decimation, params.decimation);
 
-            std::string original_points_cache_filename = "original_points_" + std::to_string(worker_data.size()) + ".cache";
-            wd.original_points_cache_file_name = wdp_cache / original_points_cache_filename;
+            const std::size_t window = worker_data.size() - 1;
 
-            if (!save_vector_data(wd.original_points_cache_file_name.string(), points))
-            {
-                log_info(logger) << "problem with save_vector_data file '" << wd.original_points_cache_file_name.string() << "'";
-                log_info(logger) << __FILE__ << " " << __LINE__;
-            }
+            if (!point_store.save(PointSet::WindowOriginal, window, points))
+                log_info(logger) << "problem with point store: original points of window " << window;
 
-            std::string intermediate_points_cache_filename = "intermediate_points_" + std::to_string(worker_data.size()) + ".cache";
-            wd.intermediate_points_cache_file_name = wdp_cache / intermediate_points_cache_filename;
-
-            if (intermediate_points.size() > 0)
-            {
-                if (!save_vector_data(wd.intermediate_points_cache_file_name.string(), intermediate_points))
-                    log_info(logger) << "problem with save_vector_data for file '" << wd.intermediate_points_cache_file_name.string() << "'";
-            }
-            else //ensure we always have intermediate points
-            {
-                if (!save_vector_data(wd.intermediate_points_cache_file_name.string(), points))
-                    log_info(logger) << "problem with save_vector_data for file '" << wd.intermediate_points_cache_file_name.string() << "'";
-            }
+            // ensure we always have intermediate points
+            if (!point_store.save(PointSet::WindowIntermediate, window, intermediate_points.size() > 0 ? intermediate_points : points))
+                log_info(logger) << "problem with point store: intermediate points of window " << window;
         }
 
         progress.checkpoint();
@@ -526,7 +504,7 @@ bool compute_step_1(
     return true;
 }
 
-void run_consistency(std::vector<WorkerData> &worker_data, const OdometryConfig &params, Logger &logger)
+void run_consistency(std::vector<WorkerData> &worker_data, const OdometryConfig &params, PointStore &point_store, Logger &logger)
 {
     log_info(logger) << "Point cloud consistency and trajectory smoothness START";
     for (int i = 0; i < params.num_constistency_iter; i++)
@@ -538,11 +516,11 @@ void run_consistency(std::vector<WorkerData> &worker_data, const OdometryConfig 
         }
         if (!params.use_mutliple_gaussian)
         {
-            Consistency(worker_data, params, logger);
+            Consistency(worker_data, params, point_store, logger);
         }
         else
         {
-            Consistency2(worker_data, params, logger);
+            Consistency2(worker_data, params, point_store, logger);
         }
     }
     log_info(logger) << "Point cloud consistency and trajectory smoothness FINISHED";
@@ -617,7 +595,7 @@ namespace
     };
 } // namespace
 
-void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &params, const OdometryState &state, const GuiPreferences &gui, fs::path outwd, double elapsed_time_s, Logger &logger)
+void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &params, const OdometryState &state, const GuiPreferences &gui, fs::path outwd, double elapsed_time_s, PointStore &point_store, Logger &logger)
 {
     std::filesystem::create_directory(outwd);
     // concatenate data
@@ -632,10 +610,8 @@ void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &par
     for (int i = 0; i < worker_data.size(); i++)
     {
         std::vector<Point3Di> original_points;
-        if (!load_vector_data(worker_data[i].original_points_cache_file_name.string(), original_points))
-        {
-            log_info(logger) << "problem with load_vector_data file '" << worker_data[i].original_points_cache_file_name.string() << "'";
-        }
+        if (!point_store.load(PointSet::WindowOriginal, i, original_points))
+            log_info(logger) << "problem with point store: original points of window " << i;
 
         if (i % 1000 == 0)
         {
@@ -663,18 +639,10 @@ void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &par
         counter++;
         if (counter > 50)
         {
-            std::filesystem::path path = state.paths.working_directory_cache;
-            std::string fn = "session_chunk_" + std::to_string(original_points_to_save_counter) + ".cache";
-            path /= fn;
-            wd.original_points_to_save_cache_file_name = path;
+            log_info(logger) << "session chunk " << original_points_to_save_counter;
 
-            log_info(logger) << "original_points_to_save_cache_file_name " << path.string();
-
-            if (!save_vector_data(wd.original_points_to_save_cache_file_name.string(), original_points_to_save))
-            {
-                log_info(logger) << "problem with save_vector_data for file '" << wd.original_points_to_save_cache_file_name.string() << "'";
-                log_info(logger) << __FILE__ << " " << __LINE__;
-            }
+            if (!point_store.save(PointSet::SessionChunk, original_points_to_save_counter, original_points_to_save))
+                log_info(logger) << "problem with point store: session chunk " << original_points_to_save_counter;
 
             original_points_to_save_counter++;
 
@@ -691,18 +659,10 @@ void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &par
 
     if (counter > params.min_counter_concatenated_trajectory_nodes)
     {
-        std::filesystem::path path = state.paths.working_directory_cache;
-        std::string fn = "session_chunk_" + std::to_string(original_points_to_save_counter) + ".cache";
-        path /= fn;
-        wd.original_points_to_save_cache_file_name = path;
+        log_info(logger) << "session chunk " << original_points_to_save_counter;
 
-        log_info(logger) << "original_points_to_save_cache_file_name " << path.string();
-
-        if (!save_vector_data(wd.original_points_to_save_cache_file_name.string(), original_points_to_save))
-        {
-            log_info(logger) << "problem with save_vector_data for file '" << wd.original_points_to_save_cache_file_name.string() << "'";
-            log_info(logger) << __FILE__ << " " << __LINE__;
-        }
+        if (!point_store.save(PointSet::SessionChunk, original_points_to_save_counter, original_points_to_save))
+            log_info(logger) << "problem with point store: session chunk " << original_points_to_save_counter;
 
         original_points_to_save_counter++;
 
@@ -743,11 +703,8 @@ void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &par
         std::vector<double> timestamps;
 
         std::vector<Point3Di> original_points_to_save;
-        if (!load_vector_data(worker_data_concatenated[i].original_points_to_save_cache_file_name.string(), original_points_to_save))
-        {
-            log_info(logger) << "problem with load_vector_data file '" << worker_data_concatenated[i].original_points_to_save_cache_file_name.string() << "'";
-            log_info(logger) << __FILE__ << " " << __LINE__;
-        }
+        if (!point_store.load(PointSet::SessionChunk, i, original_points_to_save))
+            log_info(logger) << "problem with point store: session chunk " << i;
 
         points_to_vector(
             original_points_to_save, worker_data_concatenated[i].intermediate_trajectory,

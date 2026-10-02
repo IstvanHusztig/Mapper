@@ -91,7 +91,7 @@ See proposal.md for the motivation. Current state of the input-side I/O:
    - `MandeyeFolderSource(file names)`: `read_imu`/`read_points` are today's `load_imu` and `load_point_cloud`, moved from `lidar_odometry_utils.cpp`. The free function `load_point_cloud` stays available to the GUI's reference-cloud loader through `mandeye_recording_source.h`.
    - `DiskPointStore(cache folder)`:
      - creates the folder on the first `save`;
-     - maps `(set, index)` to `original_points_<i>.cache`, `intermediate_points_<i>.cache` or `session_chunk_<i>.cache`;
+     - maps `(set, index)` to `original_points_<i>.cache`, `intermediate_points_<i>.cache` or `session_chunk_<i>.cache`. (Found during apply: `compute_step_1` used to number window files from 1, `worker_data.size()` after adding the window. The store uses the window index, so they now start at 0. Cache files are internal, and every run rewrites what it reads.)
      - uses `save_vector_data`/`load_vector_data` unchanged;
      - `clear()` is today's `remove_all`.
    - `FolderPreviewSink(preview folder)`:

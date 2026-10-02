@@ -295,7 +295,7 @@ namespace
     }
 } // namespace
 
-int run_loop_closure(std::vector<WorkerData> &worker_data, const OdometryConfig &params, Logger &logger)
+int run_loop_closure(std::vector<WorkerData> &worker_data, const OdometryConfig &params, PointStore &point_store, Logger &logger)
 {
     const int windows_per_segment = std::max(1, params.loop_closure_segment_windows);
     const int n_windows = static_cast<int>(worker_data.size());
@@ -325,7 +325,7 @@ int run_loop_closure(std::vector<WorkerData> &worker_data, const OdometryConfig 
                 count++;
             }
             std::vector<Point3Di> window_points;
-            if (!load_vector_data(worker_data[w].intermediate_points_cache_file_name.string(), window_points))
+            if (!point_store.load(PointSet::WindowIntermediate, w, window_points))
                 continue;
             for (const auto &p : window_points)
             {

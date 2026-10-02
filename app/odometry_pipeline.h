@@ -3,6 +3,7 @@
 #include "lidar_odometry.h"
 #include "run_reporting.h"
 
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -44,4 +45,5 @@ private:
     Logger *logger_;
     ProgressReporter *progress_;
     bool debug_;
+    std::unique_ptr<PointStore> point_store_;
 };

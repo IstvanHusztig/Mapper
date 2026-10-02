@@ -1568,7 +1568,7 @@ namespace
     }
 } // namespace
 
-bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &params, OdometryState &state, double &ts_failure, bool debugMsg, Logger &logger, ProgressReporter &progress)
+bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &params, OdometryState &state, double &ts_failure, bool debugMsg, PointStore &point_store, Logger &logger, ProgressReporter &progress)
 {
     if (worker_data.size() != 0)
     {
@@ -1657,7 +1657,7 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
         for (int i = 0; i < worker_data.size(); i++)
         {
             std::vector<Point3Di> intermediate_points;
-            load_vector_data(worker_data[i].intermediate_points_cache_file_name.string(), intermediate_points);
+            point_store.load(PointSet::WindowIntermediate, i, intermediate_points);
 
             progress.checkpoint();
 
@@ -2241,7 +2241,7 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
     return true;
 }
 
-void Consistency(std::vector<WorkerData> &worker_data, const OdometryConfig &params, Logger &logger)
+void Consistency(std::vector<WorkerData> &worker_data, const OdometryConfig &params, PointStore &point_store, Logger &logger)
 {
     std::vector<Eigen::Affine3d> trajectory;
     std::vector<std::pair<double, double>> timestamps;
@@ -2265,8 +2265,8 @@ void Consistency(std::vector<WorkerData> &worker_data, const OdometryConfig &par
     for (int i = 0; i < worker_data.size(); i++)
     {
         std::vector<Point3Di> intermediate_points;
-        if (!load_vector_data(worker_data[i].intermediate_points_cache_file_name.string(), intermediate_points))
-            log_info(logger) << "problem with load_vector_data file '" << worker_data[i].intermediate_points_cache_file_name.string() << "'";
+        if (!point_store.load(PointSet::WindowIntermediate, i, intermediate_points))
+            log_info(logger) << "problem with point store: intermediate points of window " << i;
 
         for (int j = 0; j < intermediate_points.size(); j++)
             all_points_local.push_back(intermediate_points[j]);
@@ -2580,7 +2580,7 @@ void Consistency(std::vector<WorkerData> &worker_data, const OdometryConfig &par
         worker_data[indexes[i].first].intermediate_trajectory[indexes[i].second] = trajectory[i];
 }
 
-void Consistency2(std::vector<WorkerData> &worker_data, const OdometryConfig &params, Logger &logger)
+void Consistency2(std::vector<WorkerData> &worker_data, const OdometryConfig &params, PointStore &point_store, Logger &logger)
 {
     std::vector<Eigen::Affine3d> trajectory;
     std::vector<std::pair<double, double>> timestamps;
@@ -2604,8 +2604,8 @@ void Consistency2(std::vector<WorkerData> &worker_data, const OdometryConfig &pa
     for (int i = 0; i < worker_data.size(); i++)
     {
         std::vector<Point3Di> intermediate_points;
-        if (!load_vector_data(worker_data[i].intermediate_points_cache_file_name.string(), intermediate_points))
-            log_info(logger) << "problem with load_vector_data for file '" << worker_data[i].intermediate_points_cache_file_name.string() << "'";
+        if (!point_store.load(PointSet::WindowIntermediate, i, intermediate_points))
+            log_info(logger) << "problem with point store: intermediate points of window " << i;
 
         for (int j = 0; j < intermediate_points.size(); j++)
             all_points_local.push_back(intermediate_points[j]);

@@ -1,6 +1,7 @@
 #include "odometry_pipeline.h"
 
 #include "loop_closure.h"
+#include "disk_point_store.h"
 
 OdometryPipeline::OdometryPipeline(const OdometryConfig &config, Logger &logger, ProgressReporter &progress, RunPaths initial_paths, bool debug)
     : config_(&config), logger_(&logger), progress_(&progress), debug_(debug)
@@ -15,9 +16,10 @@ bool OdometryPipeline::load(std::vector<std::string> input_file_names)
     progress_->checkpoint();
     if (!load_data(input_file_names, params, state, points_per_file, imu, debug_, *logger_))
         return false;
+    point_store_ = std::make_unique<DiskPointStore>(state.paths.working_directory_cache);
     calculate_trajectory(trajectory, imu, params.fusionConventionNwu, params.fusionConventionEnu, params.fusionConventionNed,
                          params.ahrs_gain, debug_, params.use_remove_imu_bias_from_first_stationary_scan, *logger_);
-    compute_step_1(points_per_file, params, state, trajectory, worker_data, *logger_, *progress_, &imu);
+    compute_step_1(points_per_file, params, state, trajectory, worker_data, *point_store_, *logger_, *progress_, &imu);
     return true;
 }
 
@@ -26,7 +28,7 @@ bool OdometryPipeline::run_odometry()
     progress_->stage_started(RunStage::Odometry);
     progress_->checkpoint();
     double ts_failure = 0.0;
-    return compute_step_2(worker_data, *config_, state, ts_failure, debug_, *logger_, *progress_);
+    return compute_step_2(worker_data, *config_, state, ts_failure, debug_, *point_store_, *logger_, *progress_);
 }
 
 void OdometryPipeline::post_process()
@@ -36,14 +38,14 @@ void OdometryPipeline::post_process()
     {
         progress_->stage_started(RunStage::LoopClosure);
         progress_->checkpoint();
-        run_loop_closure(worker_data, params, *logger_);
+        run_loop_closure(worker_data, params, *point_store_, *logger_);
     }
 
     if (params.use_consistency && params.num_constistency_iter > 0)
     {
         progress_->stage_started(RunStage::Consistency);
         progress_->checkpoint();
-        run_consistency(worker_data, params, *logger_);
+        run_consistency(worker_data, params, *point_store_, *logger_);
     }
 }
 
@@ -57,5 +59,5 @@ bool OdometryPipeline::run_all()
 void OdometryPipeline::save(const fs::path &output_folder, const GuiPreferences &gui, double elapsed_seconds)
 {
     progress_->stage_started(RunStage::Saving);
-    save_result(worker_data, *config_, state, gui, output_folder, elapsed_seconds, *logger_);
+    save_result(worker_data, *config_, state, gui, output_folder, elapsed_seconds, *point_store_, *logger_);
 }
