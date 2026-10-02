@@ -70,3 +70,8 @@ void OdometryPipeline::clear_point_store()
     if (inputs_.points)
         inputs_.points->clear();
 }
+
+bool OdometryPipeline::load_window_points(std::size_t window, std::vector<Point3Di> &points) const
+{
+    return inputs_.points && inputs_.points->load(PointSet::WindowIntermediate, window, points);
+}

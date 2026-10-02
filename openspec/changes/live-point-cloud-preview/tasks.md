@@ -4,9 +4,9 @@ Every code commit: both presets build `dMapper` and `lidar_odometry_tests`; `cte
 
 ## 1. Preview during the odometry
 
-- [ ] 1.1 `OdometryPipeline::load_window_points(window, points) const` (forwards to the run's `PointStore`; false without inputs). `GuiProgress::windows_done()`: the `done` count reported during the Odometry stage, reset at each run. Verify both presets build.
-- [ ] 1.2 `PreviewCloud` in `app/lidar_odometry_gui.cpp` (design decision 2): xyz and rgb float arrays; the voxel set (0.10 m); `add_window(i)` (load, transform with `trajectory[index_pose]`, deduplicate by voxel); colours by height, recomputed on frames that added points; the 3-million-point cap with one log line. Verify both presets build.
-- [ ] 1.3 Drawing and lifecycle (design decisions 3 and 4):
+- [x] 1.1 `OdometryPipeline::load_window_points(window, points) const` (forwards to the run's `PointStore`; false without inputs). `GuiProgress::windows_done()`: the `done` count reported during the Odometry stage, reset at each run. Verify both presets build.
+- [x] 1.2 `PreviewCloud` in `app/lidar_odometry_gui.cpp` (design decision 2): xyz and rgb float arrays; the voxel set (0.10 m); `add_window(i)` (load, transform with `trajectory[index_pose]`, deduplicate by voxel); colours by height, recomputed on frames that added points; the 3-million-point cap with one log line. Verify both presets build.
+- [x] 1.3 Drawing and lifecycle (design decisions 3 and 4):
   - `select_input` clears the preview;
   - during the Odometry stage, `display()` adds up to 4 finished windows per frame;
   - the cloud is drawn with client arrays before the trajectory, when `show_point_cloud` is on.
@@ -15,7 +15,9 @@ Every code commit: both presets build `dMapper` and `lidar_odometry_tests`; `cte
 
 ## 2. Final rebuild and view option
 
-- [ ] 2.1 When `loRunning` goes from true to false, clear and rebuild from all windows (4 per frame). Add View → Show point cloud (default on), first in the View menu. Verify both presets build. Run the step checks. Commit.
+(Implemented together with group 1 in one commit: the end-of-run rebuild and the View item belong to the same small state machine, `update_preview()`.)
+
+- [x] 2.1 When `loRunning` goes from true to false, clear and rebuild from all windows (4 per frame). Add View → Show point cloud (default on), first in the View menu. Verify both presets build. Run the step checks. Commit.
 
 ## 3. Integration
 

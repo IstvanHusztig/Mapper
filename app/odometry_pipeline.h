@@ -37,6 +37,8 @@ public:
 
     // removes the run's stored points (the GUI at exit)
     void clear_point_store();
+    // a window's stored (decimated) points, e.g. for a preview; false without inputs or data
+    bool load_window_points(std::size_t window, std::vector<Point3Di> &points) const;
 
     const OdometryConfig &config() const { return *config_; }
 

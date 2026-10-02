@@ -19,6 +19,11 @@
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <limits>
+#include <unordered_set>
 #include <HDMapping/Version.hpp>
 #include <pfd_wrapper.hpp>
 #include <ctime>
@@ -57,6 +62,7 @@ public:
     void reset()
     {
         set_paused(false);
+        windows_done_.store(0);
         start_stage(RunStage::Loading);
     }
 
@@ -68,6 +74,8 @@ public:
     void progress(std::size_t done, std::size_t total) override
     {
         fraction_.store(total > 0 ? static_cast<float>(done) / static_cast<float>(total) : 0.0f);
+        if (stage_.load() == RunStage::Odometry)
+            windows_done_.store(done);
         console_->progress(done, total);
     }
     void checkpoint() override
@@ -92,6 +100,8 @@ public:
 
     RunStage stage() const { return stage_.load(); }
     float fraction() const { return fraction_.load(); }
+    // windows the odometry has finished in the current run (their trajectory is final until post-processing)
+    std::size_t windows_done() const { return windows_done_.load(); }
     // seconds since the current stage started
     double stage_seconds() const
     {
@@ -110,6 +120,7 @@ private:
     ProgressReporter *console_;
     std::atomic<RunStage> stage_{RunStage::Loading};
     std::atomic<float> fraction_{0.0f};
+    std::atomic<std::size_t> windows_done_{0};
     std::atomic<std::chrono::steady_clock::rep> stage_start_{std::chrono::steady_clock::now().time_since_epoch().count()};
     std::mutex mutex_;
     std::condition_variable resumed_;
@@ -123,6 +134,147 @@ OdometryPipeline pipeline{params, console, gui_progress}; // the current run (da
 std::string active_parameters = "built-in defaults";
 std::string run_parameters; // active_parameters when the current run started
 std::atomic<bool> loRunning{false}; // the one-click flow's worker thread is running (the progress window is shown)
+
+// Live point cloud preview, built and drawn on the main thread only. Each finished window's stored (decimated)
+// points are placed with that window's optimized trajectory and thinned to a display voxel across all windows.
+// During the odometry only windows reported done are read (nothing writes them until post-processing); after
+// the run the preview is rebuilt from the final, post-processed trajectory.
+class PreviewCloud
+{
+public:
+    static constexpr double voxel_m = 0.10;
+    static constexpr std::size_t max_points = 3000000;
+    static constexpr std::size_t windows_per_frame = 4;
+
+    void clear()
+    {
+        xyz_.clear();
+        rgb_.clear();
+        voxels_.clear();
+        next_window_ = 0;
+        z_min_ = std::numeric_limits<float>::max();
+        z_max_ = std::numeric_limits<float>::lowest();
+        capped_ = false;
+    }
+
+    std::size_t next_window() const { return next_window_; }
+
+    // adds windows next_window() .. limit-1, at most windows_per_frame of them
+    void add_windows(const OdometryPipeline &run, std::size_t limit, Logger &logger)
+    {
+        limit = std::min(limit, run.worker_data.size());
+        bool added = false;
+        for (std::size_t n = 0; n < windows_per_frame && next_window_ < limit && !capped_; n++)
+            added |= add_window(run, next_window_++, logger);
+        if (added)
+            recolor();
+    }
+
+    void draw() const
+    {
+        if (xyz_.empty())
+            return;
+        glPointSize(2);
+        glEnableClientState(GL_VERTEX_ARRAY);
+        glEnableClientState(GL_COLOR_ARRAY);
+        glVertexPointer(3, GL_FLOAT, 0, xyz_.data());
+        glColorPointer(3, GL_FLOAT, 0, rgb_.data());
+        glDrawArrays(GL_POINTS, 0, static_cast<GLsizei>(xyz_.size() / 3));
+        glDisableClientState(GL_COLOR_ARRAY);
+        glDisableClientState(GL_VERTEX_ARRAY);
+        glPointSize(1);
+    }
+
+private:
+    bool add_window(const OdometryPipeline &run, std::size_t window, Logger &logger)
+    {
+        std::vector<Point3Di> points;
+        if (!run.load_window_points(window, points))
+            return false;
+        const auto &trajectory = run.worker_data[window].intermediate_trajectory;
+        bool added = false;
+        for (const auto &p : points)
+        {
+            if (p.index_pose < 0 || p.index_pose >= static_cast<int>(trajectory.size()))
+                continue;
+            const Eigen::Vector3d g = trajectory[p.index_pose] * p.point;
+            if (!voxels_.insert(voxel_key(g)).second)
+                continue;
+            if (xyz_.size() / 3 >= max_points)
+            {
+                capped_ = true;
+                log_info(logger) << "point cloud preview: limit of " << max_points << " points reached";
+                break;
+            }
+            xyz_.push_back(static_cast<float>(g.x()));
+            xyz_.push_back(static_cast<float>(g.y()));
+            xyz_.push_back(static_cast<float>(g.z()));
+            z_min_ = std::min(z_min_, static_cast<float>(g.z()));
+            z_max_ = std::max(z_max_, static_cast<float>(g.z()));
+            added = true;
+        }
+        return added;
+    }
+
+    static std::uint64_t voxel_key(const Eigen::Vector3d &p)
+    {
+        // 21 bits per axis around 0: +-104 km at 0.1 m
+        auto cell = [](double v) { return static_cast<std::uint64_t>(static_cast<std::int64_t>(std::floor(v / voxel_m)) + (1ll << 20)) & 0x1FFFFF; };
+        return (cell(p.x()) << 42) | (cell(p.y()) << 21) | cell(p.z());
+    }
+
+    // height ramp blue -> cyan -> green -> yellow -> red over the preview's z range
+    void recolor()
+    {
+        const float range = (z_max_ - z_min_) > 1e-3f ? (z_max_ - z_min_) : 1.0f;
+        rgb_.resize(xyz_.size());
+        for (std::size_t i = 0; i < xyz_.size(); i += 3)
+        {
+            const float t = (xyz_[i + 2] - z_min_) / range;
+            rgb_[i] = std::clamp(1.5f - std::fabs(4.0f * t - 3.0f), 0.0f, 1.0f);
+            rgb_[i + 1] = std::clamp(1.5f - std::fabs(4.0f * t - 2.0f), 0.0f, 1.0f);
+            rgb_[i + 2] = std::clamp(1.5f - std::fabs(4.0f * t - 1.0f), 0.0f, 1.0f);
+        }
+    }
+
+    std::vector<float> xyz_;
+    std::vector<float> rgb_;
+    std::unordered_set<std::uint64_t> voxels_;
+    std::size_t next_window_ = 0;
+    float z_min_ = std::numeric_limits<float>::max();
+    float z_max_ = std::numeric_limits<float>::lowest();
+    bool capped_ = false;
+};
+
+PreviewCloud preview_cloud;
+bool show_point_cloud = true;
+bool preview_was_running = false; // loRunning in the previous frame: its end triggers the final rebuild
+bool preview_final_pending = false;
+
+// adds what is ready to the preview: finished windows during the odometry, all windows after the run
+void update_preview()
+{
+    const bool running = loRunning.load();
+    if (preview_was_running && !running)
+    {
+        // the run has saved: rebuild from the final (post-processed) trajectory
+        preview_cloud.clear();
+        preview_final_pending = true;
+    }
+    preview_was_running = running;
+
+    if (running)
+    {
+        if (gui_progress.stage() == RunStage::Odometry)
+            preview_cloud.add_windows(pipeline, gui_progress.windows_done(), console);
+    }
+    else if (preview_final_pending)
+    {
+        preview_cloud.add_windows(pipeline, pipeline.worker_data.size(), console);
+        if (preview_cloud.next_window() >= pipeline.worker_data.size())
+            preview_final_pending = false;
+    }
+}
 std::chrono::time_point<std::chrono::system_clock> loStartTime;
 
 ///////////////////////////////////////////////////////////////////////////////////
@@ -261,6 +413,8 @@ bool select_input(std::string &input_folder_name, std::vector<std::string> &inpu
         working_directory = fs::path(input_file_names[0]).parent_path().string();
 
     gui_progress.reset();
+    preview_cloud.clear();
+    preview_final_pending = false;
     pipeline = OdometryPipeline(params, console, gui_progress, make_folder_inputs(input_file_names, console), pipeline.state.paths);
     return true;
 }
@@ -419,6 +573,9 @@ void openData()
 // the current run's trajectory, with a cross at its last pose
 void draw_run_data()
 {
+    if (show_point_cloud)
+        preview_cloud.draw();
+
     if (show_trajectory)
     {
         glPointSize(3);
@@ -509,7 +666,10 @@ void display()
 
     // the run's data is not drawn while it is loaded: the worker thread is still growing its vectors
     if (!(loRunning && gui_progress.stage() == RunStage::Loading))
+    {
+        update_preview();
         draw_run_data();
+    }
 
     ImGui_ImplOpenGL2_NewFrame();
     ImGui_ImplGLUT_NewFrame();
@@ -556,6 +716,9 @@ void display()
 
             if (ImGui::BeginMenu("View"))
             {
+                ImGui::MenuItem("Show point cloud", nullptr, &show_point_cloud);
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Live preview of the map, coloured by height (rebuilt from the final trajectory after a run)");
                 ImGui::MenuItem("Show trajectory", nullptr, &show_trajectory);
                 ImGui::MenuItem("Show compass/ruler", "key C", &compass_ruler);
 
