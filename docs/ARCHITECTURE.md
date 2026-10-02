@@ -1,8 +1,8 @@
 # Architecture goals
 
-Status: **draft, under refinement.** This is the target architecture for `lidar_odometry_step_1`
-and the plan for getting there. Nothing here is implemented yet; each migration step becomes its
-own OpenSpec change.
+Status: **in progress.** This is the target architecture for `lidar_odometry_step_1` and the
+plan for getting there. Each migration step is its own OpenSpec change; steps 0–3 are done (see
+the roadmap).
 
 ## Why
 
@@ -11,7 +11,7 @@ The app works and is validated on real scans, but its structure is inherited fro
 - the pipeline, the GUI and the CLI shared file-scope globals in `app/lidar_odometry_gui.cpp`
   (fixed in step 2);
 - `LidarOdometryParams` mixed settings with runtime state (fixed in step 1);
-- the optimizers print to the console and read/write cache files;
+- the optimizers printed to the console (fixed in step 3) and read/write cache files;
 - nothing can be tested in isolation.
 
 We follow **Clean Architecture** (Robert C. Martin), close in spirit to Fowler's layering and
@@ -106,7 +106,11 @@ Each step is one OpenSpec change, validated against the baseline.
    - After this step, the GUI's "Compute all" must run exactly the CLI sequence (step 2 → loop
      closure → consistency) and produce output bit-identical to the baseline.
    - The CLI output must not change.
-3. **Logger and ProgressReporter ports:** remove `std::cout` and the atomics from the pipeline.
+3. ✅ **Logger and ProgressReporter ports** (done 2026-10-02): `app/run_reporting.h` (ports),
+   `ConsoleReporter` (console adapter, whole thread-safe lines) and the GUI's `GuiProgress`. The
+   pipeline code has no `std::cout`, progress atomics or sleeps. The GUI progress window shows
+   the current stage, and Pause blocks the run at its next checkpoint. Logging stays on the
+   console.
 4. **I/O ports:** `RecordingSource`, `PointStore`, `ResultSink`, `ConfigRepository`, with adapters.
 5. **Domain model:** `Window`, `Trajectory`, `GyroBiasState`; option structs for the optimizer.
 6. **Split the optimizer file** into domain services; first unit tests on synthetic data.

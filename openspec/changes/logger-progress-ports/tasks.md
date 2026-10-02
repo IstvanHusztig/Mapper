@@ -89,9 +89,9 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
   - press Pause during Odometry, wait, then Resume.
 
   Then I verify that the new `lio_result_*` is IDENTICAL with `44_short_baseline` on all 11 files.
-- [ ] 5.3 Docs:
+- [x] 5.3 Docs:
   - `CLAUDE.md` Architecture: the ports, `ConsoleReporter`, `GuiProgress`, and "no console output in pipeline code";
   - `docs/ARCHITECTURE.md`: mark step 3 done and fix the stale "Nothing here is implemented yet" status line.
 
   Commit.
-- [ ] 5.4 Run `openspec validate logger-progress-ports --strict` and confirm it passes.
+- [x] 5.4 Run `openspec validate logger-progress-ports --strict` and confirm it passes.
