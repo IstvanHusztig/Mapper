@@ -45,7 +45,7 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
   - the per-file `total - filter = kept` line becomes one `LogMessage`.
 
   Verify that a grep for `std::cout|std::cerr|printf` in the file finds nothing, and that the `44_short` console shows whole per-file lines. Run the step checks; commit.
-- [ ] 3.2 `app/lidar_odometry.cpp`:
+- [x] 3.2 `app/lidar_odometry.cpp`:
   - convert `load_data`, `calculate_trajectory`, `compute_step_1`, `run_consistency`, `save_result`, `save_parameters_toml`, `save_processing_results_json`, `load_reference_point_clouds`;
   - leave the trajectory `std::ofstream` writes (about lines 793/806) untouched.
 

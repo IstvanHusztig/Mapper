@@ -18,7 +18,7 @@ bool load_data(std::vector<std::string>& input_file_names,
 
     std::vector<std::string> csv_files, laz_files;
 
-    std::cout << "Loading data..\n--------------\n";
+    log_info(logger) << "Loading data..\n--------------\n";
 
     // --- Separate files by type
     for (const auto& fileName : input_file_names)
@@ -54,11 +54,11 @@ bool load_data(std::vector<std::string>& input_file_names,
 
         if (!found)
         {
-            std::cout << "\n!!! there is no CSV file for: " << laz_files[i] << " !!! \n\n";
+            log_info(logger) << "\n!!! there is no CSV file for: " << laz_files[i] << " !!! \n\n";
 
             if (i < (laz_files.size() - 1))
             {
-                std::cout << "!!! can't continue with missmatched middle file pairs.. !!!\n\n";
+                log_info(logger) << "!!! can't continue with missmatched middle file pairs.. !!!\n\n";
                 return false;
             }
         }
@@ -81,11 +81,11 @@ bool load_data(std::vector<std::string>& input_file_names,
 
         if (!found)
         {
-            std::cout << "\n!!! there is no LAZ file for: " << csv_files[i] << " !!! \n\n";
+            log_info(logger) << "\n!!! there is no LAZ file for: " << csv_files[i] << " !!! \n\n";
 
             if (i < (csv_files.size() - 1))
             {
-                std::cout << "!!! can't continue with missmatched middle file pairs.. !!!\n\n";
+                log_info(logger) << "!!! can't continue with missmatched middle file pairs.. !!!\n\n";
                 return false;
             }
         }
@@ -96,17 +96,17 @@ bool load_data(std::vector<std::string>& input_file_names,
         std::string working_directory = fs::path(input_file_names.front()).parent_path().string();
 
         if (laz_files.size() != csv_files.size())
-            std::cout << "!!! file number issue. continuing but ignoring missmatched last file pair.. !!!\n" << std::endl;
+            log_info(logger) << "!!! file number issue. continuing but ignoring missmatched last file pair.. !!!\n";
 
         // check if folder exists!
         if (!fs::exists(working_directory))
         {
-            std::cerr << "Folder '" << working_directory << "' does not exist.\n";
+            log_error(logger) << "Folder '" << working_directory << "' does not exist.\n";
             return false;
         }
 
         // --- Load IMU data
-        std::cout << "loading IMU data from 'imu****.csv' ..\n";
+        log_info(logger) << "loading IMU data from 'imu****.csv' ..\n";
 
         std::size_t minSize = std::min(laz_files.size(), csv_files.size());
         // Each thread loads into its own local vector
@@ -131,8 +131,8 @@ bool load_data(std::vector<std::string>& input_file_names,
                 return std::get<0>(a).first < std::get<0>(b).first;
             });
 
-        std::cout << "Loading point clouds (" << minSize << " files)..\n";
-        std::cout << "total   - filter = kept\n-----------------------\n";
+        log_info(logger) << "Loading point clouds (" << minSize << " files)..\n";
+        log_info(logger) << "total   - filter = kept\n-----------------------\n";
 
         pointsPerFile.resize(minSize);
 
@@ -158,14 +158,14 @@ bool load_data(std::vector<std::string>& input_file_names,
                 {
                     if (!fs::exists(wdp))
                     {
-                        std::cout << "Creating folder: " << wdp << "\n";
+                        log_info(logger) << "Creating folder: " << wdp << "\n";
                         fs::create_directory(wdp);
                     }
 
                     fs::path outFile = wdp / "calibrationValidation.asc";
                     std::ofstream testPointcloud(outFile);
                     if (!testPointcloud)
-                        std::cerr << "Failed to open file: " << outFile << "\n";
+                        log_error(logger) << "Failed to open file: " << outFile << "\n";
                     else
                         for (size_t j = 0; j < std::min(data.size(), (size_t)params.calibration_validation_points); ++j)
                         {
@@ -183,12 +183,12 @@ bool load_data(std::vector<std::string>& input_file_names,
         for (const auto& pp : pointsPerFile)
             totalPoints += pp.size();
 
-        std::cout << "TOTAL: " << totalPoints << "\n..loading finished.\n\n";
+        log_info(logger) << "TOTAL: " << totalPoints << "\n..loading finished.\n\n";
         return true;
     }
     else
     {
-        std::cout << "Not enough files to continue: " << input_file_names.size() << std::endl;
+        log_info(logger) << "Not enough files to continue: " << input_file_names.size();
         return false;
     }
 }
@@ -211,7 +211,7 @@ void calculate_trajectory(
     bool first = true;
     double last_ts = 0.0;
 
-    std::cout << "start calculating trajectory.." << std::endl;
+    log_info(logger) << "start calculating trajectory..";
 
     double bias_gyr_x = 0.0;
     double bias_gyr_y = 0.0;
@@ -256,7 +256,7 @@ void calculate_trajectory(
 
             if (total_variance > 5.0)
             {
-                std::cout << "WARNING: Excessive movement detected (" << total_variance << "). Bias set to 0." << std::endl;
+                log_info(logger) << "WARNING: Excessive movement detected (" << total_variance << "). Bias set to 0.";
                 bias_gyr_x = 0.0;
                 bias_gyr_y = 0.0;
                 bias_gyr_z = 0.0;
@@ -272,12 +272,12 @@ void calculate_trajectory(
             }
         }
 
-        std::cout << "------------------" << std::endl;
-        std::cout << "GYRO BIAS" << std::endl;
-        std::cout << "bias_gyr_x [deg/s]: " << bias_gyr_x << std::endl;
-        std::cout << "bias_gyr_y [deg/s]: " << bias_gyr_y << std::endl;
-        std::cout << "bias_gyr_z [deg/s]: " << bias_gyr_z << std::endl;
-        std::cout << "------------------" << std::endl;
+        log_info(logger) << "------------------";
+        log_info(logger) << "GYRO BIAS";
+        log_info(logger) << "bias_gyr_x [deg/s]: " << bias_gyr_x;
+        log_info(logger) << "bias_gyr_y [deg/s]: " << bias_gyr_y;
+        log_info(logger) << "bias_gyr_z [deg/s]: " << bias_gyr_z;
+        log_info(logger) << "------------------";
     }
 
     for (const auto& [timestamp_pair, gyr, acc] : imu_data)
@@ -329,7 +329,8 @@ void calculate_trajectory(
             counter++;
             if (counter % 100 == 0)
             {
-                printf("Roll %0.1f, Pitch %0.1f, Yaw %0.1f [%d of %d]\n", euler.angle.roll, euler.angle.pitch, euler.angle.yaw, counter++, (int)imu_data.size());
+                log_debug(logger) << std::fixed << std::setprecision(1) << "Roll " << euler.angle.roll << ", Pitch " << euler.angle.pitch << ", Yaw " << euler.angle.yaw
+                                  << " [" << counter++ << " of " << (int)imu_data.size() << "]";
             }
         }
     }
@@ -377,11 +378,11 @@ bool compute_step_1(
     timestamps.shrink_to_fit();
     poses.shrink_to_fit();
 
-    std::cout << "number of poses: " << poses.size() << std::endl;
+    log_info(logger) << "number of poses: " << poses.size();
 
     if (poses.empty())
     {
-        std::cerr << "Loading poses went wrong! Could not load poses!" << std::endl;
+        log_error(logger) << "Loading poses went wrong! Could not load poses!";
         return false;
     }
 
@@ -410,7 +411,7 @@ bool compute_step_1(
 
     if (!fs::exists(wdp_cache))
     {
-        std::cout << "Creating folder: " << wdp_cache << "\n";
+        log_info(logger) << "Creating folder: " << wdp_cache << "\n";
         fs::create_directory(wdp_cache);
     }
 
@@ -498,8 +499,8 @@ bool compute_step_1(
 
             if (!save_vector_data(wd.original_points_cache_file_name.string(), points))
             {
-                std::cout << "problem with save_vector_data file '" << wd.original_points_cache_file_name.string() << "'" << std::endl;
-                std::cout << __FILE__ << " " << __LINE__ << std::endl;
+                log_info(logger) << "problem with save_vector_data file '" << wd.original_points_cache_file_name.string() << "'";
+                log_info(logger) << __FILE__ << " " << __LINE__;
             }
 
             std::string intermediate_points_cache_filename = "intermediate_points_" + std::to_string(worker_data.size()) + ".cache";
@@ -508,12 +509,12 @@ bool compute_step_1(
             if (intermediate_points.size() > 0)
             {
                 if (!save_vector_data(wd.intermediate_points_cache_file_name.string(), intermediate_points))
-                    std::cout << "problem with save_vector_data for file '" << wd.intermediate_points_cache_file_name.string() << "'" << std::endl;
+                    log_info(logger) << "problem with save_vector_data for file '" << wd.intermediate_points_cache_file_name.string() << "'";
             }
             else //ensure we always have intermediate points
             {
                 if (!save_vector_data(wd.intermediate_points_cache_file_name.string(), points))
-                    std::cout << "problem with save_vector_data for file '" << wd.intermediate_points_cache_file_name.string() << "'" << std::endl;
+                    log_info(logger) << "problem with save_vector_data for file '" << wd.intermediate_points_cache_file_name.string() << "'";
             }
         }
 
@@ -527,10 +528,10 @@ bool compute_step_1(
 
 void run_consistency(std::vector<WorkerData> &worker_data, const OdometryConfig &params, Logger &logger)
 {
-    std::cout << "Point cloud consistency and trajectory smoothness START" << std::endl;
+    log_info(logger) << "Point cloud consistency and trajectory smoothness START";
     for (int i = 0; i < params.num_constistency_iter; i++)
     {
-        std::cout << "Iteration " << i + 1 << " of " << params.num_constistency_iter << std::endl;
+        log_info(logger) << "Iteration " << i + 1 << " of " << params.num_constistency_iter;
         for (int ii = 0; ii < worker_data.size(); ii++)
         {
             worker_data[ii].intermediate_trajectory_motion_model = worker_data[ii].intermediate_trajectory;
@@ -544,7 +545,7 @@ void run_consistency(std::vector<WorkerData> &worker_data, const OdometryConfig 
             Consistency2(worker_data, params, logger);
         }
     }
-    std::cout << "Point cloud consistency and trajectory smoothness FINISHED" << std::endl;
+    log_info(logger) << "Point cloud consistency and trajectory smoothness FINISHED";
 }
 
 namespace
@@ -554,6 +555,8 @@ namespace
     class MergedLazWriter
     {
     public:
+        explicit MergedLazWriter(Logger &logger) : logger_(&logger) {}
+
         bool open(const std::string &filename)
         {
             if (laszip_create(&writer_))
@@ -586,7 +589,7 @@ namespace
                 point_->gps_time = timestamps[i] * 1e9;
                 if (laszip_set_coordinates(writer_, coordinates) || laszip_write_point(writer_) || laszip_update_inventory(writer_))
                 {
-                    std::cerr << "merged LAZ: write error, file incomplete" << std::endl;
+                    log_error(*logger_) << "merged LAZ: write error, file incomplete";
                     close();
                     return;
                 }
@@ -606,6 +609,7 @@ namespace
         long long count() const { return count_; }
 
     private:
+        Logger *logger_;
         laszip_POINTER writer_ = nullptr;
         laszip_point *point_ = nullptr;
         bool open_ = false;
@@ -630,12 +634,12 @@ void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &par
         std::vector<Point3Di> original_points;
         if (!load_vector_data(worker_data[i].original_points_cache_file_name.string(), original_points))
         {
-            std::cout << "problem with load_vector_data file '" << worker_data[i].original_points_cache_file_name.string() << "'" << std::endl;
+            log_info(logger) << "problem with load_vector_data file '" << worker_data[i].original_points_cache_file_name.string() << "'";
         }
 
         if (i % 1000 == 0)
         {
-            printf("processing worker_data %d/%d \n", i + 1, (int)worker_data.size());
+            log_info(logger) << "processing worker_data " << i + 1 << "/" << (int)worker_data.size() << " ";
         }
         auto tmp_data = original_points;
         point_sizes_per_chunk.push_back(tmp_data.size());
@@ -664,12 +668,12 @@ void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &par
             path /= fn;
             wd.original_points_to_save_cache_file_name = path;
 
-            std::cout << "original_points_to_save_cache_file_name " << path.string() << std::endl;
+            log_info(logger) << "original_points_to_save_cache_file_name " << path.string();
 
             if (!save_vector_data(wd.original_points_to_save_cache_file_name.string(), original_points_to_save))
             {
-                std::cout << "problem with save_vector_data for file '" << wd.original_points_to_save_cache_file_name.string() << "'" << std::endl;
-                std::cout << __FILE__ << " " << __LINE__ << std::endl;
+                log_info(logger) << "problem with save_vector_data for file '" << wd.original_points_to_save_cache_file_name.string() << "'";
+                log_info(logger) << __FILE__ << " " << __LINE__;
             }
 
             original_points_to_save_counter++;
@@ -692,12 +696,12 @@ void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &par
         path /= fn;
         wd.original_points_to_save_cache_file_name = path;
 
-        std::cout << "original_points_to_save_cache_file_name " << path.string() << std::endl;
+        log_info(logger) << "original_points_to_save_cache_file_name " << path.string();
 
         if (!save_vector_data(wd.original_points_to_save_cache_file_name.string(), original_points_to_save))
         {
-            std::cout << "problem with save_vector_data for file '" << wd.original_points_to_save_cache_file_name.string() << "'" << std::endl;
-            std::cout << __FILE__ << " " << __LINE__ << std::endl;
+            log_info(logger) << "problem with save_vector_data for file '" << wd.original_points_to_save_cache_file_name.string() << "'";
+            log_info(logger) << __FILE__ << " " << __LINE__;
         }
 
         original_points_to_save_counter++;
@@ -710,7 +714,7 @@ void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &par
     std::ofstream out_point_sizes(point_sizes_path);
     if (!out_point_sizes)
     {
-        std::cerr << "Failed to open " << point_sizes_path << " for writing point sizes per chunk.\n";
+        log_error(logger) << "Failed to open " << point_sizes_path << " for writing point sizes per chunk.\n";
     }
     else
     {
@@ -721,17 +725,17 @@ void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &par
     std::vector<Eigen::Affine3d> m_poses;
     std::vector<std::string> file_names;
     std::vector<std::vector<int>> index_poses;
-    MergedLazWriter merged;
+    MergedLazWriter merged(logger);
     if (params.export_merged_laz && !merged.open((outwd / "scan_lio_merged.laz").string()))
-        std::cerr << "can not open " << (outwd / "scan_lio_merged.laz") << " for writing" << std::endl;
+        log_error(logger) << "can not open " << (outwd / "scan_lio_merged.laz") << " for writing";
 
     for (int i = 0; i < worker_data_concatenated.size(); i++)
     {
-        std::cout << "------------------------" << std::endl;
+        log_info(logger) << "------------------------";
         fs::path path(outwd);
         std::string filename = ("scan_lio_" + std::to_string(i) + ".laz");
         path /= filename;
-        std::cout << "saving to: " << path << std::endl;
+        log_info(logger) << "saving to: " << path;
         std::vector<int> index_poses_i;
 
         std::vector<Eigen::Vector3d> global_pointcloud;
@@ -741,8 +745,8 @@ void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &par
         std::vector<Point3Di> original_points_to_save;
         if (!load_vector_data(worker_data_concatenated[i].original_points_to_save_cache_file_name.string(), original_points_to_save))
         {
-            std::cout << "problem with load_vector_data file '" << worker_data_concatenated[i].original_points_to_save_cache_file_name.string() << "'" << std::endl;
-            std::cout << __FILE__ << " " << __LINE__ << std::endl;
+            log_info(logger) << "problem with load_vector_data file '" << worker_data_concatenated[i].original_points_to_save_cache_file_name.string() << "'";
+            log_info(logger) << __FILE__ << " " << __LINE__;
         }
 
         points_to_vector(
@@ -771,13 +775,13 @@ void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &par
         std::string trajectory_filename = ("trajectory_lio_" + std::to_string(i) + ".csv");
         fs::path pathtrj(outwd);
         pathtrj /= trajectory_filename;
-        std::cout << "saving to: " << pathtrj << std::endl;
+        log_info(logger) << "saving to: " << pathtrj;
 
         std::ofstream outfile;
         outfile.open(pathtrj);
         if (!outfile.good())
         {
-            std::cout << "can not save file: " << pathtrj << std::endl;
+            log_info(logger) << "can not save file: " << pathtrj;
             return;
         }
 
@@ -811,7 +815,7 @@ void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &par
     if (params.export_merged_laz)
     {
         merged.close();
-        std::cout << "saved " << merged.count() << " points to " << (outwd / "scan_lio_merged.laz") << std::endl;
+        log_info(logger) << "saved " << merged.count() << " points to " << (outwd / "scan_lio_merged.laz");
     }
 
     fs::path path(outwd);
@@ -827,7 +831,7 @@ void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &par
         std::ofstream out_index(index_poses_path);
         if (!out_index)
         {
-            std::cerr << "Failed to open " << index_poses_path << " for writing index poses.\n";
+            log_error(logger) << "Failed to open " << index_poses_path << " for writing index poses.\n";
         }
         else
         {
@@ -840,7 +844,7 @@ void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &par
     path3 /= "session.mjs";
 
     // save session file
-    std::cout << "saving file: '" << path3 << "'" << std::endl;
+    log_info(logger) << "saving file: '" << path3 << "'";
 
     nlohmann::json jj;
     nlohmann::json j;
@@ -871,7 +875,7 @@ void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &par
         fs::path path(outwd);
         std::string filename = ("scan_lio_" + std::to_string(i) + ".laz");
         path /= filename;
-        std::cout << "adding file: " << path << std::endl;
+        log_info(logger) << "adding file: " << path;
 
         nlohmann::json jfn{
             {"file_name", path.string()}};
@@ -936,9 +940,9 @@ void load_reference_point_clouds(std::vector<std::string> input_file_names, cons
 
     for (size_t i = 0; i < input_file_names.size(); i++)
     {
-        std::cout << "loading reference point cloud from: " << input_file_names[i] << std::endl;
+        log_info(logger) << "loading reference point cloud from: " << input_file_names[i];
         auto pp = load_point_cloud(input_file_names[i].c_str(), false, 0, 10000, get_lidar_imu_lever_arm(params), logger);
-        std::cout << "loaded " << pp.size() << " reference points" << std::endl;
+        log_info(logger) << "loaded " << pp.size() << " reference points";
         state.reference_points.insert(std::end(state.reference_points), std::begin(pp), std::end(pp));
     }
 
@@ -971,16 +975,16 @@ void save_parameters_toml(const OdometryConfig &params, const RunPaths &paths, c
 
         if (success)
         {
-            std::cout << "Parameters saved to TOML file: " << toml_path << std::endl;
+            log_info(logger) << "Parameters saved to TOML file: " << toml_path;
         }
         else
         {
-            std::cerr << "Failed to save parameters to TOML file: " << toml_path << std::endl;
+            log_error(logger) << "Failed to save parameters to TOML file: " << toml_path;
         }
     }
     catch (const std::exception &e)
     {
-        std::cerr << "Error saving parameters to TOML file: " << e.what() << std::endl;
+        log_error(logger) << "Error saving parameters to TOML file: " << e.what();
     }
 }
 
@@ -1081,16 +1085,16 @@ void save_processing_results_json(const OdometryConfig &params, const OdometrySt
         {
             file << results.dump(4); // Pretty print with 4-space indentation
             file.close();
-            std::cout << "Processing results saved to JSON file: " << json_path << std::endl;
-            std::cout << "Processing time: " << fixed << std::setprecision(2) << elapsed_seconds << " [s]" << std::endl;
+            log_info(logger) << "Processing results saved to JSON file: " << json_path;
+            log_info(logger) << "Processing time: " << fixed << std::setprecision(2) << elapsed_seconds << " [s]";
         }
         else
         {
-            std::cerr << "Failed to create results JSON file: " << json_path << std::endl;
+            log_error(logger) << "Failed to create results JSON file: " << json_path;
         }
     }
     catch (const std::exception &e)
     {
-        std::cerr << "Error saving processing results to JSON file: " << e.what() << std::endl;
+        log_error(logger) << "Error saving processing results to JSON file: " << e.what();
     }
 }
