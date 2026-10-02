@@ -50,4 +50,4 @@ Every code commit: both presets build `dMapper` (before task 1.1: `lidar_odometr
 ## 5. Integration
 
 - [ ] 5.1 GUI check, **done by the user**: start `out\build\x64-Release\bin\dMapper.exe`; the title reads "dMapper" before and during a `44_short` run (Start → 1 → `lidar-vertical.toml`, Start → 2 → `44_short`); Info shows the new text; the folder dialog shows the new title. Then I verify that the result is IDENTICAL with the `44_short` manifest.
-- [ ] 5.2 Run `openspec validate rename-to-dmapper --strict` and confirm it passes.
+- [x] 5.2 Run `openspec validate rename-to-dmapper --strict` and confirm it passes.
