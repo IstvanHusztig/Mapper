@@ -1,5 +1,4 @@
 #include "lidar_odometry.h"
-#include "mandeye_recording_source.h" // load_point_cloud for the GUI's reference clouds
 #include "tbb/tbb.h"
 #include <mutex>
 
@@ -559,31 +558,6 @@ void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &par
     sink.processing_results(params, state, worker_data, elapsed_time_s);
 }
 
-void filter_reference_buckets(const OdometryConfig &params, OdometryState &state)
-{
-    NDTBucketMapType reference_buckets_out;
-    for (const auto &b : state.reference_buckets)
-    {
-        if (b.second.number_of_points > 10)
-        {
-            Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eigen_solver(b.second.cov, Eigen::ComputeEigenvectors);
-
-            auto eigen_values = eigen_solver.eigenvalues();
-            double sum_ev = eigen_values.x() + eigen_values.y() + eigen_values.z();
-            double ev1 = eigen_values.x();
-            double ev2 = eigen_values.y();
-            double ev3 = eigen_values.z();
-
-            double planarity = 1 - ((3 * ev1 / sum_ev) * (3 * ev2 / sum_ev) * (3 * ev3 / sum_ev));
-            if (planarity > 0.7)
-            {
-                reference_buckets_out[b.first] = b.second;
-            }
-        }
-    }
-    state.reference_buckets = reference_buckets_out;
-}
-
 void save_trajectory_to_ascii(std::vector<WorkerData> &worker_data, std::string output_file_name)
 {
     ofstream file;
@@ -598,19 +572,3 @@ void save_trajectory_to_ascii(std::vector<WorkerData> &worker_data, std::string 
     file.close();
 }
 
-void load_reference_point_clouds(std::vector<std::string> input_file_names, const OdometryConfig &params, OdometryState &state, Logger &logger)
-{
-    state.reference_buckets.clear();
-    state.reference_points.clear();
-
-    for (size_t i = 0; i < input_file_names.size(); i++)
-    {
-        log_info(logger) << "loading reference point cloud from: " << input_file_names[i];
-        auto pp = load_point_cloud(input_file_names[i].c_str(), false, 0, 10000, get_lidar_imu_lever_arm(params), logger);
-        log_info(logger) << "loaded " << pp.size() << " reference points";
-        state.reference_points.insert(std::end(state.reference_points), std::begin(pp), std::end(pp));
-    }
-
-    update_rgd(params.in_out_params_indoor, state.reference_buckets, state.reference_points);
-    state.buckets_indoor = state.reference_buckets;
-}

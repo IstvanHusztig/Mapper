@@ -1,7 +1,6 @@
 ﻿#include <imgui.h>
 #include <imgui_impl_glut.h>
 #include <imgui_impl_opengl2.h>
-#include <ImGuizmo.h>
 #include <imgui_internal.h>
 
 #include <GL/freeglut.h>
@@ -21,7 +20,6 @@
 #include <condition_variable>
 #include <atomic>
 #include <HDMapping/Version.hpp>
-#include <session.h>
 #include <pfd_wrapper.hpp>
 #include <ctime>
 #include <chrono>
@@ -132,32 +130,8 @@ static const std::vector<ShortcutEntry> appShortcuts = {
 
 namespace fs = std::filesystem;
 
-bool is_settings_gui = false;
-bool show_reference_buckets = true;
-bool show_reference_points = false;
-int dec_reference_points = 100;
-bool show_initial_points = true;
 bool show_trajectory = true;
-bool show_trajectory_as_axes = false;
-bool simple_gui = true;
-bool step_1_done = false;
-bool step_2_done = false;
-bool calculations_failed = false;
-
-
-
 std::string working_directory = "";
-bool initial_transformation_gizmo = false;
-
-float m_gizmo[] = {1, 0, 0, 0,
-                   0, 1, 0, 0,
-                   0, 0, 1, 0,
-                   0, 0, 0, 1};
-
-int index_begin = -1;
-int index_end = -1;
-bool gizmo_stretch_interval = false;
-Eigen::Affine3d stretch_gizmo_m = Eigen::Affine3d::Identity();
 
 OdometryConfig params;
 GuiPreferences gui_prefs;
@@ -240,7 +214,6 @@ OdometryPipeline pipeline{params, console, gui_progress}; // the current run (da
 std::string active_parameters = "built-in defaults";
 std::string run_parameters; // active_parameters when the current run started
 std::atomic<bool> loRunning{false}; // the one-click flow's worker thread is running (the progress window is shown)
-double compute_all_seconds = 0.0; // duration of the advanced GUI's "Compute all", written with the result
 std::chrono::time_point<std::chrono::system_clock> loStartTime;
 
 ///////////////////////////////////////////////////////////////////////////////////
@@ -389,10 +362,7 @@ bool select_input(std::string &input_folder_name, std::vector<std::string> &inpu
 void load_input(const std::string &input_folder_name, const std::vector<std::string> &input_file_names)
 {
     if (pipeline.load())
-    {
-        step_1_done = true;
         return;
-    }
 
     std::string message_info = "Problem with loading data from folder '" + input_folder_name + "' (Pease check if folder exists). Program will close once You click OK!!!";
     std::cout << message_info << std::endl;
@@ -406,40 +376,19 @@ void load_input(const std::string &input_folder_name, const std::vector<std::str
     exit(1);
 }
 
-void step1()
-{
-    std::string input_folder_name;
-    std::vector<std::string> input_file_names;
-    if (select_input(input_folder_name, input_file_names))
-        load_input(input_folder_name, input_file_names);
-}
-
 // odometry + post-processing (loop closure, consistency), the same stages as the CLI
 void step2()
 {
-    if (pipeline.run_all())
-        step_2_done = true;
-    else
-        calculations_failed = true;
+    pipeline.run_all();
 }
 
-void save_results(bool info, double elapsed_seconds)
+// writes the run to the next free lio_result_<n> in the recording's folder
+void save_results(double elapsed_seconds)
 {
     fs::path outwd = get_next_result_path(working_directory);
     TomlConfigRepository config_repository;
     FolderResultSink sink(outwd, config_repository, console);
     pipeline.save(sink, gui_prefs, elapsed_seconds);
-    if (info)
-    {
-        std::string message_info = "Results saved to folder: '" + outwd.string() + "'";
-        std::cout << message_info << std::endl;
-        [[maybe_unused]]
-        pfd::message message(
-            "Information",
-            message_info.c_str(),
-            pfd::choice::ok, pfd::icon::info);
-        message.result();
-    }
 }
 
 void progress_window()
@@ -538,7 +487,7 @@ void openData()
                 end = std::chrono::system_clock::now();
                 std::chrono::duration<double> elapsed_seconds = end - start;
 
-                save_results(false, elapsed_seconds.count());
+                save_results(elapsed_seconds.count());
 
                 loRunning = false;
 

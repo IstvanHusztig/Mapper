@@ -32,7 +32,7 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
 
 ## 4. Dead code
 
-- [ ] 4.1 Remove the globals whose last reader is gone (design Context list), `compute_all_seconds`, `save_results(info=true)` paths, `step1()`, and `step_1_done`/`step_2_done`/`calculations_failed` if unused. Remove `load_reference_point_clouds`, `filter_reference_buckets` and `align_to_reference` with their declarations. Keep `OdometryState::reference_*` and the `compute_step_2` branch (Non-Goals).
+- [x] 4.1 Remove the globals whose last reader is gone (design Context list), `compute_all_seconds`, `save_results(info=true)` paths, `step1()`, and `step_1_done`/`step_2_done`/`calculations_failed` if unused. Remove `load_reference_point_clouds`, `filter_reference_buckets` and `align_to_reference` with their declarations. Keep `OdometryState::reference_*` and the `compute_step_2` branch (Non-Goals).
 
   Verify:
   - a grep for these names finds nothing;
