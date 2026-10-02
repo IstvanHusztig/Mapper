@@ -60,20 +60,20 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
 
 ## 4. GUI
 
-- [ ] 4.1 Add `GuiProgress` in `lidar_odometry_gui.cpp` (design decision 5):
+- [x] 4.1 Add `GuiProgress` in `lidar_odometry_gui.cpp` (design decision 5):
   - atomics for stage, fraction and stage start;
   - `paused` with a `condition_variable`;
   - forwards to the `ConsoleReporter`.
 
   Wire the global `pipeline` to the global `ConsoleReporter` and `GuiProgress`. Remove `loProgress`, `loPause` and `loStep2StartTime`. Verify both presets build.
-- [ ] 4.2 Progress window:
+- [x] 4.2 Progress window:
   - the stage name;
   - the percentage, elapsed time and estimated finish for Odometry only (estimate measured from the odometry stage start);
   - the stage name and elapsed time for other stages;
   - Pause and Resume through `GuiProgress`.
 
   Verify both presets build.
-- [ ] 4.3 One-click flow (design decision 6):
+- [x] 4.3 One-click flow (design decision 6):
   - split `step1()` into picking the folder (main thread) and loading;
   - `openData` runs `load` → `run_all` → `save` on the worker thread with `loRunning` set before it starts;
   - a load failure keeps the existing message box and exit.

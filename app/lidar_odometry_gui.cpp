@@ -16,6 +16,8 @@
 #include <utils.hpp>
 
 #include <mutex>
+#include <condition_variable>
+#include <atomic>
 #include <HDMapping/Version.hpp>
 #include <session.h>
 #include <pfd_wrapper.hpp>
@@ -160,16 +162,84 @@ Eigen::Affine3d stretch_gizmo_m = Eigen::Affine3d::Identity();
 OdometryConfig params;
 GuiPreferences gui_prefs;
 ConsoleReporter console;  // run messages and stages on the console
-OdometryPipeline pipeline{params, console, console}; // the current run (data shown and edited by the GUI)
+
+// Progress of the current run for the progress window (stage, fraction done, stage start) and Pause/Resume:
+// while paused, the run blocks at its next checkpoint. Stages and progress are also forwarded to the console.
+class GuiProgress : public ProgressReporter
+{
+public:
+    explicit GuiProgress(ProgressReporter &console) : console_(&console) {}
+
+    // a new run starts with Loading, not paused
+    void reset()
+    {
+        set_paused(false);
+        start_stage(RunStage::Loading);
+    }
+
+    void stage_started(RunStage stage) override
+    {
+        start_stage(stage);
+        console_->stage_started(stage);
+    }
+    void progress(std::size_t done, std::size_t total) override
+    {
+        fraction_.store(total > 0 ? static_cast<float>(done) / static_cast<float>(total) : 0.0f);
+        console_->progress(done, total);
+    }
+    void checkpoint() override
+    {
+        std::unique_lock<std::mutex> lock(mutex_);
+        resumed_.wait(lock, [this] { return !paused_; });
+    }
+
+    void set_paused(bool paused)
+    {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            paused_ = paused;
+        }
+        resumed_.notify_all();
+    }
+    bool paused()
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return paused_;
+    }
+
+    RunStage stage() const { return stage_.load(); }
+    float fraction() const { return fraction_.load(); }
+    // seconds since the current stage started
+    double stage_seconds() const
+    {
+        const auto start = std::chrono::steady_clock::time_point(std::chrono::steady_clock::duration(stage_start_.load()));
+        return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+    }
+
+private:
+    void start_stage(RunStage stage)
+    {
+        stage_start_.store(std::chrono::steady_clock::now().time_since_epoch().count());
+        fraction_.store(0.0f);
+        stage_.store(stage);
+    }
+
+    ProgressReporter *console_;
+    std::atomic<RunStage> stage_{RunStage::Loading};
+    std::atomic<float> fraction_{0.0f};
+    std::atomic<std::chrono::steady_clock::rep> stage_start_{std::chrono::steady_clock::now().time_since_epoch().count()};
+    std::mutex mutex_;
+    std::condition_variable resumed_;
+    bool paused_ = false;
+};
+
+GuiProgress gui_progress{console};
+OdometryPipeline pipeline{params, console, gui_progress}; // the current run (data shown and edited by the GUI)
 Session session;
 
-std::atomic<bool> loRunning{false};
-std::atomic<float> loProgress{0.0};
-std::atomic<bool> loPause{false};
+std::atomic<bool> loRunning{false}; // the one-click flow's worker thread is running (the progress window is shown)
 double compute_all_seconds = 0.0; // duration of the advanced GUI's "Compute all", written with the result
 std::chrono::time_point<std::chrono::system_clock> loStartTime;
-// start of the odometry (step 2) only: the remaining time is extrapolated from it, loading is not part of the progress
-std::chrono::time_point<std::chrono::system_clock> loStep2StartTime;
 
 ///////////////////////////////////////////////////////////////////////////////////
 
@@ -249,48 +319,63 @@ std::string formatCompletionTime(double remainingSeconds)
     return std::string(timeStr);
 }
 
-void step1(const std::atomic<bool> &loPause)
+// Asks for the recording folder and lists its files; on the main thread (dialog, window title). Then starts a
+// fresh run: nothing from a previous folder carries over (the [paths] loaded with the settings do).
+// Returns false if no existing folder was picked.
+bool select_input(std::string &input_folder_name, std::vector<std::string> &input_file_names)
 {
-    std::string input_folder_name;
-    std::vector<std::string> input_file_names;
     input_folder_name = mandeye::fd::SelectFolder("Select Mandeye data folder");
 
     std::cout << "Selected folder: '" << input_folder_name << std::endl;
 
-    if (fs::exists(input_folder_name))
+    if (!fs::exists(input_folder_name))
+        return false;
+
+    std::string newTitle = winTitle + " - ..\\" + std::filesystem::path(input_folder_name).filename().string();
+    glutSetWindowTitle(newTitle.c_str());
+
+    for (const auto &entry : fs::directory_iterator(input_folder_name))
+        if (entry.is_regular_file())
+            input_file_names.push_back(entry.path().string());
+    if (!input_file_names.empty())
+        working_directory = fs::path(input_file_names[0]).parent_path().string();
+
+    gui_progress.reset();
+    pipeline = OdometryPipeline(params, console, gui_progress, pipeline.state.paths, full_debug_messages);
+    return true;
+}
+
+// loads the recording into the current run; if that fails, tells the user and closes the program
+void load_input(const std::string &input_folder_name, const std::vector<std::string> &input_file_names)
+{
+    if (pipeline.load(input_file_names))
     {
-        std::string newTitle = winTitle + " - ..\\" + std::filesystem::path(input_folder_name).filename().string();
-        glutSetWindowTitle(newTitle.c_str());
-
-        for (const auto &entry : fs::directory_iterator(input_folder_name))
-            if (entry.is_regular_file())
-                input_file_names.push_back(entry.path().string());
-
-        // a fresh run: nothing from a previous folder carries over (the [paths] loaded with the settings do)
-        pipeline = OdometryPipeline(params, console, console, pipeline.state.paths, full_debug_messages);
-        if (pipeline.load(input_file_names))
-        {
-            working_directory = fs::path(input_file_names[0]).parent_path().string();
-            step_1_done = true;
-        }
-        else
-        {
-            std::string message_info = "Problem with loading data from folder '" + input_folder_name + "' (Pease check if folder exists). Program will close once You click OK!!!";
-            std::cout << message_info << std::endl;
-            [[maybe_unused]]
-            pfd::message message(
-                "Information",
-                message_info.c_str(),
-                pfd::choice::ok, pfd::icon::info);
-            message.result();
-
-            exit(1);
-        }
+        step_1_done = true;
+        return;
     }
+
+    std::string message_info = "Problem with loading data from folder '" + input_folder_name + "' (Pease check if folder exists). Program will close once You click OK!!!";
+    std::cout << message_info << std::endl;
+    [[maybe_unused]]
+    pfd::message message(
+        "Information",
+        message_info.c_str(),
+        pfd::choice::ok, pfd::icon::info);
+    message.result();
+
+    exit(1);
+}
+
+void step1()
+{
+    std::string input_folder_name;
+    std::vector<std::string> input_file_names;
+    if (select_input(input_folder_name, input_file_names))
+        load_input(input_folder_name, input_file_names);
 }
 
 // odometry + post-processing (loop closure, consistency), the same stages as the CLI
-void step2(const std::atomic<bool> &loPause)
+void step2()
 {
     if (pipeline.run_all())
         step_2_done = true;
@@ -581,7 +666,7 @@ void settings_gui()
             {
                 loStartTime = std::chrono::system_clock::now();
                 
-                step1(loPause);
+                step1();
                 std::cout << "Load data done please click 'Compute all' to continue calculations" << std::endl;
 
                 std::chrono::duration<double> elapsed = std::chrono::system_clock::now() - loStartTime;
@@ -597,9 +682,9 @@ void settings_gui()
         {
             if (ImGui::Button("Compute all"))
             {
-                loStep2StartTime = std::chrono::system_clock::now();
-                step2(loPause);
-                compute_all_seconds = std::chrono::duration<double>(std::chrono::system_clock::now() - loStep2StartTime).count();
+                const auto compute_start = std::chrono::system_clock::now();
+                step2();
+                compute_all_seconds = std::chrono::duration<double>(std::chrono::system_clock::now() - compute_start).count();
             }
 
             if (ImGui::IsItemHovered())
@@ -1081,52 +1166,48 @@ void progress_window()
     ImGui::Begin("Progress", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
     ImGui::Text(("Working directory:\n'" + working_directory +  "'").c_str());
-        
-    // Calculate elapsed time and ETA
-    auto currentTime = std::chrono::system_clock::now();
-    std::chrono::duration<double> elapsed = currentTime - loStartTime;
-    double elapsedSeconds = elapsed.count();
 
-    float progress = loProgress.load();
-    double estimatedTimeRemaining = 0.0;
+    const double elapsedSeconds = std::chrono::duration<double>(std::chrono::system_clock::now() - loStartTime).count();
+    const RunStage stage = gui_progress.stage();
 
-    if (progress > 0.01f && progress < 1.0f)
-    { // Only estimate when we have meaningful progress
-        const double step2Seconds = std::chrono::duration<double>(currentTime - loStep2StartTime).count();
-        estimatedTimeRemaining = step2Seconds / progress - step2Seconds;
-    }
-
-    // Format progress text with time information
-    char progressText[256];
     char timeInfo[512];
-
-    if (progress > 0.01f)
+    if (stage == RunStage::Odometry)
     {
-        std::string completionTime = formatCompletionTime(estimatedTimeRemaining);
-        snprintf(progressText, sizeof(progressText), "Processing: %.1f%%", progress * 100.0f);
-        snprintf(timeInfo, sizeof(timeInfo),
-                 "Elapsed: %s | Remaining: %s | Estimated finish: ~%s",
-                 formatTime(elapsedSeconds).c_str(),
-                 formatTime(estimatedTimeRemaining).c_str(),
-                 completionTime.c_str());
+        // percentage and estimate for the odometry only: the remaining time is extrapolated from this stage
+        const float progress = gui_progress.fraction();
+        char progressText[256];
+        snprintf(progressText, sizeof(progressText), "%s: %.1f%%", run_stage_name(stage), progress * 100.0f);
+        if (progress > 0.01f && progress < 1.0f)
+        {
+            const double stageSeconds = gui_progress.stage_seconds();
+            const double estimatedTimeRemaining = stageSeconds / progress - stageSeconds;
+            snprintf(timeInfo, sizeof(timeInfo),
+                     "Elapsed: %s | Remaining: %s | Estimated finish: ~%s",
+                     formatTime(elapsedSeconds).c_str(),
+                     formatTime(estimatedTimeRemaining).c_str(),
+                     formatCompletionTime(estimatedTimeRemaining).c_str());
+        }
+        else
+        {
+            snprintf(timeInfo, sizeof(timeInfo),
+                     "Elapsed: %s | Calculating completion time...",
+                     formatTime(elapsedSeconds).c_str());
+        }
+        ImGui::ProgressBar(progress, ImVec2(-1.0f, 0.0f), progressText);
     }
     else
     {
-        snprintf(progressText, sizeof(progressText), "Processing: %.1f%%", progress * 100.0f);
-        snprintf(timeInfo, sizeof(timeInfo),
-                 "Elapsed: %s | Calculating completion time...",
-                 formatTime(elapsedSeconds).c_str());
+        ImGui::Text("%s...", run_stage_name(stage));
+        snprintf(timeInfo, sizeof(timeInfo), "Elapsed: %s", formatTime(elapsedSeconds).c_str());
     }
-
-    ImGui::ProgressBar(progress, ImVec2(-1.0f, 0.0f), progressText);
     ImGui::Text("%s", timeInfo);
 
     ImGui::NewLine();
 
-    if (!loPause)
+    if (!gui_progress.paused())
     {
         if (ImGui::Button("Pause"))
-            loPause.store(true);
+            gui_progress.set_paused(true);
 
         if (ImGui::IsItemHovered())
         {
@@ -1139,7 +1220,7 @@ void progress_window()
     else
     {
         if (ImGui::Button("Resume"))
-            loPause.store(false);
+            gui_progress.set_paused(false);
     }
     ImGui::SameLine();
     ImGui::Text("Also check console for progress..");
@@ -1152,22 +1233,23 @@ void openData()
     is_settings_gui = false;
     info_gui = false;
 
-    loRunning.store(true);
-    loProgress.store(0.0f);
-    loStartTime = std::chrono::system_clock::now();
-
-    step1(loPause);
-
-    if (step_1_done)
+    std::string input_folder_name;
+    std::vector<std::string> input_file_names;
+    if (select_input(input_folder_name, input_file_names))
     {
+        // the progress window is shown from here on; loading runs on the worker thread so it stays visible
+        loRunning.store(true);
+        loStartTime = std::chrono::system_clock::now();
+
         std::thread loThread(
-            []()
+            [input_folder_name, input_file_names]()
             {
+                load_input(input_folder_name, input_file_names);
+
                 std::chrono::time_point<std::chrono::system_clock> start, end;
                 start = std::chrono::system_clock::now();
-                loStep2StartTime = start;
 
-                step2(loPause);
+                step2();
 
                 end = std::chrono::system_clock::now();
                 std::chrono::duration<double> elapsed_seconds = end - start;
@@ -1193,44 +1275,11 @@ void openData()
 
         loThread.detach();
     }
-    else //no data loaded
-        loRunning = false;
 }
 
-void display()
-{ 
-    ImGuiIO& io = ImGui::GetIO();
-    glViewport(0, 0, (GLsizei)io.DisplaySize.x, (GLsizei)io.DisplaySize.y);
-
-    glClearColor(bg_color.x * bg_color.w, bg_color.y * bg_color.w, bg_color.z * bg_color.w, bg_color.w);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glEnable(GL_DEPTH_TEST);
-
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-
-    updateCameraTransition();
-
-    reshape((GLsizei)io.DisplaySize.x, (GLsizei)io.DisplaySize.y);
-
-    viewLocal = Eigen::Affine3f::Identity();
-
-    viewLocal.translate(rotation_center);
-
-    viewLocal.translate(Eigen::Vector3f(translate_x, translate_y, translate_z));
-    if (!lock_z)
-        viewLocal.rotate(Eigen::AngleAxisf(rotate_x * DEG_TO_RAD, Eigen::Vector3f::UnitX()));
-    else
-        viewLocal.rotate(Eigen::AngleAxisf(-90.0 * DEG_TO_RAD, Eigen::Vector3f::UnitX()));
-    viewLocal.rotate(Eigen::AngleAxisf(rotate_y * DEG_TO_RAD, Eigen::Vector3f::UnitZ()));
-
-    viewLocal.translate(-rotation_center);
-
-    glMatrixMode(GL_MODELVIEW);
-    glLoadMatrixf(viewLocal.matrix().data());
-
-    showAxes();
-
+// the current run's points, trajectory and reference data, and the interval markers
+void draw_run_data()
+{
     if (show_initial_points)
     {
         glColor3d(0.0, 1.0, 0.0);
@@ -1360,6 +1409,45 @@ void display()
             glEnd();
         }
     }
+}
+
+void display()
+{ 
+    ImGuiIO& io = ImGui::GetIO();
+    glViewport(0, 0, (GLsizei)io.DisplaySize.x, (GLsizei)io.DisplaySize.y);
+
+    glClearColor(bg_color.x * bg_color.w, bg_color.y * bg_color.w, bg_color.z * bg_color.w, bg_color.w);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glEnable(GL_DEPTH_TEST);
+
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+
+    updateCameraTransition();
+
+    reshape((GLsizei)io.DisplaySize.x, (GLsizei)io.DisplaySize.y);
+
+    viewLocal = Eigen::Affine3f::Identity();
+
+    viewLocal.translate(rotation_center);
+
+    viewLocal.translate(Eigen::Vector3f(translate_x, translate_y, translate_z));
+    if (!lock_z)
+        viewLocal.rotate(Eigen::AngleAxisf(rotate_x * DEG_TO_RAD, Eigen::Vector3f::UnitX()));
+    else
+        viewLocal.rotate(Eigen::AngleAxisf(-90.0 * DEG_TO_RAD, Eigen::Vector3f::UnitX()));
+    viewLocal.rotate(Eigen::AngleAxisf(rotate_y * DEG_TO_RAD, Eigen::Vector3f::UnitZ()));
+
+    viewLocal.translate(-rotation_center);
+
+    glMatrixMode(GL_MODELVIEW);
+    glLoadMatrixf(viewLocal.matrix().data());
+
+    showAxes();
+
+    // the run's data is not drawn while it is loaded: the worker thread is still growing its vectors
+    if (!(loRunning && gui_progress.stage() == RunStage::Loading))
+        draw_run_data();
 
     ImGui_ImplOpenGL2_NewFrame();
     ImGui_ImplGLUT_NewFrame();
