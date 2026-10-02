@@ -42,7 +42,7 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
 
 ## 5. Integration
 
-- [ ] 5.1 Full 44 (background): verify IDENTICAL with `tools/baseline/44.manifest.json`, or `compare_baseline.py --tolerance 1e-6` against `raw data/44_baseline` passes.
+- [x] 5.1 Full 44 (background): verify IDENTICAL with `tools/baseline/44.manifest.json`, or `compare_baseline.py --tolerance 1e-6` against `raw data/44_baseline` passes. Result: within `--tolerance 1e-6`, max difference 1e-9 (30 of 35 files differ in the last bits, as in steps 3–4).
 - [ ] 5.2 GUI check, **done by the user**:
   1. start the Release GUI; Start shows "Parameters: default_settings.toml";
   2. Start → 1. Load parameters → `settings/lidar-vertical.toml`; the line now names it;
