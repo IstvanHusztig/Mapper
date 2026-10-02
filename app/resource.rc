@@ -30,15 +30,15 @@ BLOCK "StringFileInfo"
 BEGIN
 BLOCK "040904B0"
 BEGIN
-VALUE "CompanyName", "Mandeye\0"
-VALUE "FileDescription", "HDMapping Step 1\0"
+VALUE "CompanyName", "dMapper\0"
+VALUE "FileDescription", "dMapper - LiDAR + IMU mapping\0"
 VALUE "FileVersion", "0.9.5\0"
-VALUE "InternalName", "Odometry\0"
-VALUE "LegalCopyright", "(c) 2025 github.com/MapsHD/HDMapping\0"
-VALUE "OriginalFilename", "lidar_odometry_step_1.exe\0"
+VALUE "InternalName", "dMapper\0"
+VALUE "LegalCopyright", "dMapper; based on HDMapping (c) 2025 github.com/MapsHD/HDMapping\0"
+VALUE "OriginalFilename", "dMapper.exe\0"
 VALUE "ProductVersion", "0.9.5\0"
-VALUE "ProgramID", "github.com/MapsHD/HDMapping\0"
-VALUE "ProductName", "HDMapping\0"
+VALUE "ProgramID", "dMapper\0"
+VALUE "ProductName", "dMapper\0"
 END
 END
 BLOCK "VarFileInfo"

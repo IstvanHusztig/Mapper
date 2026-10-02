@@ -16,14 +16,14 @@ Every code commit: both presets build `dMapper` (before task 1.1: `lidar_odometr
 
 ## 2. Window title, Info, dialog, file properties
 
-- [ ] 2.1 `app/lidar_odometry_gui.cpp`:
+- [x] 2.1 `app/lidar_odometry_gui.cpp`:
   - `winTitle = "dMapper"`; remove the `glutSetWindowTitle` call in `select_input`;
   - the Info text of design decision 3;
   - folder dialog title "Select recording folder (lidar*.laz + imu*.csv)";
   - header comment rewritten without Mandeye or `multi_view_tls_registration`.
 
   Verify both presets build.
-- [ ] 2.2 `app/resource.rc`: the strings of design decision 4. Verify both presets build, and that the file properties of `dMapper.exe` (PowerShell `(Get-Item ...).VersionInfo`) show ProductName dMapper and OriginalFilename `dMapper.exe`. Run the step checks. Commit.
+- [x] 2.2 `app/resource.rc`: the strings of design decision 4. Verify both presets build, and that the file properties of `dMapper.exe` (PowerShell `(Get-Item ...).VersionInfo`) show ProductName dMapper and OriginalFilename `dMapper.exe`. Run the step checks. Commit.
 
 ## 3. Mandeye references in the code
 

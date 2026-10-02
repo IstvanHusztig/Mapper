@@ -32,18 +32,18 @@
 
 ///////////////////////////////////////////////////////////////////////////////////
 
-// This is LiDAR odometry (step 1)
-// This program calculates trajectory based on IMU and LiDAR data provided by MANDEYE mobile mapping system https://github.com/JanuszBedkowski/mandeye_controller
-// The output is a session proving trajekctory and point clouds that can be  further processed by "multi_view_tls_registration" program.
+// dMapper: LiDAR + IMU mapping. Computes the trajectory and point cloud of a recording folder
+// (lidar*.laz + imu*.csv) and saves them as a result folder (session.mjs, trajectories, LAZ point clouds).
 
-std::string winTitle = std::string("Step 1 (Lidar odometry) ") + HDMAPPING_VERSION_STRING;
+std::string winTitle = "dMapper";
 
+// the second-to-last line is replaced in display() with where the results are saved
 std::vector<std::string> infoLines = {
-    "This program is first step in MANDEYE process.",
+    "dMapper computes the trajectory and point cloud of a LiDAR + IMU recording (lidar*.laz + imu*.csv).",
     "",
-    "It results trajectory and point clouds as single session for 'multi_view_tls_registration_step_2' program.",
+    "Start -> 1. Load parameters, then Start -> 2. Load data and process.",
     "",
-    "Next step will be to load session.json file with 'multi_view_tls_registration_step_2' program."};
+    "Each result folder holds session.mjs, the trajectories (trajectory_lio_*.csv) and the point clouds (scan_lio_*.laz, scan_lio_merged.laz)."};
 
 // App specific shortcuts (Type and Shortcut are just for easy reference)
 static const std::vector<ShortcutEntry> appShortcuts = {
@@ -332,20 +332,18 @@ std::string formatCompletionTime(double remainingSeconds)
     return std::string(timeStr);
 }
 
-// Asks for the recording folder and lists its files; on the main thread (dialog, window title). Then starts a
+// Asks for the recording folder and lists its files; on the main thread (file dialog). Then starts a
 // fresh run: nothing from a previous folder carries over (the [paths] loaded with the settings do).
 // Returns false if no existing folder was picked.
 bool select_input(std::string &input_folder_name, std::vector<std::string> &input_file_names)
 {
-    input_folder_name = mandeye::fd::SelectFolder("Select Mandeye data folder");
+    input_folder_name = mandeye::fd::SelectFolder("Select recording folder (lidar*.laz + imu*.csv)");
 
     std::cout << "Selected folder: '" << input_folder_name << std::endl;
 
     if (!fs::exists(input_folder_name))
         return false;
 
-    std::string newTitle = winTitle + " - ..\\" + std::filesystem::path(input_folder_name).filename().string();
-    glutSetWindowTitle(newTitle.c_str());
 
     for (const auto &entry : fs::directory_iterator(input_folder_name))
         if (entry.is_regular_file())
