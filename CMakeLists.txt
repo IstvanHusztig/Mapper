@@ -2,7 +2,9 @@ cmake_minimum_required(VERSION 4.0.0)
 
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 
-project(lidar_odometry_step_1)
+# the application and executable name (dMapper.exe)
+set(APP_NAME dMapper)
+project(${APP_NAME})
 
 add_definitions(-DHDMAPPING_VERSION_MAJOR=0)
 add_definitions(-DHDMAPPING_VERSION_MINOR=95)
@@ -250,12 +252,12 @@ if(WIN32)
     list(APPEND SOURCES app/resource.rc)
 endif()
 
-add_executable(lidar_odometry_step_1 ${SOURCES})
+add_executable(${APP_NAME} ${SOURCES})
 
-target_compile_definitions(lidar_odometry_step_1 PRIVATE -DWITH_GUI=1)
+target_compile_definitions(${APP_NAME} PRIVATE -DWITH_GUI=1)
 
 target_include_directories(
-  lidar_odometry_step_1
+  ${APP_NAME}
   PRIVATE app
           ${REPOSITORY_DIRECTORY}/core/include
           ${EXTERNAL_LIBRARIES_DIRECTORY}
@@ -274,7 +276,7 @@ target_include_directories(
           ${EXTERNAL_LIBRARIES_DIRECTORY}/manif/include)
 
 target_link_libraries(
-          lidar_odometry_step_1
+          ${APP_NAME}
           PRIVATE core
           Fusion
           ${FREEGLUT_LIBRARY}
@@ -288,27 +290,27 @@ target_link_libraries(
 
 if(WIN32)
   add_custom_command(
-    TARGET lidar_odometry_step_1
+    TARGET ${APP_NAME}
     POST_BUILD
     COMMAND
-      ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:lidar_odometry_step_1>
-      $<TARGET_FILE_DIR:lidar_odometry_step_1>
+      ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:${APP_NAME}>
+      $<TARGET_FILE_DIR:${APP_NAME}>
     COMMAND_EXPAND_LISTS)
 
     add_custom_command(
-    TARGET lidar_odometry_step_1
+    TARGET ${APP_NAME}
     POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy
             "${CMAKE_CURRENT_SOURCE_DIR}/app/default_settings.toml"
-            $<TARGET_FILE_DIR:lidar_odometry_step_1>
+            $<TARGET_FILE_DIR:${APP_NAME}>
 )
 endif()
 
 if (MSVC)
-    target_compile_options(lidar_odometry_step_1 PRIVATE /bigobj)
+    target_compile_options(${APP_NAME} PRIVATE /bigobj)
 endif()
 
-install(TARGETS lidar_odometry_step_1 DESTINATION bin)
+install(TARGETS ${APP_NAME} DESTINATION bin)
 
 # unit tests: build the lidar_odometry_tests target, run with ctest --test-dir out/build/<preset>
 enable_testing()

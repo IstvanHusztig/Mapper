@@ -4,7 +4,7 @@ Every code commit: both presets build `dMapper` (before task 1.1: `lidar_odometr
 
 ## 1. Executable name
 
-- [ ] 1.1 `CMakeLists.txt`: add `set(APP_NAME dMapper)`; use `project(${APP_NAME})`, `add_executable(${APP_NAME} ...)` and `${APP_NAME}` in every target reference (compile definitions, includes, links, both post-build copies, `/bigobj`, install).
+- [x] 1.1 `CMakeLists.txt`: add `set(APP_NAME dMapper)`; use `project(${APP_NAME})`, `add_executable(${APP_NAME} ...)` and `${APP_NAME}` in every target reference (compile definitions, includes, links, both post-build copies, `/bigobj`, install).
 
   Update my check scripts to `out/build/<preset>/bin/dMapper.exe`, and delete the old `lidar_odometry_step_1.exe` (and its `.pdb`) from both build trees.
 
