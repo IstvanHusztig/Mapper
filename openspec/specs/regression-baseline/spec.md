@@ -9,7 +9,7 @@ they changed nothing.
 ## Requirements
 
 ### Requirement: Deterministic output for identical runs
-Running the CLI (`lidar_odometry_step_1 <input> <params.toml> <output>`) twice with the same Release
+Running the CLI (`dMapper <input> <params.toml> <output>`) twice with the same Release
 build, the same input folder and the same parameter file SHALL produce output folders that are
 identical after normalization of the run-dependent fields.
 
