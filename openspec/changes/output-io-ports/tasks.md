@@ -64,7 +64,7 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
 ## 5. Integration
 
 - [ ] 5.1 Full 44 (background): verify IDENTICAL with `tools/baseline/44.manifest.json`, or `compare_baseline.py --tolerance 1e-6` against `raw data/44_baseline` passes.
-- [ ] 5.2 GUI check, **done by the user**:
+- [x] 5.2 GUI check, **done by the user**:
   1. start the Release GUI and use Load parameters with `settings/lidar-vertical.toml`;
   2. run `44_short` with "Load & process scanning", and say which `lio_result_*` it saved to;
   3. use Save parameters to save a TOML.
@@ -72,6 +72,8 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
   Then I verify:
   - the result is IDENTICAL with the `44_short` manifest;
   - the saved TOML equals the `HDMapping_params_*.toml` of that run's result folder. Both are written by `TomlConfigRepository` from the same settings and paths. (Changed during apply: the result TOML is already checked byte for byte against the baseline, so it is the reference; an older build isn't needed.)
+
+  Result: `44_short/lio_result_4` from the GUI is IDENTICAL with the manifest (11 files). The user skipped Save parameters. It calls the same `TomlConfigRepository::save` that wrote that result's parameters TOML, which is byte-identical, and the unit test covers save and load.
 - [x] 5.3 Docs:
   - `CLAUDE.md` Architecture: the output ports and adapters, `save_result`'s role, settings through `ConfigRepository`. Testing: the new test source.
   - `docs/ARCHITECTURE.md`: mark roadmap step 4b done and update §3 Ports.
