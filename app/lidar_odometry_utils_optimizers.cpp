@@ -637,6 +637,7 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points,
                              const MotionModelTranslationImuOptions &translation_imu_options,
                              Eigen::Vector3d &acc_offset,
                              Eigen::Matrix3d &acc_offset_cov,
+                             Logger &logger,
                              Eigen::Matrix3d *lidar_translation_information)
 {
     const bool have_dt = timestamps.size() == intermediate_trajectory.size();
@@ -1330,7 +1331,7 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points,
     }
 }
 
-void align_to_reference(const NDT::GridParameters &rgd_params, std::vector<Point3Di> &initial_points, Eigen::Affine3d &m_g, NDTBucketMapType &reference_buckets)
+void align_to_reference(const NDT::GridParameters &rgd_params, std::vector<Point3Di> &initial_points, Eigen::Affine3d &m_g, NDTBucketMapType &reference_buckets, Logger &logger)
 {
     Eigen::SparseMatrix<double> AtPAndt(6, 6);
     Eigen::SparseMatrix<double> AtPBndt(6, 1);
@@ -1567,7 +1568,7 @@ namespace
     }
 } // namespace
 
-bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &params, OdometryState &state, double &ts_failure, std::atomic<float> &loProgress, const std::atomic<bool> &pause, bool debugMsg)
+bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &params, OdometryState &state, double &ts_failure, bool debugMsg, Logger &logger, ProgressReporter &progress)
 {
     if (worker_data.size() != 0)
     {
@@ -1658,14 +1659,7 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
             std::vector<Point3Di> intermediate_points;
             load_vector_data(worker_data[i].intermediate_points_cache_file_name.string(), intermediate_points);
 
-            if (pause)
-            {
-                while (pause)
-                {
-                    std::cout << "pause" << std::endl;
-                    std::this_thread::sleep_for(std::chrono::seconds(1));
-                }
-            }
+            progress.checkpoint();
 
             // final world-frame velocity of the previous window (for the velocity-continuity prior)
             const bool use_acc_prior = params.lidar_odometry_motion_model_acc_1_sigma_mps2 > 0.0;
@@ -1996,6 +1990,7 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
                                         translation_imu_options,
                                         acc_offset,
                                         acc_offset_cov,
+                                        logger,
                                         acc_gated ? &lidar_translation_information : nullptr);
                 if (delta < params.convergence_delta_threshold)
                     break;
@@ -2113,7 +2108,7 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
                 }
             }
 
-            loProgress.store((float)(i + 1) / worker_data.size());
+            progress.progress(i + 1, worker_data.size());
 
             // temp save
             if (i % 100 == 0)
@@ -2246,7 +2241,7 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
     return true;
 }
 
-void Consistency(std::vector<WorkerData> &worker_data, const OdometryConfig &params)
+void Consistency(std::vector<WorkerData> &worker_data, const OdometryConfig &params, Logger &logger)
 {
     std::vector<Eigen::Affine3d> trajectory;
     std::vector<std::pair<double, double>> timestamps;
@@ -2585,7 +2580,7 @@ void Consistency(std::vector<WorkerData> &worker_data, const OdometryConfig &par
         worker_data[indexes[i].first].intermediate_trajectory[indexes[i].second] = trajectory[i];
 }
 
-void Consistency2(std::vector<WorkerData> &worker_data, const OdometryConfig &params)
+void Consistency2(std::vector<WorkerData> &worker_data, const OdometryConfig &params, Logger &logger)
 {
     std::vector<Eigen::Affine3d> trajectory;
     std::vector<std::pair<double, double>> timestamps;

@@ -9,7 +9,8 @@
 
 // Writes whole messages to the console from any thread: Debug/Info to `out`, Warning/Error to `err`.
 // Prints one "[stage] <name>" line per stage, and during Loading an in-place "running iterations: i/n"
-// counter that is ended before any other output. Never pauses.
+// counter that ends with "(done)" when i reaches n, or with a line break before any other output.
+// Never pauses.
 class ConsoleReporter : public Logger, public ProgressReporter
 {
 public:
@@ -21,13 +22,12 @@ public:
     void checkpoint() override {}
 
 private:
-    // ends an open counter line; `done` marks it finished; caller holds the lock
-    void close_counter(bool done);
+    // ends an open counter line; caller holds the lock
+    void close_counter();
 
     std::ostream *out_;
     std::ostream *err_;
     std::mutex mutex_;
     RunStage stage_ = RunStage::Loading;
     bool counter_open_ = false;
-    std::size_t counter_total_ = 0;
 };

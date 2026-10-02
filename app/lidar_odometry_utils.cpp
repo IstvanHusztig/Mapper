@@ -176,7 +176,7 @@ void update_rgd_spherical_coordinates(const NDT::GridParameters &rgd_params, NDT
     }
 }
 
-bool save_poses(const std::string file_name, std::vector<Eigen::Affine3d> m_poses, std::vector<std::string> filenames)
+bool save_poses(const std::string file_name, std::vector<Eigen::Affine3d> m_poses, std::vector<std::string> filenames, Logger &logger)
 {
     std::ofstream outfile;
     outfile.open(file_name);
@@ -204,7 +204,7 @@ bool save_poses(const std::string file_name, std::vector<Eigen::Affine3d> m_pose
     return true;
 }
 
-std::vector<std::tuple<std::pair<double, double>, FusionVector, FusionVector>> load_imu(const std::string &imu_file, int imuToUse)
+std::vector<std::tuple<std::pair<double, double>, FusionVector, FusionVector>> load_imu(const std::string &imu_file, int imuToUse, Logger &logger)
 {
     std::vector<std::tuple<std::pair<double, double>, FusionVector, FusionVector>> all_data;
 
@@ -316,7 +316,7 @@ std::vector<std::tuple<std::pair<double, double>, FusionVector, FusionVector>> l
 }
 
 std::vector<Point3Di> load_point_cloud(const std::string &lazFile, bool ommit_points_with_timestamp_equals_zero, double filter_threshold_xy_inner, double filter_threshold_xy_outer,
-                                       const Eigen::Vector3d &lever_arm)
+                                       const Eigen::Vector3d &lever_arm, Logger &logger)
 {
     std::vector<Point3Di> points;
     laszip_POINTER laszip_reader;

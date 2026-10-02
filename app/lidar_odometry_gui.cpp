@@ -10,6 +10,7 @@
 #include "lidar_odometry_utils.h"
 #include "lidar_odometry.h"
 #include "odometry_pipeline.h"
+#include "console_reporting.h"
 #include <export_laz.h>
 
 #include <utils.hpp>
@@ -158,7 +159,8 @@ Eigen::Affine3d stretch_gizmo_m = Eigen::Affine3d::Identity();
 
 OdometryConfig params;
 GuiPreferences gui_prefs;
-OdometryPipeline pipeline{params}; // the current run (data shown and edited by the GUI)
+ConsoleReporter console;  // run messages and stages on the console
+OdometryPipeline pipeline{params, console, console}; // the current run (data shown and edited by the GUI)
 Session session;
 
 std::atomic<bool> loRunning{false};
@@ -265,8 +267,8 @@ void step1(const std::atomic<bool> &loPause)
                 input_file_names.push_back(entry.path().string());
 
         // a fresh run: nothing from a previous folder carries over (the [paths] loaded with the settings do)
-        pipeline = OdometryPipeline(params, pipeline.state.paths, full_debug_messages);
-        if (pipeline.load(input_file_names, loPause))
+        pipeline = OdometryPipeline(params, console, console, pipeline.state.paths, full_debug_messages);
+        if (pipeline.load(input_file_names))
         {
             working_directory = fs::path(input_file_names[0]).parent_path().string();
             step_1_done = true;
@@ -290,7 +292,7 @@ void step1(const std::atomic<bool> &loPause)
 // odometry + post-processing (loop closure, consistency), the same stages as the CLI
 void step2(const std::atomic<bool> &loPause)
 {
-    if (pipeline.run_all(loProgress, loPause))
+    if (pipeline.run_all())
         step_2_done = true;
     else
         calculations_failed = true;
@@ -712,7 +714,7 @@ void settings_gui()
                 if (input_file_names.size() > 0)
                 {
                     show_reference_points = true;
-                    load_reference_point_clouds(input_file_names, params, pipeline.state);
+                    load_reference_point_clouds(input_file_names, params, pipeline.state, console);
                 }
             }
 
@@ -760,7 +762,7 @@ void settings_gui()
                     {
                         for (int i = 0; i < 30; i++)
                         {
-                            align_to_reference(params.in_out_params_indoor, pipeline.state.initial_points, pipeline.state.m_g, pipeline.state.reference_buckets);
+                            align_to_reference(params.in_out_params_indoor, pipeline.state.initial_points, pipeline.state.m_g, pipeline.state.reference_buckets, console);
                         }
                     }
                 }
@@ -1833,13 +1835,12 @@ int main(int argc, char *argv[])
                 }
             }
 
-            OdometryPipeline pipeline(config, paths, full_debug_messages);
-            std::atomic<bool> loPause{false};
-            std::atomic<float> progress{0.0f};
-            if (pipeline.load(input_file_names, loPause))
-                std::cout << "step_1_done" << std::endl;
+            ConsoleReporter reporter;
+            OdometryPipeline pipeline(config, reporter, reporter, paths, full_debug_messages);
+            if (pipeline.load(input_file_names))
+                log_info(reporter) << "step_1_done";
 
-            pipeline.run_all(progress, loPause);
+            pipeline.run_all();
 
             end = std::chrono::system_clock::now();
             std::chrono::duration<double> elapsed_seconds = end - start;

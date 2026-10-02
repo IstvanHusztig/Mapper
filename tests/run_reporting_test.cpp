@@ -107,15 +107,19 @@ TEST_CASE("ConsoleReporter stage lines and the loading counter")
     console.progress(1, 3);
     console.progress(2, 3);
     log_info(console) << "message while counting"; // ends the open counter line first
-    console.progress(3, 3);
-    console.stage_started(RunStage::Odometry);
+    console.progress(3, 3); // reaching the total ends the counter with "(done)"
+    log_info(console) << "after loading";
+    console.progress(1, 4);
+    console.stage_started(RunStage::Odometry); // ends an open counter line
     console.progress(1, 10); // no counter outside Loading
     log_info(console) << "window 1";
 
     CHECK(out.str() == "[stage] Loading\n"
                        "\rrunning iterations: 1/3\rrunning iterations: 2/3\n"
                        "message while counting\n"
-                       "\rrunning iterations: 3/3\rrunning iterations: 3 (done)\n"
+                       "\rrunning iterations: 3 (done)\n"
+                       "after loading\n"
+                       "\rrunning iterations: 1/4\n"
                        "[stage] Odometry\n"
                        "window 1\n");
     CHECK(err.str().empty());

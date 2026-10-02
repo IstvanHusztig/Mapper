@@ -26,12 +26,12 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
 
 ## 2. Ports into the pipeline API (no message converted yet)
 
-- [ ] 2.1 Change the signatures (design decision 3):
+- [x] 2.1 Change the signatures (design decision 3):
   - `compute_step_1` and `compute_step_2` take `Logger&, ProgressReporter&` instead of the atomics. Replace their pause loops with `progress.checkpoint()`, and the `loProgress.store` with `progress.progress(i + 1, n)`. The `running iterations` counter in `compute_step_1` becomes `progress.progress(...)`.
   - `load_data`, `calculate_trajectory`, `run_loop_closure`, `run_consistency`, `Consistency`, `Consistency2`, `save_result` and the helpers in design Context take `Logger&`.
 
   Verify both presets build.
-- [ ] 2.2 `OdometryPipeline`:
+- [x] 2.2 `OdometryPipeline`:
   - It takes `Logger&, ProgressReporter&` in its constructor (stored as pointers).
   - Stage reporting: `stage_started` with a `checkpoint()` in `load` (Loading), `run_odometry` (Odometry), `post_process` (LoopClosure / Consistency, only when each runs) and `save` (Saving).
   - `load`, `run_odometry` and `run_all` lose their atomic parameters.

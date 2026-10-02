@@ -19,6 +19,7 @@
 #include <python-scripts/constraints/smoothness_tait_bryan_wc_jacobian.h>
 #include <python-scripts/point-to-point-metrics/point_to_point_source_to_target_tait_bryan_wc_jacobian_simplified.h>
 #include <common/include/cauchy.h>
+#include "run_reporting.h"
 
 namespace fs = std::filesystem;
 
@@ -267,7 +268,7 @@ void update_rgd_spherical_coordinates(const NDT::GridParameters &rgd_params, NDT
 //! @param imu_file - path to file with IMU data
 //! @param imuToUse - id number of IMU to use, the same index as in pointcloud return by @ref load_point_cloud
 //! @return vector of tuples (std::pair<timestamp, timestampUnix>, angular_velocity, linear_acceleration)
-std::vector<std::tuple<std::pair<double, double>, FusionVector, FusionVector>> load_imu(const std::string &imu_file, int imuToUse);
+std::vector<std::tuple<std::pair<double, double>, FusionVector, FusionVector>> load_imu(const std::string &imu_file, int imuToUse, Logger &logger);
 
 //! This function load point cloud from LAS/LAZ file.
 //! Each point is shifted by the LiDAR-IMU lever arm.
@@ -277,9 +278,9 @@ std::vector<std::tuple<std::pair<double, double>, FusionVector, FusionVector>> l
 //! @param lever_arm - LiDAR-IMU lever arm added to each point
 //! @return vector of points of @ref Point3Di type
 std::vector<Point3Di> load_point_cloud(const std::string &lazFile, bool ommit_points_with_timestamp_equals_zero, double filter_threshold_xy_inner, double filter_threshold_xy_outer,
-                                       const Eigen::Vector3d &lever_arm);
+                                       const Eigen::Vector3d &lever_arm, Logger &logger);
 
-bool save_poses(const std::string file_name, std::vector<Eigen::Affine3d> m_poses, std::vector<std::string> filenames);
+bool save_poses(const std::string file_name, std::vector<Eigen::Affine3d> m_poses, std::vector<std::string> filenames, Logger &logger);
 
 fs::path get_next_result_path(const std::string working_directory);
 
@@ -346,6 +347,7 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, std::ve
                              const MotionModelTranslationImuOptions &translation_imu_options,
                              Eigen::Vector3d &acc_offset,
                              Eigen::Matrix3d &acc_offset_cov,
+                             Logger &logger,
                              Eigen::Matrix3d *lidar_translation_information = nullptr);
 
 void optimize_sf2(std::vector<Point3Di> &intermediate_points, std::vector<Point3Di> &intermediate_points_sf, std::vector<Eigen::Affine3d> &intermediate_trajectory,
@@ -353,10 +355,10 @@ void optimize_sf2(std::vector<Point3Di> &intermediate_points, std::vector<Point3
                   const NDT::GridParameters &rgd_params, bool useMultithread, double wx, double wy, double wz, double wom, double wfi, double wka);
 
 // this function registers initial point cloud to geoferenced point cloud
-void align_to_reference(const NDT::GridParameters &rgd_params, std::vector<Point3Di> &initial_points, Eigen::Affine3d &m_g, NDTBucketMapType &buckets);
+void align_to_reference(const NDT::GridParameters &rgd_params, std::vector<Point3Di> &initial_points, Eigen::Affine3d &m_g, NDTBucketMapType &buckets, Logger &logger);
 
-bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &params, OdometryState &state, double &ts_failure, std::atomic<float> &loProgress, const std::atomic<bool> &pause, bool debugMsg);
+bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &params, OdometryState &state, double &ts_failure, bool debugMsg, Logger &logger, ProgressReporter &progress);
 
-void Consistency(std::vector<WorkerData> &worker_data, const OdometryConfig &params);
-void Consistency2(std::vector<WorkerData> &worker_data, const OdometryConfig &params);
+void Consistency(std::vector<WorkerData> &worker_data, const OdometryConfig &params, Logger &logger);
+void Consistency2(std::vector<WorkerData> &worker_data, const OdometryConfig &params, Logger &logger);
 #endif

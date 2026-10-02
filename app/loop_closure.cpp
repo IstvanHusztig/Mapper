@@ -295,7 +295,7 @@ namespace
     }
 } // namespace
 
-int run_loop_closure(std::vector<WorkerData> &worker_data, const OdometryConfig &params)
+int run_loop_closure(std::vector<WorkerData> &worker_data, const OdometryConfig &params, Logger &logger)
 {
     const int windows_per_segment = std::max(1, params.loop_closure_segment_windows);
     const int n_windows = static_cast<int>(worker_data.size());

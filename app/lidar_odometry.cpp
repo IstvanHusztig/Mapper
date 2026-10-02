@@ -11,7 +11,8 @@ bool load_data(std::vector<std::string>& input_file_names,
     OdometryState& state,
     std::vector<std::vector<Point3Di>>& pointsPerFile,
     Imu& imu_data,
-    bool debugMsg)
+    bool debugMsg,
+    Logger& logger)
 {
     std::sort(input_file_names.begin(), input_file_names.end());
 
@@ -116,7 +117,7 @@ bool load_data(std::vector<std::string>& input_file_names,
             [&](const tbb::blocked_range<size_t>& range) {
                 for (size_t i = range.begin(); i < range.end(); ++i)
                 {
-                    imuChunks[i] = load_imu(csv_files[i].c_str(), 0);
+                    imuChunks[i] = load_imu(csv_files[i].c_str(), 0, logger);
                 }
             });
 
@@ -147,7 +148,7 @@ bool load_data(std::vector<std::string>& input_file_names,
             {
                 const std::string& fn = laz_files[i];
 
-                auto data = load_point_cloud(fn.c_str(), true, params.filter_threshold_xy_inner, params.filter_threshold_xy_outer, get_lidar_imu_lever_arm(params));
+                auto data = load_point_cloud(fn.c_str(), true, params.filter_threshold_xy_inner, params.filter_threshold_xy_outer, get_lidar_imu_lever_arm(params), logger);
 
                 std::sort(data.begin(), data.end(), [](const Point3Di& a, const Point3Di& b)
                     { return a.timestamp < b.timestamp; });
@@ -193,7 +194,7 @@ bool load_data(std::vector<std::string>& input_file_names,
 }
 
 void calculate_trajectory(
-    Trajectory& trajectory, Imu& imu_data, bool fusionConventionNwu, bool fusionConventionEnu, bool fusionConventionNed, double ahrs_gain, bool debugMsg, bool use_remove_imu_bias_from_first_stationary_scan)
+    Trajectory& trajectory, Imu& imu_data, bool fusionConventionNwu, bool fusionConventionEnu, bool fusionConventionNed, double ahrs_gain, bool debugMsg, bool use_remove_imu_bias_from_first_stationary_scan, Logger& logger)
 {
     FusionAhrs ahrs;
     FusionAhrsInitialise(&ahrs);
@@ -335,7 +336,7 @@ void calculate_trajectory(
 }
 
 bool compute_step_1(
-    std::vector<std::vector<Point3Di>>& pointsPerFile, const OdometryConfig &params, OdometryState& state, Trajectory& trajectory, std::vector<WorkerData>& worker_data, const std::atomic<bool>& pause, const Imu* imu_data)
+    std::vector<std::vector<Point3Di>>& pointsPerFile, const OdometryConfig &params, OdometryState& state, Trajectory& trajectory, std::vector<WorkerData>& worker_data, Logger& logger, ProgressReporter& progress, const Imu* imu_data)
 {
     int number_of_initial_points = 0;
     double timestamp_begin = 0.0;
@@ -416,7 +417,7 @@ bool compute_step_1(
     for (size_t i = 0; i < n_iter; i++)
     {
         if (i % 50 == 0)
-            std::cout << "\rrunning iterations: " << i + 1 << "/" << n_iter << std::flush;
+            progress.progress(i + 1, n_iter);
 
         WorkerData& wd = worker_data.emplace_back();  // construct in-place
         wd.intermediate_trajectory.reserve(threshold);
@@ -516,19 +517,15 @@ bool compute_step_1(
             }
         }
 
-        if (pause)
-            while (pause)
-                std::this_thread::sleep_for(std::chrono::seconds(1));
+        progress.checkpoint();
     }
-
-    std::cout << "\rrunning iterations: " << n_iter << " (done)" << std::flush;
-    std::cout << std::endl;
+    progress.progress(n_iter, n_iter);
 
     state.m_g = worker_data[0].intermediate_trajectory[0];
     return true;
 }
 
-void run_consistency(std::vector<WorkerData> &worker_data, const OdometryConfig &params)
+void run_consistency(std::vector<WorkerData> &worker_data, const OdometryConfig &params, Logger &logger)
 {
     std::cout << "Point cloud consistency and trajectory smoothness START" << std::endl;
     for (int i = 0; i < params.num_constistency_iter; i++)
@@ -540,11 +537,11 @@ void run_consistency(std::vector<WorkerData> &worker_data, const OdometryConfig 
         }
         if (!params.use_mutliple_gaussian)
         {
-            Consistency(worker_data, params);
+            Consistency(worker_data, params, logger);
         }
         else
         {
-            Consistency2(worker_data, params);
+            Consistency2(worker_data, params, logger);
         }
     }
     std::cout << "Point cloud consistency and trajectory smoothness FINISHED" << std::endl;
@@ -616,7 +613,7 @@ namespace
     };
 } // namespace
 
-void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &params, const OdometryState &state, const GuiPreferences &gui, fs::path outwd, double elapsed_time_s)
+void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &params, const OdometryState &state, const GuiPreferences &gui, fs::path outwd, double elapsed_time_s, Logger &logger)
 {
     std::filesystem::create_directory(outwd);
     // concatenate data
@@ -819,10 +816,10 @@ void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &par
 
     fs::path path(outwd);
     path /= "session_ini_poses.mri";
-    save_poses(path.string(), m_poses, file_names);
+    save_poses(path.string(), m_poses, file_names, logger);
     fs::path path2(outwd);
     path2 /= "session_poses.mrp";
-    save_poses(path2.string(), m_poses, file_names);
+    save_poses(path2.string(), m_poses, file_names, logger);
 
     fs::path index_poses_path = outwd / "index_poses.json";
     if (params.save_index_pose){
@@ -887,10 +884,10 @@ void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &par
     fs.close();
 
     // Save parameters to TOML file (loadable parameters only)
-    save_parameters_toml(params, state.paths, gui, outwd, elapsed_time_s);
+    save_parameters_toml(params, state.paths, gui, outwd, elapsed_time_s, logger);
 
     // Save processing results and complex data to JSON file
-    save_processing_results_json(params, state, outwd, elapsed_time_s, &worker_data);
+    save_processing_results_json(params, state, outwd, elapsed_time_s, logger, &worker_data);
 }
 
 void filter_reference_buckets(const OdometryConfig &params, OdometryState &state)
@@ -932,7 +929,7 @@ void save_trajectory_to_ascii(std::vector<WorkerData> &worker_data, std::string 
     file.close();
 }
 
-void load_reference_point_clouds(std::vector<std::string> input_file_names, const OdometryConfig &params, OdometryState &state)
+void load_reference_point_clouds(std::vector<std::string> input_file_names, const OdometryConfig &params, OdometryState &state, Logger &logger)
 {
     state.reference_buckets.clear();
     state.reference_points.clear();
@@ -940,7 +937,7 @@ void load_reference_point_clouds(std::vector<std::string> input_file_names, cons
     for (size_t i = 0; i < input_file_names.size(); i++)
     {
         std::cout << "loading reference point cloud from: " << input_file_names[i] << std::endl;
-        auto pp = load_point_cloud(input_file_names[i].c_str(), false, 0, 10000, get_lidar_imu_lever_arm(params));
+        auto pp = load_point_cloud(input_file_names[i].c_str(), false, 0, 10000, get_lidar_imu_lever_arm(params), logger);
         std::cout << "loaded " << pp.size() << " reference points" << std::endl;
         state.reference_points.insert(std::end(state.reference_points), std::begin(pp), std::end(pp));
     }
@@ -949,7 +946,7 @@ void load_reference_point_clouds(std::vector<std::string> input_file_names, cons
     state.buckets_indoor = state.reference_buckets;
 }
 
-void save_parameters_toml(const OdometryConfig &params, const RunPaths &paths, const GuiPreferences &gui, const fs::path &outwd, double elapsed_seconds)
+void save_parameters_toml(const OdometryConfig &params, const RunPaths &paths, const GuiPreferences &gui, const fs::path &outwd, double elapsed_seconds, Logger &logger)
 {
     // Get current date and time
     auto now = std::chrono::system_clock::now();
@@ -988,7 +985,7 @@ void save_parameters_toml(const OdometryConfig &params, const RunPaths &paths, c
 }
 
 void save_processing_results_json(const OdometryConfig &params, const OdometryState &state, const fs::path &outwd, double elapsed_seconds,
-                                  const std::vector<WorkerData> *worker_data)
+                                  Logger &logger, const std::vector<WorkerData> *worker_data)
 {
     // Get current date and time
     auto now = std::chrono::system_clock::now();
