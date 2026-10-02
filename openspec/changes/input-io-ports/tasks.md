@@ -56,14 +56,18 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
 
 ## 5. Integration
 
-- [ ] 5.1 Full 44 (background): verify IDENTICAL with `tools/baseline/44.manifest.json`, or `compare_baseline.py --tolerance 1e-6` against `raw data/44_baseline` passes.
-- [ ] 5.2 GUI check, **done by the user**:
+- [x] 5.1 Full 44 (background): verify IDENTICAL with `tools/baseline/44.manifest.json`, or `compare_baseline.py --tolerance 1e-6` against `raw data/44_baseline` passes.
+- [x] 5.2 GUI check, **done by the user**:
   1. start the Release GUI and load `settings/lidar-vertical.toml`;
   2. run `44_short` with the one-click flow, and say which `lio_result_*` it saved to;
   3. in the advanced flow, use "Load data" and "Compute all", then save;
   4. close the GUI and check that `44_short/cache` is gone.
 
   Then I verify that both results are IDENTICAL with the `44_short` manifest.
+
+  Results:
+  - 5.1: 30 of 35 files differ in the last bits; within `--tolerance 1e-6`, max difference 1e-9 (as in step 3).
+  - 5.2: the one-click result `lio_result_2` is IDENTICAL with the manifest (11 files). The advanced result `lio_result_3` was run with the GUI's start-up `default_settings.toml` instead of `lidar-vertical.toml`. A CLI run on `44_short` with that same file is IDENTICAL with it (10 files). `44_short/cache` was removed when the GUI closed.
 - [x] 5.3 Docs:
   - `CLAUDE.md` Architecture: the input ports and adapters, `OdometryPipeline` owning `RunInputs`, and where `load_imu`/`load_point_cloud` live now. Testing: the new test sources.
   - `docs/ARCHITECTURE.md`: split roadmap step 4 into 4a (done) and 4b (`ResultSink`, `ConfigRepository`); add `PreviewSink` to §3 Ports; in §4, the `WorkerData` cache fields are unused (removed in step 5).
