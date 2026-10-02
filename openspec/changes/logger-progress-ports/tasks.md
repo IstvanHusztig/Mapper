@@ -84,12 +84,14 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
 
 - [x] 5.1 Full 44 (background): verify IDENTICAL with `tools/baseline/44.manifest.json`. Result: DIFFERENT, 30 of 35 files, max 1e-9 (`/fp:fast`, see design Risks); the user chose a tolerance for 44.
 - [x] 5.1a Add `--tolerance` to `tools/compare_baseline.py` (numeric comparison of text outputs against the baseline folder; LAZ reported as derived). Document it in `tools/README.md`, `CLAUDE.md` and `docs/ARCHITECTURE.md` (Decisions). Verify that the 44 result passes at 1e-6 and fails at 1e-12.
-- [ ] 5.2 GUI check, **done by the user**:
+- [x] 5.2 GUI check, **done by the user**:
   - start the Release GUI and load `settings/lidar-vertical.toml`;
   - open `44_short` with the one-click flow and check that the progress window shows Loading → Odometry (%) → Loop closure (if enabled) → Saving;
   - press Pause during Odometry, wait, then Resume.
 
   Then I verify that the new `lio_result_*` is IDENTICAL with `44_short_baseline` on all 11 files.
+
+  Result: `44_short/lio_result_3` is IDENTICAL (11 files). Loop closure was too short to see on `44_short`: it finds no candidates and finishes at once.
 - [x] 5.3 Docs:
   - `CLAUDE.md` Architecture: the ports, `ConsoleReporter`, `GuiProgress`, and "no console output in pipeline code";
   - `docs/ARCHITECTURE.md`: mark step 3 done and fix the stale "Nothing here is implemented yet" status line.
