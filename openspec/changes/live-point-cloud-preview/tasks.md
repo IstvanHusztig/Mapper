@@ -31,7 +31,7 @@ Every code commit: both presets build `dMapper` and `lidar_odometry_tests`; `cte
   - the run time (results JSON) is at most 1.3× the CLI's;
   - the result is IDENTICAL with the `44_short` manifest.
 
-  Result: the user ran the GUI with the preview and reported it done (`lio_result_9`). The run took 198.6 s against about 197 s for the CLI (1.0×; 194.9 s without the preview), and the result is IDENTICAL with the manifest (11 files).
+  Result: the user ran the GUI with the preview (`lio_result_9`) and reported the preview fine (growth, rebuild, toggle, smooth view). The run took 198.6 s against about 197 s for the CLI (1.0×; 194.9 s without the preview), and the result is IDENTICAL with the manifest (11 files).
 - [ ] 3.2 Optional, if the user wants it: a GUI run of the full `44`, checking smoothness and the memory of `dMapper.exe` (Task Manager) during and after the run. The result must be identical or within `--tolerance 1e-6` of `raw data/44_baseline`.
 - [x] 3.3 Docs: `CLAUDE.md` (GUI bullet: the live preview, how it's built, View → Show point cloud). Commit.
 - [x] 3.4 Run `openspec validate live-point-cloud-preview --strict` and confirm it passes.
