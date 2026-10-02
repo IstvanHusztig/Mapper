@@ -29,21 +29,11 @@ The command line and every GUI path that produces a result SHALL use this same s
 - **THEN** the results are saved directly after the odometry
 
 ### Requirement: GUI and CLI results are identical
-For the same input folder and the same settings, a result saved by the GUI's "Compute all" (or
-its simple one-click flow) SHALL be identical to the CLI's output. The comparison ignores only
-the run-dependent fields listed in `regression-baseline`.
+For the same input folder and the same settings, a result saved by the GUI's "Load data and process" SHALL be identical to the CLI's output. The comparison ignores only the run-dependent fields listed in `regression-baseline`.
 
 #### Scenario: GUI run of the short reference dataset
 - **WHEN** the GUI processes `44_short` with `settings/lidar-vertical.toml` loaded and saves the result
 - **THEN** every output file compares identical with `44_short_baseline`
-
-### Requirement: No separate consistency action in the GUI
-The GUI SHALL NOT offer a separate action that runs the consistency pass on a finished result.
-Consistency runs only as part of the processing sequence, controlled by the settings.
-
-#### Scenario: After Compute all
-- **WHEN** the odometry and post-processing have finished in the GUI
-- **THEN** the available actions are saving and exporting, with no extra consistency button
 
 ### Requirement: CLI settings come only from the given file
 In command-line mode, the settings SHALL be the built-in defaults overlaid with the given
@@ -66,3 +56,10 @@ exists there, independent of the current working directory.
 #### Scenario: Started from Visual Studio or a shortcut
 - **WHEN** the GUI is started with a working directory that is not the exe folder
 - **THEN** it still loads the `default_settings.toml` that sits next to the exe
+
+### Requirement: Consistency only inside the processing sequence
+The GUI SHALL NOT offer an action that runs the consistency pass on its own. Consistency runs only as part of the processing sequence, controlled by the settings (`use_consistency`).
+
+#### Scenario: After a run
+- **WHEN** a run started with "Load data and process" has finished in the GUI
+- **THEN** the available actions are the Start menu and the view options, with no consistency button
