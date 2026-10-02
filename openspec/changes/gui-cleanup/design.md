@@ -65,8 +65,8 @@ See proposal.md for the motivation and the decisions. Current state of `app/lida
    - *Rejected:* dropping `GuiPreferences`. That would change the TOML format, the golden test files and both baseline manifests, for no user benefit.
 
 4. **The Tools window** is today's Settings window cut down to the scan range tools:
-   - it is shown when `is_tools_window` (View → Tools) is set and `pipeline.worker_data` is non-empty and no run is going;
-   - otherwise it shows a one-line hint ("available after a run").
+   - it has its own top-level **Tools** menu in the menu bar, after Start and before View (user request), with one item, "Scan range…". The item is disabled until a run has finished (`pipeline.worker_data` non-empty) and while a run is going. It toggles `is_tools_window`;
+   - the disabled item's tooltip says "available after a run".
 
    The stretch gizmo code in `display()` stays. The initial-transformation branch of the gizmo (writing `m_g`) goes.
 

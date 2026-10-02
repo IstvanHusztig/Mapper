@@ -43,19 +43,19 @@ The GUI SHALL NOT offer loading reference point clouds, placing the start pose b
 - **THEN** there is no reference-cloud loading and no "Align to reference" action
 
 ### Requirement: Remaining tools and view options
-After a run has finished, the GUI SHALL offer the scan range tools in a Tools window (View → Tools):
+The menu bar SHALL have its own Tools menu, after Start and before View. After a run has finished, its "Scan range…" item SHALL open the scan range tools; before that, the item is disabled:
 - choosing an index range;
 - Select all and Unselect;
 - Export selected scans;
 - Save RESSO file;
 - the stretch gizmo.
 
-The View menu SHALL offer Points size, Show trajectory, Show compass/ruler, Lock Z and Tools. The Info button and the progress window with Pause and Resume SHALL remain.
+The View menu SHALL offer Points size, Show trajectory, Show compass/ruler and Lock Z. The Info button and the progress window with Pause and Resume SHALL remain.
 
 The background colour SHALL come from the `[misc] clear_color` setting of the loaded parameters, with no colour picker in the GUI.
 
 #### Scenario: Tools after a run
-- **WHEN** a run has finished and the user opens View → Tools
+- **WHEN** a run has finished and the user opens Tools → Scan range…
 - **THEN** the scan range tools work on the finished run
 
 #### Scenario: Background colour from the file

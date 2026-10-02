@@ -27,7 +27,7 @@ The user decided (2026-10-02):
     - the reference point clouds, the initial-placement gizmo and "Align to reference" (georeferencing);
   - from the View menu: "Show initial points", "Show trajectory as axes" and the Background colour picker.
 - **Kept:**
-  - the scan range tools (index from/to, Select all/Unselect, Export selected scans, Save RESSO file, the stretch gizmo) in a window renamed **Tools** (View → Tools), available once a run has finished;
+  - the scan range tools (index from/to, Select all/Unselect, Export selected scans, Save RESSO file, the stretch gizmo) in a **Tools** window opened from its own top-level **Tools** menu (Tools → Scan range…), available once a run has finished;
   - View: Points size, Show trajectory, Show compass/ruler, Lock Z;
   - the Info button and the progress window with Pause/Resume.
 - **The background colour stays a setting**, as `[misc] clear_color` in the TOML. It is loaded and applied at start-up and on Load parameters, and saved with each result. There is no TOML format change, so the baselines and golden files stay valid.

@@ -17,8 +17,7 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
 ## 3. Settings window → Tools window, display
 
 - [ ] 3.1 Cut `settings_gui()` down to the scan range tools and rename it to the Tools window (design decision 4):
-  - View → Tools replaces View → Settings;
-  - an "available after a run" hint when there is no finished run;
+  - a top-level Tools menu (after Start, before View) with "Scan range…", disabled with an "available after a run" tooltip until a run has finished; View → Settings is removed;
   - removed: `simple_gui`, every parameter field, "Set example", NWU/ENU/NED, "Load data", "Compute all", "Save result", "Save all point clouds to single las/laz file", "Save trajectory to ASCII", the reference clouds section, and the initial-transformation gizmo and "Align to reference".
 
   Verify both presets build.
@@ -46,7 +45,7 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
   1. start the Release GUI; Start shows "Parameters: default_settings.toml";
   2. Start → 1. Load parameters → `settings/lidar-vertical.toml`; the line now names it;
   3. Start → 2. Load data and process → `44_short`; the progress window names the file; say which `lio_result_*` it saved to;
-  4. View → Tools: select a range and use Export selected scans;
+  4. Tools → Scan range…: select a range and use Export selected scans;
   5. confirm that Presets, Parameters, the settings fields, georeferencing, "Show initial points", "Show trajectory as axes" and the colour picker are gone.
 
   Then I verify that the result is IDENTICAL with the `44_short` manifest.
