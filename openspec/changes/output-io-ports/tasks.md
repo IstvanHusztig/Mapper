@@ -51,13 +51,15 @@ Every code commit: both presets build `lidar_odometry_step_1` and `lidar_odometr
 
 ## 4. Pipeline and wiring
 
-- [ ] 4.1 Changes:
+- [x] 4.1 Changes:
   - `OdometryPipeline::save(ResultSink &sink, const GuiPreferences &gui, double elapsed_seconds)`;
   - the CLI builds `TomlConfigRepository` + `FolderResultSink(argv[3], ...)`;
   - the GUI's `save_results` builds the sink on `get_next_result_path(working_directory)`;
   - `get_next_result_path` moves to `folder_result_sink.{h,cpp}`.
 
   Verify that `lidar_odometry.cpp` and `lidar_odometry_utils.cpp` no longer include `nlohmann`/`export_laz.h`/`toml_io.h` for outputs. Run the step checks. Commit.
+
+  Result: `lidar_odometry.h` dropped `laszip_api.h`, `nlohmann/json.hpp` and `toml_io.h`. It keeps `export_laz.h`, because `points_to_vector` lives there. `lidar_odometry_utils.h` still includes `laszip_api.h` and `nlohmann/json.hpp`; it is the shared header of the old app code and is left for step 7.
 
 ## 5. Integration
 

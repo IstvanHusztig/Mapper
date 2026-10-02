@@ -40,3 +40,6 @@ private:
     Logger *logger_;
     std::unique_ptr<MergedLazWriter> merged_;
 };
+
+// the next free <working_directory>/lio_result_<n> (the GUI saves each result to a new folder)
+std::filesystem::path get_next_result_path(const std::string working_directory);

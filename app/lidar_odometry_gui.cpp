@@ -12,6 +12,7 @@
 #include "odometry_pipeline.h"
 #include "console_reporting.h"
 #include "folder_inputs.h"
+#include "folder_result_sink.h"
 #include <export_laz.h>
 
 #include <utils.hpp>
@@ -388,7 +389,9 @@ void step2()
 void save_results(bool info, double elapsed_seconds)
 {
     fs::path outwd = get_next_result_path(working_directory);
-    pipeline.save(outwd, gui_prefs, elapsed_seconds);
+    TomlConfigRepository config_repository;
+    FolderResultSink sink(outwd, config_repository, console);
+    pipeline.save(sink, gui_prefs, elapsed_seconds);
     if (info)
     {
         std::string message_info = "Results saved to folder: '" + outwd.string() + "'";
@@ -1937,7 +1940,8 @@ int main(int argc, char *argv[])
                       << std::ctime(&end_time)
                       << "Elapsed time: " << formatTime(elapsed_seconds.count()).c_str() << "s\n";
 
-            pipeline.save(argv[3], gui, elapsed_seconds.count());
+            FolderResultSink sink(argv[3], config_repository, reporter);
+            pipeline.save(sink, gui, elapsed_seconds.count());
         }
         else //full GUI mode
         {

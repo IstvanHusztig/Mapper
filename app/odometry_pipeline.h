@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lidar_odometry.h"
+#include "output_ports.h"
 #include "run_reporting.h"
 
 #include <string>
@@ -31,8 +32,8 @@ public:
     void post_process();
     // run_odometry + post_process; returns run_odometry's result (post-processing runs regardless, as in the CLI)
     bool run_all();
-    // writes the result folder (session, trajectories, LAZ, parameters TOML, results JSON)
-    void save(const fs::path &output_folder, const GuiPreferences &gui, double elapsed_seconds);
+    // writes the result (session, trajectories, LAZ, parameters, results report) to the sink
+    void save(ResultSink &sink, const GuiPreferences &gui, double elapsed_seconds);
 
     // removes the run's stored points (the GUI at exit)
     void clear_point_store();

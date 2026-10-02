@@ -1,7 +1,6 @@
 #include "lidar_odometry_utils.h"
 #include <filesystem>
 #include <algorithm>
-#include <regex>
 
 namespace fs = std::filesystem;
 
@@ -173,25 +172,4 @@ void update_rgd_spherical_coordinates(const NDT::GridParameters &rgd_params, NDT
             buckets.emplace(index_of_bucket, bucket_to_add);
         }
     }
-}
-
-fs::path get_next_result_path(const std::string working_directory)
-{
-    std::regex pattern(R"(lio_result_(\d+))");
-    int max_number = -1;
-    for (const auto &entry : fs::directory_iterator(working_directory))
-    {
-        if (entry.is_directory())
-        {
-            std::smatch match;
-            std::string folder_name = entry.path().filename().string();
-
-            if (std::regex_match(folder_name, match, pattern))
-            {
-                int folder_number = std::stoi(match[1].str());
-                max_number = std::max(max_number, folder_number);
-            }
-        }
-    }
-    return (working_directory / fs::path("lio_result_" + std::to_string(max_number + 1)));
 }

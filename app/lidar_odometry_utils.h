@@ -263,7 +263,6 @@ void update_rgd_spherical_coordinates(const NDT::GridParameters &rgd_params, NDT
                                       std::vector<Point3Di> &points_global, std::vector<Eigen::Vector3d> &points_global_spherical);
 
 
-fs::path get_next_result_path(const std::string working_directory);
 
 // rotation part of the motion model: time-scaled sigma and online gyro bias (see OdometryConfig)
 struct MotionModelRotationOptions
