@@ -34,12 +34,14 @@ The loop around it is `run_lm_iterations` (`app/run_odometry.cpp`, file-local). 
 
 **Goals:**
 - Test the optimizer against a known truth: a perfect guess, rotation drift, gyro-bias recovery, and the degeneracy information.
+- Measure how many Levenberg–Marquardt iterations the optimizer needs to converge (decision 8), as a first input to the speed question of `nr_iter` and `convergence_delta_threshold`.
 - Keep the tests fast (seconds in Release), deterministic (`multithread = false`), and independent of the shipped settings files.
 - Don't change app code. The test target only gains sources.
 
 **Non-Goals:**
 - Robust mode (`optimize_sf2`, `optimize_rigid_sf`), the accelerometer term and the velocity prior. They can get tests later; this change covers the default path of `settings/lidar-vertical.toml`.
 - Linking `core`, or any change to `CORE_SOURCE_FILES`.
+- Changing `nr_iter`, `convergence_delta_threshold` or anything else in the settings. The measurement only informs a later change, which would need a full-44 check and `eval_odometry.py`.
 - Testing the whole window loop (`optimize_windows`). It needs the `PointStore` and the map state, and belongs to a later step.
 
 ## Decisions
@@ -83,6 +85,19 @@ The loop around it is `run_lm_iterations` (`app/run_odometry.cpp`, file-local). 
    - degeneracy: an eigenvalue ratio of at least 100.
 
    If a target is missed, implementation pauses and the numbers are reported: it may be a real property of the optimizer, for example the 1e-4 m translation priors. The user decides whether to accept a different target or to look into the optimizer.
+
+8. **The iteration count is measured on the two drift scenarios.**
+   - The helper (decision 4) takes the number of iterations and an optional callback that records each iteration's `delta` and the largest position and heading error against the truth. The drift tests run it for 100 iterations, the default `nr_iter`.
+   - After each iteration, the test records:
+     - the poses' largest change from the final result;
+     - the error against the truth;
+     - `delta`.
+   - It reports with doctest `MESSAGE`:
+     - **N_final:** the first iteration after which the poses stay within 0.1 mm and 0.001° of their result after 100 iterations;
+     - **N_fast:** the first iteration with `delta < 1e-2`;
+     - the error against the truth at N_fast and at 100, and the run time per iteration.
+   - The test asserts only that N_final < 100, so the result is meaningful. Everything else is reported, not asserted.
+   - The numbers and the caveat go into `docs/PERFORMANCE.md`, under the `convergence_delta_threshold` and `nr_iter` rows. The caveat: a synthetic window is smaller, noise-free and well-conditioned, so a real window will need at least as many iterations. A real-data check would be the follow-up: log the iteration count per window on `44_short`.
 
 7. **No app change, so no full 44.** `dMapper` is rebuilt from unchanged sources, so a `44_short` IDENTICAL check is enough to show it. This is the usual rule's exception for test-only changes, stated here so it isn't silently skipped.
 

@@ -18,6 +18,11 @@ This is roadmap step 6c, the last of the three changes the user split step 6 int
   - **a rotation drift is corrected:** the guess turns with a constant yaw-rate error, as a gyro bias does; the optimizer brings the poses back close to the truth;
   - **the gyro bias is estimated:** with bias estimation on, the estimated bias matches the injected yaw-rate error;
   - **degeneracy is detected:** in a corridor (no end walls), the translation information the optimizer reports is weak along the corridor and strong across it; in the closed room it is strong in all three directions. `optimize_windows` uses this information to detect degenerate windows.
+- **How many iterations are needed** (added at the user's request, 2026-10-04). For the drift scenarios, the tests run the full 100 iterations of a real run and record, iteration by iteration, the pose error against the truth and the update `delta`. They report:
+  - the iteration after which the poses stay within 0.1 mm and 0.001° of their final values;
+  - the iteration at which `delta` first falls below `1e-2`, the fast-mode `convergence_delta_threshold`, and how far the poses are from the truth at that point.
+
+  This gives a first, measured answer to whether `nr_iter = 100` is more than needed. The numbers go into `docs/PERFORMANCE.md`, with the caveat that a synthetic window is easier than a real one. The change doesn't alter `nr_iter` or any other setting; that would be a separate change with a full-44 check.
 - **The options are set in the test**, at the values of `settings/lidar-vertical.toml`, so tuning the shipped TOML doesn't break the tests.
 - **No link with `core`.** The roadmap entry says "the tests then link `core`". They don't need to: `scan_to_map.cpp` uses only the NDT types from `core`'s headers and `get_rgd_index`, which `app/lidar_odometry_utils.cpp` defines (checked with `dumpbin` on the Debug objects). The test target compiles `app/scan_to_map.cpp` and `app/lidar_odometry_utils.cpp` directly, like the other app sources it tests, and avoids `core`'s link-order constraint.
 - **Docs.** `CLAUDE.md` gets the new tested sources. `docs/ARCHITECTURE.md` marks 6c done and corrects the "link `core`" note.
@@ -40,5 +45,6 @@ None.
   - `tests/scan_to_map_test.cpp` (new);
   - `tests/CMakeLists.txt`: the new test file, plus `app/scan_to_map.cpp` and `app/lidar_odometry_utils.cpp`.
 - **App:** none. `44_short` must stay IDENTICAL with its manifest, and the full 44 is not needed, because `dMapper` isn't rebuilt from changed sources.
-- **Test time:** the new tests should take a few seconds in Release. Debug is slower, because unoptimized Eigen is.
+- **Test time:** the new tests should take a few seconds in Release. Debug is slower, because unoptimized Eigen is. The 100-iteration measurement runs only for the two drift scenarios.
+- **Docs:** `docs/PERFORMANCE.md` gets the measured iteration counts and what they suggest for `nr_iter` and `convergence_delta_threshold`.
 - **Risk:** the tests check what the optimizer *should* do. If one fails, it may show a real weakness of the optimizer, for example a bias that isn't recovered. That is reported to the user, not hidden by a looser test.

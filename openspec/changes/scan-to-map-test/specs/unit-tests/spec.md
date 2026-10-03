@@ -15,6 +15,10 @@ The unit tests SHALL run the scan-to-map optimizer of one window on a synthetic 
 - **WHEN** the same drifting guess is optimized with gyro-bias estimation on
 - **THEN** the estimated bias about the vertical axis matches the injected yaw-rate error within 20 %
 
+#### Scenario: Iterations needed
+- **WHEN** a drifting guess is optimized for the full number of iterations of a real run
+- **THEN** the test reports the iteration after which the poses no longer change by more than 0.1 mm and 0.001°, and the iteration at which the update first falls below 1e-2, together with the pose error against the truth at that iteration
+
 #### Scenario: Degenerate scene
 - **WHEN** the window moves along a corridor with no end walls
 - **THEN** the translation information reported for the window is at least 100 times weaker along the corridor than across it, while in a closed room no direction is that weak
