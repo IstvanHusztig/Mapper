@@ -214,7 +214,7 @@ private:
         std::vector<Point3Di> points;
         if (!run.load_window_points(window, points))
             return false;
-        const auto &trajectory = run.worker_data[window].intermediate_trajectory;
+        const auto &trajectory = run.worker_data[window].poses;
         bool added = false;
         for (const auto &p : points)
         {
@@ -617,7 +617,7 @@ void draw_run_data()
         glBegin(GL_POINTS);
         for (const auto &wd : pipeline.worker_data)
         {
-            for (const auto &it : wd.intermediate_trajectory)
+            for (const auto &it : wd.poses)
                 glVertex3f(it(0, 3), it(1, 3), it(2, 3));
         }
         glEnd();
@@ -628,9 +628,9 @@ void draw_run_data()
         if (pipeline.worker_data.size() > 0)
         {
             const auto &wd = pipeline.worker_data[pipeline.worker_data.size() - 1];
-            if (wd.intermediate_trajectory.size() > 0)
+            if (wd.poses.size() > 0)
             {
-                const auto &it = wd.intermediate_trajectory[wd.intermediate_trajectory.size() - 1];
+                const auto &it = wd.poses[wd.poses.size() - 1];
 
                 glVertex3f(it(0, 3) - 1, it(1, 3), it(2, 3));
                 glVertex3f(it(0, 3) + 1, it(1, 3), it(2, 3));

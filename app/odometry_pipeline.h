@@ -45,7 +45,7 @@ public:
     std::vector<std::vector<Point3Di>> points_per_file;
     Imu imu;
     Trajectory trajectory;
-    std::vector<WorkerData> worker_data;
+    std::vector<Window> worker_data;
     OdometryState state;
 
 private:

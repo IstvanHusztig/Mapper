@@ -1484,7 +1484,7 @@ namespace
     }
 } // namespace
 
-bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &params, OdometryState &state, double &ts_failure, bool debugMsg, PointStore &point_store, PreviewSink &preview, Logger &logger, ProgressReporter &progress)
+bool compute_step_2(std::vector<Window> &worker_data, const OdometryConfig &params, OdometryState &state, double &ts_failure, bool debugMsg, PointStore &point_store, PreviewSink &preview, Logger &logger, ProgressReporter &progress)
 {
     if (worker_data.size() != 0)
     {
@@ -1494,16 +1494,16 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
         std::vector<Point3Di> points_global;
 
         Eigen::Affine3d m_last = state.m_g;
-        auto tmp = worker_data[0].intermediate_trajectory;
+        auto tmp = worker_data[0].poses;
 
-        worker_data[0].intermediate_trajectory[0] = m_last;
+        worker_data[0].poses[0] = m_last;
         for (int k = 1; k < tmp.size(); k++)
         {
             Eigen::Affine3d m_update = tmp[k - 1].inverse() * tmp[k];
             m_last = m_last * m_update;
-            worker_data[0].intermediate_trajectory[k] = m_last;
+            worker_data[0].poses[k] = m_last;
         }
-        worker_data[0].intermediate_trajectory_motion_model = worker_data[0].intermediate_trajectory;
+        worker_data[0].motion_model_poses = worker_data[0].poses;
 
         auto pp = state.initial_points;
         for (int i = 0; i < pp.size(); i++)
@@ -1523,12 +1523,12 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
         }
         const double bias_rw_rad = params.gyro_bias_rw_deg_s_sqrt_s * DEG_TO_RAD;
         const double bias_sigma0_rad = params.gyro_bias_initial_sigma_deg_s * DEG_TO_RAD;
-        Eigen::Vector3d carried_bias = Eigen::Vector3d::Zero();
-        Eigen::Matrix3d carried_bias_cov = Eigen::Matrix3d::Identity() * (bias_sigma0_rad * bias_sigma0_rad);
+        GyroBiasState carried_bias; // the previous window's estimate, the prior of the next one
+        carried_bias.covariance = Eigen::Matrix3d::Identity() * (bias_sigma0_rad * bias_sigma0_rad);
 
         // IMU-aided translation prediction: raw accelerometer and AHRS orientation of every node are needed
-        const bool have_acc = !worker_data.empty() && worker_data[0].imu_acc.size() == worker_data[0].intermediate_trajectory.size() &&
-                              worker_data[0].imu_om_fi_ka.size() == worker_data[0].intermediate_trajectory.size();
+        const bool have_acc = !worker_data.empty() && worker_data[0].imu_acc.size() == worker_data[0].poses.size() &&
+                              worker_data[0].imu_angles.size() == worker_data[0].poses.size();
         const bool use_imu_pred = params.use_imu_translation_prediction && have_acc;
         const bool use_zupt = params.use_zero_velocity_detection && have_acc;
         if ((params.use_imu_translation_prediction || params.use_zero_velocity_detection) && !have_acc)
@@ -1552,7 +1552,7 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
         if (use_acc_term)
         {
             for (size_t k = 0; k < worker_data[0].imu_acc.size(); k++)
-                acc_gravity += rotation_of(worker_data[0].intermediate_trajectory[k]) * worker_data[0].imu_acc[k];
+                acc_gravity += rotation_of(worker_data[0].poses[k]) * worker_data[0].imu_acc[k];
             acc_gravity /= double(worker_data[0].imu_acc.size());
         }
         const double acc_offset_sigma0 = params.imu_acceleration_offset_initial_sigma_mps2;
@@ -1579,8 +1579,8 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
             double prev_velocity_age_s = 0.0;
             if ((use_acc_prior || imu_translation || use_acc_term) && i > 0)
             {
-                const auto &prev_tr = worker_data[i - 1].intermediate_trajectory;
-                const auto &prev_ts = worker_data[i - 1].intermediate_trajectory_timestamps;
+                const auto &prev_tr = worker_data[i - 1].poses;
+                const auto &prev_ts = worker_data[i - 1].timestamps;
                 const int n = prev_tr.size();
                 const int k = std::min(20, n - 1);
                 if (k > 0 && prev_ts.size() == prev_tr.size())
@@ -1590,7 +1590,7 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
                     {
                         prev_velocity = (prev_tr[n - 1].translation() - prev_tr[n - 1 - k].translation()) / dt;
                         use_prev_velocity = true;
-                        const auto &ts_i = worker_data[i].intermediate_trajectory_timestamps;
+                        const auto &ts_i = worker_data[i].timestamps;
                         if (!ts_i.empty())
                             prev_velocity_age_s = std::max(ts_i[0].first - 0.5 * (prev_ts[n - 1].first + prev_ts[n - 1 - k].first), 0.0);
                     }
@@ -1610,9 +1610,9 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
             {
                 if (i > 1)
                 {
-                    mean_shift = worker_data[i - 1].intermediate_trajectory[worker_data[i - 1].intermediate_trajectory.size() - 1].translation() -
-                                 worker_data[i - 2].intermediate_trajectory[worker_data[i - 2].intermediate_trajectory.size() - 1].translation();
-                    mean_shift /= (worker_data[i - 1].intermediate_trajectory.size());
+                    mean_shift = worker_data[i - 1].poses[worker_data[i - 1].poses.size() - 1].translation() -
+                                 worker_data[i - 2].poses[worker_data[i - 2].poses.size() - 1].translation();
+                    mean_shift /= (worker_data[i - 1].poses.size());
                 }
 
                 if (mean_shift.norm() > 1.0)
@@ -1622,29 +1622,29 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
                 }
 
                 std::vector<Eigen::Affine3d> new_trajectory;
-                Eigen::Affine3d current_node = worker_data[i - 1].intermediate_trajectory[worker_data[i - 1].intermediate_trajectory.size() - 1];
+                Eigen::Affine3d current_node = worker_data[i - 1].poses[worker_data[i - 1].poses.size() - 1];
                 new_trajectory.push_back(current_node);
 
-                for (int tr = 1; tr < worker_data[i].intermediate_trajectory.size(); tr++)
+                for (int tr = 1; tr < worker_data[i].poses.size(); tr++)
                 {
-                    auto update = worker_data[i].intermediate_trajectory[tr - 1].inverse() * worker_data[i].intermediate_trajectory[tr];
+                    auto update = worker_data[i].poses[tr - 1].inverse() * worker_data[i].poses[tr];
                     current_node = current_node * update;
                     new_trajectory.push_back(current_node);
                 }
 
-                const auto &ts = worker_data[i].intermediate_trajectory_timestamps;
+                const auto &ts = worker_data[i].timestamps;
                 const auto &acc = worker_data[i].imu_acc;
                 const bool imu_sizes_ok = imu_translation && ts.size() == new_trajectory.size() && acc.size() == new_trajectory.size() &&
-                                          worker_data[i].imu_om_fi_ka.size() == new_trajectory.size();
+                                          worker_data[i].imu_angles.size() == new_trajectory.size();
                 std::vector<Eigen::Vector3d> a;
                 if (imu_sizes_ok)
                 {
-                    a = world_acceleration(new_trajectory, ts, acc, worker_data[i].imu_om_fi_ka, gravity_norm, 0.5 * params.imu_acc_smoothing_s);
+                    a = world_acceleration(new_trajectory, ts, acc, worker_data[i].imu_angles, gravity_norm, 0.5 * params.imu_acc_smoothing_s);
                     // rest detection on a 50 ms average: the accelerometer noise of a 10 ms average already reaches ~0.3 m/s^2
                     // at rest, while walking accelerations (1-3 m/s^2 at ~2 Hz) survive the longer average
                     constexpr double zupt_smoothing_half_width_s = 0.025;
                     stationary = use_zupt && is_window_stationary(new_trajectory, ts,
-                                                                  world_acceleration(new_trajectory, ts, acc, worker_data[i].imu_om_fi_ka, gravity_norm, zupt_smoothing_half_width_s),
+                                                                  world_acceleration(new_trajectory, ts, acc, worker_data[i].imu_angles, gravity_norm, zupt_smoothing_half_width_s),
                                                                   params.zero_velocity_acc_threshold_mps2,
                                                                   params.zero_velocity_gyro_threshold_deg_s * DEG_TO_RAD);
                 }
@@ -1682,23 +1682,23 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
                         new_trajectory[tr].translation() += mean_shift * tr;
                 }
 
-                worker_data[i].intermediate_trajectory = new_trajectory;
-                worker_data[i].intermediate_trajectory_motion_model = new_trajectory;
+                worker_data[i].poses = new_trajectory;
+                worker_data[i].motion_model_poses = new_trajectory;
             }
 
             // gyro bias: prior from the previous window, grown by the bias random walk over this window
             if (rotation_options.estimate_bias)
             {
-                const auto &ts = worker_data[i].intermediate_trajectory_timestamps;
+                const auto &ts = worker_data[i].timestamps;
                 const double window_duration = ts.size() > 1 ? ts.back().first - ts.front().first : 0.0;
-                rotation_options.bias_prior_mean = carried_bias;
-                rotation_options.bias_prior_cov = carried_bias_cov + Eigen::Matrix3d::Identity() * (bias_rw_rad * bias_rw_rad * window_duration);
-                worker_data[i].gyro_bias = carried_bias;
-                worker_data[i].gyro_bias_cov = rotation_options.bias_prior_cov;
+                rotation_options.bias_prior_mean = carried_bias.mean;
+                rotation_options.bias_prior_cov = carried_bias.covariance + Eigen::Matrix3d::Identity() * (bias_rw_rad * bias_rw_rad * window_duration);
+                worker_data[i].gyro_bias.mean = carried_bias.mean;
+                worker_data[i].gyro_bias.covariance = rotation_options.bias_prior_cov;
 
                 // remove the carried bias from the IMU rotation increments of the initial guess (translations unchanged)
-                remove_gyro_bias_from_rotations(worker_data[i].intermediate_trajectory, ts, carried_bias);
-                worker_data[i].intermediate_trajectory_motion_model = worker_data[i].intermediate_trajectory;
+                remove_gyro_bias_from_rotations(worker_data[i].poses, ts, carried_bias.mean);
+                worker_data[i].motion_model_poses = worker_data[i].poses;
             }
 
             // the first window is registered against the initial map, which is built from not yet optimized points
@@ -1710,8 +1710,8 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
             // tight turns: trust the gyro more (rotation about the vertical from the IMU-based initial guess)
             if (params.rotation_sigma_inflation_k_turn > 0.0)
             {
-                const auto &tr = worker_data[i].intermediate_trajectory;
-                const auto &ts = worker_data[i].intermediate_trajectory_timestamps;
+                const auto &tr = worker_data[i].poses;
+                const auto &ts = worker_data[i].timestamps;
                 if (tr.size() > 1 && ts.size() == tr.size())
                 {
                     double yaw = 0.0;
@@ -1735,8 +1735,8 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
             Eigen::Matrix3d lidar_translation_information = Eigen::Matrix3d::Zero();
             Eigen::Vector3d acc_offset = Eigen::Vector3d::Zero();
             Eigen::Matrix3d acc_offset_cov = carried_acc_offset_cov;
-            const double window_duration_s = worker_data[i].intermediate_trajectory_timestamps.size() > 1
-                                                 ? worker_data[i].intermediate_trajectory_timestamps.back().first - worker_data[i].intermediate_trajectory_timestamps.front().first
+            const double window_duration_s = worker_data[i].timestamps.size() > 1
+                                                 ? worker_data[i].timestamps.back().first - worker_data[i].timestamps.front().first
                                                  : 0.0;
             bool acc_term_active = use_acc_term && i > 0;
             if (acc_gated)
@@ -1753,7 +1753,7 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
             if (acc_gated && acc_term_active)
                 sigma_x_m = sigma_y_m = sigma_z_m = params.imu_degenerate_translation_sigma_m;
 
-            if (acc_term_active && worker_data[i].imu_acc.size() == worker_data[i].intermediate_trajectory.size())
+            if (acc_term_active && worker_data[i].imu_acc.size() == worker_data[i].poses.size())
             {
                 const double window_duration = window_duration_s;
                 const double rw = params.imu_acceleration_offset_rw_mps2_sqrt_s;
@@ -1771,12 +1771,12 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
             std::chrono::time_point<std::chrono::system_clock> start1, end1;
             start1 = std::chrono::system_clock::now();
 
-            auto tmp_worker_data = worker_data[i].intermediate_trajectory;
+            auto tmp_worker_data = worker_data[i].poses;
 
             if (params.use_robust_and_accurate_lidar_odometry)
             {
-                auto tr = worker_data[i].intermediate_trajectory;
-                auto trmm = worker_data[i].intermediate_trajectory_motion_model;
+                auto tr = worker_data[i].poses;
+                auto trmm = worker_data[i].motion_model_poses;
 
                 auto firstm = tr[0];
 
@@ -1833,12 +1833,12 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
                 for (auto &t : trmm)
                     t.translation() += firstm.translation();
 
-                worker_data[i].intermediate_trajectory = tr;
-                worker_data[i].intermediate_trajectory_motion_model = tr;
+                worker_data[i].poses = tr;
+                worker_data[i].motion_model_poses = tr;
 
                 optimize_rigid_sf(intermediate_points,
-                                  worker_data[i].intermediate_trajectory,
-                                  worker_data[i].intermediate_trajectory_motion_model,
+                                  worker_data[i].poses,
+                                  worker_data[i].motion_model_poses,
                                   state.buckets_indoor,
                                   params.distance_bucket_rigid_sf,
                                   params.polar_angle_deg_rigid_sf,
@@ -1854,7 +1854,7 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
                                   params.rgd_sf_sigma_ka_deg);
             }
 
-            worker_data[i].intermediate_trajectory_motion_model = worker_data[i].intermediate_trajectory;
+            worker_data[i].motion_model_poses = worker_data[i].poses;
 
             double delta = 100000.0;
             double lm_factor = params.lm_factor_initial;
@@ -1868,7 +1868,7 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
             {
                 iter_end = iter;
                 delta = 100000.0;
-                optimize_lidar_odometry(intermediate_points, worker_data[i].intermediate_trajectory, worker_data[i].intermediate_trajectory_motion_model,
+                optimize_lidar_odometry(intermediate_points, worker_data[i].poses, worker_data[i].motion_model_poses,
                                         params.in_out_params_indoor, state.buckets_indoor,
                                         params.in_out_params_outdoor, state.buckets_outdoor,
                                         params.useMultithread, params.min_distance_lidar, params.min_distance_lidar_outdoor_grid, params.max_distance_lidar, delta,
@@ -1890,13 +1890,13 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
                                         params.ablation_study_use_norm,
                                         params.ablation_study_use_hierarchical_rgd,
                                         params.ablation_study_use_view_point_and_normal_vectors,
-                                        worker_data[i].intermediate_trajectory_timestamps,
+                                        worker_data[i].timestamps,
                                         params.lidar_odometry_motion_model_acc_1_sigma_mps2,
                                         use_prev_velocity,
                                         prev_velocity,
                                         window_rotation_options,
-                                        worker_data[i].gyro_bias,
-                                        worker_data[i].gyro_bias_cov,
+                                        worker_data[i].gyro_bias.mean,
+                                        worker_data[i].gyro_bias.covariance,
                                         translation_imu_options,
                                         acc_offset,
                                         acc_offset_cov,
@@ -1939,16 +1939,15 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
 
             if (rotation_options.estimate_bias)
             {
-                const Eigen::Vector3d b_deg = worker_data[i].gyro_bias * RAD_TO_DEG;
-                const Eigen::Vector3d s_deg = worker_data[i].gyro_bias_cov.diagonal().cwiseMax(0.0).cwiseSqrt() * RAD_TO_DEG;
+                const Eigen::Vector3d b_deg = worker_data[i].gyro_bias.mean * RAD_TO_DEG;
+                const Eigen::Vector3d s_deg = worker_data[i].gyro_bias.covariance.diagonal().cwiseMax(0.0).cwiseSqrt() * RAD_TO_DEG;
                 log_info(logger) << "gyro bias [deg/s] window " << i + 1 << ": " << std::fixed << std::setprecision(3)
                                  << b_deg.x() << " " << b_deg.y() << " " << b_deg.z() << " (1-sigma "
                                  << s_deg.x() << " " << s_deg.y() << " " << s_deg.z() << ")";
-                if ((worker_data[i].gyro_bias.cwiseAbs().array() >= rotation_options.bias_max_rad_s * (1.0 - 1e-9)).any())
+                if ((worker_data[i].gyro_bias.mean.cwiseAbs().array() >= rotation_options.bias_max_rad_s * (1.0 - 1e-9)).any())
                     log_info(logger) << "WARNING: gyro bias clamped to +-" << params.gyro_bias_max_deg_s << " deg/s in window " << i + 1 << "\n";
 
                 carried_bias = worker_data[i].gyro_bias;
-                carried_bias_cov = worker_data[i].gyro_bias_cov;
             }
 
             if (acc_gated)
@@ -1965,7 +1964,7 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
                 // outside degenerate stretches: calibrate the gravity vector from the LiDAR-constrained trajectory
                 Eigen::Vector3d observed;
                 if (!translation_imu_options.enabled && !previous_window_degenerate &&
-                    observed_acceleration_offset(worker_data[i].intermediate_trajectory, worker_data[i].intermediate_trajectory_timestamps,
+                    observed_acceleration_offset(worker_data[i].poses, worker_data[i].timestamps,
                                                  worker_data[i].imu_acc, acc_gravity, 9.80665 / acc_gravity.norm(), params.handoff_tail_nodes, observed))
                 {
                     const double alpha = 1.0 - std::exp(-window_duration_s / gravity_calibration_time_constant_s);
@@ -1991,9 +1990,9 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
             // re-propagated from the last well-constrained node with the IMU rotation and constant velocity;
             // the next window starts from the re-propagated last node
             {
-                auto &tr = worker_data[i].intermediate_trajectory;
-                const auto &imu = worker_data[i].intermediate_trajectory_motion_model;
-                const auto &ts = worker_data[i].intermediate_trajectory_timestamps;
+                auto &tr = worker_data[i].poses;
+                const auto &imu = worker_data[i].motion_model_poses;
+                const auto &ts = worker_data[i].timestamps;
                 const int n = static_cast<int>(tr.size());
                 const int m = params.handoff_tail_nodes;
                 const int a = n - 1 - m;          // last node kept from the optimization
@@ -2004,7 +2003,7 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
                     const Eigen::Vector3d v = dt_v > 0.0 ? Eigen::Vector3d((tr[a].translation() - tr[a - velocity_nodes].translation()) / dt_v)
                                                          : Eigen::Vector3d::Zero();
                     // the initial guess was corrected with the prior bias; apply the update estimated in this window
-                    const Eigen::Vector3d db = rotation_options.estimate_bias ? Eigen::Vector3d(worker_data[i].gyro_bias - rotation_options.bias_prior_mean)
+                    const Eigen::Vector3d db = rotation_options.estimate_bias ? Eigen::Vector3d(worker_data[i].gyro_bias.mean - rotation_options.bias_prior_mean)
                                                                               : Eigen::Vector3d::Zero();
                     Eigen::Quaterniond q = rotation_of(tr[a]);
                     for (int k = a + 1; k < n; k++)
@@ -2027,46 +2026,46 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
                 std::vector<unsigned short> intensity;
                 std::vector<double> timestamps;
                 points_to_vector(
-                    intermediate_points, worker_data[i].intermediate_trajectory,
+                    intermediate_points, worker_data[i].poses,
                     0, nullptr, global_pointcloud, intensity, timestamps, false, params.save_index_pose);
                 preview.window_cloud(i, global_pointcloud, intensity, timestamps);
             }
             auto acc_distance_tmp = acc_distance;
-            acc_distance += ((worker_data[i].intermediate_trajectory[0].inverse()) *
-                             worker_data[i].intermediate_trajectory[worker_data[i].intermediate_trajectory.size() - 1])
+            acc_distance += ((worker_data[i].poses[0].inverse()) *
+                             worker_data[i].poses[worker_data[i].poses.size() - 1])
                                 .translation()
                                 .norm();
 
             if (!(acc_distance == acc_distance)) // NaN check
             {
-                worker_data[i].intermediate_trajectory = tmp_worker_data;
+                worker_data[i].poses = tmp_worker_data;
                 log_info(logger) << "CHALLENGING DATA OCCURED!!!";
                 acc_distance = acc_distance_tmp;
                 log_info(logger) << "please split data set into subsets";
-                ts_failure = worker_data[i].intermediate_trajectory_timestamps[0].first;
-                log_info(logger) << "calculations canceled for TIMESTAMP: " << (long long int)worker_data[i].intermediate_trajectory_timestamps[0].first;
+                ts_failure = worker_data[i].timestamps[0].first;
+                log_info(logger) << "calculations canceled for TIMESTAMP: " << (long long int)worker_data[i].timestamps[0].first;
                 return false;
             }
 
             for (int j = i + 1; j < worker_data.size(); j++)
             {
-                Eigen::Affine3d m_last = worker_data[j - 1].intermediate_trajectory[worker_data[j - 1].intermediate_trajectory.size() - 1];
-                auto tmp = worker_data[j].intermediate_trajectory;
+                Eigen::Affine3d m_last = worker_data[j - 1].poses[worker_data[j - 1].poses.size() - 1];
+                auto tmp = worker_data[j].poses;
 
-                worker_data[j].intermediate_trajectory[0] = m_last;
+                worker_data[j].poses[0] = m_last;
 
                 for (int k = 1; k < tmp.size(); k++)
                 {
                     Eigen::Affine3d m_update = tmp[k - 1].inverse() * tmp[k];
                     m_last = m_last * m_update;
-                    worker_data[j].intermediate_trajectory[k] = m_last;
+                    worker_data[j].poses[k] = m_last;
                 }
             }
 
             for (int j = 0; j < intermediate_points.size(); j++)
             {
                 Point3Di pp = intermediate_points[j];
-                pp.point = worker_data[i].intermediate_trajectory[intermediate_points[j].index_pose] * pp.point;
+                pp.point = worker_data[i].poses[intermediate_points[j].index_pose] * pp.point;
                 points_global.push_back(pp);
             }
 
@@ -2091,10 +2090,10 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
                     points_global = decimate(points_global, params.decimation, params.decimation, params.decimation);
                 }
 
-                update_rgd(params.in_out_params_indoor, state.buckets_indoor, points_global, worker_data[i].intermediate_trajectory[0].translation());
+                update_rgd(params.in_out_params_indoor, state.buckets_indoor, points_global, worker_data[i].poses[0].translation());
                 if (params.ablation_study_use_hierarchical_rgd)
                 {
-                    update_rgd(params.in_out_params_outdoor, state.buckets_outdoor, points_global, worker_data[i].intermediate_trajectory[0].translation());
+                    update_rgd(params.in_out_params_outdoor, state.buckets_outdoor, points_global, worker_data[i].poses[0].translation());
                 }
             }
             else
@@ -2103,27 +2102,27 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
                 for (int j = 0; j < intermediate_points.size(); j++)
                 {
                     Point3Di pp = intermediate_points[j];
-                    pp.point = worker_data[i].intermediate_trajectory[intermediate_points[j].index_pose] * pp.point;
+                    pp.point = worker_data[i].poses[intermediate_points[j].index_pose] * pp.point;
                     pg.push_back(pp);
                 }
-                update_rgd(params.in_out_params_indoor, state.buckets_indoor, pg, worker_data[i].intermediate_trajectory[0].translation());
+                update_rgd(params.in_out_params_indoor, state.buckets_indoor, pg, worker_data[i].poses[0].translation());
                 if (params.ablation_study_use_hierarchical_rgd)
                 {
-                    update_rgd(params.in_out_params_outdoor, state.buckets_outdoor, pg, worker_data[i].intermediate_trajectory[0].translation());
+                    update_rgd(params.in_out_params_outdoor, state.buckets_outdoor, pg, worker_data[i].poses[0].translation());
                 }
             }
 
             if (i > 1)
             {
-                double translation = (worker_data[i - 1].intermediate_trajectory[0].translation() -
-                                      worker_data[i - 2].intermediate_trajectory[0].translation())
+                double translation = (worker_data[i - 1].poses[0].translation() -
+                                      worker_data[i - 2].poses[0].translation())
                                          .norm();
                 state.consecutive_distance += translation;
             }
         }
 
         for (int i = 0; i < worker_data.size(); i++)
-            worker_data[i].intermediate_trajectory_motion_model = worker_data[i].intermediate_trajectory;
+            worker_data[i].motion_model_poses = worker_data[i].poses;
 
         end = std::chrono::system_clock::now();
 
@@ -2136,7 +2135,7 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
 
         state.total_length_of_calculated_trajectory = 0;
         for (int i = 1; i < worker_data.size(); i++)
-            state.total_length_of_calculated_trajectory += (worker_data[i].intermediate_trajectory[0].translation() - worker_data[i - 1].intermediate_trajectory[0].translation()).norm();
+            state.total_length_of_calculated_trajectory += (worker_data[i].poses[0].translation() - worker_data[i - 1].poses[0].translation()).norm();
 
         log_info(logger) << "total_length_of_calculated_trajectory: " << state.total_length_of_calculated_trajectory << " [m]";
         if (use_zupt)
@@ -2150,7 +2149,7 @@ bool compute_step_2(std::vector<WorkerData> &worker_data, const OdometryConfig &
     return true;
 }
 
-void Consistency(std::vector<WorkerData> &worker_data, const OdometryConfig &params, PointStore &point_store, Logger &logger)
+void Consistency(std::vector<Window> &worker_data, const OdometryConfig &params, PointStore &point_store, Logger &logger)
 {
     std::vector<Eigen::Affine3d> trajectory;
     std::vector<std::pair<double, double>> timestamps;
@@ -2162,10 +2161,10 @@ void Consistency(std::vector<WorkerData> &worker_data, const OdometryConfig &par
     log_info(logger) << "preparing data START";
     for (int i = 0; i < worker_data.size(); i++)
     {
-        for (int j = 0; j < worker_data[i].intermediate_trajectory.size(); j++)
+        for (int j = 0; j < worker_data[i].poses.size(); j++)
         {
-            trajectory.push_back(worker_data[i].intermediate_trajectory[j]);
-            timestamps.push_back(worker_data[i].intermediate_trajectory_timestamps[j]);
+            trajectory.push_back(worker_data[i].poses[j]);
+            timestamps.push_back(worker_data[i].timestamps[j]);
             indexes.emplace_back(i, j);
         }
     }
@@ -2486,10 +2485,10 @@ void Consistency(std::vector<WorkerData> &worker_data, const OdometryConfig &par
     }
 
     for (int i = 0; i < indexes.size(); i++)
-        worker_data[indexes[i].first].intermediate_trajectory[indexes[i].second] = trajectory[i];
+        worker_data[indexes[i].first].poses[indexes[i].second] = trajectory[i];
 }
 
-void Consistency2(std::vector<WorkerData> &worker_data, const OdometryConfig &params, PointStore &point_store, Logger &logger)
+void Consistency2(std::vector<Window> &worker_data, const OdometryConfig &params, PointStore &point_store, Logger &logger)
 {
     std::vector<Eigen::Affine3d> trajectory;
     std::vector<std::pair<double, double>> timestamps;
@@ -2501,10 +2500,10 @@ void Consistency2(std::vector<WorkerData> &worker_data, const OdometryConfig &pa
     log_info(logger) << "preparing data START";
     for (int i = 0; i < worker_data.size(); i++)
     {
-        for (int j = 0; j < worker_data[i].intermediate_trajectory.size(); j++)
+        for (int j = 0; j < worker_data[i].poses.size(); j++)
         {
-            trajectory.push_back(worker_data[i].intermediate_trajectory[j]);
-            timestamps.push_back(worker_data[i].intermediate_trajectory_timestamps[j]);
+            trajectory.push_back(worker_data[i].poses[j]);
+            timestamps.push_back(worker_data[i].timestamps[j]);
             indexes.emplace_back(i, j);
         }
     }
@@ -2969,5 +2968,5 @@ void Consistency2(std::vector<WorkerData> &worker_data, const OdometryConfig &pa
     }
 
     for (int i = 0; i < indexes.size(); i++)
-        worker_data[indexes[i].first].intermediate_trajectory[indexes[i].second] = trajectory[i];
+        worker_data[indexes[i].first].poses[indexes[i].second] = trajectory[i];
 }

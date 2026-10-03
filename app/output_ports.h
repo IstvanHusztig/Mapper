@@ -56,7 +56,7 @@ public:
     virtual void session(const SessionSummary &summary) = 0;
     virtual void parameters(const OdometryConfig &config, const RunPaths &paths, const GuiPreferences &gui) = 0;
     virtual void processing_results(const OdometryConfig &config, const OdometryState &state,
-                                    const std::vector<WorkerData> &windows, double elapsed_seconds) = 0;
+                                    const std::vector<Window> &windows, double elapsed_seconds) = 0;
 };
 
 class ConfigRepository

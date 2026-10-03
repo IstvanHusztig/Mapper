@@ -30,7 +30,7 @@ public:
     void session(const SessionSummary &summary) override;
     void parameters(const OdometryConfig &config, const RunPaths &paths, const GuiPreferences &gui) override;
     void processing_results(const OdometryConfig &config, const OdometryState &state,
-                            const std::vector<WorkerData> &windows, double elapsed_seconds) override;
+                            const std::vector<Window> &windows, double elapsed_seconds) override;
 
 private:
     class MergedLazWriter;

@@ -348,7 +348,7 @@ void FolderResultSink::parameters(const OdometryConfig &config, const RunPaths &
 }
 
 void FolderResultSink::processing_results(const OdometryConfig &config, const OdometryState &state,
-                                          const std::vector<WorkerData> &windows, double elapsed_seconds)
+                                          const std::vector<Window> &windows, double elapsed_seconds)
 {
     // Get current date and time
     auto now = std::chrono::system_clock::now();
@@ -417,11 +417,11 @@ void FolderResultSink::processing_results(const OdometryConfig &config, const Od
             nlohmann::json track = nlohmann::json::array();
             for (const auto &wd : windows)
             {
-                if (wd.intermediate_trajectory_timestamps.empty())
+                if (wd.timestamps.empty())
                     continue;
-                const Eigen::Vector3d b = wd.gyro_bias * RAD_TO_DEG;
-                const Eigen::Vector3d s = wd.gyro_bias_cov.diagonal().cwiseMax(0.0).cwiseSqrt() * RAD_TO_DEG;
-                track.push_back({{"t_start_s", wd.intermediate_trajectory_timestamps.front().first},
+                const Eigen::Vector3d b = wd.gyro_bias.mean * RAD_TO_DEG;
+                const Eigen::Vector3d s = wd.gyro_bias.covariance.diagonal().cwiseMax(0.0).cwiseSqrt() * RAD_TO_DEG;
+                track.push_back({{"t_start_s", wd.timestamps.front().first},
                                  {"bias_deg_s", {b.x(), b.y(), b.z()}},
                                  {"sigma_deg_s", {s.x(), s.y(), s.z()}}});
             }

@@ -222,7 +222,7 @@ void calculate_trajectory(
 }
 
 bool compute_step_1(
-    std::vector<std::vector<Point3Di>>& pointsPerFile, const OdometryConfig &params, OdometryState& state, Trajectory& trajectory, std::vector<WorkerData>& worker_data, PointStore& point_store, Logger& logger, ProgressReporter& progress, const Imu* imu_data)
+    std::vector<std::vector<Point3Di>>& pointsPerFile, const OdometryConfig &params, OdometryState& state, Trajectory& trajectory, std::vector<Window>& worker_data, PointStore& point_store, Logger& logger, ProgressReporter& progress, const Imu* imu_data)
 {
     int number_of_initial_points = 0;
     double timestamp_begin = 0.0;
@@ -297,23 +297,23 @@ bool compute_step_1(
         if (i % 50 == 0)
             progress.progress(i + 1, n_iter);
 
-        WorkerData& wd = worker_data.emplace_back();  // construct in-place
-        wd.intermediate_trajectory.reserve(threshold);
-        wd.intermediate_trajectory_motion_model.reserve(threshold);
-        wd.intermediate_trajectory_timestamps.reserve(threshold);
-        wd.imu_om_fi_ka.reserve(threshold);
+        Window& wd = worker_data.emplace_back();  // construct in-place
+        wd.poses.reserve(threshold);
+        wd.motion_model_poses.reserve(threshold);
+        wd.timestamps.reserve(threshold);
+        wd.imu_angles.reserve(threshold);
 
         const size_t start_idx = i * threshold;
         const size_t end_idx = (i + 1) * threshold;
 
         for (size_t idx = start_idx; idx < end_idx; idx++)
         {
-            wd.intermediate_trajectory.emplace_back(poses[idx]);
-            wd.intermediate_trajectory_motion_model.emplace_back(poses[idx]);
-            wd.intermediate_trajectory_timestamps.emplace_back(timestamps[idx]);
+            wd.poses.emplace_back(poses[idx]);
+            wd.motion_model_poses.emplace_back(poses[idx]);
+            wd.timestamps.emplace_back(timestamps[idx]);
 
             const TaitBryanPose tb = pose_tait_bryan_from_affine_matrix(poses[idx]);
-            wd.imu_om_fi_ka.emplace_back(tb.om, tb.fi, tb.ka);
+            wd.imu_angles.emplace_back(tb.om, tb.fi, tb.ka);
 
             if (!accelerations.empty())
                 wd.imu_acc.emplace_back(accelerations[idx]);
@@ -325,14 +325,14 @@ bool compute_step_1(
         {
             auto lower = std::lower_bound(
                 pointsPerFile[index].begin(), pointsPerFile[index].end(),
-                wd.intermediate_trajectory_timestamps[0].first,
+                wd.timestamps[0].first,
                 [](const Point3Di& point, double timestamp)
                 {
                     return point.timestamp < timestamp;
                 });
             auto upper = std::lower_bound(
                 pointsPerFile[index].begin(), pointsPerFile[index].end(),
-                wd.intermediate_trajectory_timestamps[wd.intermediate_trajectory_timestamps.size() - 1].first,
+                wd.timestamps[wd.timestamps.size() - 1].first,
                 [](const Point3Di& point, double timestamp)
                 {
                     return point.timestamp < timestamp;
@@ -345,14 +345,14 @@ bool compute_step_1(
         for (size_t k = 0; k < points.size(); k++)
         {
             Point3Di& p = points[k];
-            auto lower = std::lower_bound(wd.intermediate_trajectory_timestamps.begin(), wd.intermediate_trajectory_timestamps.end(), p.timestamp,
+            auto lower = std::lower_bound(wd.timestamps.begin(), wd.timestamps.end(), p.timestamp,
                 [](std::pair<double, double> lhs, double rhs) -> bool
                 { return lhs.first < rhs; });
 
-            int index_pose = std::distance(wd.intermediate_trajectory_timestamps.begin(), lower) - 1;
+            int index_pose = std::distance(wd.timestamps.begin(), lower) - 1;
 
-            if (index_pose >= 0 && index_pose < wd.intermediate_trajectory_timestamps.size() &&
-                std::abs(p.timestamp - wd.intermediate_trajectory_timestamps[index_pose].first) <= 0.01)
+            if (index_pose >= 0 && index_pose < wd.timestamps.size() &&
+                std::abs(p.timestamp - wd.timestamps[index_pose].first) <= 0.01)
                 p.index_pose = index_pose;
             else
                 p.index_pose = -1;
@@ -385,11 +385,11 @@ bool compute_step_1(
     }
     progress.progress(n_iter, n_iter);
 
-    state.m_g = worker_data[0].intermediate_trajectory[0];
+    state.m_g = worker_data[0].poses[0];
     return true;
 }
 
-void run_consistency(std::vector<WorkerData> &worker_data, const OdometryConfig &params, PointStore &point_store, Logger &logger)
+void run_consistency(std::vector<Window> &worker_data, const OdometryConfig &params, PointStore &point_store, Logger &logger)
 {
     log_info(logger) << "Point cloud consistency and trajectory smoothness START";
     for (int i = 0; i < params.num_constistency_iter; i++)
@@ -397,7 +397,7 @@ void run_consistency(std::vector<WorkerData> &worker_data, const OdometryConfig 
         log_info(logger) << "Iteration " << i + 1 << " of " << params.num_constistency_iter;
         for (int ii = 0; ii < worker_data.size(); ii++)
         {
-            worker_data[ii].intermediate_trajectory_motion_model = worker_data[ii].intermediate_trajectory;
+            worker_data[ii].motion_model_poses = worker_data[ii].poses;
         }
         if (!params.use_mutliple_gaussian)
         {
@@ -411,12 +411,12 @@ void run_consistency(std::vector<WorkerData> &worker_data, const OdometryConfig 
     log_info(logger) << "Point cloud consistency and trajectory smoothness FINISHED";
 }
 
-void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &params, const OdometryState &state, const GuiPreferences &gui, double elapsed_time_s, ResultSink &sink, PointStore &point_store, Logger &logger)
+void save_result(std::vector<Window> &worker_data, const OdometryConfig &params, const OdometryState &state, const GuiPreferences &gui, double elapsed_time_s, ResultSink &sink, PointStore &point_store, Logger &logger)
 {
     sink.begin();
     // concatenate data
-    std::vector<WorkerData> worker_data_concatenated;
-    WorkerData wd;
+    std::vector<Window> worker_data_concatenated;
+    Window wd;
     int counter = 0;
     int pose_offset = 0;
     std::vector<int> point_sizes_per_chunk;
@@ -440,17 +440,17 @@ void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &par
             t.index_pose += pose_offset;
         }
 
-        wd.intermediate_trajectory.insert(std::end(wd.intermediate_trajectory),
-                                          std::begin(worker_data[i].intermediate_trajectory), std::end(worker_data[i].intermediate_trajectory));
+        wd.poses.insert(std::end(wd.poses),
+                                          std::begin(worker_data[i].poses), std::end(worker_data[i].poses));
 
-        wd.intermediate_trajectory_timestamps.insert(std::end(wd.intermediate_trajectory_timestamps),
-                                                     std::begin(worker_data[i].intermediate_trajectory_timestamps), std::end(worker_data[i].intermediate_trajectory_timestamps));
+        wd.timestamps.insert(std::end(wd.timestamps),
+                                                     std::begin(worker_data[i].timestamps), std::end(worker_data[i].timestamps));
 
         original_points_to_save.insert(std::end(original_points_to_save),
                                        std::begin(tmp_data), std::end(tmp_data));
 
-        wd.imu_om_fi_ka.insert(std::end(wd.imu_om_fi_ka), std::begin(worker_data[i].imu_om_fi_ka), std::end(worker_data[i].imu_om_fi_ka));
-        pose_offset += worker_data[i].intermediate_trajectory.size();
+        wd.imu_angles.insert(std::end(wd.imu_angles), std::begin(worker_data[i].imu_angles), std::end(worker_data[i].imu_angles));
+        pose_offset += worker_data[i].poses.size();
 
         counter++;
         if (counter > 50)
@@ -463,10 +463,10 @@ void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &par
             original_points_to_save_counter++;
 
             worker_data_concatenated.push_back(wd);
-            wd.intermediate_trajectory.clear();
-            wd.intermediate_trajectory_timestamps.clear();
+            wd.poses.clear();
+            wd.timestamps.clear();
             original_points_to_save.clear();
-            wd.imu_om_fi_ka.clear();
+            wd.imu_angles.clear();
 
             counter = 0;
             pose_offset = 0;
@@ -505,14 +505,14 @@ void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &par
             log_info(logger) << "problem with point store: session chunk " << i;
 
         points_to_vector(
-            original_points_to_save, worker_data_concatenated[i].intermediate_trajectory,
+            original_points_to_save, worker_data_concatenated[i].poses,
             params.threshould_output_filter, &index_poses_i, global_pointcloud, intensity, timestamps, true, params.save_index_pose);
         sink.chunk_cloud(i, global_pointcloud, intensity, timestamps);
 
         if (params.export_merged_laz)
         {
             // chunk points are stored relative to the chunk's first pose: back to world coordinates
-            const Eigen::Affine3d &chunk_pose = worker_data_concatenated[i].intermediate_trajectory[0];
+            const Eigen::Affine3d &chunk_pose = worker_data_concatenated[i].poses[0];
             std::vector<Eigen::Vector3d> world(global_pointcloud.size());
             for (size_t k = 0; k < global_pointcloud.size(); k++)
                 world[k] = chunk_pose * global_pointcloud[k];
@@ -523,15 +523,15 @@ void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &par
             index_poses.push_back(index_poses_i);
         }
         
-        m_poses.push_back(worker_data_concatenated[i].intermediate_trajectory[0]);
+        m_poses.push_back(worker_data_concatenated[i].poses[0]);
 
         // trajectory, relative to the chunk's first node
         std::vector<TrajectoryRow> rows;
-        rows.reserve(worker_data_concatenated[i].intermediate_trajectory.size());
-        for (int j = 0; j < worker_data_concatenated[i].intermediate_trajectory.size(); j++)
+        rows.reserve(worker_data_concatenated[i].poses.size());
+        for (int j = 0; j < worker_data_concatenated[i].poses.size(); j++)
         {
-            auto pose = worker_data_concatenated[i].intermediate_trajectory[0].inverse() * worker_data_concatenated[i].intermediate_trajectory[j];
-            rows.push_back({worker_data_concatenated[i].intermediate_trajectory_timestamps[j], pose, worker_data_concatenated[i].imu_om_fi_ka[j]});
+            auto pose = worker_data_concatenated[i].poses[0].inverse() * worker_data_concatenated[i].poses[j];
+            rows.push_back({worker_data_concatenated[i].timestamps[j], pose, worker_data_concatenated[i].imu_angles[j]});
         }
         if (!sink.chunk_trajectory(i, rows))
             return;
@@ -558,13 +558,13 @@ void save_result(std::vector<WorkerData> &worker_data, const OdometryConfig &par
     sink.processing_results(params, state, worker_data, elapsed_time_s);
 }
 
-void save_trajectory_to_ascii(std::vector<WorkerData> &worker_data, std::string output_file_name)
+void save_trajectory_to_ascii(std::vector<Window> &worker_data, std::string output_file_name)
 {
     ofstream file;
     file.open(output_file_name);
     for (const auto &wd : worker_data)
     {
-        for (const auto &it : wd.intermediate_trajectory)
+        for (const auto &it : wd.poses)
         {
             file << it(0, 3) << " " << it(1, 3) << " " << it(2, 3) << std::endl;
         }

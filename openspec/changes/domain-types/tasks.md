@@ -4,8 +4,8 @@ Every code commit: both presets build `dMapper` and `lidar_odometry_tests`; `cte
 
 ## 1. Window type
 
-- [ ] 1.1 Add `app/window.h` (design decision 1: `GyroBiasState`, `Window`, `ImuTrajectory`) and add it to `SOURCES`. Verify both presets build.
-- [ ] 1.2 Switch the app from `WorkerData` to `Window` with the member renames (design decision 2, member-access patterns only): `poses`, `motion_model_poses`, `timestamps`, `imu_angles`, `gyro_bias.mean`, `gyro_bias.covariance`.
+- [x] 1.1 Add `app/window.h` (design decision 1: `GyroBiasState`, `Window`, `ImuTrajectory`) and add it to `SOURCES`. Verify both presets build.
+- [x] 1.2 Switch the app from `WorkerData` to `Window` with the member renames (design decision 2, member-access patterns only): `poses`, `motion_model_poses`, `timestamps`, `imu_angles`, `gyro_bias.mean`, `gyro_bias.covariance`.
   - Check every `.gyro_bias` hit by hand.
   - `compute_step_2`'s carried bias becomes one `GyroBiasState` (design decision 3).
   - Remove `#include <structures.h>` uses that only served `WorkerData`, where nothing else needs them.

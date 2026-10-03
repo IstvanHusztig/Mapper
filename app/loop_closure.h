@@ -10,4 +10,4 @@
 //  4. a pose graph over the segment poses (odometry edges + accepted loop edges) is optimized,
 //  5. the correction is interpolated onto every trajectory node of every window.
 // Returns the number of accepted loop edges.
-int run_loop_closure(std::vector<WorkerData> &worker_data, const OdometryConfig &params, PointStore &point_store, Logger &logger);
+int run_loop_closure(std::vector<Window> &worker_data, const OdometryConfig &params, PointStore &point_store, Logger &logger);
