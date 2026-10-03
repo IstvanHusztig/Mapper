@@ -25,7 +25,7 @@ The GUI must be closed while building. Code is moved, not rewritten: `git diff -
   - a previous window with fewer than 2 nodes, or with mismatched timestamps, gives no prior.
 
   Run the step checks. Commit.
-- [ ] 2.3 Add `predict_window_poses`: chaining from the previous end, IMU integration, ZUPT, constant velocity and mean shift, with the same branch order. It returns `stationary`. Tests:
+- [x] 2.3 Add `predict_window_poses`: chaining from the previous end, IMU integration, ZUPT, constant velocity and mean shift, with the same branch order. It returns `stationary`. Tests:
   - constant velocity: the guess moves at `prev_velocity`;
   - IMU integration with a known acceleration gives `p = v·t + a·t²/2`;
   - a window at rest gives no motion and `stationary`;

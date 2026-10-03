@@ -146,86 +146,26 @@ bool compute_step_2(std::vector<Window> &windows, const OdometryConfig &params, 
                 prev_velocity_age_s = previous.age_s;
             }
 
-            Eigen::Vector3d mean_shift(0.0, 0.0, 0.0);
-            bool stationary = false;
             if ((i > 1 || ((use_acc_prior || imu_translation || setup.use_acc_term) && i > 0)) && params.use_motion_from_previous_step)
             {
-                if (i > 1)
-                {
-                    mean_shift = windows[i - 1].poses[windows[i - 1].poses.size() - 1].translation() -
-                                 windows[i - 2].poses[windows[i - 2].poses.size() - 1].translation();
-                    mean_shift /= (windows[i - 1].poses.size());
-                }
-
-                if (mean_shift.norm() > 1.0)
-                {
+                PosePredictionOptions prediction_options;
+                prediction_options.use_imu_pred = setup.use_imu_pred;
+                prediction_options.use_zupt = setup.use_zupt;
+                prediction_options.constant_velocity = use_acc_prior || setup.use_acc_term;
+                prediction_options.gravity_norm = setup.gravity_norm;
+                prediction_options.acc_smoothing_half_width_s = 0.5 * params.imu_acc_smoothing_s;
+                prediction_options.zupt_acc_threshold_mps2 = params.zero_velocity_acc_threshold_mps2;
+                prediction_options.zupt_gyro_threshold_rad_s = params.zero_velocity_gyro_threshold_deg_s * DEG_TO_RAD;
+                const PosePrediction prediction = predict_window_poses(windows[i], windows[i - 1], i > 1 ? &windows[i - 2] : nullptr,
+                                                                       prev_velocity, prediction_options);
+                if (prediction.mean_shift_dropped)
                     log_info(logger) << "!!!mean_shift.norm() > 1.0!!!";
-                    mean_shift = Eigen::Vector3d(0.0, 0.0, 0.0);
-                }
-
-                std::vector<Eigen::Affine3d> new_trajectory;
-                Eigen::Affine3d current_node = windows[i - 1].poses[windows[i - 1].poses.size() - 1];
-                new_trajectory.push_back(current_node);
-
-                for (int tr = 1; tr < windows[i].poses.size(); tr++)
+                if (prediction.stationary)
                 {
-                    auto update = windows[i].poses[tr - 1].inverse() * windows[i].poses[tr];
-                    current_node = current_node * update;
-                    new_trajectory.push_back(current_node);
+                    carry.stationary_windows++;
+                    if (debugMsg)
+                        log_debug(logger) << "window " << i + 1 << " stationary (zero-velocity detection)\n";
                 }
-
-                const auto &ts = windows[i].timestamps;
-                const auto &acc = windows[i].imu_acc;
-                const bool imu_sizes_ok = imu_translation && ts.size() == new_trajectory.size() && acc.size() == new_trajectory.size() &&
-                                          windows[i].imu_angles.size() == new_trajectory.size();
-                std::vector<Eigen::Vector3d> a;
-                if (imu_sizes_ok)
-                {
-                    a = world_acceleration(new_trajectory, ts, acc, windows[i].imu_angles, setup.gravity_norm, 0.5 * params.imu_acc_smoothing_s);
-                    // rest detection on a 50 ms average: the accelerometer noise of a 10 ms average already reaches ~0.3 m/s^2
-                    // at rest, while walking accelerations (1-3 m/s^2 at ~2 Hz) survive the longer average
-                    constexpr double zupt_smoothing_half_width_s = 0.025;
-                    stationary = setup.use_zupt && is_window_stationary(new_trajectory, ts,
-                                                                  world_acceleration(new_trajectory, ts, acc, windows[i].imu_angles, setup.gravity_norm, zupt_smoothing_half_width_s),
-                                                                  params.zero_velocity_acc_threshold_mps2,
-                                                                  params.zero_velocity_gyro_threshold_deg_s * DEG_TO_RAD);
-                }
-
-                if (imu_sizes_ok && (setup.use_imu_pred || stationary))
-                {
-                    // integrate the accelerometer from the previous window's final velocity;
-                    // a window at rest (zero-velocity detection) is predicted without motion
-                    Eigen::Vector3d v = stationary ? Eigen::Vector3d::Zero() : prev_velocity;
-                    Eigen::Vector3d p = new_trajectory[0].translation();
-                    for (size_t tr = 1; tr < new_trajectory.size(); tr++)
-                    {
-                        const double dt = std::max(ts[tr].first - ts[tr - 1].first, 0.0);
-                        const Eigen::Vector3d a_k = (setup.use_imu_pred && !stationary) ? a[tr - 1] : Eigen::Vector3d::Zero();
-                        p += v * dt + 0.5 * a_k * dt * dt;
-                        v += a_k * dt;
-                        new_trajectory[tr].translation() = p;
-                    }
-                    if (stationary)
-                    {
-                        carry.stationary_windows++;
-                        if (debugMsg)
-                            log_debug(logger) << "window " << i + 1 << " stationary (zero-velocity detection)\n";
-                    }
-                }
-                else if ((use_acc_prior || setup.use_acc_term) && ts.size() == new_trajectory.size())
-                {
-                    // timestamp-aware constant-velocity prediction from the previous window's final velocity
-                    for (int tr = 0; tr < new_trajectory.size(); tr++)
-                        new_trajectory[tr].translation() += prev_velocity * (ts[tr].first - ts[0].first);
-                }
-                else
-                {
-                    for (int tr = 0; tr < new_trajectory.size(); tr++)
-                        new_trajectory[tr].translation() += mean_shift * tr;
-                }
-
-                windows[i].poses = new_trajectory;
-                windows[i].motion_model_poses = new_trajectory;
             }
 
             // gyro bias: prior from the previous window, grown by the bias random walk over this window

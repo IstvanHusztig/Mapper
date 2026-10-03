@@ -21,3 +21,27 @@ struct PreviousVelocity
 // final velocity of previous over its last span_nodes nodes, and its age at window's first node;
 // a velocity faster than max_speed_mps is dropped
 PreviousVelocity estimate_previous_velocity(const Window &previous, const Window &window, int span_nodes, double max_speed_mps);
+
+// how predict_window_poses guesses the motion of a window
+struct PosePredictionOptions
+{
+    bool use_imu_pred = false;      // integrate the accelerometer from the previous velocity
+    bool use_zupt = false;          // zero-velocity detection
+    bool constant_velocity = false; // else: timestamp-aware constant velocity from the previous velocity
+    double gravity_norm = 1.0;      // accelerometer reading of gravity [g]
+    double acc_smoothing_half_width_s = 0.0;
+    double zupt_acc_threshold_mps2 = 0.0;
+    double zupt_gyro_threshold_rad_s = 0.0;
+};
+
+struct PosePrediction
+{
+    bool stationary = false;         // the window rests (zero-velocity detection)
+    bool mean_shift_dropped = false; // the mean-shift fallback was implausible (> 1 m per node) and set to zero
+};
+
+// initial guess of window: its relative poses chained from previous's last node; the translations come from
+// IMU integration (or rest), else constant velocity, else the mean shift between before_previous and previous
+// (before_previous may be null); poses and motion_model_poses are both set to the guess
+PosePrediction predict_window_poses(Window &window, const Window &previous, const Window *before_previous,
+                                    const Eigen::Vector3d &prev_velocity, const PosePredictionOptions &options);
