@@ -86,6 +86,8 @@ struct OdometryConfig
 
     //lidar odometry debug info
     bool save_calibration_validation = false;
+    // diagnostics only: log per window after how many iterations the poses settle (results unchanged)
+    bool log_iteration_convergence = false;
     int calibration_validation_points = 1000000;
 
     //consistency
