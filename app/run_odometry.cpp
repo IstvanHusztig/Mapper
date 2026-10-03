@@ -622,9 +622,10 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
             if (!add_window_distance(windows[i], poses_before_optimization, carry, ts_failure, logger))
                 return false;
 
-            // every later window continues from the new end of this one
-            for (int j = i + 1; j < windows.size(); j++)
-                place_window_after(windows[j], windows[j - 1].poses[windows[j - 1].poses.size() - 1]);
+            // the next window continues from the new end of this one; the windows after it are placed in their own turn,
+            // since no step reads a window's placement before the window before it is done
+            if (i + 1 < windows.size())
+                place_window_after(windows[i + 1], windows[i].poses[windows[i].poses.size() - 1]);
 
             add_window_to_map(intermediate_points, windows[i], carry, state, params);
 
