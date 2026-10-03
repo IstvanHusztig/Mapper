@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Degeneracy Information</title>
+<style>
+  :root {
+    --bg: #fbfbfa; --panel: #ffffff; --text: #1d2126; --muted: #5b6470; --line: #e3e5e8;
+    --accent: #1f6fb2; --accent-soft: #e8f1fa; --code-bg: #f2f3f5; --warn: #9a5b00; --warn-soft: #fff4e0;
+    --ok: #20703c; --ok-soft: #e6f4ea; --bad: #b3261e; --bad-soft: #fbe9e7;
+    --node: #ffffff; --node-line: #9aa6b4; --arrow: #7a8594;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15181c; --panel: #1c2026; --text: #e4e7eb; --muted: #9aa3ae; --line: #2c323a;
+      --accent: #6cb0ec; --accent-soft: #1d2d3d; --code-bg: #242a31; --warn: #f0b35a; --warn-soft: #3a2c16;
+      --ok: #6ccf8e; --ok-soft: #1a3324; --bad: #f28b82; --bad-soft: #3a1f1d;
+      --node: #222830; --node-line: #56616e; --arrow: #8994a2;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15181c; --panel: #1c2026; --text: #e4e7eb; --muted: #9aa3ae; --line: #2c323a;
+    --accent: #6cb0ec; --accent-soft: #1d2d3d; --code-bg: #242a31; --warn: #f0b35a; --warn-soft: #3a2c16;
+    --ok: #6ccf8e; --ok-soft: #1a3324; --bad: #f28b82; --bad-soft: #3a1f1d;
+    --node: #222830; --node-line: #56616e; --arrow: #8994a2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 40px 16px 80px; }
+  h1 { font-size: 30px; line-height: 1.25; margin: 0 0 8px; }
+  h2 { font-size: 23px; margin: 48px 0 12px; padding-top: 8px; border-top: 1px solid var(--line); }
+  h3 { font-size: 18px; margin: 28px 0 8px; }
+  .lead { color: var(--muted); font-size: 17px; margin-top: 0; }
+  code, pre { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13.5px; }
+  code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--code-bg); padding: 12px 14px; border-radius: 8px; overflow-x: auto; line-height: 1.45; }
+  pre .del { color: var(--bad); }
+  pre .add { color: var(--ok); }
+  pre .cm { color: var(--muted); }
+  a { color: var(--accent); }
+  .note, .warn, .good {
+    border-left: 3px solid var(--accent); background: var(--accent-soft);
+    padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 16px 0;
+  }
+  .warn { border-left-color: var(--warn); background: var(--warn-soft); }
+  .good { border-left-color: var(--ok); background: var(--ok-soft); }
+  .note b, .warn b, .good b { display: block; margin-bottom: 2px; }
+  .table-wrap { overflow-x: auto; margin: 14px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 600; color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tldr { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 22px 0; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .card .big { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .card .lbl { color: var(--muted); font-size: 13.5px; }
+  figure { margin: 18px 0; }
+  figcaption { color: var(--muted); font-size: 13.5px; margin-top: 6px; }
+  svg { max-width: 100%; height: auto; display: block; }
+  svg text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: var(--text); }
+  svg .muted { fill: var(--muted); }
+  .meta { color: var(--muted); font-size: 13.5px; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Degeneracy information: when the LiDAR can't see where you moved</h1>
+<p class="lead">What the "LiDAR translation information" is, how dMapper uses it to decide when to trust the accelerometer,
+how to read its log line, and a known weakness found in October 2026. It is computed in <code>optimize_lidar_odometry</code>
+(<code>app/scan_to_map.cpp</code>) and used in <code>update_acc_term_after_window</code> (<code>app/run_odometry.cpp</code>).</p>
+
+<div class="note"><b>In one sentence</b>
+Every surface a window's points are matched to pins the motion only <em>across</em> that surface, along its normal. Adding
+up <code>n·nᵀ</code> over all matched normals gives a 3 × 3 matrix whose weakest direction is the one in which the LiDAR
+can't see the motion. When that direction is much weaker than the strongest one, the window is <strong>degenerate</strong>.</div>
+
+<h2>1. The idea: a surface only fixes motion along its normal</h2>
+<p>The scan-to-map optimization moves each node until its points lie on the map's surfaces. A point on a wall tells the
+optimizer how far the sensor is <em>from</em> the wall, but nothing about where <em>along</em> the wall it is: sliding the
+sensor parallel to the wall leaves the point on the wall. So each matched point constrains the translation only along the
+surface normal <code>n</code> of the map cell it hits.</p>
+
+<figure>
+<svg viewBox="0 0 760 230" role="img" aria-label="Room versus corridor: which directions the walls constrain">
+  <defs><marker id="ah" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--accent)"/></marker></defs>
+  <text x="40" y="20" font-size="14" font-weight="600">Closed room</text>
+  <rect x="40" y="35" width="280" height="160" fill="none" stroke="var(--text)" stroke-width="3"/>
+  <circle cx="180" cy="115" r="7" fill="var(--ok)"/>
+  <g stroke="var(--accent)" stroke-width="2.5" marker-end="url(#ah)">
+    <line x1="180" y1="115" x2="120" y2="115"/><line x1="180" y1="115" x2="240" y2="115"/>
+    <line x1="180" y1="115" x2="180" y2="65"/><line x1="180" y1="115" x2="180" y2="165"/>
+  </g>
+  <text x="40" y="218" font-size="13" class="muted">end walls fix x, side walls fix y: every direction is constrained</text>
+  <text x="400" y="20" font-size="14" font-weight="600">Long corridor (no end walls in range)</text>
+  <line x1="390" y1="75" x2="740" y2="75" stroke="var(--text)" stroke-width="3"/>
+  <line x1="390" y1="155" x2="740" y2="155" stroke="var(--text)" stroke-width="3"/>
+  <circle cx="565" cy="115" r="7" fill="var(--warn)"/>
+  <g stroke="var(--accent)" stroke-width="2.5" marker-end="url(#ah)">
+    <line x1="565" y1="115" x2="565" y2="85"/><line x1="565" y1="115" x2="565" y2="145"/>
+  </g>
+  <line x1="500" y1="115" x2="630" y2="115" stroke="var(--bad)" stroke-width="2.5" stroke-dasharray="5 4"/>
+  <text x="640" y="120" font-size="13" fill="var(--bad)">x: free</text>
+  <text x="400" y="218" font-size="13" class="muted">the walls (and floor and ceiling) fix y and z; nothing fixes x</text>
+</svg>
+<figcaption>Blue: the directions a matched surface constrains (its normal). In the corridor no surface faces along x, so a
+node can slide along the corridor without moving any point off its surface.</figcaption>
+</figure>
+
+<h2>2. The matrix</h2>
+<p>For one window, <code>optimize_lidar_odometry</code> adds up, over every point matched to a fine-grid (0.15 m) cell with a
+valid normal:</p>
+<pre>I = Σ n · nᵀ        (3 × 3, world frame; n = the cell's unit surface normal)</pre>
+<p>Each term adds strength only along its own normal. The sum tells how strongly each direction is constrained, and its
+eigen-decomposition gives the answer directly:</p>
+<div class="table-wrap"><table>
+  <tr><th>Eigenvalue / eigenvector</th><th>Meaning</th></tr>
+  <tr><td>largest eigenvalue</td><td>roughly how many points pin the best-constrained direction</td></tr>
+  <tr><td>smallest eigenvalue <i>λ</i><sub>min</sub></td><td>roughly how many pin the worst one</td></tr>
+  <tr><td>eigenvector of <i>λ</i><sub>min</sub></td><td>the <b>weakest direction</b>: where the LiDAR is (nearly) blind</td></tr>
+  <tr><td><b>ratio</b> = <i>λ</i><sub>min</sub> / <i>λ</i><sub>max</sub></td><td>0 = blind in one direction, 1 = equally constrained everywhere</td></tr>
+</table></div>
+<p>Only the direction of each normal counts, not the distance or the NDT weight. That is deliberate. The NDT information
+itself (the inverse covariances) looks strong even in a corridor, because the small Gaussians also hold points in place
+<em>along</em> a flat wall, so its ratio doesn't reveal the blindness.</p>
+
+<h2>3. How dMapper uses it</h2>
+<p>Walking produces only about 0.2 m/s² of acceleration, while a 1° tilt error already leaves 0.17 m/s² of gravity in the
+accelerometer. So the accelerometer is a poor position sensor, and it is used only where the LiDAR is blind
+(<a href="index.html#p-imu"><code>[imu_translation]</code></a>):</p>
+<ol>
+  <li>After each window, the ratio of its information is computed. Below <code>imu_degenerate_information_ratio</code> (0.3),
+  the window counts as <b>degenerate</b>.</li>
+  <li>The <em>next</em> window then switches on the accelerometer term (the measured change of velocity between nodes), and
+  loosens the translation prior from 1e-4 m to <code>imu_degenerate_translation_sigma_m</code> (3e-4 m), so the
+  accelerometer can actually move the nodes along the blind direction.</li>
+  <li>After <code>imu_degenerate_max_duration_s</code> (15 s) in one degenerate stretch, the term switches off again,
+  because the accelerometer error grows with time.</li>
+  <li>Outside degenerate stretches, the gravity vector and an acceleration offset are calibrated from the LiDAR trajectory,
+  so they are ready for the next blind stretch.</li>
+</ol>
+<p>This needs <code>use_imu_acceleration_term = true</code> and <code>imu_acceleration_only_when_degenerate = true</code>;
+both are on in <code>settings/lidar-vertical.toml</code>.</p>
+
+<h3>Measured values</h3>
+<div class="table-wrap"><table>
+  <tr><th>Where</th><th class="num">Ratio</th></tr>
+  <tr><td>Rooms (recording b1)</td><td class="num">0.36–0.86</td></tr>
+  <tr><td>Corridor turnaround, stair climb (b1)</td><td class="num">0.16–0.30</td></tr>
+  <tr><td>Synthetic closed room (unit test)</td><td class="num">0.48 (eigenvalues 677, 740, 1419)</td></tr>
+</table></div>
+
+<h2>4. Reading the log</h2>
+<p>With the gating on, every window prints one line:</p>
+<pre>lidar translation information window 123: ratio 0.2140 weakest direction 0.98 0.17 0.02 | accelerometer term active</pre>
+<ul>
+  <li><b>ratio</b> below 0.3: this window is degenerate, so the accelerometer term will be active in the next window.</li>
+  <li><b>weakest direction</b>: the unit vector (world x, y, z) the LiDAR can't see well; here almost x, i.e. along a corridor
+  running in x. A vertical weakest direction (0 0 1) typically means a stairwell, or a space where floor and ceiling are
+  out of view.</li>
+  <li><b>| accelerometer term active</b>: the term was active <em>in this window</em> (decided by the previous one).</li>
+</ul>
+<p>At the end the console prints how many windows used the term: <code>accelerometer term: active in N of M windows</code>.</p>
+
+<h2>5. Known weakness: the cell normals (found 2026-10-04)</h2>
+<div class="warn"><b>The information is only as good as the map's normals, and many of them are wrong</b>
+The synthetic scan-to-map test (<code>tests/scan_to_map_test.cpp</code>, change <code>scan-to-map-test</code>) put a window
+in a 30 m corridor. The information came out <em>strongest</em> along the corridor (925 along x against 155 across), the
+opposite of the truth.</div>
+<p>The cause is in how the map cells are built (<code>update_rgd</code>, <code>app/lidar_odometry_utils.cpp</code>):</p>
+<ul>
+  <li>A cell's normal is computed <b>once</b>, when its third point arrives, from those 3 points plus the initial isotropic
+  3 cm covariance, and it is <b>never updated</b>. If the first 3 points lie roughly on a line, the normal can point anywhere
+  in the plane the line leaves open. That is common, because points arrive in scan order, along the scan rings.</li>
+  <li>Later points update the covariance only if they pass the view-point test <em>against that normal</em>, so a wrong
+  normal also leaves the covariance poorly estimated.</li>
+  <li>A cell's mean is its first point, and it is never updated either.</li>
+</ul>
+<div class="table-wrap"><table>
+  <tr><th>Corridor map, points inserted</th><th class="num">Cells whose normal is more than 30° off the true surface</th><th class="num">Information along / across the corridor</th></tr>
+  <tr><td>in grid order (along lines)</td><td class="num">60 % (15,193 of 25,370)</td><td class="num">925 / 155</td></tr>
+  <tr><td>in random order</td><td class="num">12 % (3,120 of 25,370)</td><td class="num">175 / 1046</td></tr>
+</table></div>
+<p>On real data the ratio is therefore noisy. Degenerate stretches were still detected on b1 (0.16–0.30 against 0.36 and more
+in rooms), but the wrong normals eat into that margin, and the reported weakest direction can be off. The same wrong normals
+make the view-point check in the scan-to-map optimization skip good cells.</p>
+<p><b>Status.</b> The corridor test keeps the correct expectation and is marked as an expected failure
+(<code>doctest::should_fail</code>). A separate change is planned to compute the cell statistics properly: a running mean
+and covariance, and the normal from the final covariance. It changes every run's results, so it will be measured on
+recording 44 before it is accepted. Once it works, the corridor test starts passing, doctest reports that, and the marker is
+removed.</p>
+
+<h2>6. Where to find it</h2>
+<ul>
+  <li>Computed: <code>optimize_lidar_odometry</code> in <code>app/scan_to_map.cpp</code> (<code>lidar_translation_information</code>).</li>
+  <li>Used: <code>prepare_acc_term</code> and <code>update_acc_term_after_window</code> in <code>app/run_odometry.cpp</code>.</li>
+  <li>Settings: <a href="index.html#p-imu"><code>[imu_translation]</code></a> in the main documentation.</li>
+  <li>Tests: <code>tests/scan_to_map_test.cpp</code> (room and corridor).</li>
+</ul>
+
+</main>
+</body>
+</html>

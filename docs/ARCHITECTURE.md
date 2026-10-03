@@ -1,7 +1,7 @@
 # Architecture goals
 
 Status: **in progress.** This is the target architecture for dMapper (`dMapper.exe`) and the
-plan for getting there. Each migration step is its own OpenSpec change; steps 0–5, 6a and 6b are done (see
+plan for getting there. Each migration step is its own OpenSpec change; steps 0–6 are done (see
 the roadmap).
 
 ## Why
@@ -143,7 +143,11 @@ Each step is one OpenSpec change, validated against the baseline.
      after every window the loop placed all later windows again (about 238,000 placements on 44). Fixed in
      `chain-next-window-only` (2026-10-03): only the next window is placed; new baselines, see
      `docs/window-chaining.html`.
-   - 6c. **Synthetic scan-to-map test** of `optimize_lidar_odometry` (the tests then link `core`).
+   - 6c. ✅ **Synthetic scan-to-map test** (done 2026-10-04): `tests/scan_to_map_test.cpp` runs
+     `optimize_lidar_odometry` on a synthetic room and corridor against the truth. No `core` link was needed: the
+     tests compile `scan_to_map.cpp` and `lidar_odometry_utils.cpp` directly. Found on the way: `update_rgd` keeps a
+     cell's first point as its mean and fixes its normal from the first 3 points, which costs about 1 mm and makes the
+     degeneracy information unreliable (`docs/degeneracy-information.html`); fixing it is a separate change.
 7. **Layered CMake targets and folders;** move the `core/` pieces touched so far.
 
 Steps 8–11 were added on 2026-10-03. They cover the goals that steps 0–7 still leave open.

@@ -100,9 +100,25 @@ OpenSpec change `chain-next-window-only`. The full explanation, with diagrams an
 | `convergence_delta_threshold` | `1e-12` (all `nr_iter` iterations run) | `1e-2` is 3–4× faster | 0.5–1.5 % more occupied 3 cm cells on recordings 42/43, i.e. a slightly less sharp map |
 | `useMultithread` | `false` | `true` is about 40 % faster per window | the parallel float sum makes results differ from run to run |
 | `real_time_threshold_seconds` | `10.0` | caps a window's time | when a window hits it, results depend on machine speed and load |
-| `nr_iter` | 100 | fewer iterations are faster | less converged windows |
+| `nr_iter` | 100 | fewer iterations are faster | less converged windows (but see below: a synthetic window converges in 4) |
 
 The defaults favour reproducible, sharp results over speed. `docs/index.html` has the details of each setting.
+
+### How many iterations a window needs (measured 2026-10-04)
+
+The unit test `scan-to-map: iterations needed` (`tests/scan_to_map_test.cpp`) runs the 100 iterations of a real run on a synthetic window: 50 nodes in a closed room, 60 points per node with ±5 mm noise, and a guess whose heading drifts at 0.5 °/s, as a gyro bias makes it do.
+
+| | Without bias estimation | With bias estimation |
+|---|---|---|
+| Poses stop changing (within 0.1 mm / 0.001°) after | 4 iterations | 4 iterations |
+| `delta` first below `1e-2` (fast mode) after | 3 iterations | 3 iterations |
+| Error against the truth at that point | 1.777 mm / 0.0472° | 1.776 mm / 0.0472° |
+| Error against the truth after 100 iterations | 1.771 mm / 0.0472° | 1.770 mm / 0.0472° |
+| Time per iteration (Release) | 3.1 ms | 3.6 ms |
+
+On this window, 96 of the 100 iterations change nothing, and stopping at the fast-mode threshold costs 0.006 mm.
+
+**Caveat.** A synthetic window is small, well-conditioned and has no outliers; a real window has about 360 nodes, more points and harder geometry, so it may need more iterations. This is evidence that `nr_iter = 100` is generous, not proof. The next step would be to log the iteration count per window on `44_short` and `44`. Any change to `nr_iter` or `convergence_delta_threshold` would be its own change, checked with a full 44 run and `tools/eval_odometry.py`.
 
 ## Open findings
 

@@ -38,11 +38,11 @@ There is no app change, so `44_short` is checked once, in 3.1 (design decision 7
 
 ## 3. Check and docs
 
-- [ ] 3.1 Build `dMapper` in Release and run `44_short`. Verify it is IDENTICAL with `tools/baseline/44_short.manifest.json` (decision 7: no app source changed). Report the result.
-- [ ] 3.2 Update the docs:
+- [x] 3.1 Build `dMapper` in Release and run `44_short`. Verify it is IDENTICAL with `tools/baseline/44_short.manifest.json` (decision 7: no app source changed). Report the result. Result (2026-10-04): IDENTICAL, 11 files.
+- [x] 3.2 Update the docs:
   - `CLAUDE.md`, Testing: add `app/scan_to_map.cpp` and `app/lidar_odometry_utils.cpp` to the compiled sources, and mention the synthetic scan-to-map tests;
   - `docs/ARCHITECTURE.md`: 6c ✅ with the date, and correct "the tests then link `core`" to "the tests compile `scan_to_map.cpp` and `lidar_odometry_utils.cpp` directly; no `core` needed";
   - `docs/ARCHITECTURE.md`, status line: steps 0–6 done;
   - `docs/PERFORMANCE.md`: the measured iteration counts from 2.4, next to `nr_iter` and `convergence_delta_threshold`, with the caveat and the suggested real-data follow-up.
 
-  Verify: `grep` finds no "tests then link" in `docs/` or `CLAUDE.md`. Run `openspec validate scan-to-map-test --strict`. Commit.
+  Verify: `grep` finds no "tests then link" in `docs/` or `CLAUDE.md`. Run `openspec validate scan-to-map-test --strict`. Commit. Added at the user's request (2026-10-04): `docs/degeneracy-information.html` explains the degeneracy information. It is linked from the `imu_degenerate_information_ratio` row and from a new Known-limitations entry in `docs/index.html`.
