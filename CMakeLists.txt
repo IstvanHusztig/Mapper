@@ -249,6 +249,8 @@ set(SOURCES
   app/scan_to_map.h
   app/robust_lidar_odometry.cpp
   app/robust_lidar_odometry.h
+  app/consistency.cpp
+  app/consistency.h
   app/optimizer_options.cpp
   app/optimizer_options.h
   app/toml_config_repository.cpp

@@ -1,4 +1,5 @@
 #include "lidar_odometry.h"
+#include "consistency.h"
 #include "tbb/tbb.h"
 #include <mutex>
 
