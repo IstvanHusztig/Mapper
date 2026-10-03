@@ -22,7 +22,7 @@ Close the GUI before building.
 ## 2. Place only the next window
 
 - [x] 2.1 In `optimize_windows` (`app/run_odometry.cpp`), replace the loop over all later windows with `place_window_after(windows[i + 1], <end of window i>)` when `i + 1 < windows.size()` (decision 1). Update the comment above it to say why only the next window is placed. Verify: run the step checks and report both largest differences. Commit. Result: precise within tolerance (trajectories 1e-10, results JSON 1.8e-12), fast within tolerance (trajectories 1e-11, results JSON 3.9e-12); 5 of 11 files identical in both.
-- [ ] 2.2 On the failure path, call `place_windows_after(windows, i + 1)` before `return false`, after window `i` has its old poses back (decision 2). `add_window_distance` restores the poses, and the caller calls the helper when it returns `false`. Verify: run the step checks; the results don't change from 2.1, because the path doesn't run on `44_short`. Commit.
+- [x] 2.2 On the failure path, call `place_windows_after(windows, i + 1)` before `return false`, after window `i` has its old poses back (decision 2). `add_window_distance` restores the poses, and the caller calls the helper when it returns `false`. Verify: run the step checks; the results don't change from 2.1, because the path doesn't run on `44_short`. Commit. Result: the same largest differences as 2.1 on both builds (bit-identity with 2.1 not checked, its output folders were reused); the path is covered by the place_windows_after test.
 
 ## 3. Full run, timing, baseline
 

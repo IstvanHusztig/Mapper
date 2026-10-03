@@ -620,7 +620,11 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
                 send_preview(i, intermediate_points, windows[i], params, preview);
 
             if (!add_window_distance(windows[i], poses_before_optimization, carry, ts_failure, logger))
+            {
+                // the run stops here but is still saved: the remaining windows continue from this one's restored end
+                place_windows_after(windows, i + 1);
                 return false;
+            }
 
             // the next window continues from the new end of this one; the windows after it are placed in their own turn,
             // since no step reads a window's placement before the window before it is done
