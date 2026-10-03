@@ -66,7 +66,7 @@ infrastructure and UI at the edge, and all source dependencies pointing inward.
 - ✅ Globals in `lidar_odometry_gui.cpp` (`params`, `worker_data`, `imu_data`, `trajectory`,
   `pointsPerFile`, step flags). Step 2 moved the run data into `OdometryPipeline`. The GUI still
   keeps `params`, `gui_prefs`, its current `pipeline` and UI state as file-scope globals for the
-  GLUT callbacks; a GUI view-model is left for later. Since the GUI cleanup (2026-10-02) the GUI
+  GLUT callbacks; a GUI view-model is step 10. Since the GUI cleanup (2026-10-02) the GUI
   changes `OdometryConfig` only through `ConfigRepository` (Start → Load parameters). It has no
   settings widgets and no georeferencing or editing tools. Georeferencing is planned as a
   separate post-processing module on result folders.
@@ -76,7 +76,7 @@ infrastructure and UI at the edge, and all source dependencies pointing inward.
   state hand-off and I/O → since step 6a one file per service: `scan_to_map`, `robust_lidar_odometry`,
   `consistency`, `imu_kinematics`, `normal_equations` and the window loop in `run_odometry`.
 - `core/` mixes pure math (NDT, ICP, pose graph) with I/O (LAZ export, session, file dialogs)
-  → the pure parts feed the domain, the rest becomes infrastructure.
+  → the pure parts feed the domain, the rest becomes infrastructure (step 11).
 
 ## 5. Target folder and CMake layout
 
@@ -144,6 +144,19 @@ Each step is one OpenSpec change, validated against the baseline.
      that changes the last bits of the results, so it is a separate change.
    - 6c. **Synthetic scan-to-map test** of `optimize_lidar_odometry` (the tests then link `core`).
 7. **Layered CMake targets and folders;** move the `core/` pieces touched so far.
+
+Steps 8–11 were added on 2026-10-03. They cover the goals that steps 0–7 still leave open.
+
+8. **Tests for loop closure and consistency:** run `run_loop_closure` and `run_consistency` on synthetic
+   data, as 6c does for scan-to-map, so every algorithm in the Goals has a unit test.
+9. **Remaining ports:** `OrientationEstimator` (Fusion AHRS) and `ParallelExecutor` (TBB, see
+   Decisions), so the domain no longer calls Fusion or TBB directly.
+10. **GUI view-model:** move `params`, `gui_prefs`, the current `pipeline` and the UI state out of the
+    file-scope globals in `lidar_odometry_gui.cpp` into a view-model that the GLUT callbacks reach.
+11. **Split `core/`:** the pure math (NDT, ICP, pose graph) goes into the domain, the I/O (LAZ export,
+    session, file dialogs) into infrastructure. This is the riskiest step because of the
+    `CORE_SOURCE_FILES` link-order constraint. Keeping `core` as a vendored "math kernel" dependency
+    instead is a valid outcome and is decided when the step is proposed.
 
 ## 7. Rules and conventions
 
