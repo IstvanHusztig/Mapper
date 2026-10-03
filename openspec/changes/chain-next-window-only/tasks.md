@@ -38,7 +38,7 @@ Close the GUI before building.
 
 ## 4. Docs
 
-- [ ] 4.1 Update the docs:
+- [x] 4.1 Update the docs:
   - `docs/ARCHITECTURE.md`: replace the re-chaining note under 6b with "fixed in `chain-next-window-only`";
   - `tools/README.md`: the baseline refresh, with the date, the reason and the old folder names;
   - `docs/PERFORMANCE.md`: add this fix with its measured time;

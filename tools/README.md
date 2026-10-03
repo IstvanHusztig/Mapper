@@ -81,6 +81,8 @@ python tools/compare_baseline.py "<raw data>/44_short_check" tools/baseline/44_s
 
 The 44 reference was refreshed on 2026-10-03 from the output of the `domain-types` code (step 5a). Every 44 run since step 3 had differed from the 2026-10-01 reference by the same `/fp:fast` last-bit pattern, at most 1e-9 m. The old reference is kept as `raw data/44_baseline_2026-10-01`.
 
+Both references were refreshed again on 2026-10-03 by `chain-next-window-only`, which deliberately changes the last bits: the window loop places only the next window instead of all later ones (`docs/window-chaining.html`). Its results were within `--tolerance 1e-6` of the old references (44 at most 1e-9, 44_short at most 1e-11), and the manifests and the folders `raw data/44_baseline` and `raw data/44_short_baseline` now hold its output. The previous references are kept as `raw data/44_baseline_2026-10-03b` and `raw data/44_short_baseline_2026-10-03b`.
+
 The full 44 is checked against the manifest first. If that reports differences, check it again with `--tolerance 1e-6` against the baseline output folder `raw data/44_baseline`, which must be kept for this:
 
 ```

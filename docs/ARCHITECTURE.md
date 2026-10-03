@@ -140,8 +140,9 @@ Each step is one OpenSpec change, validated against the baseline.
    - 6b. ✅ **Window loop into named steps** (done 2026-10-03): `compute_step_2` became
      `optimize_windows`, a 126-line loop of named steps with `OdometryRunSetup` and `WindowLoopCarry`;
      the steps that only need window data are in `app/window_steps.cpp`, with tests. Found on the way:
-     after every window the loop re-chains all later windows (about 238,000 window chains on 44); removing
-     that changes the last bits of the results, so it is a separate change.
+     after every window the loop placed all later windows again (about 238,000 placements on 44). Fixed in
+     `chain-next-window-only` (2026-10-03): only the next window is placed; new baselines, see
+     `docs/window-chaining.html`.
    - 6c. **Synthetic scan-to-map test** of `optimize_lidar_odometry` (the tests then link `core`).
 7. **Layered CMake targets and folders;** move the `core/` pieces touched so far.
 

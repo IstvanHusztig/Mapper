@@ -15,7 +15,7 @@ Times are for the reference recordings in `raw data/`, with the Release build an
 | [Release optimization flags](#3-release-optimization-flags) | (inherited) | build | faster arithmetic (not measured here) | last bits differ from a build without `/fp:fast` |
 | [GUI frame-rate cap](#4-gui-frame-rate-cap) | 2026-10-02 | GUI | `44_short` in the GUI: 510–570 s → 195 s (CLI 197 s) | GUI = CLI again |
 | [Remaining-time estimate from the odometry start](#5-remaining-time-estimate) | 2026-10-01 | GUI | a realistic estimate (no speed gain) | – |
-| [Place only the next window](#6-place-only-the-next-window-proposed) | proposed | window loop | removes about 238,000 needless window placements on 44 | last bits |
+| [Place only the next window](#6-place-only-the-next-window) | 2026-10-03 | window loop | 237,705 → 689 window placements on 44: 6.7 s → 0.02 s (about 0.4 % of the run) | last bits, within 1e-6 |
 
 ## 1. Sparse band of the normal matrix
 
@@ -79,15 +79,19 @@ The GUI's estimate used to extrapolate from the start of the run, including data
 
 Commit `9b822c4`.
 
-## 6. Place only the next window (proposed)
+## 6. Place only the next window
 
 **Problem.** After each window, `optimize_windows` (`app/run_odometry.cpp`) places all later windows again, each after the new end of the one before it. That is quadratic in the number of windows: about 238,000 placements on 44, where 690 are enough. Only the next window's placement is ever read.
 
-**Fix (proposed).** Place only window `i + 1`. If a run fails at a window, place the remaining windows once, so the saved trajectory stays continuous.
+**Fix.** Place only window `i + 1`. If a run fails at a window, place the remaining windows once, so the saved trajectory stays continuous.
 
-**Expected effect.** Seconds on 44, not minutes, because the scan-to-map optimization dominates. It also removes rounding error that has no meaning. The time will be measured when it is applied.
+**Effect.** A benchmark of the placement loops alone (690 windows of 360 nodes, Release flags) gives 6.5–6.8 s for the old loop and 0.018 s for the new one, so the fix saves about 7 s of the roughly 27-minute 44 run. That is smaller than the run-to-run variation, so the whole-run times can't show it:
+- `44_short`: 163–164 s with the fix, 165 s for master;
+- `44`: 1567 s with the fix, 1651 s for master the same day.
 
-OpenSpec change `chain-next-window-only`.
+Because the old cost grows with the square of the number of windows, it would have reached about 3 % of a 5,000-window run and 12 % of a 20,000-window run. The fix also removes the rounding error of rebuilding window `j` `j` times. The results changed only in the last bits (44: at most 1e-9), and new baselines were written.
+
+OpenSpec change `chain-next-window-only`. The full explanation, with diagrams and numbers, is in [`window-chaining.html`](window-chaining.html).
 
 ## Settings that trade speed
 
