@@ -8,6 +8,9 @@
 #include "window_steps.h"
 #include <export_laz.h>
 
+#include <algorithm>
+#include <cmath>
+
 namespace
 {
     // settings of the window loop, fixed for a run
@@ -43,6 +46,7 @@ namespace
         int stationary_windows = 0;
         int turn_windows = 0;
         int acc_term_windows = 0;
+        std::vector<IterationConvergence> convergence; // per window, with log_iteration_convergence
     };
 
     OdometryRunSetup prepare_run(const std::vector<Window> &windows, const OdometryConfig &params, Logger &logger)
@@ -296,7 +300,13 @@ namespace
     {
         int last_iteration = 0; // index of the last Levenberg-Marquardt iteration
         double delta = 100000.0; // sum of the parameter updates of that iteration
+        IterationConvergence convergence; // only with log_iteration_convergence
     };
+
+    // limits of log_iteration_convergence: poses count as settled within these of the last result; the fast-mode threshold
+    constexpr double convergence_settle_position_m = 1e-4;
+    constexpr double convergence_settle_rotation_deg = 0.001;
+    constexpr double convergence_fast_delta = 1e-2;
 
     // Levenberg-Marquardt iterations of optimize_lidar_odometry: until the update falls below convergence_delta_threshold,
     // nr_iter iterations ran, or the window took longer than real_time_threshold_seconds; the damping grows every 10 iterations
@@ -313,6 +323,10 @@ namespace
 
         int iter_end = 0;
 
+        // log_iteration_convergence: the poses and delta after each iteration (only read, the iterations are unchanged)
+        std::vector<std::vector<Eigen::Affine3d>> poses_after;
+        std::vector<double> deltas;
+
         for (int iter = 0; iter < params.nr_iter; iter++)
         {
             iter_end = iter;
@@ -321,6 +335,11 @@ namespace
                                     setup.scan_to_map, acc_term.motion_model, window_rotation_options, acc_term.options,
                                     velocity_prior, lm_factor, delta, acc_offset, acc_term.offset_cov, logger,
                                     setup.acc_gated ? &lidar_translation_information : nullptr);
+            if (params.log_iteration_convergence)
+            {
+                poses_after.push_back(window.poses);
+                deltas.push_back(delta);
+            }
             if (delta < params.convergence_delta_threshold)
                 break;
 
@@ -342,6 +361,9 @@ namespace
         WindowOptimization result;
         result.last_iteration = iter_end;
         result.delta = delta;
+        if (params.log_iteration_convergence)
+            result.convergence = convergence_of(poses_after, deltas, convergence_settle_position_m,
+                                                convergence_settle_rotation_deg * DEG_TO_RAD, convergence_fast_delta);
         return result;
     }
 
@@ -358,6 +380,26 @@ namespace
             msg << std::setprecision(10) << optimization.delta << "!!!";
         else
             msg << "< " << std::setprecision(1) << std::scientific << params.convergence_delta_threshold;
+    }
+
+    // log_iteration_convergence: after how many iterations the window's poses settled, and where fast mode would have stopped
+    void log_iteration_convergence(int i, const OdometryConfig &params, const WindowOptimization &optimization, WindowLoopCarry &carry, Logger &logger)
+    {
+        if (!params.log_iteration_convergence)
+            return;
+        const IterationConvergence &c = optimization.convergence;
+        carry.convergence.push_back(c);
+        auto msg = log_info(logger);
+        msg << "convergence window " << i + 1 << ": settled after " << c.settled_after << "/" << c.iterations << " iterations ("
+            << convergence_settle_position_m * 1000.0 << " mm / " << convergence_settle_rotation_deg << " deg), delta < "
+            << convergence_fast_delta << " after ";
+        if (c.fast_stop_after > 0)
+            msg << c.fast_stop_after << ", error then " << std::fixed << std::setprecision(4) << c.fast_stop_position_error_m * 1000.0
+                << " mm / " << c.fast_stop_rotation_error_rad * RAD_TO_DEG << " deg";
+        else
+            msg << "never";
+        if (c.iterations < params.nr_iter)
+            msg << " (stopped at " << c.iterations << ")";
     }
 
     // after the window: log the estimated gyro bias (and a clamp), and carry it as the next window's prior
@@ -485,6 +527,43 @@ namespace
         }
     }
 
+    // nearest-rank percentile (0..100) of values, which must not be empty
+    template <typename T>
+    T percentile(std::vector<T> values, double pct)
+    {
+        std::sort(values.begin(), values.end());
+        const size_t rank = static_cast<size_t>(std::ceil(pct / 100.0 * values.size()));
+        return values[std::clamp<size_t>(rank, 1, values.size()) - 1];
+    }
+
+    // log_iteration_convergence: the distribution over all windows
+    void log_convergence_summary(const std::vector<IterationConvergence> &convergence, Logger &logger)
+    {
+        std::vector<int> settled, fast;
+        std::vector<double> fast_error_mm;
+        for (const IterationConvergence &c : convergence)
+        {
+            settled.push_back(c.settled_after);
+            if (c.fast_stop_after > 0)
+            {
+                fast.push_back(c.fast_stop_after);
+                fast_error_mm.push_back(c.fast_stop_position_error_m * 1000.0);
+            }
+        }
+        auto msg = log_info(logger);
+        msg << "iteration convergence over " << convergence.size() << " windows: settled after median " << percentile(settled, 50.0)
+            << ", p90 " << percentile(settled, 90.0) << ", max " << percentile(settled, 100.0);
+        if (fast.empty())
+        {
+            msg << "; delta never below " << convergence_fast_delta;
+            return;
+        }
+        msg << "; delta < " << convergence_fast_delta << " after median " << percentile(fast, 50.0) << ", p90 " << percentile(fast, 90.0)
+            << " (in " << fast.size() << " windows); error at that point median " << std::fixed << std::setprecision(4)
+            << percentile(fast_error_mm, 50.0) << " mm, p90 " << percentile(fast_error_mm, 90.0) << " mm, max "
+            << percentile(fast_error_mm, 100.0) << " mm";
+    }
+
     // after the last window: the motion-model poses follow the result, the trajectory length and the summary
     void finish_run(std::vector<Window> &windows, const std::chrono::time_point<std::chrono::system_clock> &start,
                     const OdometryRunSetup &setup, const WindowLoopCarry &carry, OdometryState &state,
@@ -513,6 +592,8 @@ namespace
             log_info(logger) << "accelerometer term: active in " << carry.acc_term_windows << " of " << windows.size() << " windows";
         if (params.rotation_sigma_inflation_k_turn > 0.0)
             log_info(logger) << "turn windows (gyro trusted more): " << carry.turn_windows << " of " << windows.size();
+        if (params.log_iteration_convergence && !carry.convergence.empty())
+            log_convergence_summary(carry.convergence, logger);
     }
 } // namespace
 
@@ -602,6 +683,7 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
 
             const std::chrono::duration<double> window_seconds = std::chrono::system_clock::now() - window_start;
             log_window_result(i, windows.size(), optimization, carry.acc_distance, window_seconds.count(), params, logger);
+            log_iteration_convergence(i, params, optimization, carry, logger);
 
             update_gyro_bias_after_window(windows[i], i, setup, carry, params, logger);
             update_acc_term_after_window(windows[i], i, acc_term, lidar_translation_information, acc_offset, setup, carry, params, logger);

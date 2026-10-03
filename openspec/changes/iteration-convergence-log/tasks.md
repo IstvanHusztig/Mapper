@@ -19,8 +19,8 @@ If the `/fp:fast` build moves last bits, the precise-build rule of `window-loop-
 
 ## 2. Logging in the window loop
 
-- [ ] 2.1 In `run_lm_iterations`, when the setting is on, record the poses after each iteration and the deltas, and fill `WindowOptimization::convergence` with `convergence_of` (decision 2). Add the step `log_iteration_convergence`, which prints the per-window line after `log_window_result`, and collect the values in `WindowLoopCarry`. Verify: the step checks with the setting off; then `44_short` with the setting on (a scratchpad copy of `lidar-vertical.toml`) is IDENTICAL with the manifest, and its log has 70 `convergence window` lines. Commit.
-- [ ] 2.2 The end-of-run summary in `finish_run` (decision 4), only with the setting on. Verify: the `44_short` run with the setting on prints it; its numbers match a hand count from the 70 lines. Commit.
+- [x] 2.1 In `run_lm_iterations`, when the setting is on, record the poses after each iteration and the deltas, and fill `WindowOptimization::convergence` with `convergence_of` (decision 2). Add the step `log_iteration_convergence`, which prints the per-window line after `log_window_result`, and collect the values in `WindowLoopCarry`. Verify: the step checks with the setting off; then `44_short` with the setting on (a scratchpad copy of `lidar-vertical.toml`) is IDENTICAL with the manifest, and its log has 70 `convergence window` lines. Commit. Result: setting off IDENTICAL (11 files). Setting on: 10 of 11 files identical; only the params TOML differs, because it records `log_iteration_convergence = true`. 70 lines.
+- [x] 2.2 The end-of-run summary in `finish_run` (decision 4), only with the setting on. Verify: the `44_short` run with the setting on prints it; its numbers match a hand count from the 70 lines. Commit. Result (`44_short`): settled after median 52, p90 74, max 83. Delta below 1e-2 after median 19, p90 43 (in all 70 windows). The error at that point is median 0.0126 mm, p90 0.051 mm, max 0.174 mm. The hand count over the 70 lines gives the same values. Setting off: IDENTICAL. Committed together with 2.1.
 
 ## 3. Tool, measurement, docs
 
