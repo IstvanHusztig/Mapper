@@ -185,3 +185,45 @@ TEST_CASE("is_turn_window compares the mean yaw rate with the threshold")
     CHECK_FALSE(is_turn_window(moving_window(40, 1.0, 0.2), threshold));   // 11 deg/s
     CHECK_FALSE(is_turn_window(moving_window(1, 1.0, 1.0), threshold));    // a single node
 }
+
+TEST_CASE("repropagate_window_tail continues the tail with the kept velocity and the IMU rotation")
+{
+    const int n = 60;
+    const int tail = 5;
+    // optimized poses: along x at 1 m/s, but the tail went astray (sideways jump)
+    Window w = moving_window(n, 1.0, 0.0);
+    const Window imu = moving_window(n, 1.0, 0.4); // the IMU says the device turns at 0.4 rad/s
+    w.motion_model_poses = imu.poses;
+    for (int k = n - tail; k < n; k++)
+        w.poses[k].translation().y() += 0.3;
+    const Window before = w;
+
+    SUBCASE("no tail nodes: nothing changes")
+    {
+        repropagate_window_tail(w, 0, Eigen::Vector3d::Zero());
+        for (int k = 0; k < n; k++)
+            CHECK(w.poses[k].matrix() == before.poses[k].matrix());
+    }
+
+    SUBCASE("the tail continues from the last kept node")
+    {
+        repropagate_window_tail(w, tail, Eigen::Vector3d::Zero());
+        const int a = n - 1 - tail;
+        for (int k = 0; k <= a; k++)
+            CHECK(w.poses[k].matrix() == before.poses[k].matrix());
+        for (int k = a + 1; k < n; k++)
+        {
+            CHECK(w.poses[k].translation().isApprox(Eigen::Vector3d(k * dt, 0.0, 0.0), 1e-9));
+            // rotation: the kept node's rotation (identity) followed by the IMU increments
+            const Eigen::Matrix3d expected = Eigen::AngleAxisd(0.4 * (k - a) * dt, Eigen::Vector3d::UnitZ()).toRotationMatrix();
+            CHECK(w.poses[k].linear().isApprox(expected, 1e-9));
+        }
+    }
+
+    SUBCASE("a bias update removes rotation from the IMU increments")
+    {
+        repropagate_window_tail(w, tail, Eigen::Vector3d(0.0, 0.0, 0.4));
+        for (int k = n - tail; k < n; k++)
+            CHECK(w.poses[k].linear().isApprox(Eigen::Matrix3d::Identity(), 1e-9));
+    }
+}

@@ -162,3 +162,30 @@ bool is_turn_window(const Window &window, double threshold_rad_s)
     }
     return false;
 }
+
+void repropagate_window_tail(Window &window, int tail_nodes, const Eigen::Vector3d &bias_update)
+{
+    auto &tr = window.poses;
+    const auto &imu = window.motion_model_poses;
+    const auto &ts = window.timestamps;
+    const int n = static_cast<int>(tr.size());
+    const int m = tail_nodes;
+    const int a = n - 1 - m;          // last node kept from the optimization
+    constexpr int velocity_nodes = 20; // same span as the prev_velocity estimate
+    if (m > 0 && a >= velocity_nodes && ts.size() == tr.size() && imu.size() == tr.size())
+    {
+        const double dt_v = ts[a].first - ts[a - velocity_nodes].first;
+        const Eigen::Vector3d v = dt_v > 0.0 ? Eigen::Vector3d((tr[a].translation() - tr[a - velocity_nodes].translation()) / dt_v)
+                                             : Eigen::Vector3d::Zero();
+        const Eigen::Vector3d &db = bias_update;
+        Eigen::Quaterniond q = rotation_of(tr[a]);
+        for (int k = a + 1; k < n; k++)
+        {
+            const double dt = std::max(ts[k].first - ts[k - 1].first, 0.0);
+            q = (q * relative_rotation(imu[k - 1], imu[k]) * Eigen::Quaterniond(exp_so3(-db * dt))).normalized();
+            const Eigen::Vector3d t_new = tr[k - 1].translation() + v * dt;
+            tr[k].linear() = q.toRotationMatrix();
+            tr[k].translation() = t_new;
+        }
+    }
+}

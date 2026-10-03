@@ -420,35 +420,12 @@ bool compute_step_2(std::vector<Window> &windows, const OdometryConfig &params, 
                 }
             }
 
-            // window hand-off: the last nodes carry almost no points (the last one none), so their pose is
-            // re-propagated from the last well-constrained node with the IMU rotation and constant velocity;
-            // the next window starts from the re-propagated last node
+            // window hand-off; the initial guess was corrected with the prior bias, so the tail gets the update estimated in this window
             {
-                auto &tr = windows[i].poses;
-                const auto &imu = windows[i].motion_model_poses;
-                const auto &ts = windows[i].timestamps;
-                const int n = static_cast<int>(tr.size());
-                const int m = params.handoff_tail_nodes;
-                const int a = n - 1 - m;          // last node kept from the optimization
-                constexpr int velocity_nodes = 20; // same span as the prev_velocity estimate
-                if (m > 0 && a >= velocity_nodes && ts.size() == tr.size() && imu.size() == tr.size())
-                {
-                    const double dt_v = ts[a].first - ts[a - velocity_nodes].first;
-                    const Eigen::Vector3d v = dt_v > 0.0 ? Eigen::Vector3d((tr[a].translation() - tr[a - velocity_nodes].translation()) / dt_v)
-                                                         : Eigen::Vector3d::Zero();
-                    // the initial guess was corrected with the prior bias; apply the update estimated in this window
-                    const Eigen::Vector3d db = setup.rotation_options.estimate_bias ? Eigen::Vector3d(windows[i].gyro_bias.mean - setup.rotation_options.bias_prior_mean)
-                                                                              : Eigen::Vector3d::Zero();
-                    Eigen::Quaterniond q = rotation_of(tr[a]);
-                    for (int k = a + 1; k < n; k++)
-                    {
-                        const double dt = std::max(ts[k].first - ts[k - 1].first, 0.0);
-                        q = (q * relative_rotation(imu[k - 1], imu[k]) * Eigen::Quaterniond(exp_so3(-db * dt))).normalized();
-                        const Eigen::Vector3d t_new = tr[k - 1].translation() + v * dt;
-                        tr[k].linear() = q.toRotationMatrix();
-                        tr[k].translation() = t_new;
-                    }
-                }
+                const Eigen::Vector3d bias_update = setup.rotation_options.estimate_bias
+                                                        ? Eigen::Vector3d(windows[i].gyro_bias.mean - setup.rotation_options.bias_prior_mean)
+                                                        : Eigen::Vector3d::Zero();
+                repropagate_window_tail(windows[i], params.handoff_tail_nodes, bias_update);
             }
 
             progress.progress(i + 1, windows.size());

@@ -38,7 +38,7 @@ The GUI must be closed while building. Code is moved, not rewritten: `git diff -
   - a window turning faster than the threshold is a turn, a slower one is not.
 
   Run the step checks. Commit.
-- [ ] 2.5 Add `repropagate_window_tail`. Tests:
+- [x] 2.5 Add `repropagate_window_tail`. Tests:
   - with `tail_nodes = 0`, nothing changes;
   - the tail nodes continue at the velocity of the last kept 20 nodes, with the IMU relative rotations;
   - nodes up to the last kept one are unchanged.
