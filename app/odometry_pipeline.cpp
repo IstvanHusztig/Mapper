@@ -32,7 +32,7 @@ bool OdometryPipeline::run_odometry()
     progress_->stage_started(RunStage::Odometry);
     progress_->checkpoint();
     double ts_failure = 0.0;
-    return compute_step_2(windows, *config_, state, ts_failure, debug_, *inputs_.points, *inputs_.preview, *logger_, *progress_);
+    return optimize_windows(windows, *config_, state, ts_failure, debug_, *inputs_.points, *inputs_.preview, *logger_, *progress_);
 }
 
 void OdometryPipeline::post_process()

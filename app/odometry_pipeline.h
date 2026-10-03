@@ -9,7 +9,7 @@
 
 // One processing run, shared by the CLI and the GUI:
 //   load (load_data -> calculate_trajectory -> compute_step_1)
-//   -> run_odometry (compute_step_2)
+//   -> run_odometry (optimize_windows)
 //   -> post_process (loop closure if use_loop_closure, then consistency if use_consistency)
 //   -> save (save_result)
 // Each stage is reported to the ProgressReporter (with a pause checkpoint at its start); messages go to

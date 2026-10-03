@@ -77,5 +77,5 @@ struct MotionModelTranslationImuOptions
 };
 
 ScanToMapOptions get_scan_to_map_options(const OdometryConfig &config);
-// the position sigmas are the configured ones; compute_step_2 may raise them for a degenerate window
+// the position sigmas are the configured ones; optimize_windows may raise them for a degenerate window
 MotionModelOptions get_motion_model_options(const OdometryConfig &config);

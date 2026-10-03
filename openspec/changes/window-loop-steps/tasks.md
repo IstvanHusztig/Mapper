@@ -55,7 +55,7 @@ The GUI must be closed while building. Code is moved, not rewritten: `git diff -
   - `wc -l app/run_odometry.cpp` is about 400 or less, with the loop function about 200.
 
   Run the step checks. Commit.
-- [ ] 3.5 Rename `compute_step_2` to `optimize_windows` with `tools/rename_identifiers.py` (dry run first) in `app/`. Fix the comment mentions by hand: `app/odometry_pipeline.h` and `app/optimizer_options.h`. Run the step checks. Commit.
+- [x] 3.5 Rename `compute_step_2` to `optimize_windows` with `tools/rename_identifiers.py` (dry run first) in `app/`. Fix the comment mentions by hand: `app/odometry_pipeline.h` and `app/optimizer_options.h`. Run the step checks. Commit.
 
 ## 4. Integration
 
