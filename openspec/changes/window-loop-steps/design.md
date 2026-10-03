@@ -67,7 +67,13 @@
    Each step takes the parts it changes by reference. The struct doesn't hide which step changes what.
 5. **`place_window_after(Window &w, const Eigen::Affine3d &start)`** replaces the three identical chaining loops (window 0 from `m_g`, and every later window from its predecessor's end). It uses the same expression, `m_last = m_last * (tmp[k-1].inverse() * tmp[k])`.
 6. **`compute_step_2` → `optimize_windows`**, renamed in the last code commit, with `tools/rename_identifiers.py` (`-r compute_step_2=optimize_windows`) over `app/` and in the docs. The signature is unchanged otherwise.
-7. **One extraction per commit, each with the step checks.** If an extraction breaks `44_short` bit-identity, stop and report which one and how large the difference is (same rule as 6a).
+7. **One extraction per commit, each with the step checks. Bit-identity is checked with a precise build** (changed on 2026-10-03, after task 1.1).
+   - **The problem:** under `/fp:fast` the compiler decides per function whether to reassociate or contract floating-point operations. Task 1.1 only moves locals into structs and setup code into functions, yet it changed the fast build's `44_short` by up to 1e-11.
+   - **The precise build:** a separate Release build without `/fp:fast` (`-DHD_CPU_OPTIMIZATION=GENERIC`, built in the scratchpad, not as a repo preset). Its compiler may not reorder floating-point math, so an exact refactor stays bit-identical there.
+   - Master's precise `44_short` run is the reference; every commit must reproduce it bit for bit. The fast build only has to stay within `--tolerance 1e-6`.
+   - If the precise build is not bit-identical, stop and report.
+   - Precise and fast results differ from each other by millimetres over a run, so they are never compared with each other.
+   - *Alternative:* accept 1e-6 on the fast build alone. Rejected: a real mistake that is smaller than 1e-6 would pass.
 8. **The test file `tests/window_steps_test.cpp`** builds windows in code:
    - nodes every 10 ms;
    - known motion: constant velocity, a constant turn rate, at rest;

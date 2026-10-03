@@ -1,15 +1,16 @@
 # Tasks
 
-**Step checks, on every code commit:**
+**Step checks, on every code commit** (changed on 2026-10-03, design decision 7):
 - both presets build `dMapper` and `lidar_odometry_tests`;
 - `ctest` passes;
-- a Release CLI run on `44_short` from the repo root compares IDENTICAL with `tools/baseline/44_short.manifest.json`.
+- the **precise build** (Release without `/fp:fast`, `HD_CPU_OPTIMIZATION=GENERIC`, built in the scratchpad) runs `44_short` **bit-identical** with the precise reference that master made;
+- the normal Release build runs `44_short` IDENTICAL with `tools/baseline/44_short.manifest.json`, or within `--tolerance 1e-6` of `raw data/44_short_baseline`. Report the maximum difference.
 
 The GUI must be closed while building. Code is moved, not rewritten: `git diff --color-moved` must show each step's body as moved lines.
 
 ## 1. Setup and carried state
 
-- [ ] 1.1 Add `OdometryRunSetup` and `prepare_run` in `app/run_odometry.cpp` (design decision 3), and `WindowLoopCarry` (decision 4). Replace the setup block (lines 41–90) and the carried locals with them. Run the step checks. Commit.
+- [x] 1.1 Add `OdometryRunSetup` and `prepare_run` in `app/run_odometry.cpp` (design decision 3), and `WindowLoopCarry` (decision 4). Replace the setup block (lines 41–90) and the carried locals with them. Run the step checks. Commit. Result: precise IDENTICAL (11 files); fast within tolerance, at most 1e-11 (the first attempt under the old bit-identical rule failed here, which led to decision 7).
 
 ## 2. Pure steps (`app/window_steps.{h,cpp}`, tested)
 
@@ -62,5 +63,6 @@ The GUI must be closed while building. Code is moved, not rewritten: `git diff -
 - [ ] 4.2 Docs. Commit.
   - `CLAUDE.md`: `optimize_windows` and its steps (`app/window_steps.cpp`), plus the Testing list;
   - `docs/PIPELINE.md` and `docs/index.html`: the function name;
-  - `docs/ARCHITECTURE.md`: 6b ✅, and a note on the quadratic re-chaining.
+  - `docs/ARCHITECTURE.md`: 6b ✅, and a note on the quadratic re-chaining. A new decision: refactors of numeric code are checked bit for bit with a precise build, while the `/fp:fast` build only has to be within 1e-6;
+  - `CLAUDE.md` (Testing) and `tools/README.md`: how to make the precise build and its reference.
 - [ ] 4.3 Run `openspec validate window-loop-steps --strict` and confirm it passes.
