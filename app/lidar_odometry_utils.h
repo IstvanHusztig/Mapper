@@ -295,41 +295,20 @@ struct MotionModelTranslationImuOptions
     Eigen::Matrix3d offset_prior_cov = Eigen::Matrix3d::Identity();
 };
 
+struct ScanToMapOptions;
+struct MotionModelOptions;
+struct VelocityPrior;
+
 // this function performs main LiDAR odometry calculations
 // gyro_bias / gyro_bias_cov are updated only when rotation_options.estimate_bias is set
-void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, std::vector<Eigen::Affine3d> &intermediate_trajectory,
-                             std::vector<Eigen::Affine3d> &intermediate_trajectory_motion_model,
-                             const NDT::GridParameters &rgd_params_indoor, NDTBucketMapType &buckets_indoor,
-                             const NDT::GridParameters &rgd_params_outdoor, NDTBucketMapType &buckets_outdoor,
-                             bool useMultithread, double min_distance, double min_distance_outdoor_grid, double max_distance, double &delta, double lm_factor, TaitBryanPose motion_model_correction,
-                             double lidar_odometry_motion_model_x_1_sigma_m,
-                             double lidar_odometry_motion_model_y_1_sigma_m,
-                             double lidar_odometry_motion_model_z_1_sigma_m,
-                             double lidar_odometry_motion_model_om_1_sigma_deg,
-                             double lidar_odometry_motion_model_fi_1_sigma_deg,
-                             double lidar_odometry_motion_model_ka_1_sigma_deg,
-                             double lidar_odometry_motion_model_fix_origin_x_1_sigma_m,
-                             double lidar_odometry_motion_model_fix_origin_y_1_sigma_m,
-                             double lidar_odometry_motion_model_fix_origin_z_1_sigma_m,
-                             double lidar_odometry_motion_model_fix_origin_om_1_sigma_deg,
-                             double lidar_odometry_motion_model_fix_origin_fi_1_sigma_deg,
-                             double lidar_odometry_motion_model_fix_origin_ka_1_sigma_deg,
-                             bool ablation_study_use_planarity,
-                             bool ablation_study_use_norm,
-                             bool ablation_study_use_hierarchical_rgd,
-                             bool ablation_study_use_view_point_and_normal_vectors,
-                             const std::vector<std::pair<double, double>> &timestamps,
-                             double acc_sigma_mps2,
-                             bool use_prev_velocity,
-                             const Eigen::Vector3d &prev_velocity,
+void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window &window,
+                             NDTBucketMapType &buckets_indoor, NDTBucketMapType &buckets_outdoor,
+                             const ScanToMapOptions &scan_to_map, const MotionModelOptions &motion_model,
                              const MotionModelRotationOptions &rotation_options,
-                             Eigen::Vector3d &gyro_bias,
-                             Eigen::Matrix3d &gyro_bias_cov,
                              const MotionModelTranslationImuOptions &translation_imu_options,
-                             Eigen::Vector3d &acc_offset,
-                             Eigen::Matrix3d &acc_offset_cov,
-                             Logger &logger,
-                             Eigen::Matrix3d *lidar_translation_information = nullptr);
+                             const VelocityPrior &velocity_prior, double lm_factor, double &delta,
+                             Eigen::Vector3d &acc_offset, Eigen::Matrix3d &acc_offset_cov, Logger &logger,
+                             Eigen::Matrix3d *lidar_translation_information);
 
 void optimize_sf2(std::vector<Point3Di> &intermediate_points, std::vector<Point3Di> &intermediate_points_sf, std::vector<Eigen::Affine3d> &intermediate_trajectory,
                   const std::vector<Eigen::Affine3d> &intermediate_trajectory_motion_model,

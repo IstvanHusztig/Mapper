@@ -15,7 +15,7 @@ Every code commit: both presets build `dMapper` and `lidar_odometry_tests`; `cte
 
 ## 3. New signature
 
-- [ ] 3.1 Change `optimize_lidar_odometry`'s declaration and definition to the signature of design decision 2. Rename its body with `tools/rename_identifiers.py --lines <function>` (design decision 3): dry run first, review the hit list, then apply.
+- [x] 3.1 Change `optimize_lidar_odometry`'s declaration and definition to the signature of design decision 2. Rename its body with `tools/rename_identifiers.py --lines <function>` (design decision 3): dry run first, review the hit list, then apply.
 
   In `compute_step_2`:
   - build `ScanToMapOptions` and `MotionModelOptions` once per run, and set the window's `x/y/z_sigma_m` where the `sigma_*_m` locals are set today;
