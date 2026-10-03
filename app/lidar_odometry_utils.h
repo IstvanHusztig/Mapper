@@ -267,23 +267,6 @@ void update_rgd_spherical_coordinates(const NDT::GridParameters &rgd_params, NDT
 
 
 
-struct MotionModelRotationOptions;
-struct MotionModelTranslationImuOptions;
-struct ScanToMapOptions;
-struct MotionModelOptions;
-struct VelocityPrior;
-
-// this function performs main LiDAR odometry calculations
-// gyro_bias / gyro_bias_cov are updated only when rotation_options.estimate_bias is set
-void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window &window,
-                             NDTBucketMapType &buckets_indoor, NDTBucketMapType &buckets_outdoor,
-                             const ScanToMapOptions &scan_to_map, const MotionModelOptions &motion_model,
-                             const MotionModelRotationOptions &rotation_options,
-                             const MotionModelTranslationImuOptions &translation_imu_options,
-                             const VelocityPrior &velocity_prior, double lm_factor, double &delta,
-                             Eigen::Vector3d &acc_offset, Eigen::Matrix3d &acc_offset_cov, Logger &logger,
-                             Eigen::Matrix3d *lidar_translation_information);
-
 void optimize_sf2(std::vector<Point3Di> &intermediate_points, std::vector<Point3Di> &intermediate_points_sf, std::vector<Eigen::Affine3d> &trajectory,
                   const std::vector<Eigen::Affine3d> &motion_model_trajectory,
                   const NDT::GridParameters &rgd_params, bool useMultithread, double wx, double wy, double wz, double wom, double wfi, double wka);

@@ -245,6 +245,8 @@ set(SOURCES
   app/normal_equations.h
   app/imu_kinematics.cpp
   app/imu_kinematics.h
+  app/scan_to_map.cpp
+  app/scan_to_map.h
   app/optimizer_options.cpp
   app/optimizer_options.h
   app/toml_config_repository.cpp
