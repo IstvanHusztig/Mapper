@@ -11,6 +11,7 @@ add_executable(lidar_odometry_tests
   window_steps_test.cpp
   imu_kinematics_test.cpp
   normal_equations_test.cpp
+  scan_to_map_test.cpp
   ${REPOSITORY_DIRECTORY}/app/toml_io.cpp
   ${REPOSITORY_DIRECTORY}/app/console_reporting.cpp
   ${REPOSITORY_DIRECTORY}/app/recording_files.cpp
@@ -19,7 +20,10 @@ add_executable(lidar_odometry_tests
   ${REPOSITORY_DIRECTORY}/app/optimizer_options.cpp
   ${REPOSITORY_DIRECTORY}/app/window_steps.cpp
   ${REPOSITORY_DIRECTORY}/app/imu_kinematics.cpp
-  ${REPOSITORY_DIRECTORY}/app/normal_equations.cpp)
+  ${REPOSITORY_DIRECTORY}/app/normal_equations.cpp
+  # the scan-to-map optimizer and the NDT map helpers (update_rgd, get_rgd_index); compiled directly, core is not linked
+  ${REPOSITORY_DIRECTORY}/app/scan_to_map.cpp
+  ${REPOSITORY_DIRECTORY}/app/lidar_odometry_utils.cpp)
 
 target_include_directories(
   lidar_odometry_tests
