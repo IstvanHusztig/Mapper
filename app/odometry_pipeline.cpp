@@ -20,9 +20,9 @@ bool OdometryPipeline::load()
     state.paths.working_directory_cache = inputs_.points->location();
     if (!load_data(*inputs_.recording, *inputs_.preview, params, points_per_file, imu, debug_, *logger_))
         return false;
-    calculate_trajectory(trajectory, imu, params.fusionConventionNwu, params.fusionConventionEnu, params.fusionConventionNed,
+    calculate_trajectory(imu_trajectory, imu, params.fusionConventionNwu, params.fusionConventionEnu, params.fusionConventionNed,
                          params.ahrs_gain, debug_, params.use_remove_imu_bias_from_first_stationary_scan, *logger_);
-    compute_step_1(points_per_file, params, state, trajectory, worker_data, *inputs_.points, *logger_, *progress_, &imu);
+    compute_step_1(points_per_file, params, state, imu_trajectory, windows, *inputs_.points, *logger_, *progress_, &imu);
     return true;
 }
 
@@ -31,7 +31,7 @@ bool OdometryPipeline::run_odometry()
     progress_->stage_started(RunStage::Odometry);
     progress_->checkpoint();
     double ts_failure = 0.0;
-    return compute_step_2(worker_data, *config_, state, ts_failure, debug_, *inputs_.points, *inputs_.preview, *logger_, *progress_);
+    return compute_step_2(windows, *config_, state, ts_failure, debug_, *inputs_.points, *inputs_.preview, *logger_, *progress_);
 }
 
 void OdometryPipeline::post_process()
@@ -41,14 +41,14 @@ void OdometryPipeline::post_process()
     {
         progress_->stage_started(RunStage::LoopClosure);
         progress_->checkpoint();
-        run_loop_closure(worker_data, params, *inputs_.points, *logger_);
+        run_loop_closure(windows, params, *inputs_.points, *logger_);
     }
 
     if (params.use_consistency && params.num_constistency_iter > 0)
     {
         progress_->stage_started(RunStage::Consistency);
         progress_->checkpoint();
-        run_consistency(worker_data, params, *inputs_.points, *logger_);
+        run_consistency(windows, params, *inputs_.points, *logger_);
     }
 }
 
@@ -62,7 +62,7 @@ bool OdometryPipeline::run_all()
 void OdometryPipeline::save(ResultSink &sink, const GuiPreferences &gui, double elapsed_seconds)
 {
     progress_->stage_started(RunStage::Saving);
-    save_result(worker_data, *config_, state, gui, elapsed_seconds, sink, *inputs_.points, *logger_);
+    save_result(windows, *config_, state, gui, elapsed_seconds, sink, *inputs_.points, *logger_);
 }
 
 void OdometryPipeline::clear_point_store()

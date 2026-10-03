@@ -79,7 +79,7 @@ bool load_data(RecordingSource& recording,
 }
 
 void calculate_trajectory(
-    Trajectory& trajectory, Imu& imu_data, bool fusionConventionNwu, bool fusionConventionEnu, bool fusionConventionNed, double ahrs_gain, bool debugMsg, bool use_remove_imu_bias_from_first_stationary_scan, Logger& logger)
+    ImuTrajectory& trajectory, Imu& imu_data, bool fusionConventionNwu, bool fusionConventionEnu, bool fusionConventionNed, double ahrs_gain, bool debugMsg, bool use_remove_imu_bias_from_first_stationary_scan, Logger& logger)
 {
     FusionAhrs ahrs;
     FusionAhrsInitialise(&ahrs);
@@ -222,7 +222,7 @@ void calculate_trajectory(
 }
 
 bool compute_step_1(
-    std::vector<std::vector<Point3Di>>& pointsPerFile, const OdometryConfig &params, OdometryState& state, Trajectory& trajectory, std::vector<Window>& worker_data, PointStore& point_store, Logger& logger, ProgressReporter& progress, const Imu* imu_data)
+    std::vector<std::vector<Point3Di>>& pointsPerFile, const OdometryConfig &params, OdometryState& state, ImuTrajectory& trajectory, std::vector<Window>& windows, PointStore& point_store, Logger& logger, ProgressReporter& progress, const Imu* imu_data)
 {
     int number_of_initial_points = 0;
     double timestamp_begin = 0.0;
@@ -289,15 +289,15 @@ bool compute_step_1(
     int threshold = params.threshold_nr_poses;
 
     const int n_iter = poses.size() / threshold;
-    worker_data.clear();
-    worker_data.reserve(n_iter);
+    windows.clear();
+    windows.reserve(n_iter);
 
     for (size_t i = 0; i < n_iter; i++)
     {
         if (i % 50 == 0)
             progress.progress(i + 1, n_iter);
 
-        Window& wd = worker_data.emplace_back();  // construct in-place
+        Window& wd = windows.emplace_back();  // construct in-place
         wd.poses.reserve(threshold);
         wd.motion_model_poses.reserve(threshold);
         wd.timestamps.reserve(threshold);
@@ -363,7 +363,7 @@ bool compute_step_1(
         points.erase(it, points.end());
 
         if (points.size() <= 1000)
-            worker_data.pop_back();
+            windows.pop_back();
         else
         {
             std::vector<Point3Di> intermediate_points;
@@ -371,7 +371,7 @@ bool compute_step_1(
             if (params.decimation > 0.0 && points.size() > 1000)
                 intermediate_points = decimate(points, params.decimation, params.decimation, params.decimation);
 
-            const std::size_t window = worker_data.size() - 1;
+            const std::size_t window = windows.size() - 1;
 
             if (!point_store.save(PointSet::WindowOriginal, window, points))
                 log_info(logger) << "problem with point store: original points of window " << window;
@@ -385,37 +385,37 @@ bool compute_step_1(
     }
     progress.progress(n_iter, n_iter);
 
-    state.m_g = worker_data[0].poses[0];
+    state.m_g = windows[0].poses[0];
     return true;
 }
 
-void run_consistency(std::vector<Window> &worker_data, const OdometryConfig &params, PointStore &point_store, Logger &logger)
+void run_consistency(std::vector<Window> &windows, const OdometryConfig &params, PointStore &point_store, Logger &logger)
 {
     log_info(logger) << "Point cloud consistency and trajectory smoothness START";
     for (int i = 0; i < params.num_constistency_iter; i++)
     {
         log_info(logger) << "Iteration " << i + 1 << " of " << params.num_constistency_iter;
-        for (int ii = 0; ii < worker_data.size(); ii++)
+        for (int ii = 0; ii < windows.size(); ii++)
         {
-            worker_data[ii].motion_model_poses = worker_data[ii].poses;
+            windows[ii].motion_model_poses = windows[ii].poses;
         }
         if (!params.use_mutliple_gaussian)
         {
-            Consistency(worker_data, params, point_store, logger);
+            Consistency(windows, params, point_store, logger);
         }
         else
         {
-            Consistency2(worker_data, params, point_store, logger);
+            Consistency2(windows, params, point_store, logger);
         }
     }
     log_info(logger) << "Point cloud consistency and trajectory smoothness FINISHED";
 }
 
-void save_result(std::vector<Window> &worker_data, const OdometryConfig &params, const OdometryState &state, const GuiPreferences &gui, double elapsed_time_s, ResultSink &sink, PointStore &point_store, Logger &logger)
+void save_result(std::vector<Window> &windows, const OdometryConfig &params, const OdometryState &state, const GuiPreferences &gui, double elapsed_time_s, ResultSink &sink, PointStore &point_store, Logger &logger)
 {
     sink.begin();
     // concatenate data
-    std::vector<Window> worker_data_concatenated;
+    std::vector<Window> chunks;
     Window wd;
     int counter = 0;
     int pose_offset = 0;
@@ -423,7 +423,7 @@ void save_result(std::vector<Window> &worker_data, const OdometryConfig &params,
 
     std::vector<Point3Di> original_points_to_save;
     int original_points_to_save_counter = 0;
-    for (int i = 0; i < worker_data.size(); i++)
+    for (int i = 0; i < windows.size(); i++)
     {
         std::vector<Point3Di> original_points;
         if (!point_store.load(PointSet::WindowOriginal, i, original_points))
@@ -431,7 +431,7 @@ void save_result(std::vector<Window> &worker_data, const OdometryConfig &params,
 
         if (i % 1000 == 0)
         {
-            log_info(logger) << "processing worker_data " << i + 1 << "/" << (int)worker_data.size() << " ";
+            log_info(logger) << "processing window " << i + 1 << "/" << (int)windows.size() << " ";
         }
         auto tmp_data = original_points;
         point_sizes_per_chunk.push_back(tmp_data.size());
@@ -441,16 +441,16 @@ void save_result(std::vector<Window> &worker_data, const OdometryConfig &params,
         }
 
         wd.poses.insert(std::end(wd.poses),
-                                          std::begin(worker_data[i].poses), std::end(worker_data[i].poses));
+                                          std::begin(windows[i].poses), std::end(windows[i].poses));
 
         wd.timestamps.insert(std::end(wd.timestamps),
-                                                     std::begin(worker_data[i].timestamps), std::end(worker_data[i].timestamps));
+                                                     std::begin(windows[i].timestamps), std::end(windows[i].timestamps));
 
         original_points_to_save.insert(std::end(original_points_to_save),
                                        std::begin(tmp_data), std::end(tmp_data));
 
-        wd.imu_angles.insert(std::end(wd.imu_angles), std::begin(worker_data[i].imu_angles), std::end(worker_data[i].imu_angles));
-        pose_offset += worker_data[i].poses.size();
+        wd.imu_angles.insert(std::end(wd.imu_angles), std::begin(windows[i].imu_angles), std::end(windows[i].imu_angles));
+        pose_offset += windows[i].poses.size();
 
         counter++;
         if (counter > 50)
@@ -462,7 +462,7 @@ void save_result(std::vector<Window> &worker_data, const OdometryConfig &params,
 
             original_points_to_save_counter++;
 
-            worker_data_concatenated.push_back(wd);
+            chunks.push_back(wd);
             wd.poses.clear();
             wd.timestamps.clear();
             original_points_to_save.clear();
@@ -482,7 +482,7 @@ void save_result(std::vector<Window> &worker_data, const OdometryConfig &params,
 
         original_points_to_save_counter++;
 
-        worker_data_concatenated.push_back(wd);
+        chunks.push_back(wd);
     }
 
     sink.point_sizes(point_sizes_per_chunk);
@@ -492,7 +492,7 @@ void save_result(std::vector<Window> &worker_data, const OdometryConfig &params,
     if (params.export_merged_laz)
         sink.open_merged_cloud();
 
-    for (int i = 0; i < worker_data_concatenated.size(); i++)
+    for (int i = 0; i < chunks.size(); i++)
     {
         std::vector<int> index_poses_i;
 
@@ -505,14 +505,14 @@ void save_result(std::vector<Window> &worker_data, const OdometryConfig &params,
             log_info(logger) << "problem with point store: session chunk " << i;
 
         points_to_vector(
-            original_points_to_save, worker_data_concatenated[i].poses,
+            original_points_to_save, chunks[i].poses,
             params.threshould_output_filter, &index_poses_i, global_pointcloud, intensity, timestamps, true, params.save_index_pose);
         sink.chunk_cloud(i, global_pointcloud, intensity, timestamps);
 
         if (params.export_merged_laz)
         {
             // chunk points are stored relative to the chunk's first pose: back to world coordinates
-            const Eigen::Affine3d &chunk_pose = worker_data_concatenated[i].poses[0];
+            const Eigen::Affine3d &chunk_pose = chunks[i].poses[0];
             std::vector<Eigen::Vector3d> world(global_pointcloud.size());
             for (size_t k = 0; k < global_pointcloud.size(); k++)
                 world[k] = chunk_pose * global_pointcloud[k];
@@ -523,15 +523,15 @@ void save_result(std::vector<Window> &worker_data, const OdometryConfig &params,
             index_poses.push_back(index_poses_i);
         }
         
-        m_poses.push_back(worker_data_concatenated[i].poses[0]);
+        m_poses.push_back(chunks[i].poses[0]);
 
         // trajectory, relative to the chunk's first node
         std::vector<TrajectoryRow> rows;
-        rows.reserve(worker_data_concatenated[i].poses.size());
-        for (int j = 0; j < worker_data_concatenated[i].poses.size(); j++)
+        rows.reserve(chunks[i].poses.size());
+        for (int j = 0; j < chunks[i].poses.size(); j++)
         {
-            auto pose = worker_data_concatenated[i].poses[0].inverse() * worker_data_concatenated[i].poses[j];
-            rows.push_back({worker_data_concatenated[i].timestamps[j], pose, worker_data_concatenated[i].imu_angles[j]});
+            auto pose = chunks[i].poses[0].inverse() * chunks[i].poses[j];
+            rows.push_back({chunks[i].timestamps[j], pose, chunks[i].imu_angles[j]});
         }
         if (!sink.chunk_trajectory(i, rows))
             return;
@@ -550,19 +550,19 @@ void save_result(std::vector<Window> &worker_data, const OdometryConfig &params,
     summary.decimation = params.decimation;
     summary.threshold_nr_poses = params.threshold_nr_poses;
     summary.index_poses = params.save_index_pose;
-    summary.chunk_count = worker_data_concatenated.size();
+    summary.chunk_count = chunks.size();
     sink.session(summary);
 
     // parameters (loadable TOML) and the processing results report
     sink.parameters(params, state.paths, gui);
-    sink.processing_results(params, state, worker_data, elapsed_time_s);
+    sink.processing_results(params, state, windows, elapsed_time_s);
 }
 
-void save_trajectory_to_ascii(std::vector<Window> &worker_data, std::string output_file_name)
+void save_trajectory_to_ascii(std::vector<Window> &windows, std::string output_file_name)
 {
     ofstream file;
     file.open(output_file_name);
-    for (const auto &wd : worker_data)
+    for (const auto &wd : windows)
     {
         for (const auto &it : wd.poses)
         {

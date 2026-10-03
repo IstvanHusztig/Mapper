@@ -295,10 +295,10 @@ namespace
     }
 } // namespace
 
-int run_loop_closure(std::vector<Window> &worker_data, const OdometryConfig &params, PointStore &point_store, Logger &logger)
+int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params, PointStore &point_store, Logger &logger)
 {
     const int windows_per_segment = std::max(1, params.loop_closure_segment_windows);
-    const int n_windows = static_cast<int>(worker_data.size());
+    const int n_windows = static_cast<int>(windows.size());
     if (n_windows < 2 * windows_per_segment)
         return 0;
     log_info(logger) << "loop closure START";
@@ -310,15 +310,15 @@ int run_loop_closure(std::vector<Window> &worker_data, const OdometryConfig &par
         Segment s;
         s.first_window = w0;
         s.last_window = std::min(n_windows, w0 + windows_per_segment) - 1;
-        s.pose = worker_data[w0].poses.front();
-        s.t_begin = worker_data[w0].timestamps.front().first;
-        s.t_end = worker_data[s.last_window].timestamps.back().first;
+        s.pose = windows[w0].poses.front();
+        s.t_begin = windows[w0].timestamps.front().first;
+        s.t_end = windows[s.last_window].timestamps.back().first;
         Eigen::Vector3d sum = Eigen::Vector3d::Zero();
         int count = 0;
         std::vector<Eigen::Vector3d> points;
         for (int w = s.first_window; w <= s.last_window; w++)
         {
-            const auto &tr = worker_data[w].poses;
+            const auto &tr = windows[w].poses;
             for (const auto &node : tr)
             {
                 sum += node.translation();
@@ -419,15 +419,15 @@ int run_loop_closure(std::vector<Window> &worker_data, const OdometryConfig &par
         const double t1 = has_next ? segments[k + 1].t_begin : segments[k].t_end;
         for (int w = segments[k].first_window; w <= segments[k].last_window; w++)
         {
-            auto &tr = worker_data[w].poses;
-            const auto &ts = worker_data[w].timestamps;
+            auto &tr = windows[w].poses;
+            const auto &ts = windows[w].timestamps;
             for (size_t n = 0; n < tr.size(); n++)
             {
                 const double f = (has_next && t1 > t0) ? std::clamp((ts[n].first - t0) / (t1 - t0), 0.0, 1.0) : 0.0;
                 const Eigen::Affine3d C = has_next ? interpolate(correction[k], correction[k + 1], f) : correction[k];
                 tr[n] = C * tr[n];
             }
-            worker_data[w].motion_model_poses = tr;
+            windows[w].motion_model_poses = tr;
         }
     }
     double max_shift = 0.0;

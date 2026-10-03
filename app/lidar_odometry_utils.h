@@ -335,8 +335,8 @@ void optimize_sf2(std::vector<Point3Di> &intermediate_points, std::vector<Point3
                   const std::vector<Eigen::Affine3d> &intermediate_trajectory_motion_model,
                   const NDT::GridParameters &rgd_params, bool useMultithread, double wx, double wy, double wz, double wom, double wfi, double wka);
 
-bool compute_step_2(std::vector<Window> &worker_data, const OdometryConfig &params, OdometryState &state, double &ts_failure, bool debugMsg, PointStore &point_store, PreviewSink &preview, Logger &logger, ProgressReporter &progress);
+bool compute_step_2(std::vector<Window> &windows, const OdometryConfig &params, OdometryState &state, double &ts_failure, bool debugMsg, PointStore &point_store, PreviewSink &preview, Logger &logger, ProgressReporter &progress);
 
-void Consistency(std::vector<Window> &worker_data, const OdometryConfig &params, PointStore &point_store, Logger &logger);
-void Consistency2(std::vector<Window> &worker_data, const OdometryConfig &params, PointStore &point_store, Logger &logger);
+void Consistency(std::vector<Window> &windows, const OdometryConfig &params, PointStore &point_store, Logger &logger);
+void Consistency2(std::vector<Window> &windows, const OdometryConfig &params, PointStore &point_store, Logger &logger);
 #endif

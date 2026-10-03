@@ -19,7 +19,7 @@ Every code commit: both presets build `dMapper` and `lidar_odometry_tests`; `cte
 
 ## 2. Variable names
 
-- [ ] 2.1 Rename `worker_data` → `windows` (including `OdometryPipeline::windows`, the GUI, `ResultSink::processing_results`' parameter), `worker_data_concatenated` → `chunks`, `Trajectory` → `ImuTrajectory`, and `OdometryPipeline::trajectory` → `imu_trajectory` (design decision 2). Update the comments.
+- [x] 2.1 Rename `worker_data` → `windows` (including `OdometryPipeline::windows`, the GUI, `ResultSink::processing_results`' parameter), `worker_data_concatenated` → `chunks`, `Trajectory` → `ImuTrajectory`, and `OdometryPipeline::trajectory` → `imu_trajectory` (design decision 2). Update the comments.
 
   Verify that a grep for `worker_data|\bTrajectory\b` in `app/` finds nothing, apart from `TrajectoryRow`. Run the step checks. Commit.
 

@@ -15,7 +15,7 @@
 // Each stage is reported to the ProgressReporter (with a pause checkpoint at its start); messages go to
 // the Logger. The pipeline owns the run's inputs (recording, point store, preview). The config, logger and
 // reporter must outlive the pipeline. The run's data members are public because
-// the GUI views and edits them (trajectory gizmo, export).
+// the GUI views them (trajectory, point cloud preview).
 class OdometryPipeline
 {
 public:
@@ -44,8 +44,8 @@ public:
 
     std::vector<std::vector<Point3Di>> points_per_file;
     Imu imu;
-    Trajectory trajectory;
-    std::vector<Window> worker_data;
+    ImuTrajectory imu_trajectory; // AHRS orientation per IMU sample
+    std::vector<Window> windows;
     OdometryState state;
 
 private:

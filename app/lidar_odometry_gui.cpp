@@ -164,7 +164,7 @@ public:
     // adds windows next_window() .. limit-1, at most windows_per_frame of them
     void add_windows(const OdometryPipeline &run, std::size_t limit, Logger &logger)
     {
-        limit = std::min(limit, run.worker_data.size());
+        limit = std::min(limit, run.windows.size());
         bool added = false;
         for (std::size_t n = 0; n < windows_per_frame && next_window_ < limit && !capped_; n++)
             added |= add_window(run, next_window_++, logger);
@@ -214,7 +214,7 @@ private:
         std::vector<Point3Di> points;
         if (!run.load_window_points(window, points))
             return false;
-        const auto &trajectory = run.worker_data[window].poses;
+        const auto &trajectory = run.windows[window].poses;
         bool added = false;
         for (const auto &p : points)
         {
@@ -295,14 +295,14 @@ void update_preview()
         {
             const std::size_t before = preview_cloud.next_window();
             preview_cloud.add_windows(pipeline, gui_progress.windows_done(), console);
-            if (before < pipeline.worker_data.size() && preview_cloud.next_window() >= pipeline.worker_data.size())
+            if (before < pipeline.windows.size() && preview_cloud.next_window() >= pipeline.windows.size())
                 log_info(console) << "point cloud preview: " << preview_cloud.size() << " points after the odometry";
         }
     }
     else if (preview_final_pending)
     {
-        preview_cloud.add_windows(pipeline, pipeline.worker_data.size(), console);
-        if (preview_cloud.next_window() >= pipeline.worker_data.size())
+        preview_cloud.add_windows(pipeline, pipeline.windows.size(), console);
+        if (preview_cloud.next_window() >= pipeline.windows.size())
         {
             preview_final_pending = false;
             log_info(console) << "point cloud preview: " << preview_cloud.size() << " points (final)";
@@ -615,7 +615,7 @@ void draw_run_data()
         glPointSize(3);
         glColor3f(0, 1, 1);
         glBegin(GL_POINTS);
-        for (const auto &wd : pipeline.worker_data)
+        for (const auto &wd : pipeline.windows)
         {
             for (const auto &it : wd.poses)
                 glVertex3f(it(0, 3), it(1, 3), it(2, 3));
@@ -625,9 +625,9 @@ void draw_run_data()
 
         glColor3f(1, 0, 0);
         glBegin(GL_LINES);
-        if (pipeline.worker_data.size() > 0)
+        if (pipeline.windows.size() > 0)
         {
-            const auto &wd = pipeline.worker_data[pipeline.worker_data.size() - 1];
+            const auto &wd = pipeline.windows[pipeline.windows.size() - 1];
             if (wd.poses.size() > 0)
             {
                 const auto &it = wd.poses[wd.poses.size() - 1];
