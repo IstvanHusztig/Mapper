@@ -278,3 +278,43 @@ TEST_CASE("repropagate_window_tail continues the tail with the kept velocity and
             CHECK(w.poses[k].linear().isApprox(Eigen::Matrix3d::Identity(), 1e-9));
     }
 }
+
+TEST_CASE("convergence_of finds when the poses settle and when delta drops below the fast threshold")
+{
+    // 10 iterations of a 3-node window: node 2 moves by 1 cm, 1 mm, 0.1 mm, ... until iteration 6, then stays
+    std::vector<std::vector<Eigen::Affine3d>> poses_after;
+    std::vector<double> deltas;
+    double x = 0.0;
+    for (int i = 0; i < 10; i++)
+    {
+        if (i < 6)
+            x += 0.01 * std::pow(0.1, i);
+        poses_after.push_back({pose(0, 0, 0, 0), pose(1, 0, 0, 0), pose(2 + x, 0, 0, 0)});
+        deltas.push_back(0.5 * std::pow(0.1, i)); // 0.5, 0.05, 0.005 (< 1e-2 after 3 iterations), ...
+    }
+
+    const IterationConvergence c = convergence_of(poses_after, deltas, 1e-4, 0.001 * 3.14159265358979 / 180.0, 1e-2);
+    CHECK(c.iterations == 10);
+    // after iteration 3 (index 2) node 2 is 1e-5 + 1e-6 + 1e-7 short of the end: within 1e-4; after iteration 2 it is 1.1e-4 short
+    CHECK(c.settled_after == 3);
+    CHECK(c.fast_stop_after == 3);
+    CHECK(c.fast_stop_position_error_m == doctest::Approx(1.11e-5).epsilon(1e-6));
+    CHECK(c.fast_stop_rotation_error_rad == doctest::Approx(0.0));
+
+    SUBCASE("a rotation that settles late")
+    {
+        poses_after[7][1] = pose(1, 0, 0, 0.01); // iteration 8 rotates node 1 by 0.57 deg
+        const IterationConvergence r = convergence_of(poses_after, deltas, 1e-4, 0.001 * 3.14159265358979 / 180.0, 1e-2);
+        CHECK(r.settled_after == 9);
+    }
+
+    SUBCASE("a run cut short is measured against its last iteration")
+    {
+        poses_after.resize(2);
+        deltas.resize(2);
+        const IterationConvergence r = convergence_of(poses_after, deltas, 1e-4, 0.001 * 3.14159265358979 / 180.0, 1e-2);
+        CHECK(r.iterations == 2);
+        CHECK(r.settled_after == 2);
+        CHECK(r.fast_stop_after == 0);
+    }
+}

@@ -197,3 +197,45 @@ void repropagate_window_tail(Window &window, int tail_nodes, const Eigen::Vector
         }
     }
 }
+
+IterationConvergence convergence_of(const std::vector<std::vector<Eigen::Affine3d>> &poses_after, const std::vector<double> &deltas,
+                                    double settle_position_m, double settle_rotation_rad, double fast_delta)
+{
+    IterationConvergence r;
+    r.iterations = static_cast<int>(poses_after.size());
+    if (poses_after.empty())
+        return r;
+    const std::vector<Eigen::Affine3d> &last = poses_after.back();
+
+    // largest position and rotation difference of a pose list from the last result
+    const auto difference = [&](const std::vector<Eigen::Affine3d> &poses)
+    {
+        std::pair<double, double> d{0.0, 0.0};
+        for (size_t k = 0; k < poses.size() && k < last.size(); k++)
+        {
+            d.first = std::max(d.first, (poses[k].translation() - last[k].translation()).norm());
+            d.second = std::max(d.second, Eigen::AngleAxisd(poses[k].linear() * last[k].linear().transpose()).angle());
+        }
+        return d;
+    };
+
+    r.settled_after = r.iterations;
+    for (int i = r.iterations - 1; i >= 0; i--)
+    {
+        const auto d = difference(poses_after[i]);
+        if (d.first > settle_position_m || d.second > settle_rotation_rad)
+            break;
+        r.settled_after = i + 1;
+    }
+
+    for (size_t i = 0; i < deltas.size() && i < poses_after.size(); i++)
+        if (deltas[i] < fast_delta)
+        {
+            r.fast_stop_after = static_cast<int>(i) + 1;
+            const auto d = difference(poses_after[i]);
+            r.fast_stop_position_error_m = d.first;
+            r.fast_stop_rotation_error_rad = d.second;
+            break;
+        }
+    return r;
+}

@@ -63,3 +63,17 @@ bool is_turn_window(const Window &window, double threshold_rad_s);
 // bias_update) and the velocity of the 20 nodes before it; the next window starts from the re-propagated last node.
 // Does nothing for tail_nodes <= 0 or a window too short for the velocity span.
 void repropagate_window_tail(Window &window, int tail_nodes, const Eigen::Vector3d &bias_update);
+
+// how a window's Levenberg-Marquardt iterations converged (diagnostics of log_iteration_convergence)
+struct IterationConvergence
+{
+    int iterations = 0;                    // iterations that ran
+    int settled_after = 0;                 // from this many iterations on, the poses stay within the settle limits of the last result
+    int fast_stop_after = 0;               // the first iteration count with delta below fast_delta (0: never)
+    double fast_stop_position_error_m = 0.0; // largest node distance between the poses at fast_stop_after and the last result
+    double fast_stop_rotation_error_rad = 0.0;
+};
+
+// poses_after[i] / deltas[i]: the window's poses and delta after iteration i + 1; measured against the last entry
+IterationConvergence convergence_of(const std::vector<std::vector<Eigen::Affine3d>> &poses_after, const std::vector<double> &deltas,
+                                    double settle_position_m, double settle_rotation_rad, double fast_delta);
