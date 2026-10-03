@@ -8,6 +8,10 @@
 // re-chain the window's poses so that its first node lies at start, keeping every relative pose
 void place_window_after(Window &window, const Eigen::Affine3d &start);
 
+// place windows[first], windows[first + 1], ... in order, each after the last node of the window before it;
+// does nothing for first == 0 or first >= windows.size()
+void place_windows_after(std::vector<Window> &windows, size_t first);
+
 // the previous window's final world-frame velocity, the prior of the next window
 struct PreviousVelocity
 {

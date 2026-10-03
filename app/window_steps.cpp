@@ -18,6 +18,14 @@ void place_window_after(Window &window, const Eigen::Affine3d &start)
     }
 }
 
+void place_windows_after(std::vector<Window> &windows, size_t first)
+{
+    if (first == 0)
+        return;
+    for (size_t j = first; j < windows.size(); j++)
+        place_window_after(windows[j], windows[j - 1].poses[windows[j - 1].poses.size() - 1]);
+}
+
 PreviousVelocity estimate_previous_velocity(const Window &previous, const Window &window, int span_nodes, double max_speed_mps)
 {
     PreviousVelocity r;

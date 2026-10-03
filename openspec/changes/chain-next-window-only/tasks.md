@@ -10,7 +10,7 @@ Close the GUI before building.
 
 ## 1. Helper and tests
 
-- [ ] 1.1 Add `place_windows_after(std::vector<Window> &windows, size_t first)` to `app/window_steps.{h,cpp}`. It places `windows[first..]` each after the end of its predecessor, and does nothing when `first == 0` or `first >= windows.size()` (decision 3). Add tests to `tests/window_steps_test.cpp`:
+- [x] 1.1 Add `place_windows_after(std::vector<Window> &windows, size_t first)` to `app/window_steps.{h,cpp}`. It places `windows[first..]` each after the end of its predecessor, and does nothing when `first == 0` or `first >= windows.size()` (decision 3). Add tests to `tests/window_steps_test.cpp`:
   - after the call, each window from `first` on starts at its predecessor's last pose;
   - each window keeps its relative poses within 1e-12;
   - windows before `first` don't change;

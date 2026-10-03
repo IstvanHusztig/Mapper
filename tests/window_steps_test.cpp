@@ -50,6 +50,57 @@ TEST_CASE("place_window_after starts the window at the given pose and keeps its 
     }
 }
 
+TEST_CASE("place_windows_after chains the windows from first on, each after its predecessor's end")
+{
+    // windows at unrelated places, as cut from the data before the odometry
+    std::vector<Window> original;
+    for (int i = 0; i < 6; i++)
+        original.push_back(moving_window(25, 1.0 + 0.2 * i, 0.1 * i, pose(10.0 * i, -3.0 * i, 0.5 * i, 0.4 * i)));
+
+    std::vector<Window> windows = original;
+    place_windows_after(windows, 2);
+
+    for (size_t i = 0; i < 2; i++)
+        for (size_t k = 0; k < windows[i].poses.size(); k++)
+            CHECK(windows[i].poses[k].isApprox(original[i].poses[k], 0.0));
+    for (size_t i = 2; i < windows.size(); i++)
+    {
+        CHECK(windows[i].poses[0].isApprox(windows[i - 1].poses.back(), 1e-12));
+        for (size_t k = 1; k < windows[i].poses.size(); k++)
+        {
+            const Eigen::Affine3d rel_new = windows[i].poses[k - 1].inverse() * windows[i].poses[k];
+            const Eigen::Affine3d rel_old = original[i].poses[k - 1].inverse() * original[i].poses[k];
+            CHECK(rel_new.isApprox(rel_old, 1e-12));
+        }
+    }
+
+    SUBCASE("one call matches the old placement of all later windows after every window")
+    {
+        std::vector<Window> repeated = original;
+        for (size_t i = 0; i < repeated.size(); i++)
+            for (size_t j = i + 1; j < repeated.size(); j++)
+                place_window_after(repeated[j], repeated[j - 1].poses.back());
+
+        std::vector<Window> once = original;
+        place_windows_after(once, 1);
+        for (size_t i = 0; i < once.size(); i++)
+            for (size_t k = 0; k < once[i].poses.size(); k++)
+                CHECK((once[i].poses[k].matrix() - repeated[i].poses[k].matrix()).cwiseAbs().maxCoeff() < 1e-9);
+    }
+
+    SUBCASE("first = 0 and first = size change nothing")
+    {
+        for (size_t first : {size_t(0), windows.size()})
+        {
+            std::vector<Window> w = original;
+            place_windows_after(w, first);
+            for (size_t i = 0; i < w.size(); i++)
+                for (size_t k = 0; k < w[i].poses.size(); k++)
+                    CHECK(w[i].poses[k].isApprox(original[i].poses[k], 0.0));
+        }
+    }
+}
+
 TEST_CASE("estimate_previous_velocity measures the previous window's final velocity")
 {
     const Window previous = moving_window(50, 1.5, 0.0);
