@@ -10,7 +10,7 @@ There is no app change, so `44_short` is checked once, in 3.1 (design decision 7
 ## 1. Test target and fixtures
 
 - [x] 1.1 Add `app/scan_to_map.cpp` and `app/lidar_odometry_utils.cpp` to `tests/CMakeLists.txt`, with a comment that the tests compile them directly and don't link `core`. Add an empty `tests/scan_to_map_test.cpp`. Verify: both presets build `lidar_odometry_tests` without link errors, and `ctest` passes. If a symbol is missing, pause and report it; don't link `core`. Commit.
-- [ ] 1.2 Fixtures in `tests/scan_to_map_test.cpp` (design decisions 1–4):
+- [x] 1.2 Fixtures in `tests/scan_to_map_test.cpp` (design decisions 1–4):
   - the box-room and corridor scenes, with a fixed-seed jitter;
   - building the indoor and outdoor maps with `update_rgd`;
   - the synthetic window from a list of true poses: points per node in the node frame, timestamps;
