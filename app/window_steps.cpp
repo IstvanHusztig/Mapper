@@ -126,3 +126,39 @@ PosePrediction predict_window_poses(Window &window, const Window &previous, cons
     window.motion_model_poses = new_trajectory;
     return r;
 }
+
+GyroBiasState apply_gyro_bias_prior(Window &window, const GyroBiasState &carried, double bias_rw_rad)
+{
+    const auto &ts = window.timestamps;
+    const double window_duration = ts.size() > 1 ? ts.back().first - ts.front().first : 0.0;
+    GyroBiasState prior;
+    prior.mean = carried.mean;
+    prior.covariance = carried.covariance + Eigen::Matrix3d::Identity() * (bias_rw_rad * bias_rw_rad * window_duration);
+    window.gyro_bias.mean = carried.mean;
+    window.gyro_bias.covariance = prior.covariance;
+
+    // remove the carried bias from the IMU rotation increments of the initial guess (translations unchanged)
+    remove_gyro_bias_from_rotations(window.poses, ts, carried.mean);
+    window.motion_model_poses = window.poses;
+    return prior;
+}
+
+bool is_turn_window(const Window &window, double threshold_rad_s)
+{
+    const auto &tr = window.poses;
+    const auto &ts = window.timestamps;
+    if (tr.size() > 1 && ts.size() == tr.size())
+    {
+        double yaw = 0.0;
+        for (size_t k = 1; k < tr.size(); k++)
+        {
+            // world-frame rotation increment, its component about the vertical
+            const Eigen::AngleAxisd aa(Eigen::Matrix3d(tr[k].linear() * tr[k - 1].linear().transpose()));
+            yaw += aa.angle() * aa.axis().z();
+        }
+        const double duration = ts.back().first - ts.front().first;
+        if (duration > 0.0 && std::abs(yaw) / duration > threshold_rad_s)
+            return true;
+    }
+    return false;
+}

@@ -153,3 +153,35 @@ TEST_CASE("predict_window_poses guesses the window's motion")
             CHECK(w2.poses[k].translation().isApprox(end, 1e-12));
     }
 }
+
+TEST_CASE("apply_gyro_bias_prior grows the prior and removes the bias from the guess")
+{
+    const int n = 50;
+    const double bias = 0.1; // rad/s about z: the guess turns only because of it
+    Window w = moving_window(n, 1.0, bias);
+    GyroBiasState carried;
+    carried.mean = Eigen::Vector3d(0.0, 0.0, bias);
+    carried.covariance = Eigen::Matrix3d::Identity() * 1e-4;
+    const double rw = 0.01;
+
+    const GyroBiasState prior = apply_gyro_bias_prior(w, carried, rw);
+    const double duration = (n - 1) * dt;
+    CHECK(prior.mean == carried.mean);
+    CHECK(prior.covariance.isApprox(carried.covariance + Eigen::Matrix3d::Identity() * (rw * rw * duration), 1e-15));
+    CHECK(w.gyro_bias.mean == prior.mean);
+    CHECK(w.gyro_bias.covariance == prior.covariance);
+    for (int k = 0; k < n; k++)
+    {
+        CHECK(w.poses[k].linear().isApprox(Eigen::Matrix3d::Identity(), 1e-12));
+        CHECK(w.motion_model_poses[k].matrix() == w.poses[k].matrix());
+    }
+}
+
+TEST_CASE("is_turn_window compares the mean yaw rate with the threshold")
+{
+    const double threshold = 30.0 * 3.14159265358979323846 / 180.0; // 30 deg/s
+    CHECK(is_turn_window(moving_window(40, 1.0, 1.0), threshold));         // 57 deg/s
+    CHECK(is_turn_window(moving_window(40, 1.0, -1.0), threshold));        // either direction
+    CHECK_FALSE(is_turn_window(moving_window(40, 1.0, 0.2), threshold));   // 11 deg/s
+    CHECK_FALSE(is_turn_window(moving_window(1, 1.0, 1.0), threshold));    // a single node
+}

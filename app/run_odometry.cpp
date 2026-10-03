@@ -171,16 +171,9 @@ bool compute_step_2(std::vector<Window> &windows, const OdometryConfig &params, 
             // gyro bias: prior from the previous window, grown by the bias random walk over this window
             if (setup.rotation_options.estimate_bias)
             {
-                const auto &ts = windows[i].timestamps;
-                const double window_duration = ts.size() > 1 ? ts.back().first - ts.front().first : 0.0;
-                setup.rotation_options.bias_prior_mean = carry.bias.mean;
-                setup.rotation_options.bias_prior_cov = carry.bias.covariance + Eigen::Matrix3d::Identity() * (setup.bias_rw_rad * setup.bias_rw_rad * window_duration);
-                windows[i].gyro_bias.mean = carry.bias.mean;
-                windows[i].gyro_bias.covariance = setup.rotation_options.bias_prior_cov;
-
-                // remove the carried bias from the IMU rotation increments of the initial guess (translations unchanged)
-                remove_gyro_bias_from_rotations(windows[i].poses, ts, carry.bias.mean);
-                windows[i].motion_model_poses = windows[i].poses;
+                const GyroBiasState prior = apply_gyro_bias_prior(windows[i], carry.bias, setup.bias_rw_rad);
+                setup.rotation_options.bias_prior_mean = prior.mean;
+                setup.rotation_options.bias_prior_cov = prior.covariance;
             }
 
             // the first window is registered against the initial map, which is built from not yet optimized points
@@ -190,26 +183,10 @@ bool compute_step_2(std::vector<Window> &windows, const OdometryConfig &params, 
             window_rotation_options.estimate_bias = setup.rotation_options.estimate_bias && i > 0;
 
             // tight turns: trust the gyro more (rotation about the vertical from the IMU-based initial guess)
-            if (params.rotation_sigma_inflation_k_turn > 0.0)
+            if (params.rotation_sigma_inflation_k_turn > 0.0 && is_turn_window(windows[i], params.turn_rate_threshold_deg_s * DEG_TO_RAD))
             {
-                const auto &tr = windows[i].poses;
-                const auto &ts = windows[i].timestamps;
-                if (tr.size() > 1 && ts.size() == tr.size())
-                {
-                    double yaw = 0.0;
-                    for (size_t k = 1; k < tr.size(); k++)
-                    {
-                        // world-frame rotation increment, its component about the vertical
-                        const Eigen::AngleAxisd aa(Eigen::Matrix3d(tr[k].linear() * tr[k - 1].linear().transpose()));
-                        yaw += aa.angle() * aa.axis().z();
-                    }
-                    const double duration = ts.back().first - ts.front().first;
-                    if (duration > 0.0 && std::abs(yaw) / duration > params.turn_rate_threshold_deg_s * DEG_TO_RAD)
-                    {
-                        window_rotation_options.inflation_k = params.rotation_sigma_inflation_k_turn;
-                        carry.turn_windows++;
-                    }
-                }
+                window_rotation_options.inflation_k = params.rotation_sigma_inflation_k_turn;
+                carry.turn_windows++;
             }
 
             // accelerometer term (from the second window on, like the bias): offset prior grown by its random walk

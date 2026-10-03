@@ -45,3 +45,11 @@ struct PosePrediction
 // (before_previous may be null); poses and motion_model_poses are both set to the guess
 PosePrediction predict_window_poses(Window &window, const Window &previous, const Window *before_previous,
                                     const Eigen::Vector3d &prev_velocity, const PosePredictionOptions &options);
+
+// gyro-bias prior of window: the carried estimate, its covariance grown by the bias random walk over the window;
+// sets window.gyro_bias to it and removes the carried bias from the guess's rotation increments (translations unchanged);
+// returns the prior
+GyroBiasState apply_gyro_bias_prior(Window &window, const GyroBiasState &carried, double bias_rw_rad);
+
+// true if the guess turns about the vertical faster than threshold_rad_s on average over the window
+bool is_turn_window(const Window &window, double threshold_rad_s);

@@ -32,7 +32,7 @@ The GUI must be closed while building. Code is moved, not rewritten: `git diff -
   - the mean-shift fallback.
 
   Run the step checks. Commit.
-- [ ] 2.4 Add `apply_gyro_bias_prior` and `is_turn_window`. Tests:
+- [x] 2.4 Add `apply_gyro_bias_prior` and `is_turn_window`. Tests:
   - the prior covariance grows by rw² · duration;
   - the bias is removed from the guess;
   - a window turning faster than the threshold is a turn, a slower one is not.
