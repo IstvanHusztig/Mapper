@@ -25,7 +25,7 @@ The GUI must be closed while building. Every move goes through `git diff`, which
     - entries outside the band are dropped;
     - `SumBlocks` adds each block at its offset and subtracts the right-hand side.
   - Compile `app/normal_equations.cpp` into the tests. Run the step checks. Commit.
-- [ ] 2.3 Move the IMU kinematics helpers to `app/imu_kinematics.{h,cpp}`. Add `tests/imu_kinematics_test.cpp`, which builds synthetic trajectories in code:
+- [x] 2.3 Move the IMU kinematics helpers to `app/imu_kinematics.{h,cpp}`. Add `tests/imu_kinematics_test.cpp`, which builds synthetic trajectories in code:
   - `exp_so3`: the zero vector gives the identity, and (0, 0, π/2) gives a 90° turn about z;
   - `remove_gyro_bias_from_rotations`:
     - a trajectory turning at a constant rate b about z, with bias b, becomes non-rotating;
