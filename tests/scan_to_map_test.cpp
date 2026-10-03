@@ -316,3 +316,86 @@ TEST_CASE("scan-to-map fixtures: scene points on the faces, maps filled, points 
     CHECK(*std::min_element(in_range.begin(), in_range.end()) >= 40);
     CHECK(*std::max_element(in_range.begin(), in_range.end()) <= 80);
 }
+
+namespace
+{
+    // the drifting guess of a gyro bias: true translations, yaw off by bias * t (node 0 is exact, as the fix origin holds it)
+    std::vector<Eigen::Affine3d> drifting_guess(const std::vector<Eigen::Affine3d> &truth, double bias_rad_s)
+    {
+        std::vector<Eigen::Affine3d> guess = truth;
+        for (int k = 0; k < static_cast<int>(guess.size()); k++)
+            guess[k].linear() = Eigen::AngleAxisd(bias_rad_s * k * node_dt, Eigen::Vector3d::UnitZ()).toRotationMatrix() * truth[k].linear();
+        return guess;
+    }
+}
+
+TEST_CASE("scan-to-map: a perfect guess stays at the truth")
+{
+    const Options o = options_from(test_config());
+    const Scene s = room();
+    Maps maps = build_maps(s, o.scan_to_map);
+    const std::vector<Eigen::Affine3d> truth = true_poses();
+    std::vector<Point3Di> points = observe(s, truth);
+    Window w = make_window(truth);
+    NullLogger logger;
+
+    // Measured 2026-10-04: 1.5 mm, 0.046 deg, delta 1.5e-4. About 1 mm of the position error is systematic: update_rgd keeps
+    // a bucket's first point as its mean (with the true centroids it is 0.5 mm). The rotation error scales with the point
+    // noise (0.022 deg at +-1 mm). The limits record today's behaviour with margin.
+    const double delta = run_iterations(points, w, maps, o, 5.0, 30, logger);
+    const PoseError e = max_error(w.poses, truth);
+    MESSAGE("perfect guess after 30 iterations: position ", e.position * 1000.0, " mm, rotation ", e.rotation / deg, " deg, delta ", delta);
+    CHECK(e.position < 0.003);
+    CHECK(e.rotation < 0.1 * deg);
+    CHECK(delta < 1e-3);
+}
+
+TEST_CASE("scan-to-map: a yaw drift is corrected")
+{
+    const Options o = options_from(test_config());
+    const Scene s = room();
+    Maps maps = build_maps(s, o.scan_to_map);
+    const std::vector<Eigen::Affine3d> truth = true_poses();
+    std::vector<Point3Di> points = observe(s, truth);
+    const double bias = 0.5 * deg;
+    const std::vector<Eigen::Affine3d> guess = drifting_guess(truth, bias);
+    Window w = make_window(guess);
+    NullLogger logger;
+
+    run_iterations(points, w, maps, o, 5.0, 30, logger);
+    const PoseError before = max_error(guess, truth);
+    const PoseError after = max_error(w.poses, truth);
+    const double heading_before = end_heading_error(guess, truth);
+    const double heading_after = end_heading_error(w.poses, truth);
+    MESSAGE("yaw drift: end heading error ", heading_before / deg, " -> ", heading_after / deg, " deg; largest position error ",
+            before.position * 1000.0, " -> ", after.position * 1000.0, " mm; largest rotation error ", before.rotation / deg, " -> ",
+            after.rotation / deg, " deg");
+    // Measured 2026-10-04: 0.245 -> 0.016 deg at the end; the positions (exact in the guess) pick up 1.8 mm, the same
+    // systematic offset as with a perfect guess (bucket mean = first point)
+    CHECK(std::abs(heading_after) <= 0.1 * std::abs(heading_before));
+    CHECK(after.position < 0.003);
+}
+
+TEST_CASE("scan-to-map: the gyro bias is estimated")
+{
+    OdometryConfig c = test_config();
+    c.use_gyro_bias_estimation = true;
+    const Options o = options_from(c);
+    const Scene s = room();
+    Maps maps = build_maps(s, o.scan_to_map);
+    const std::vector<Eigen::Affine3d> truth = true_poses();
+    std::vector<Point3Di> points = observe(s, truth);
+    const double bias = 0.5 * deg;
+    const std::vector<Eigen::Affine3d> guess = drifting_guess(truth, bias);
+    Window w = make_window(guess);
+    NullLogger logger;
+
+    run_iterations(points, w, maps, o, 5.0, 30, logger);
+    const Eigen::Vector3d b = w.gyro_bias.mean / deg;
+    const PoseError after = max_error(w.poses, truth);
+    MESSAGE("estimated bias ", b.x(), " ", b.y(), " ", b.z(), " deg/s (injected 0 0 0.5); end heading error ",
+            end_heading_error(w.poses, truth) / deg, " deg; largest position error ", after.position * 1000.0, " mm");
+    CHECK(b.z() == doctest::Approx(0.5).epsilon(0.2));
+    CHECK(std::abs(b.x()) < 0.05);
+    CHECK(std::abs(b.y()) < 0.05);
+}

@@ -5,11 +5,11 @@ The unit tests SHALL run the scan-to-map optimizer of one window on a synthetic 
 
 #### Scenario: A perfect initial guess
 - **WHEN** the window's initial guess equals the true trajectory in a closed room
-- **THEN** the optimized poses stay within 1 mm and 0.01° of the truth
+- **THEN** the optimized poses stay within 3 mm and 0.1° of the truth
 
 #### Scenario: A rotation drift in the initial guess
 - **WHEN** the initial guess turns away from the truth at a constant yaw rate, as a gyro bias makes it do, and the bias is not estimated
-- **THEN** the optimized poses end closer to the truth than the guess, and the heading error at the end of the window is reduced to at most 10 % of the guess's
+- **THEN** the heading error at the end of the window is reduced to at most 10 % of the guess's, and the positions stay within 3 mm of the truth
 
 #### Scenario: Gyro bias estimation
 - **WHEN** the same drifting guess is optimized with gyro-bias estimation on

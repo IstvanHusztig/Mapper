@@ -86,6 +86,18 @@ The loop around it is `run_lm_iterations` (`app/run_odometry.cpp`, file-local). 
 
    If a target is missed, implementation pauses and the numbers are reported: it may be a real property of the optimizer, for example the 1e-4 m translation priors. The user decides whether to accept a different target or to look into the optimizer.
 
+   **Outcome (2026-10-04).** 2.1 and 2.2 missed their targets:
+   - a perfect guess moved by 1.5 mm and 0.046°;
+   - the drift test's positions picked up 1.8 mm.
+
+   Two experiments found the cause. About 1 mm is systematic: `update_rgd` keeps a bucket's first point as its mean, and with true centroids the error was 0.5 mm. The rotation error scales with the point noise (0.022° at ±1 mm); with no noise the buckets become flat, degenerate and are rejected (3.7 mm, 0.6°).
+
+   The user chose to record today's behaviour with margin:
+   - perfect guess within 3 mm, 0.1° and `delta` below 1e-3;
+   - drift: heading at most 10 %, positions within 3 mm.
+
+   Updating the bucket mean in `update_rgd` is a separate follow-up, because it changes every run's results.
+
 7. **No app change, so no full 44.** `dMapper` is rebuilt from unchanged sources, so a `44_short` IDENTICAL check is enough to show it. This is the usual rule's exception for test-only changes, stated here so it isn't silently skipped.
 
 8. **The iteration count is measured on the two drift scenarios.**
