@@ -1,7 +1,7 @@
 # Architecture goals
 
 Status: **in progress.** This is the target architecture for dMapper (`dMapper.exe`) and the
-plan for getting there. Each migration step is its own OpenSpec change; steps 0–5 are done (see
+plan for getting there. Each migration step is its own OpenSpec change; steps 0–5 and 6a are done (see
 the roadmap).
 
 ## Why
@@ -72,8 +72,9 @@ infrastructure and UI at the edge, and all source dependencies pointing inward.
   separate post-processing module on result folders.
 - ✅ `optimize_lidar_odometry` took about 35 positional arguments → since step 5b it takes a
   `Window` and option structs built from the config (15 parameters).
-- `lidar_odometry_utils_optimizers.cpp` (about 3,000 lines) mixes optimizer math, the window loop,
-  state hand-off and I/O → split into one domain service each.
+- ✅ `lidar_odometry_utils_optimizers.cpp` (about 3,000 lines) mixed optimizer math, the window loop,
+  state hand-off and I/O → since step 6a one file per service: `scan_to_map`, `robust_lidar_odometry`,
+  `consistency`, `imu_kinematics`, `normal_equations` and the window loop in `run_odometry`.
 - `core/` mixes pure math (NDT, ICP, pose graph) with I/O (LAZ export, session, file dialogs)
   → the pure parts feed the domain, the rest becomes infrastructure.
 
@@ -133,7 +134,12 @@ Each step is one OpenSpec change, validated against the baseline.
    - 5b. ✅ **Option structs** (done 2026-10-03): `optimize_lidar_odometry` takes the `Window` and
      `ScanToMapOptions`, `MotionModelOptions` and `VelocityPrior` (`app/optimizer_options.h`, built
      from `OdometryConfig`) instead of about 35 positional parameters.
-6. **Split the optimizer file** into domain services; first unit tests on synthetic data.
+6. **Split the optimizer file** into domain services, split into three changes:
+   - 6a. ✅ **One file per service** (done 2026-10-03): pure moves out of the 2,922-line file;
+     the first tests on synthetic data cover the IMU kinematics and the normal-equation helpers.
+   - 6b. **Window loop into named steps:** `compute_step_2` broken into functions with a
+     carried-state struct (velocity prior, gyro bias, acceleration offset, degeneracy gating, hand-off).
+   - 6c. **Synthetic scan-to-map test** of `optimize_lidar_odometry` (the tests then link `core`).
 7. **Layered CMake targets and folders;** move the `core/` pieces touched so far.
 
 ## 7. Rules and conventions

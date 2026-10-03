@@ -54,7 +54,7 @@ In more detail:
   - It builds the windows from the `ImuTrajectory`.
   - Every point is attached to the node just before its timestamp (at most 10 ms), so each point gets its own pose (motion compensation). Windows with too few points are dropped.
   - The original and decimated points go to the `PointStore`.
-- **`compute_step_2`** (`app/lidar_odometry_utils_optimizers.cpp`) runs the windows in order:
+- **`compute_step_2`** (`app/run_odometry.cpp`) runs the windows in order:
   - The previous window's end gives the start guess and the velocity.
   - Its `gyro_bias` becomes the next window's prior (the prior's uncertainty grows with time).
   - `optimize_lidar_odometry` adjusts the window's `poses` against the NDT map of the points so far, the motion-model prior and the gyro bias.

@@ -234,7 +234,7 @@
 
 <li class="step" id="s-map">
 <h3>The initial map</h3>
-<div class="where">compute_step_2 (start) · app/lidar_odometry_utils_optimizers.cpp</div>
+<div class="where">compute_step_2 (start) · app/run_odometry.cpp</div>
 <p>The set-aside initial points are transformed with the <b>first pose only</b> (no per-point motion compensation) and inserted into two <b>NDT grids</b>. Space is divided into cubes (0.15 m "indoor" and 0.4 m "outdoor" grid), and each cube stores the mean and covariance of the points in it, i.e. a small Gaussian that describes the local surface. A cube with 3 or more points also gets a normal vector facing the sensor.</p>
 <p>Because this map is not motion-compensated, stand still for the first second or two if you can. The first window is registered against this map, so its misfit is not allowed to affect the gyro bias estimate.</p>
 <div class="params"><span>in_out_params_indoor.resolution_*</span><span>in_out_params_outdoor.resolution_*</span><span>threshold_initial_points</span></div>
@@ -242,7 +242,7 @@
 
 <li class="step" id="s-guess">
 <h3>Initial guess for the next window</h3>
-<div class="where">compute_step_2 · app/lidar_odometry_utils_optimizers.cpp</div>
+<div class="where">compute_step_2 · app/run_odometry.cpp</div>
 <ul>
 <li>The window's first node is placed exactly on the previous window's last node.</li>
 <li>Rotations follow the IMU's relative rotations between nodes, <b>minus the gyro bias</b> estimated so far (bias × Δt per step).</li>
@@ -254,7 +254,7 @@
 
 <li class="step" id="s-opt">
 <h3>Window optimization</h3>
-<div class="where">optimize_lidar_odometry · app/lidar_odometry_utils_optimizers.cpp</div>
+<div class="where">optimize_lidar_odometry · app/scan_to_map.cpp</div>
 <p>The unknowns are the 6 pose parameters (x, y, z, ω, φ, κ) of every node of the window, plus 3 gyro-bias values: 6 × 360 + 3 = 2163 numbers. Each Levenberg–Marquardt iteration builds one least-squares system from these terms:</p>
 <ul>
 <li><b>Point to map (NDT, fine grid):</b> every decimated point with 3-D distance between <code>min_distance_lidar</code> and <code>max_distance_lidar</code> is transformed with its node's pose and looked up in the 0.15 m grid. Its distance to that cube's Gaussian, weighted by the inverse covariance, is minimized. Points hitting a cube whose normal faces away from the sensor, or whose covariance is degenerate, are skipped.</li>
@@ -271,7 +271,7 @@
 
 <li class="step" id="s-handoff">
 <h3>Hand-off and gyro bias</h3>
-<div class="where">compute_step_2 · app/lidar_odometry_utils_optimizers.cpp</div>
+<div class="where">compute_step_2 · app/run_odometry.cpp</div>
 <p>The last node of a window has no points, and the ones just before it have very few. Left free, they can spin by several degrees, and the next window would inherit that error permanently, which shows up as rotated "ghost" copies of walls. So after the optimization, the last <code>handoff_tail_nodes</code> nodes are <b>recomputed from the last well-constrained node</b> using the bias-corrected IMU rotation and the optimized velocity. The next window starts from that recomputed end.</p>
 <p>The window's bias estimate and its uncertainty become the prior for the next window, and they are printed and written to the results JSON.</p>
 <div class="params"><span>handoff_tail_nodes</span><span>gyro_bias_*</span></div>
@@ -279,7 +279,7 @@
 
 <li class="step" id="s-update">
 <h3>Map update</h3>
-<div class="where">compute_step_2 · app/lidar_odometry_utils_optimizers.cpp</div>
+<div class="where">compute_step_2 · app/run_odometry.cpp</div>
 <p>The window's decimated points, now transformed with their optimized poses, are added to both NDT grids (the Gaussians are updated incrementally). The map therefore grows with the whole recording. Once the travelled distance exceeds <code>sliding_window_trajectory_length_threshold</code>, the map is rebuilt from the most recent half of the points, voxel-decimated with <code>decimation</code>, which bounds memory on long runs. With the default 200 m this happens rarely on handheld recordings.</p>
 <div class="params"><span>sliding_window_trajectory_length_threshold</span></div>
 </li>

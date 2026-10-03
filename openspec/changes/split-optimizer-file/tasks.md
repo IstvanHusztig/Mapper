@@ -56,10 +56,10 @@ The GUI must be closed while building. Every move goes through `git diff`, which
 ## 3. Integration
 
 - [ ] 3.1 Full 44 in the background. Verify IDENTICAL with `tools/baseline/44.manifest.json`, or else that `compare_baseline.py --tolerance 1e-6` against the refreshed `raw data/44_baseline` passes. Report which.
-- [ ] 3.2 Docs. Commit.
+- [x] 3.2 Docs. Commit.
   - `CLAUDE.md`: pipeline step 4 and the Testing list name the new files; drop `optimize_icp`.
   - `docs/ARCHITECTURE.md`:
     - roadmap step 6 is split into 6a ✅, 6b (window loop into named steps) and 6c (synthetic scan-to-map test);
     - the §4 item about the 3,000-line file is marked solved.
   - `docs/PIPELINE.md` and the five `where` lines of `docs/index.html`: the new file names.
-- [ ] 3.3 Run `openspec validate split-optimizer-file --strict` and confirm it passes.
+- [x] 3.3 Run `openspec validate split-optimizer-file --strict` and confirm it passes.
