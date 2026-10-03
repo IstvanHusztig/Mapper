@@ -117,3 +117,20 @@ out/build/x64-Release/bin/cut_recording.exe "<raw data>/44" "<raw data>/44_short
 - Arguments: `<in_folder> <out_folder> <start_s> <duration_s>`, measured from the first IMU sample. It cuts every `.laz`/`.las` and `.csv` of the input folder and keeps their names.
 - Kept points are unchanged: the input header (point format, scale, offset) is reused, so the stored coordinates and every attribute are identical. After writing, every kept point is re-read and compared. IMU lines and the header line are copied byte for byte.
 - It refuses an output folder that already holds `.laz`, `.las` or `.csv` files. The input folder is never modified.
+
+## rename_identifiers.py
+
+Renames C++ identifiers in code only, never in comments, string or character literals. Used for the refactors' mechanical renames, so the compiler and the baseline check are the only things left to verify. Pure Python 3.
+
+```
+python tools/rename_identifiers.py app -r worker_data=windows -r WorkerData=Window --dry-run
+python tools/rename_identifiers.py app -m intermediate_trajectory=poses -m gyro_bias=gyro_bias.mean
+```
+
+- `-r OLD=NEW` renames every whole identifier `OLD`: variables, types, functions and parameters.
+- `-m OLD=NEW` renames `OLD` only as a member access, right after `.` or `->`, so a parameter or local with the same name is left alone. `NEW` may contain a dot (`gyro_bias.mean`).
+- `--dry-run` lists every hit as `file:line: old -> new | code`, without changing anything; review it before a real run.
+- **Paths:** files or folders (`.cpp,.cc,.c,.h,.hpp`; `--ext` changes the list, `--recursive` descends into sub-folders).
+- **Output:** line endings are kept. A summary per file and in total is printed.
+- **Exit codes:** 0 done, 2 usage error.
+- **Known limit:** raw string literals (`R"(...)"`) are treated as code.

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 dMapper started as a standalone extraction of the LiDAR odometry (step 1) application of the HDMapping (hd-mapping) repository. It is a C++20 CMake project that builds a single executable, `dMapper`, which computes LiDAR+IMU odometry from a recording folder (lidar*.laz + imu*.csv). All dependencies are vendored under `3rdparty/` (Eigen, freeglut, glew-cmake, LASzip, oneTBB, Fusion AHRS, imgui/ImGuizmo/implot, manif, nlohmann json, observation_equations, portable-file-dialogs) — no package manager, no network needed. Only OpenGL/GLU must come from the system.
 
-There are no linters or CI. Unit tests use doctest (`3rdparty/doctest`), and refactors are checked against a golden baseline (see Testing).
+There are no linters or CI. Unit tests use doctest (`3rdparty/doctest`), and refactors are checked against a golden baseline (see Testing). Mechanical renames in refactors are done with `tools/rename_identifiers.py` (code only, never comments or strings; `-m` for member accesses only; `--dry-run` first).
 
 ## Build
 
