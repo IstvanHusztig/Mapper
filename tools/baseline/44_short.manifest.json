@@ -1,20 +1,20 @@
 {
   "dataset": "44_short",
   "params": "settings/lidar-vertical.toml",
-  "commit": "889194c",
+  "commit": "102a7f2",
   "hd_cpu_optimization": "AUTO",
-  "created": "2026-10-01",
+  "created": "2026-10-03",
   "files": {
     "HDMapping_params_0.95.0_<DATETIME>.toml": "15d6c9f0955912f1194d439c309283907979905b5e855f0bc58d5e44255aebc9",
-    "HDMapping_results_0.95.0_<DATETIME>.json": "a88c6efb7e0053ce8a0c956aae8f98456fc3c94f415e3e33340a30181f856941",
+    "HDMapping_results_0.95.0_<DATETIME>.json": "c06d1cec544a90c193f2d440ccee292d721087e1d5ffdb28a2277274f55c1230",
     "point_sizes_per_chunk.json": "aa294b4d298e62209709b1aa747f7b9e405f8eb276d9b7d624734e3bcdbd39e4",
-    "scan_lio_0.laz": "d3b139c096125554d09fa149446e4b11ca30b31e7e4a81b4290dd63a0706a9a9",
-    "scan_lio_1.laz": "70cc092ee09d36658490530f5a55f9dbc9df2e762dfa585b8f5f4ca3cc791dd8",
+    "scan_lio_0.laz": "4fe0fbb35ac358131611daceb455c814833aae7c296751ea5bbedf7b82dc9a7a",
+    "scan_lio_1.laz": "c1472ea7e31bcd653d78e4d4ee11beefd2d95be603689c92a2e4e08aa581b486",
     "scan_lio_merged.laz": "8bd324788e6664bf99266b49357e91e1c10fb494bafe88bef06067f55ebdfc82",
-    "session.mjs": "9ed38613cc5a78c15453873b7bad025922a78b278c9620c661b52108621bb0ea",
+    "session.mjs": "d2ab978c0b7b38d3fc15e79474b9d78b95776a5649324c4af7f119591b918f9a",
     "session_ini_poses.mri": "0bf7684daf40e9c4918eac762fec38bc920b401a1a40d84729af47db25cf0f71",
     "session_poses.mrp": "0bf7684daf40e9c4918eac762fec38bc920b401a1a40d84729af47db25cf0f71",
-    "trajectory_lio_0.csv": "fcfe69b5dd7bead26a53e8b62c0774ef70184c21965ef2073e203f531b7a200b",
-    "trajectory_lio_1.csv": "8d8ca171335829df891cd53be391295116b9751900bcc4825c29a59f15ac1a00"
+    "trajectory_lio_0.csv": "eee84a4f1343cfba6e82d871841cb87816a656fbb3790381626d6e844863ffb7",
+    "trajectory_lio_1.csv": "4164c0aa6011c9393c2ac506fba9e53fbc07f87c8345eb5010e5e48992b14d12"
   }
 }
