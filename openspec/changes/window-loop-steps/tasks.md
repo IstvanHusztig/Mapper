@@ -59,7 +59,7 @@ The GUI must be closed while building. Code is moved, not rewritten: `git diff -
 
 ## 4. Integration
 
-- [ ] 4.1 Full 44 in the background. Verify IDENTICAL with `tools/baseline/44.manifest.json`, or else that `compare_baseline.py --tolerance 1e-6` against `raw data/44_baseline` passes. Report which.
+- [x] 4.1 Full 44 in the background. Verify IDENTICAL with `tools/baseline/44.manifest.json`, or else that `compare_baseline.py --tolerance 1e-6` against `raw data/44_baseline` passes. Report which. Result (2026-10-03): within tolerance, not identical — 5 of 35 files identical, the rest within 1e-6 (trajectories at most 1e-9, results JSON 5.5e-13, session.mjs 1.7e-13).
 - [x] 4.2 Docs. Commit.
   - `CLAUDE.md`: `optimize_windows` and its steps (`app/window_steps.cpp`), plus the Testing list;
   - `docs/PIPELINE.md` and `docs/index.html`: the function name;
