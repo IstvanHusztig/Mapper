@@ -4,6 +4,7 @@
 #include "scan_to_map.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <functional>
 #include <random>
@@ -398,4 +399,62 @@ TEST_CASE("scan-to-map: the gyro bias is estimated")
     CHECK(b.z() == doctest::Approx(0.5).epsilon(0.2));
     CHECK(std::abs(b.x()) < 0.05);
     CHECK(std::abs(b.y()) < 0.05);
+}
+
+// How many Levenberg-Marquardt iterations the optimizer needs (design decision 8): the two drift scenarios run the 100
+// iterations of a real run (nr_iter), and the test reports when the poses stop changing (N_final) and when the update first
+// falls below the fast-mode convergence_delta_threshold of 1e-2 (N_fast), with the error against the truth at both.
+// Only N_final < 100 is asserted; the numbers are a measurement (see docs/PERFORMANCE.md).
+TEST_CASE("scan-to-map: iterations needed")
+{
+    for (const bool estimate_bias : {false, true})
+    {
+        OdometryConfig c = test_config();
+        c.use_gyro_bias_estimation = estimate_bias;
+        const Options o = options_from(c);
+        const Scene s = room();
+        Maps maps = build_maps(s, o.scan_to_map);
+        const std::vector<Eigen::Affine3d> truth = true_poses();
+        std::vector<Point3Di> points = observe(s, truth);
+        Window w = make_window(drifting_guess(truth, 0.5 * deg));
+        NullLogger logger;
+
+        constexpr int iterations = 100;
+        std::vector<std::vector<Eigen::Affine3d>> poses_after;
+        std::vector<double> deltas;
+        const auto start = std::chrono::steady_clock::now();
+        run_iterations(points, w, maps, o, 5.0, iterations, logger, nullptr,
+                       [&](const IterationResult &r, const Window &window)
+                       {
+                           poses_after.push_back(window.poses);
+                           deltas.push_back(r.delta);
+                       });
+        const double ms_per_iteration = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count() / iterations;
+
+        // N_final: the number of iterations after which the poses stay within 0.1 mm and 0.001 deg of the result after 100
+        const std::vector<Eigen::Affine3d> &final_poses = poses_after.back();
+        int n_final = iterations;
+        for (int i = iterations - 1; i >= 0; i--)
+        {
+            const PoseError e = max_error(poses_after[i], final_poses);
+            if (e.position > 1e-4 || e.rotation > 0.001 * deg)
+                break;
+            n_final = i + 1;
+        }
+        // N_fast: the number of iterations run when delta first falls below 1e-2 (run_lm_iterations stops there)
+        int n_fast = 0;
+        for (int i = 0; i < iterations; i++)
+            if (deltas[i] < 1e-2)
+            {
+                n_fast = i + 1;
+                break;
+            }
+
+        const PoseError at_final = max_error(final_poses, truth);
+        const PoseError at_fast = n_fast > 0 ? max_error(poses_after[n_fast - 1], truth) : PoseError{};
+        MESSAGE(std::string(estimate_bias ? "with" : "without"), " bias estimation: N_final ", n_final, ", N_fast ", n_fast,
+                "; error vs truth at N_fast ", at_fast.position * 1000.0, " mm / ", at_fast.rotation / deg, " deg, after ", iterations,
+                " ", at_final.position * 1000.0, " mm / ", at_final.rotation / deg, " deg; ", ms_per_iteration, " ms per iteration");
+        CHECK(n_final < iterations);
+    }
 }
