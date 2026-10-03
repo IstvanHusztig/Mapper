@@ -277,6 +277,92 @@ namespace
                           params.rgd_sf_sigma_fi_deg,
                           params.rgd_sf_sigma_ka_deg);
     }
+
+    struct WindowOptimization
+    {
+        int last_iteration = 0; // index of the last Levenberg-Marquardt iteration
+        double delta = 100000.0; // sum of the parameter updates of that iteration
+    };
+
+    // Levenberg-Marquardt iterations of optimize_lidar_odometry: until the update falls below convergence_delta_threshold,
+    // nr_iter iterations ran, or the window took longer than real_time_threshold_seconds; the damping grows every 10 iterations
+    WindowOptimization run_lm_iterations(std::vector<Point3Di> &intermediate_points, Window &window, OdometryState &state,
+                                         const OdometryRunSetup &setup, AccTerm &acc_term, const MotionModelRotationOptions &window_rotation_options,
+                                         const VelocityPrior &velocity_prior, Eigen::Vector3d &acc_offset, Eigen::Matrix3d &lidar_translation_information,
+                                         const OdometryConfig &params, bool debugMsg, Logger &logger)
+    {
+        double delta = 100000.0;
+        double lm_factor = params.lm_factor_initial;
+
+        std::chrono::time_point<std::chrono::system_clock> start, end;
+        start = std::chrono::system_clock::now();
+
+        int iter_end = 0;
+
+        for (int iter = 0; iter < params.nr_iter; iter++)
+        {
+            iter_end = iter;
+            delta = 100000.0;
+            optimize_lidar_odometry(intermediate_points, window, state.buckets_indoor, state.buckets_outdoor,
+                                    setup.scan_to_map, acc_term.motion_model, window_rotation_options, acc_term.options,
+                                    velocity_prior, lm_factor, delta, acc_offset, acc_term.offset_cov, logger,
+                                    setup.acc_gated ? &lidar_translation_information : nullptr);
+            if (delta < params.convergence_delta_threshold)
+                break;
+
+            if (iter % 10 == 0 && iter > 0)
+            {
+                if (debugMsg)
+                    log_debug(logger) << "\nlm_factor " << lm_factor << ", delta " << std::setprecision(10) << delta << "\n";
+
+                lm_factor *= 10.0;
+            }
+
+            end = std::chrono::system_clock::now();
+            std::chrono::duration<double> elapsed_seconds = end - start;
+
+            if (elapsed_seconds.count() > params.real_time_threshold_seconds)
+                break;
+        }
+
+        WindowOptimization result;
+        result.last_iteration = iter_end;
+        result.delta = delta;
+        return result;
+    }
+
+    void log_window_result(int i, size_t n_windows, const WindowOptimization &optimization, double acc_distance, double elapsed_s,
+                           const OdometryConfig &params, Logger &logger)
+    {
+        auto msg = log_info(logger);
+        msg << "finished at iteration " << optimization.last_iteration + 1 << "/" << params.nr_iter;
+        msg << " optimizing window " << i + 1 << "/" << n_windows
+            << " with acc_distance " << fixed << std::setprecision(2) << acc_distance << "[m] in "
+            << fixed << std::setprecision(2) << elapsed_s
+            << "[s], delta ";
+        if (optimization.delta >= params.convergence_delta_threshold)
+            msg << std::setprecision(10) << optimization.delta << "!!!";
+        else
+            msg << "< " << std::setprecision(1) << std::scientific << params.convergence_delta_threshold;
+    }
+
+    // after the window: log the estimated gyro bias (and a clamp), and carry it as the next window's prior
+    void update_gyro_bias_after_window(const Window &window, int i, const OdometryRunSetup &setup, WindowLoopCarry &carry,
+                                       const OdometryConfig &params, Logger &logger)
+    {
+        if (setup.rotation_options.estimate_bias)
+        {
+            const Eigen::Vector3d b_deg = window.gyro_bias.mean * RAD_TO_DEG;
+            const Eigen::Vector3d s_deg = window.gyro_bias.covariance.diagonal().cwiseMax(0.0).cwiseSqrt() * RAD_TO_DEG;
+            log_info(logger) << "gyro bias [deg/s] window " << i + 1 << ": " << std::fixed << std::setprecision(3)
+                             << b_deg.x() << " " << b_deg.y() << " " << b_deg.z() << " (1-sigma "
+                             << s_deg.x() << " " << s_deg.y() << " " << s_deg.z() << ")";
+            if ((window.gyro_bias.mean.cwiseAbs().array() >= setup.rotation_options.bias_max_rad_s * (1.0 - 1e-9)).any())
+                log_info(logger) << "WARNING: gyro bias clamped to +-" << params.gyro_bias_max_deg_s << " deg/s in window " << i + 1 << "\n";
+
+            carry.bias = window.gyro_bias;
+        }
+    }
 } // namespace
 
 bool compute_step_2(std::vector<Window> &windows, const OdometryConfig &params, OdometryState &state, double &ts_failure, bool debugMsg, PointStore &point_store, PreviewSink &preview, Logger &logger, ProgressReporter &progress)
@@ -386,69 +472,16 @@ bool compute_step_2(std::vector<Window> &windows, const OdometryConfig &params, 
 
             windows[i].motion_model_poses = windows[i].poses;
 
-            double delta = 100000.0;
-            double lm_factor = params.lm_factor_initial;
-
-            std::chrono::time_point<std::chrono::system_clock> start, end;
-            start = std::chrono::system_clock::now();
-
-            int iter_end = 0;
-
-            for (int iter = 0; iter < params.nr_iter; iter++)
-            {
-                iter_end = iter;
-                delta = 100000.0;
-                optimize_lidar_odometry(intermediate_points, windows[i], state.buckets_indoor, state.buckets_outdoor,
-                                        setup.scan_to_map, acc_term.motion_model, window_rotation_options, acc_term.options,
-                                        velocity_prior, lm_factor, delta, acc_offset, acc_term.offset_cov, logger,
-                                        setup.acc_gated ? &lidar_translation_information : nullptr);
-                if (delta < params.convergence_delta_threshold)
-                    break;
-
-                if (iter % 10 == 0 && iter > 0)
-                {
-                    if (debugMsg)
-                        log_debug(logger) << "\nlm_factor " << lm_factor << ", delta " << std::setprecision(10) << delta << "\n";
-
-                    lm_factor *= 10.0;
-                }
-
-                end = std::chrono::system_clock::now();
-                std::chrono::duration<double> elapsed_seconds = end - start;
-
-                if (elapsed_seconds.count() > params.real_time_threshold_seconds)
-                    break;
-            }
+            const WindowOptimization optimization = run_lm_iterations(intermediate_points, windows[i], state, setup, acc_term, window_rotation_options,
+                                                                      velocity_prior, acc_offset, lidar_translation_information, params, debugMsg, logger);
 
             end1 = std::chrono::system_clock::now();
 
             std::chrono::duration<double> elapsed_seconds1 = end1 - start1;
 
-            {
-                auto msg = log_info(logger);
-                msg << "finished at iteration " << iter_end + 1 << "/" << params.nr_iter;
-                msg << " optimizing window " << i + 1 << "/" << windows.size()
-                    << " with acc_distance " << fixed << std::setprecision(2) << carry.acc_distance << "[m] in "
-                    << fixed << std::setprecision(2) << elapsed_seconds1.count()
-                    << "[s], delta ";
-                if (delta >= params.convergence_delta_threshold)
-                    msg << std::setprecision(10) << delta << "!!!";
-                else
-                    msg << "< " << std::setprecision(1) << std::scientific << params.convergence_delta_threshold;
-            }
+            log_window_result(i, windows.size(), optimization, carry.acc_distance, elapsed_seconds1.count(), params, logger);
 
-            if (setup.rotation_options.estimate_bias)
-            {
-                const Eigen::Vector3d b_deg = windows[i].gyro_bias.mean * RAD_TO_DEG;
-                const Eigen::Vector3d s_deg = windows[i].gyro_bias.covariance.diagonal().cwiseMax(0.0).cwiseSqrt() * RAD_TO_DEG;
-                log_info(logger) << "gyro bias [deg/s] window " << i + 1 << ": " << std::fixed << std::setprecision(3)
-                                 << b_deg.x() << " " << b_deg.y() << " " << b_deg.z() << " (1-sigma "
-                                 << s_deg.x() << " " << s_deg.y() << " " << s_deg.z() << ")";
-                if ((windows[i].gyro_bias.mean.cwiseAbs().array() >= setup.rotation_options.bias_max_rad_s * (1.0 - 1e-9)).any())
-                    log_info(logger) << "WARNING: gyro bias clamped to +-" << params.gyro_bias_max_deg_s << " deg/s in window " << i + 1 << "\n";
-
-                carry.bias = windows[i].gyro_bias;
-            }
+            update_gyro_bias_after_window(windows[i], i, setup, carry, params, logger);
 
             update_acc_term_after_window(windows[i], i, acc_term, lidar_translation_information, acc_offset, setup, carry, params, logger);
 
