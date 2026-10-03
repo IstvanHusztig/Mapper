@@ -37,4 +37,4 @@ Every code commit: both presets build `dMapper` and `lidar_odometry_tests`; `cte
   - `docs/ARCHITECTURE.md` (roadmap 5b done; §4, the "about 40 positional arguments" item solved).
 
   Commit.
-- [ ] 4.3 Run `openspec validate optimizer-options --strict` and confirm it passes.
+- [x] 4.3 Run `openspec validate optimizer-options --strict` and confirm it passes.
