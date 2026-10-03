@@ -4,7 +4,7 @@ Every code commit: both presets build `dMapper` and `lidar_odometry_tests`. The 
 
 ## 1. Setting
 
-- [ ] 1.1 Add the setting (design decisions 1–4):
+- [x] 1.1 Add the setting (design decisions 1–4):
   - `OdometryConfig::max_prior_velocity_mps = 10.0` in `app/lidar_odometry_utils.h`, with a comment;
   - an entry in `TomlIO::POINTERS` and in the `motion_model_uncertainty` entry of `CATEGORIES` (`app/toml_io.h`);
   - in `compute_step_2`, replace `10.0` with `params.max_prior_velocity_mps` and use the new console message;

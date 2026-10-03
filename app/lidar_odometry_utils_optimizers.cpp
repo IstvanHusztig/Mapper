@@ -1571,9 +1571,10 @@ bool compute_step_2(std::vector<Window> &windows, const OdometryConfig &params, 
                     }
                 }
 
-                if (prev_velocity.norm() > 10.0)
+                if (prev_velocity.norm() > params.max_prior_velocity_mps)
                 {
-                    log_info(logger) << "!!!prev_velocity.norm() > 10.0!!!";
+                    log_info(logger) << "window " << i + 1 << ": previous window velocity " << prev_velocity.norm()
+                                     << " m/s > max_prior_velocity_mps " << params.max_prior_velocity_mps << ": not used as prior";
                     prev_velocity = Eigen::Vector3d(0.0, 0.0, 0.0);
                     use_prev_velocity = false;
                 }

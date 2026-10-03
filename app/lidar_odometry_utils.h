@@ -106,6 +106,8 @@ struct OdometryConfig
     // velocity-continuity prior: world-frame acceleration sigma [m/s^2] between consecutive nodes,
     // also applied across window boundaries (removes velocity kinks every threshold_nr_poses); 0 = disabled
     double lidar_odometry_motion_model_acc_1_sigma_mps2 = 0.0;
+    // the previous window's final velocity (over its last 20 nodes) is used as a prior only up to this speed [m/s]
+    double max_prior_velocity_mps = 10.0;
 
     // time-scaled rotation prior between consecutive nodes:
     // sigma_axis(dt) = max(k * gyro_arw_axis * sqrt(dt), rotation_sigma_floor_deg); replaces the constant om/fi/ka sigmas above

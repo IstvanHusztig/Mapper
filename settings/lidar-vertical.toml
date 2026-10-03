@@ -144,6 +144,7 @@ lidar_odometry_motion_model_fix_origin_z_1_sigma_m = 1e-06
 lidar_odometry_motion_model_fi_1_sigma_deg = 0.1
 lidar_odometry_motion_model_ka_1_sigma_deg = 0.15
 lidar_odometry_motion_model_acc_1_sigma_mps2 = 1.0
+max_prior_velocity_mps = 5.0
 lidar_odometry_motion_model_om_1_sigma_deg = 0.1
 lidar_odometry_motion_model_x_1_sigma_m = 1e-04
 lidar_odometry_motion_model_y_1_sigma_m = 1e-04
