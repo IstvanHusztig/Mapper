@@ -136,30 +136,14 @@ bool compute_step_2(std::vector<Window> &windows, const OdometryConfig &params, 
             double prev_velocity_age_s = 0.0;
             if ((use_acc_prior || imu_translation || setup.use_acc_term) && i > 0)
             {
-                const auto &prev_tr = windows[i - 1].poses;
-                const auto &prev_ts = windows[i - 1].timestamps;
-                const int n = prev_tr.size();
-                const int k = std::min(20, n - 1);
-                if (k > 0 && prev_ts.size() == prev_tr.size())
-                {
-                    const double dt = prev_ts[n - 1].first - prev_ts[n - 1 - k].first;
-                    if (dt > 0.0)
-                    {
-                        prev_velocity = (prev_tr[n - 1].translation() - prev_tr[n - 1 - k].translation()) / dt;
-                        use_prev_velocity = true;
-                        const auto &ts_i = windows[i].timestamps;
-                        if (!ts_i.empty())
-                            prev_velocity_age_s = std::max(ts_i[0].first - 0.5 * (prev_ts[n - 1].first + prev_ts[n - 1 - k].first), 0.0);
-                    }
-                }
-
-                if (prev_velocity.norm() > params.max_prior_velocity_mps)
-                {
-                    log_info(logger) << "window " << i + 1 << ": previous window velocity " << prev_velocity.norm()
+                constexpr int velocity_span_nodes = 20;
+                const PreviousVelocity previous = estimate_previous_velocity(windows[i - 1], windows[i], velocity_span_nodes, params.max_prior_velocity_mps);
+                if (previous.dropped)
+                    log_info(logger) << "window " << i + 1 << ": previous window velocity " << previous.speed
                                      << " m/s > max_prior_velocity_mps " << params.max_prior_velocity_mps << ": not used as prior";
-                    prev_velocity = Eigen::Vector3d(0.0, 0.0, 0.0);
-                    use_prev_velocity = false;
-                }
+                use_prev_velocity = previous.use;
+                prev_velocity = previous.velocity;
+                prev_velocity_age_s = previous.age_s;
             }
 
             Eigen::Vector3d mean_shift(0.0, 0.0, 0.0);

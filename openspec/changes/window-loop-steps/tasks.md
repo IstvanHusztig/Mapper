@@ -19,7 +19,7 @@ The GUI must be closed while building. Code is moved, not rewritten: `git diff -
   - it keeps every relative pose.
 
   Compile `app/window_steps.cpp` into the tests. Run the step checks. Commit.
-- [ ] 2.2 Add `estimate_previous_velocity`, with the span as a parameter, called with 20 (decision 2). The loop logs the drop. Tests:
+- [x] 2.2 Add `estimate_previous_velocity`, with the span as a parameter, called with 20 (decision 2). The loop logs the drop. Tests:
   - constant velocity gives that velocity and the age;
   - a velocity above the limit is dropped, and `speed` is reported;
   - a previous window with fewer than 2 nodes, or with mismatched timestamps, gives no prior.
