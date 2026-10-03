@@ -26,8 +26,8 @@ Close the GUI before building.
 
 ## 3. Full run, timing, baseline
 
-- [ ] 3.1 Run the full 44 in the background with the normal build. Verify it is within `--tolerance 1e-6` of `raw data/44_baseline`, and report the largest difference per file type. If it goes over 1e-6, pause: compare with `tools/eval_odometry.py` and ask before going on.
-- [ ] 3.2 Measure the run time. Compare the odometry's `elapsed time` line between master (`master_bin`) and this change, on `44_short` and from the full 44 log, and report the numbers as they are (decision 6).
+- [x] 3.1 Run the full 44 in the background with the normal build. Verify it is within `--tolerance 1e-6` of `raw data/44_baseline`, and report the largest difference per file type. If it goes over 1e-6, pause: compare with `tools/eval_odometry.py` and ask before going on. Result (2026-10-03): within tolerance 1e-6, 5 of 35 files identical; trajectories at most 1e-9, results JSON 5.2e-13, session.mjs 8.5e-14.
+- [x] 3.2 Measure the run time. Compare the odometry's `elapsed time` line between master (`master_bin`) and this change, on `44_short` and from the full 44 log, and report the numbers as they are (decision 6). Result: 44_short odometry 163.4 s and 164.5 s with the fix, master 164.9 s the same evening; 44 1567 s with the fix, master 1651 s the same day (earlier runs of the same code 1508-1858 s), so the run-time difference is within the run-to-run variation. A benchmark of the placement loops alone (690 windows of 360 nodes, Release flags) gives 6.5-6.8 s old against 0.018 s new: the fix saves about 7 s on 44. Written up in docs/window-chaining.html.
 - [ ] 3.3 New baseline in a commit of its own (decision 5):
   - rename the old `raw data/44_short_baseline` and `raw data/44_baseline` to `*_2026-10-03b`;
   - make the 44_short and 44 outputs of this change the new baseline folders;

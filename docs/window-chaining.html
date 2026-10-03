@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Window Chaining Fix</title>
+<style>
+  :root {
+    --bg: #fbfbfa; --panel: #ffffff; --text: #1d2126; --muted: #5b6470; --line: #e3e5e8;
+    --accent: #1f6fb2; --accent-soft: #e8f1fa; --code-bg: #f2f3f5; --warn: #9a5b00; --warn-soft: #fff4e0;
+    --ok: #20703c; --ok-soft: #e6f4ea; --bad: #b3261e; --bad-soft: #fbe9e7;
+    --node: #ffffff; --node-line: #9aa6b4; --arrow: #7a8594;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15181c; --panel: #1c2026; --text: #e4e7eb; --muted: #9aa3ae; --line: #2c323a;
+      --accent: #6cb0ec; --accent-soft: #1d2d3d; --code-bg: #242a31; --warn: #f0b35a; --warn-soft: #3a2c16;
+      --ok: #6ccf8e; --ok-soft: #1a3324; --bad: #f28b82; --bad-soft: #3a1f1d;
+      --node: #222830; --node-line: #56616e; --arrow: #8994a2;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15181c; --panel: #1c2026; --text: #e4e7eb; --muted: #9aa3ae; --line: #2c323a;
+    --accent: #6cb0ec; --accent-soft: #1d2d3d; --code-bg: #242a31; --warn: #f0b35a; --warn-soft: #3a2c16;
+    --ok: #6ccf8e; --ok-soft: #1a3324; --bad: #f28b82; --bad-soft: #3a1f1d;
+    --node: #222830; --node-line: #56616e; --arrow: #8994a2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 40px 16px 80px; }
+  h1 { font-size: 30px; line-height: 1.25; margin: 0 0 8px; }
+  h2 { font-size: 23px; margin: 48px 0 12px; padding-top: 8px; border-top: 1px solid var(--line); }
+  h3 { font-size: 18px; margin: 28px 0 8px; }
+  .lead { color: var(--muted); font-size: 17px; margin-top: 0; }
+  code, pre { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13.5px; }
+  code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--code-bg); padding: 12px 14px; border-radius: 8px; overflow-x: auto; line-height: 1.45; }
+  pre .del { color: var(--bad); }
+  pre .add { color: var(--ok); }
+  pre .cm { color: var(--muted); }
+  a { color: var(--accent); }
+  .note, .warn, .good {
+    border-left: 3px solid var(--accent); background: var(--accent-soft);
+    padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 16px 0;
+  }
+  .warn { border-left-color: var(--warn); background: var(--warn-soft); }
+  .good { border-left-color: var(--ok); background: var(--ok-soft); }
+  .note b, .warn b, .good b { display: block; margin-bottom: 2px; }
+  .table-wrap { overflow-x: auto; margin: 14px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 600; color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tldr { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 22px 0; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .card .big { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .card .lbl { color: var(--muted); font-size: 13.5px; }
+  figure { margin: 18px 0; }
+  figcaption { color: var(--muted); font-size: 13.5px; margin-top: 6px; }
+  svg { max-width: 100%; height: auto; display: block; }
+  svg text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: var(--text); }
+  svg .muted { fill: var(--muted); }
+  .meta { color: var(--muted); font-size: 13.5px; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Window chaining: what was wrong, and what the fix changed</h1>
+<p class="lead">Change <code>chain-next-window-only</code>, October 2026. After every window, the odometry loop used to place
+<em>all</em> later windows again, although only the next one is ever read. This page explains the old code, why that work
+was wasted, what replaced it, and what it gained, with measurements.</p>
+
+<div class="tldr">
+  <div class="card"><div class="big">237,705 → 689</div><div class="lbl">window placements on <code>44</code> (690 windows)</div></div>
+  <div class="card"><div class="big">O(n²) → O(n)</div><div class="lbl">placement cost as the recording grows</div></div>
+  <div class="card"><div class="big">6.7 s → 0.02 s</div><div class="lbl">time of the placement work on <code>44</code> (benchmark)</div></div>
+  <div class="card"><div class="big">&lt; 1 %</div><div class="lbl">of a full 44 run: not visible in the run time</div></div>
+</div>
+
+<div class="note"><b>In one sentence</b>
+The old loop was correct but did about 345 times more placement work than needed, and the work grew with the square of the
+number of windows; the fix does each placement once. On today's recordings the saving is about 7 seconds, because the
+scan-to-map optimization takes almost all of the time; on much longer recordings the old loop would have become a real cost.</div>
+
+<h2>1. Background: windows and placing a window</h2>
+
+<p>A run cuts the recording into <strong>windows</strong> (see <code>docs/PIPELINE.md</code>). Each window is a short
+trajectory: a list of poses (<code>Window::poses</code>), one node every few milliseconds. On <code>raw data/44</code> there are
+<strong>690 windows of 360 nodes</strong> (248,400 nodes in all).</p>
+
+<p>Before the odometry, each window's poses come from the IMU alone, and the windows don't join up: each one starts somewhere
+on its own. The window loop <code>optimize_windows</code> (<code>app/run_odometry.cpp</code>) processes the windows in order, and
+each window has to start where the one before it ended. Moving a window so that it starts at a given pose while keeping its
+shape is <strong>placing</strong> it:</p>
+
+<pre><span class="cm">// app/window_steps.cpp</span>
+void place_window_after(Window &amp;window, const Eigen::Affine3d &amp;start)
+{
+    Eigen::Affine3d m_last = start;
+    auto tmp = window.poses;                         <span class="cm">// copy of all 360 poses</span>
+    window.poses[0] = m_last;
+    for (int k = 1; k &lt; tmp.size(); k++)
+    {
+        Eigen::Affine3d m_update = tmp[k - 1].inverse() * tmp[k];   <span class="cm">// relative pose k-1 → k</span>
+        m_last = m_last * m_update;
+        window.poses[k] = m_last;
+    }
+}</pre>
+
+<p>One placement costs, per node, an inverse and two 4×4 matrix products, plus a copy of the window's pose vector
+(360 × 128 bytes ≈ 46 KB).</p>
+
+<h2>2. The old code</h2>
+
+<p>At the end of each window <code>i</code>, after its optimization, the loop placed every later window again:</p>
+
+<pre><span class="cm">// every later window continues from the new end of this one</span>
+for (int j = i + 1; j &lt; windows.size(); j++)
+    place_window_after(windows[j], windows[j - 1].poses[windows[j - 1].poses.size() - 1]);</pre>
+
+<figure>
+<svg viewBox="0 0 760 250" role="img" aria-label="Old loop: after each window all later windows are placed again">
+  <defs>
+    <marker id="ah" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--arrow)"/></marker>
+  </defs>
+  <text x="10" y="22" font-size="13" class="muted">window →</text>
+  <g font-size="13">
+    <text x="128" y="22">0</text><text x="208" y="22">1</text><text x="288" y="22">2</text><text x="368" y="22">3</text>
+    <text x="448" y="22">4</text><text x="528" y="22">5</text><text x="608" y="22">…</text><text x="680" y="22">689</text>
+  </g>
+  <!-- rows: after window i -->
+  <g font-size="13">
+    <text x="10" y="58">after window 0</text>
+    <text x="10" y="98">after window 1</text>
+    <text x="10" y="138">after window 2</text>
+    <text x="10" y="178">after window 3</text>
+    <text x="10" y="218">…</text>
+  </g>
+  <g>
+    <!-- done cells -->
+    <rect x="115" y="42" width="40" height="22" rx="4" fill="var(--ok-soft)" stroke="var(--ok)"/>
+    <rect x="115" y="82" width="40" height="22" rx="4" fill="var(--ok-soft)" stroke="var(--ok)"/>
+    <rect x="195" y="82" width="40" height="22" rx="4" fill="var(--ok-soft)" stroke="var(--ok)"/>
+    <rect x="115" y="122" width="40" height="22" rx="4" fill="var(--ok-soft)" stroke="var(--ok)"/>
+    <rect x="195" y="122" width="40" height="22" rx="4" fill="var(--ok-soft)" stroke="var(--ok)"/>
+    <rect x="275" y="122" width="40" height="22" rx="4" fill="var(--ok-soft)" stroke="var(--ok)"/>
+    <rect x="115" y="162" width="40" height="22" rx="4" fill="var(--ok-soft)" stroke="var(--ok)"/>
+    <rect x="195" y="162" width="40" height="22" rx="4" fill="var(--ok-soft)" stroke="var(--ok)"/>
+    <rect x="275" y="162" width="40" height="22" rx="4" fill="var(--ok-soft)" stroke="var(--ok)"/>
+    <rect x="355" y="162" width="40" height="22" rx="4" fill="var(--ok-soft)" stroke="var(--ok)"/>
+  </g>
+  <g fill="var(--accent-soft)" stroke="var(--accent)">
+    <!-- needed placement: the next window -->
+    <rect x="195" y="42" width="40" height="22" rx="4"/>
+    <rect x="275" y="82" width="40" height="22" rx="4"/>
+    <rect x="355" y="122" width="40" height="22" rx="4"/>
+    <rect x="435" y="162" width="40" height="22" rx="4"/>
+  </g>
+  <g fill="var(--bad-soft)" stroke="var(--bad)" stroke-dasharray="3 2">
+    <!-- wasted placements -->
+    <rect x="275" y="42" width="40" height="22" rx="4"/><rect x="355" y="42" width="40" height="22" rx="4"/><rect x="435" y="42" width="40" height="22" rx="4"/><rect x="515" y="42" width="40" height="22" rx="4"/><rect x="665" y="42" width="40" height="22" rx="4"/>
+    <rect x="355" y="82" width="40" height="22" rx="4"/><rect x="435" y="82" width="40" height="22" rx="4"/><rect x="515" y="82" width="40" height="22" rx="4"/><rect x="665" y="82" width="40" height="22" rx="4"/>
+    <rect x="435" y="122" width="40" height="22" rx="4"/><rect x="515" y="122" width="40" height="22" rx="4"/><rect x="665" y="122" width="40" height="22" rx="4"/>
+    <rect x="515" y="162" width="40" height="22" rx="4"/><rect x="665" y="162" width="40" height="22" rx="4"/>
+  </g>
+  <g font-size="16" class="muted"><text x="606" y="58">…</text><text x="606" y="98">…</text><text x="606" y="138">…</text><text x="606" y="178">…</text></g>
+  <g font-size="12.5">
+    <rect x="115" y="232" width="14" height="12" rx="3" fill="var(--ok-soft)" stroke="var(--ok)"/><text x="135" y="243">already optimized</text>
+    <rect x="270" y="232" width="14" height="12" rx="3" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="290" y="243">needed: the next window</text>
+    <rect x="460" y="232" width="14" height="12" rx="3" fill="var(--bad-soft)" stroke="var(--bad)" stroke-dasharray="3 2"/><text x="480" y="243">wasted: placed again later anyway</text>
+  </g>
+</svg>
+<figcaption>Old loop. Each row is one iteration; every coloured cell after the green ones is a full placement of that window.
+Only the blue cell of each row is ever read.</figcaption>
+</figure>
+
+<p>After window 0 it placed windows 1–689 (689 placements), after window 1 windows 2–689 (688), and so on. In total:</p>
+
+<div class="table-wrap"><table>
+  <tr><th>Quantity</th><th class="num">Formula</th><th class="num">On 44 (n = 690, m = 360)</th></tr>
+  <tr><td>Window placements</td><td class="num">n(n−1)/2</td><td class="num">237,705</td></tr>
+  <tr><td>Node updates (inverse + 2 products each)</td><td class="num">m · n(n−1)/2</td><td class="num">≈ 85.6 million</td></tr>
+  <tr><td>Pose data copied (the <code>tmp</code> vector)</td><td class="num">46 KB · n(n−1)/2</td><td class="num">≈ 11 GB</td></tr>
+  <tr><td>Needed placements</td><td class="num">n − 1</td><td class="num">689</td></tr>
+</table></div>
+
+<h2>3. What was wrong with it</h2>
+
+<p>The results were <strong>correct</strong>: every window was processed starting from the right place. Three things were wrong
+with how it got there.</p>
+
+<h3>3.1 Almost all of the work was thrown away</h3>
+<p>A placement of window <code>j</code> only matters if something reads window <code>j</code>'s absolute poses before the next
+placement overwrites them. Going through every step of the loop:</p>
+
+<div class="table-wrap"><table>
+  <tr><th>Step (before window <code>i</code> is optimized)</th><th>What it reads</th></tr>
+  <tr><td><code>estimate_previous_velocity</code></td><td>the end of window <code>i − 1</code> (already final) and only the <em>timestamps</em> of window <code>i</code></td></tr>
+  <tr><td><code>predict_window_poses</code></td><td>places window <code>i</code> itself from the end of <code>i − 1</code>, using only its <em>relative</em> poses</td></tr>
+  <tr><td><code>apply_gyro_bias_prior</code>, <code>is_turn_window</code>, accelerometer term</td><td>window <code>i</code> as it is at that moment</td></tr>
+  <tr><td>Optimization, map update, logs</td><td>window <code>i</code> only</td></tr>
+  <tr><td>GUI live preview</td><td>only windows already reported done</td></tr>
+</table></div>
+
+<p>Nothing reads window <code>j &gt; i + 1</code> before its own turn, and by then it has been placed again after window
+<code>j − 1</code>. So of the 689 placements after window 0, only the one of window 1 was ever used; the other 688 were
+overwritten before anyone looked at them. That is 237,016 wasted placements out of 237,705, about 99.7 %.</p>
+
+<h3>3.2 The cost grew with the square of the recording</h3>
+<p>The waste is not a constant factor. The number of placements is n(n−1)/2, so a recording twice as long does four times the
+placement work, while everything else in the loop (the optimization, the map update) only doubles:</p>
+
+<div class="table-wrap"><table>
+  <tr><th>Recording</th><th class="num">Windows</th><th class="num">Old placements</th><th class="num">Old placement time (est.)</th><th class="num">New placement time (est.)</th></tr>
+  <tr><td><code>44</code> (today)</td><td class="num">690</td><td class="num">237,705</td><td class="num">6.7 s (0.4 % of 27 min)</td><td class="num">0.02 s</td></tr>
+  <tr><td>3× as long</td><td class="num">2,000</td><td class="num">≈ 2.0 million</td><td class="num">≈ 56 s (1.2 % of 80 min)</td><td class="num">0.05 s</td></tr>
+  <tr><td>7× as long</td><td class="num">5,000</td><td class="num">≈ 12.5 million</td><td class="num">≈ 6 min (3 % of 3.3 h)</td><td class="num">0.13 s</td></tr>
+  <tr><td>29× as long</td><td class="num">20,000</td><td class="num">≈ 200 million</td><td class="num">≈ 94 min (12 % of 13 h)</td><td class="num">0.5 s</td></tr>
+</table></div>
+<p class="meta">Times scaled from the benchmark in section 5 (old ∝ n², new ∝ n), for windows of 360 nodes. A whole run takes
+about 2.4 s per window, so 44 needs about 27 minutes.</p>
+
+<h3>3.3 It added rounding error that meant nothing</h3>
+<p>Each placement rebuilds the window from its own relative poses, <code>tmp[k − 1].inverse() * tmp[k]</code>. That is exact in
+theory, but in floating point each rebuild rounds a little. Window <code>j</code> was rebuilt <code>j</code> times, so window
+689 went through 689 rebuilds before it was processed, each adding a little rounding noise. The benchmark measures how far the
+repeated placement drifts from a single one: at most 1.75e-8 (in metres for the translations) after 689 rebuilds on the synthetic windows. Tiny, but it is noise with no meaning, and it made the results
+depend on how many windows came before.</p>
+
+<h2>4. The fix</h2>
+
+<p>Only the next window is placed after each window:</p>
+
+<pre><span class="del">-            // every later window continues from the new end of this one</span>
+<span class="del">-            for (int j = i + 1; j &lt; windows.size(); j++)</span>
+<span class="del">-                place_window_after(windows[j], windows[j - 1].poses[windows[j - 1].poses.size() - 1]);</span>
+<span class="add">+            // the next window continues from the new end of this one; the windows after it are placed in their own turn,</span>
+<span class="add">+            // since no step reads a window's placement before the window before it is done</span>
+<span class="add">+            if (i + 1 &lt; windows.size())</span>
+<span class="add">+                place_window_after(windows[i + 1], windows[i].poses[windows[i].poses.size() - 1]);</span></pre>
+
+<p>Each window is still placed after the optimized end of its predecessor before it is processed. That matters when the initial
+guess doesn't place it itself: with <code>use_motion_from_previous_step = false</code>, and for window 1 when the velocity prior
+is off. Simply deleting the loop would have been a real behaviour change, so it was not done.</p>
+
+<h3>4.1 The one place where the later windows did matter: a failed run</h3>
+<p>When the NaN check stops a run at window <code>i</code>, <code>optimize_windows</code> returns <code>false</code>, but the run
+is still post-processed and saved. With the old code, the windows after <code>i</code> happened to be chained from the earlier
+placements, so the saved trajectory had no jump. Without the full loop they would lie at their IMU-only positions. So the
+failure path now places all remaining windows once:</p>
+
+<pre>if (!add_window_distance(windows[i], poses_before_optimization, carry, ts_failure, logger))
+{
+<span class="add">    // the run stops here but is still saved: the remaining windows continue from this one's restored end</span>
+<span class="add">    place_windows_after(windows, i + 1);</span>
+    return false;
+}</pre>
+
+<p><code>place_windows_after(windows, first)</code> is a new helper in <code>app/window_steps.cpp</code>. It places
+<code>windows[first]</code>, <code>windows[first + 1]</code>, … in order, each after its predecessor's end: n − first placements,
+once. It has a unit test (<code>tests/window_steps_test.cpp</code>) that checks the chaining, the kept relative poses, that
+earlier windows don't move, and that one call matches the old repeated placement within 1e-9.</p>
+
+<h2>5. How much faster</h2>
+
+<h3>5.1 The placement work alone (benchmark)</h3>
+<p>A small benchmark (<code>bench_chain.cpp</code>, compiled with the same <code>/O2 /fp:fast</code> flags as the Release
+build) runs both loops on 690 synthetic windows of 360 nodes, the size of 44, using a copy of
+<code>place_window_after</code>:</p>
+
+<div class="table-wrap"><table>
+  <tr><th>Loop</th><th class="num">Placements</th><th class="num">Time</th></tr>
+  <tr><td>Old: all later windows after every window</td><td class="num">237,705</td><td class="num">6.5–6.8 s (3 runs)</td></tr>
+  <tr><td>New: only the next window</td><td class="num">689</td><td class="num">0.018 s</td></tr>
+  <tr><td><b>Saved</b></td><td></td><td class="num"><b>≈ 6.7 s (about 370× less)</b></td></tr>
+</table></div>
+
+<h3>5.2 The whole run</h3>
+<div class="table-wrap"><table>
+  <tr><th>Run (fast Release build)</th><th class="num">Odometry time, master</th><th class="num">Odometry time, with the fix</th></tr>
+  <tr><td><code>44_short</code> (70 windows)</td><td class="num">165 s today (155–218 s over earlier runs)</td><td class="num">163 s, 164 s</td></tr>
+  <tr><td><code>44</code> (690 windows)</td><td class="num">1651 s (earlier: 1508–1858 s)</td><td class="num">1567 s</td></tr>
+</table></div>
+
+<div class="warn"><b>Why the whole run barely changes</b>
+The odometry spends about 2.4 s per window in the scan-to-map optimization (up to 100 Levenberg–Marquardt iterations over
+tens of thousands of points). The placement work was about 6.7 s over the whole run, against about 1,650 s. Run times of the same
+code vary by more than 10 % (other load on the machine, turbo clocks), which is far more than the saving. So the fix is real
+but cannot be seen in a single run time on 44: the full run with the fix took 84 s less than master's run of the same day,
+but only about 7 s of that come from the fix; the rest is run-to-run variation.</div>
+
+<div class="good"><b>Where the fix does matter</b>
+<ul style="margin:4px 0 0; padding-left: 20px">
+  <li><b>Longer recordings:</b> the old cost grows with n², so it would have cost about 3 % of a 5,000-window run and 12 % of a
+  20,000-window run (see the table in 3.2), and more from there on.</li>
+  <li><b>No meaningless rounding:</b> each window is rebuilt once, not once per earlier window.</li>
+  <li><b>A clearer loop:</b> the code now says what it needs, the next window's start, and a failed run is handled
+  explicitly instead of by accident.</li>
+</ul></div>
+
+<h2>6. Effect on the results</h2>
+<p>The results change only in their last digits, because window <code>j</code> now goes through one rebuild instead of
+<code>j</code>, and the optimizer starts from minutely different poses:</p>
+
+<div class="table-wrap"><table>
+  <tr><th>Check</th><th>Against</th><th class="num">Largest difference</th></tr>
+  <tr><td><code>44_short</code>, precise build (no <code>/fp:fast</code>)</td><td>precise reference from master</td><td class="num">trajectories 1e-10, results JSON 1.8e-12</td></tr>
+  <tr><td><code>44_short</code>, normal build</td><td><code>raw data/44_short_baseline</code></td><td class="num">trajectories 1e-11, results JSON 3.9e-12</td></tr>
+  <tr><td><code>44</code>, normal build</td><td><code>raw data/44_baseline</code></td><td class="num">trajectories 1e-9, results JSON 5.2e-13</td></tr>
+</table></div>
+<p>All are far inside the 1e-6 tolerance the refactors use (1e-6 m is a thousandth of a millimetre). Because the numbers do
+change, the change writes new baselines for <code>44_short</code> and <code>44</code> in a commit of its own.</p>
+
+<h2>7. Where to find it</h2>
+<ul>
+  <li>OpenSpec change: <code>openspec/changes/chain-next-window-only/</code> (proposal, design, tasks; archived under
+  <code>openspec/changes/archive/</code> once done).</li>
+  <li>Code: <code>app/run_odometry.cpp</code> (<code>optimize_windows</code>), <code>app/window_steps.{h,cpp}</code>
+  (<code>place_window_after</code>, <code>place_windows_after</code>), <code>tests/window_steps_test.cpp</code>.</li>
+  <li>Commits: <code>9053ab1</code> (helper and tests), <code>7a99a94</code> (only the next window),
+  <code>dfed690</code> (failure path).</li>
+  <li>The other performance fixes: <code>docs/PERFORMANCE.md</code>.</li>
+</ul>
+
+</main>
+</body>
+</html>
