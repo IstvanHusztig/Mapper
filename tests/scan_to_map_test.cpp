@@ -458,3 +458,42 @@ TEST_CASE("scan-to-map: iterations needed")
         CHECK(n_final < iterations);
     }
 }
+
+namespace
+{
+    // the translation information the optimizer reports for a window on the true trajectory (one iteration): the sum of
+    // n * n^T over the matched surface normals, which optimize_windows uses to detect degenerate windows
+    Eigen::Matrix3d translation_information(const Scene &s, const Options &o)
+    {
+        Maps maps = build_maps(s, o.scan_to_map);
+        const std::vector<Eigen::Affine3d> truth = true_poses();
+        std::vector<Point3Di> points = observe(s, truth);
+        Window w = make_window(truth);
+        NullLogger logger;
+        Eigen::Matrix3d info = Eigen::Matrix3d::Zero();
+        run_iterations(points, w, maps, o, 5.0, 1, logger, &info);
+        return info;
+    }
+}
+
+TEST_CASE("scan-to-map: the translation information is strong in every direction in a closed room")
+{
+    const Eigen::Vector3d eigenvalues =
+        Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d>(translation_information(room(), options_from(test_config()))).eigenvalues();
+    MESSAGE("room: information eigenvalues ", eigenvalues.x(), " ", eigenvalues.y(), " ", eigenvalues.z());
+    CHECK(eigenvalues.minCoeff() > 0.01 * eigenvalues.maxCoeff());
+}
+
+// Expected to fail today (found 2026-10-04): update_rgd fixes a bucket's normal once, from its first 3 points and the initial
+// 3 cm isotropic covariance, and never updates it. On this corridor 60 % of the indoor buckets get a normal more than 30 deg
+// off the true face normal (12 % if the points are inserted in random order), so the information along the corridor is
+// large (measured 925 along x against 155 across). When the bucket statistics are fixed, doctest reports this test as
+// passing unexpectedly: then remove should_fail.
+TEST_CASE("scan-to-map: the translation information shows a degenerate corridor" * doctest::should_fail())
+{
+    const Eigen::Matrix3d info = translation_information(corridor(), options_from(test_config()));
+    const double along = info(0, 0);
+    const double across = std::min(info(1, 1), info(2, 2));
+    MESSAGE("corridor: information along x ", along, ", across (smaller of y and z) ", across);
+    CHECK(along <= 0.01 * across);
+}

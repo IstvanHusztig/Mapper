@@ -98,6 +98,15 @@ The loop around it is `run_lm_iterations` (`app/run_odometry.cpp`, file-local). 
 
    Updating the bucket mean in `update_rgd` is a separate follow-up, because it changes every run's results.
 
+   **Outcome of 2.5 (2026-10-04).** The corridor case failed: the information along the corridor was 925, against 155 across. The cause is that `update_rgd` fixes a bucket's normal once, from its first 3 points and the initial 3 cm isotropic covariance, and never updates it. Covariance updates after the third point are also skipped when the new point fails the viewpoint test against that normal.
+   - On the corridor map, 60 % of the indoor buckets had a normal more than 30° off the true face when the points were inserted in grid order, and 12 % in random order.
+   - In random order the perfect-guess error was 0.34 mm instead of 1.5 mm.
+
+   The user chose to keep the correct expectation:
+   - the corridor case is marked `doctest::should_fail`, with a comment naming the cause;
+   - the room case is a normal test;
+   - the bucket statistics (mean, covariance, normal) get a change of their own, measured on 44.
+
 7. **No app change, so no full 44.** `dMapper` is rebuilt from unchanged sources, so a `44_short` IDENTICAL check is enough to show it. This is the usual rule's exception for test-only changes, stated here so it isn't silently skipped.
 
 8. **The iteration count is measured on the two drift scenarios.**
