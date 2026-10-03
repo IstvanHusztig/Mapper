@@ -24,7 +24,7 @@ If the `/fp:fast` build moves last bits, the precise-build rule of `window-loop-
 
 ## 3. Tool, measurement, docs
 
-- [ ] 3.1 Add `tools/convergence_summary.py` (decision 5) and its section in `tools/README.md`. Verify: on the 2.2 `44_short` log it prints both histograms and the ten largest errors, consistent with the summary line. Commit.
+- [x] 3.1 Add `tools/convergence_summary.py` (decision 5) and its section in `tools/README.md`. Verify: on the 2.2 `44_short` log it prints both histograms and the ten largest errors, consistent with the summary line. Commit.
 - [ ] 3.2 Run the full 44 in the background with the setting on (decision 7). Verify: IDENTICAL with `tools/baseline/44.manifest.json`, and 690 `convergence window` lines. Report the distribution and the odometry time against the last 44 run (1567 s). If the result isn't identical, pause.
 - [ ] 3.3 Docs:
   - `docs/PERFORMANCE.md`: the 44 distribution next to the synthetic numbers, and what it suggests for `nr_iter` and `convergence_delta_threshold`, with no setting changed;

@@ -39,6 +39,22 @@ python tools/eval_odometry.py "<dataset_folder>" "<result_folder_A>" "<result_fo
 
 The IMU timestamps must be strictly increasing. Recordings from dLidar builds before the timestamp fix must be repaired first.
 
+## convergence_summary.py
+
+How many Levenberg–Marquardt iterations the windows of a run needed. Pure Python 3. Run dMapper with `log_iteration_convergence = true` in `[lidar_odometry_debug_info]` (a copy of the settings file is enough), and keep the console output:
+
+```
+dMapper "<input>" "<params_with_the_setting.toml>" "<output>" > run.log
+python tools/convergence_summary.py run.log [--top 10] [--bin 5]
+```
+
+It prints:
+- the median, p90 and max of two counts per window: **settled after**, the iteration after which the poses stay within 0.1 mm / 0.001° of the window's result, and **delta < 1e-2 after**, where `convergence_delta_threshold = 1e-2` (fast mode) would stop the window;
+- a histogram of each;
+- the windows with the largest pose error at that fast-mode stop.
+
+The run's results are the same with the setting on or off; only the parameter file in the output records it.
+
 ## fix_imu_timestamps.py
 
 Rebuilds a steady sample clock for an `imu*.csv` whose timestamps are arrival times (bursts of samples ~0.02 ms apart followed by gaps, or clock corrections applied as jumps). Pure Python 3.
