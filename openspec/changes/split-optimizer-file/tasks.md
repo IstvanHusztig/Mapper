@@ -55,7 +55,7 @@ The GUI must be closed while building. Every move goes through `git diff`, which
 
 ## 3. Integration
 
-- [ ] 3.1 Full 44 in the background. Verify IDENTICAL with `tools/baseline/44.manifest.json`, or else that `compare_baseline.py --tolerance 1e-6` against the refreshed `raw data/44_baseline` passes. Report which.
+- [x] 3.1 Full 44 in the background. Verify IDENTICAL with `tools/baseline/44.manifest.json`, or else that `compare_baseline.py --tolerance 1e-6` against the refreshed `raw data/44_baseline` passes. Report which. Result 2026-10-03: IDENTICAL, 35 files (2070 s).
 - [x] 3.2 Docs. Commit.
   - `CLAUDE.md`: pipeline step 4 and the Testing list name the new files; drop `optimize_icp`.
   - `docs/ARCHITECTURE.md`:
