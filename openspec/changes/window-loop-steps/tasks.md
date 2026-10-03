@@ -47,7 +47,7 @@ The GUI must be closed while building. Code is moved, not rewritten: `git diff -
 
 ## 3. Steps in `run_odometry.cpp`
 
-- [ ] 3.1 Extract the accelerometer-term gating and options (lines 259–300) and their update after the window (lines 454–488) as two functions. Run the step checks. Commit.
+- [x] 3.1 Extract the accelerometer-term gating and options (lines 259–300) and their update after the window (lines 454–488) as two functions. Run the step checks. Commit.
 - [ ] 3.2 Extract robust mode (lines 305–388) as one function. Run the step checks; this is build-only coverage. Commit.
 - [ ] 3.3 Extract the LM iteration loop with its window log (lines 390–439), and the gyro-bias update with its log (lines 441–452). Run the step checks. Commit.
 - [ ] 3.4 Extract the NaN check (lines 534–549), the map update (lines 566–622), and the end-of-run summary (lines 625–647). Verify:
