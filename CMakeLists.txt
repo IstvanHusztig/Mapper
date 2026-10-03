@@ -241,6 +241,8 @@ set(SOURCES
   app/output_ports.h
   app/window.h
   app/angle_units.h
+  app/normal_equations.cpp
+  app/normal_equations.h
   app/optimizer_options.cpp
   app/optimizer_options.h
   app/toml_config_repository.cpp

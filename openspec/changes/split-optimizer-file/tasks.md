@@ -19,7 +19,7 @@ The GUI must be closed while building. Every move goes through `git diff`, which
 ## 2. Moves
 
 - [x] 2.1 Add `app/angle_units.h` (design decision 4). Make the optimizer file include it instead of defining the constants. Run the step checks. Commit.
-- [ ] 2.2 Move `Blocks`, `SumBlocks` and `pose_band_to_sparse` to `app/normal_equations.{h,cpp}` (design decision 3).
+- [x] 2.2 Move `Blocks`, `SumBlocks` and `pose_band_to_sparse` to `app/normal_equations.{h,cpp}` (design decision 3).
   - Add `tests/normal_equations_test.cpp`:
     - `pose_band_to_sparse` of a matrix whose pose part has entries only within `max_offset` of the diagonal, plus full extra rows/columns, equals `sparseView()` of it;
     - entries outside the band are dropped;
