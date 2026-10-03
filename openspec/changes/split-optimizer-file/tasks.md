@@ -46,7 +46,7 @@ The GUI must be closed while building. Every move goes through `git diff`, which
 - [x] 2.5 Move `optimize_lidar_odometry` to `app/scan_to_map.{h,cpp}`. Its declaration leaves `lidar_odometry_utils.h`, and the 5b forward declarations go away. Run the step checks. Commit.
 - [x] 2.6 Move `optimize_sf2` and `optimize_rigid_sf` to `app/robust_lidar_odometry.{h,cpp}`. Both are declared there. Run the step checks. Commit.
 - [x] 2.7 Move `Consistency` and `Consistency2` to `app/consistency.{h,cpp}`. `app/lidar_odometry.cpp` includes the new header. Run the step checks. Commit.
-- [ ] 2.8 `git mv app/lidar_odometry_utils_optimizers.cpp app/run_odometry.cpp` and add `app/run_odometry.h` with `compute_step_2`'s declaration. Callers include it. Update `CMakeLists.txt`.
+- [x] 2.8 `git mv app/lidar_odometry_utils_optimizers.cpp app/run_odometry.cpp` and add `app/run_odometry.h` with `compute_step_2`'s declaration. Callers include it. Update `CMakeLists.txt`.
   - Verify that `git log --follow app/run_odometry.cpp` shows the old history.
   - Verify that `wc -l` of every new or remaining file is ≤ 900.
   - Verify that `lidar_odometry_utils.h` no longer declares any of the moved functions.

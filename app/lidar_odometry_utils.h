@@ -265,8 +265,4 @@ void update_rgd(const NDT::GridParameters &rgd_params, NDTBucketMapType &buckets
 void update_rgd_spherical_coordinates(const NDT::GridParameters &rgd_params, NDTBucketMapType &buckets,
                                       std::vector<Point3Di> &points_global, std::vector<Eigen::Vector3d> &points_global_spherical);
 
-
-
-bool compute_step_2(std::vector<Window> &windows, const OdometryConfig &params, OdometryState &state, double &ts_failure, bool debugMsg, PointStore &point_store, PreviewSink &preview, Logger &logger, ProgressReporter &progress);
-
 #endif

@@ -1,4 +1,5 @@
 #include "odometry_pipeline.h"
+#include "run_odometry.h"
 
 #include "loop_closure.h"
 

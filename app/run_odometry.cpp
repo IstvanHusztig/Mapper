@@ -1,15 +1,11 @@
-#include "lidar_odometry_utils.h"
-#include "optimizer_options.h"
-#include <hash_utils.h>
-#include <mutex>
-#include "normal_equations.h"
-#include "imu_kinematics.h"
-#include "scan_to_map.h"
-#include "robust_lidar_odometry.h"
-
-#include <export_laz.h>
+#include "run_odometry.h"
 
 #include "angle_units.h"
+#include "imu_kinematics.h"
+#include "optimizer_options.h"
+#include "robust_lidar_odometry.h"
+#include "scan_to_map.h"
+#include <export_laz.h>
 
 bool compute_step_2(std::vector<Window> &windows, const OdometryConfig &params, OdometryState &state, double &ts_failure, bool debugMsg, PointStore &point_store, PreviewSink &preview, Logger &logger, ProgressReporter &progress)
 {

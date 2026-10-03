@@ -219,7 +219,8 @@ set(SOURCES
   app/lidar_odometry.h
   app/lidar_odometry_utils.h
   app/lidar_odometry_utils.cpp
-  app/lidar_odometry_utils_optimizers.cpp
+  app/run_odometry.cpp
+  app/run_odometry.h
   app/loop_closure.cpp
   app/loop_closure.h
   app/odometry_pipeline.cpp
