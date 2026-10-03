@@ -3,7 +3,8 @@
 
     python tools/rename_identifiers.py [options] PATH [PATH ...] -r OLD=NEW [-r OLD=NEW ...] [-m OLD=NEW ...]
 
-  -r / --rename OLD=NEW   rename every whole identifier OLD (variables, types, functions, parameters);
+  -r / --rename OLD=NEW   rename every whole identifier OLD (variables, types, functions, parameters), but not
+                          member accesses (after '.' or '->': use -m for those);
                           NEW may be a dotted name, e.g. -r intermediate_trajectory=window.poses
   -m / --member OLD=NEW   rename OLD only as a member access, i.e. right after '.' or '->'
                           (NEW may contain a dot, e.g. -m gyro_bias=gyro_bias.mean)
@@ -67,12 +68,13 @@ def rename_text(src, plain, member, lines=None):
             if not lines[0] <= line <= lines[1]:
                 out.append(tok)
                 continue
-        if tok in member:
+        if tok in member or tok in plain:
             before = src[:m.start()].rstrip(" \t")
-            if before.endswith(".") or before.endswith("->"):
+            is_member_access = before.endswith(".") or before.endswith("->")
+            if is_member_access and tok in member:
                 new = member[tok]
-        if new == tok and tok in plain:
-            new = plain[tok]
+            elif not is_member_access and tok in plain:
+                new = plain[tok]
         if new != tok:
             hits.append((src.count("\n", 0, m.start()) + 1, tok, new))
         out.append(new)
