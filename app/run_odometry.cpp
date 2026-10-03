@@ -5,6 +5,7 @@
 #include "optimizer_options.h"
 #include "robust_lidar_odometry.h"
 #include "scan_to_map.h"
+#include "window_steps.h"
 #include <export_laz.h>
 
 namespace
@@ -103,16 +104,7 @@ bool compute_step_2(std::vector<Window> &windows, const OdometryConfig &params, 
         std::chrono::time_point<std::chrono::system_clock> start, end;
         start = std::chrono::system_clock::now();
 
-        Eigen::Affine3d m_last = state.m_g;
-        auto tmp = windows[0].poses;
-
-        windows[0].poses[0] = m_last;
-        for (int k = 1; k < tmp.size(); k++)
-        {
-            Eigen::Affine3d m_update = tmp[k - 1].inverse() * tmp[k];
-            m_last = m_last * m_update;
-            windows[0].poses[k] = m_last;
-        }
+        place_window_after(windows[0], state.m_g);
         windows[0].motion_model_poses = windows[0].poses;
 
         auto pp = state.initial_points;
@@ -589,19 +581,7 @@ bool compute_step_2(std::vector<Window> &windows, const OdometryConfig &params, 
             }
 
             for (int j = i + 1; j < windows.size(); j++)
-            {
-                Eigen::Affine3d m_last = windows[j - 1].poses[windows[j - 1].poses.size() - 1];
-                auto tmp = windows[j].poses;
-
-                windows[j].poses[0] = m_last;
-
-                for (int k = 1; k < tmp.size(); k++)
-                {
-                    Eigen::Affine3d m_update = tmp[k - 1].inverse() * tmp[k];
-                    m_last = m_last * m_update;
-                    windows[j].poses[k] = m_last;
-                }
-            }
+                place_window_after(windows[j], windows[j - 1].poses[windows[j - 1].poses.size() - 1]);
 
             for (int j = 0; j < intermediate_points.size(); j++)
             {

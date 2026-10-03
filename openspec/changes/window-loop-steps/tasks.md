@@ -14,7 +14,7 @@ The GUI must be closed while building. Code is moved, not rewritten: `git diff -
 
 ## 2. Pure steps (`app/window_steps.{h,cpp}`, tested)
 
-- [ ] 2.1 Add `app/window_steps.{h,cpp}` with `place_window_after` (decision 5). Use it for window 0 and for re-chaining the later windows. Add `tests/window_steps_test.cpp`:
+- [x] 2.1 Add `app/window_steps.{h,cpp}` with `place_window_after` (decision 5). Use it for window 0 and for re-chaining the later windows. Add `tests/window_steps_test.cpp`:
   - the chained window starts at the given pose;
   - it keeps every relative pose.
 

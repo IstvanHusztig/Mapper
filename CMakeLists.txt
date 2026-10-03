@@ -241,6 +241,8 @@ set(SOURCES
   app/folder_inputs.h
   app/output_ports.h
   app/window.h
+  app/window_steps.cpp
+  app/window_steps.h
   app/angle_units.h
   app/normal_equations.cpp
   app/normal_equations.h

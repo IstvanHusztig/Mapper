@@ -8,6 +8,7 @@ add_executable(lidar_odometry_tests
   disk_point_store_test.cpp
   toml_config_repository_test.cpp
   optimizer_options_test.cpp
+  window_steps_test.cpp
   imu_kinematics_test.cpp
   normal_equations_test.cpp
   ${REPOSITORY_DIRECTORY}/app/toml_io.cpp
@@ -16,6 +17,7 @@ add_executable(lidar_odometry_tests
   ${REPOSITORY_DIRECTORY}/app/disk_point_store.cpp
   ${REPOSITORY_DIRECTORY}/app/toml_config_repository.cpp
   ${REPOSITORY_DIRECTORY}/app/optimizer_options.cpp
+  ${REPOSITORY_DIRECTORY}/app/window_steps.cpp
   ${REPOSITORY_DIRECTORY}/app/imu_kinematics.cpp
   ${REPOSITORY_DIRECTORY}/app/normal_equations.cpp)
 
