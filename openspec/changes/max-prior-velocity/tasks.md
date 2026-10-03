@@ -15,7 +15,7 @@ Every code commit: both presets build `dMapper` and `lidar_odometry_tests`. The 
   - `ctest` fails only in the two golden TOML tests, and each diff is just the new `max_prior_velocity_mps` line.
 
   Commit.
-- [ ] 1.2 Regenerate the golden TOML files with `LO_UPDATE_GOLDEN=1` (design decision 5). Verify:
+- [x] 1.2 Regenerate the golden TOML files with `LO_UPDATE_GOLDEN=1` (design decision 5). Verify:
   - `git diff` shows only one new line per file: 10.0 in `default_params.golden.toml`, 5.0 in `lidar_vertical.golden.toml`;
   - `ctest` passes.
 

@@ -148,6 +148,7 @@ lidar_odometry_motion_model_om_1_sigma_deg = 0.3
 lidar_odometry_motion_model_x_1_sigma_m = 1e-04
 lidar_odometry_motion_model_y_1_sigma_m = 1e-04
 lidar_odometry_motion_model_z_1_sigma_m = 1e-04
+max_prior_velocity_mps = 10.0
 rotation_sigma_floor_deg = 0.002
 rotation_sigma_inflation_k = 4.0
 rotation_sigma_inflation_k_turn = 0.0
