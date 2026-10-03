@@ -1257,18 +1257,6 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
     }
 }
 
-MotionModelRotationOptions get_motion_model_rotation_options(const OdometryConfig &params)
-{
-    MotionModelRotationOptions o;
-    o.time_scaled_sigma = params.use_time_scaled_rotation_sigma;
-    o.arw_rad_sqrt_s = Eigen::Vector3d(params.gyro_arw_x_deg_sqrt_s, params.gyro_arw_y_deg_sqrt_s, params.gyro_arw_z_deg_sqrt_s) * DEG_TO_RAD;
-    o.inflation_k = params.rotation_sigma_inflation_k;
-    o.sigma_floor_rad = params.rotation_sigma_floor_deg * DEG_TO_RAD;
-    o.estimate_bias = params.use_gyro_bias_estimation;
-    o.bias_max_rad_s = params.gyro_bias_max_deg_s * DEG_TO_RAD;
-    return o;
-}
-
 bool compute_step_2(std::vector<Window> &windows, const OdometryConfig &params, OdometryState &state, double &ts_failure, bool debugMsg, PointStore &point_store, PreviewSink &preview, Logger &logger, ProgressReporter &progress)
 {
     if (windows.size() != 0)

@@ -82,3 +82,34 @@ TEST_CASE("get_motion_model_options copies each sigma to its member")
     CHECK(o.fix_origin_ka_sigma_deg == 12.0);
     CHECK(o.acc_sigma_mps2 == 13.0);
 }
+
+TEST_CASE("get_motion_model_rotation_options copies each setting and converts degrees to radians")
+{
+    const double deg = M_PI / 180.0;
+    OdometryConfig config;
+    config.use_time_scaled_rotation_sigma = true;
+    config.gyro_arw_x_deg_sqrt_s = 1.0;
+    config.gyro_arw_y_deg_sqrt_s = 2.0;
+    config.gyro_arw_z_deg_sqrt_s = 3.0;
+    config.rotation_sigma_inflation_k = 4.0;
+    config.rotation_sigma_floor_deg = 5.0;
+    config.use_gyro_bias_estimation = false;
+    config.gyro_bias_max_deg_s = 6.0;
+
+    const MotionModelRotationOptions o = get_motion_model_rotation_options(config);
+    CHECK(o.time_scaled_sigma == true);
+    CHECK(o.arw_rad_sqrt_s.x() == doctest::Approx(1.0 * deg));
+    CHECK(o.arw_rad_sqrt_s.y() == doctest::Approx(2.0 * deg));
+    CHECK(o.arw_rad_sqrt_s.z() == doctest::Approx(3.0 * deg));
+    CHECK(o.inflation_k == 4.0);
+    CHECK(o.sigma_floor_rad == doctest::Approx(5.0 * deg));
+    CHECK(o.estimate_bias == false);
+    CHECK(o.bias_max_rad_s == doctest::Approx(6.0 * deg));
+
+    // the opposite flag values, so no flag can be hard-coded
+    config.use_time_scaled_rotation_sigma = false;
+    config.use_gyro_bias_estimation = true;
+    const MotionModelRotationOptions p = get_motion_model_rotation_options(config);
+    CHECK(p.time_scaled_sigma == false);
+    CHECK(p.estimate_bias == true);
+}

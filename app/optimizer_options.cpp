@@ -1,5 +1,7 @@
 #include "optimizer_options.h"
 
+#include "angle_units.h"
+
 ScanToMapOptions get_scan_to_map_options(const OdometryConfig &config)
 {
     ScanToMapOptions o;
@@ -33,5 +35,17 @@ MotionModelOptions get_motion_model_options(const OdometryConfig &config)
     o.fix_origin_fi_sigma_deg = config.lidar_odometry_motion_model_fix_origin_fi_1_sigma_deg;
     o.fix_origin_ka_sigma_deg = config.lidar_odometry_motion_model_fix_origin_ka_1_sigma_deg;
     o.acc_sigma_mps2 = config.lidar_odometry_motion_model_acc_1_sigma_mps2;
+    return o;
+}
+
+MotionModelRotationOptions get_motion_model_rotation_options(const OdometryConfig &params)
+{
+    MotionModelRotationOptions o;
+    o.time_scaled_sigma = params.use_time_scaled_rotation_sigma;
+    o.arw_rad_sqrt_s = Eigen::Vector3d(params.gyro_arw_x_deg_sqrt_s, params.gyro_arw_y_deg_sqrt_s, params.gyro_arw_z_deg_sqrt_s) * DEG_TO_RAD;
+    o.inflation_k = params.rotation_sigma_inflation_k;
+    o.sigma_floor_rad = params.rotation_sigma_floor_deg * DEG_TO_RAD;
+    o.estimate_bias = params.use_gyro_bias_estimation;
+    o.bias_max_rad_s = params.gyro_bias_max_deg_s * DEG_TO_RAD;
     return o;
 }
