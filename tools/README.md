@@ -129,8 +129,9 @@ python tools/rename_identifiers.py app -r worker_data=windows -r WorkerData=Wind
 python tools/rename_identifiers.py app -m intermediate_trajectory=poses -m gyro_bias=gyro_bias.mean
 ```
 
-- `-r OLD=NEW` renames every whole identifier `OLD`: variables, types, functions and parameters.
+- `-r OLD=NEW` renames every whole identifier `OLD`: variables, types, functions and parameters. `NEW` may be dotted (`-r intermediate_trajectory=window.poses`).
 - `-m OLD=NEW` renames `OLD` only as a member access, right after `.` or `->`, so a parameter or local with the same name is left alone. `NEW` may contain a dot (`gyro_bias.mean`).
+- `--lines A-B` limits the renames to lines A..B of a single file, for example one function's body, when a name like `timestamps` is used elsewhere too.
 - `--dry-run` lists every hit as `file:line: old -> new | code`, without changing anything; review it before a real run.
 - **Paths:** files or folders (`.cpp,.cc,.c,.h,.hpp`; `--ext` changes the list, `--recursive` descends into sub-folders).
 - **Output:** line endings are kept. A summary per file and in total is printed.

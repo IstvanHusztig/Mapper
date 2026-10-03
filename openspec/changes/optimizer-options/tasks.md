@@ -4,7 +4,7 @@ Every code commit: both presets build `dMapper` and `lidar_odometry_tests`; `cte
 
 ## 1. Rename tool
 
-- [ ] 1.1 `tools/rename_identifiers.py`: `--lines A-B` (single file only; usage error otherwise) and a dotted NEW for `-r` (design decision 5). Update the docstring and `tools/README.md`.
+- [x] 1.1 `tools/rename_identifiers.py`: `--lines A-B` (single file only; usage error otherwise) and a dotted NEW for `-r` (design decision 5). Update the docstring and `tools/README.md`.
 
   Verify on a sample file in the scratchpad: two functions use the same parameter name, and a rename with `--lines` of the first changes only the first; a dotted NEW works for `-r`. Commit.
 

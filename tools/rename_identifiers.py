@@ -3,9 +3,11 @@
 
     python tools/rename_identifiers.py [options] PATH [PATH ...] -r OLD=NEW [-r OLD=NEW ...] [-m OLD=NEW ...]
 
-  -r / --rename OLD=NEW   rename every whole identifier OLD (variables, types, functions, parameters)
+  -r / --rename OLD=NEW   rename every whole identifier OLD (variables, types, functions, parameters);
+                          NEW may be a dotted name, e.g. -r intermediate_trajectory=window.poses
   -m / --member OLD=NEW   rename OLD only as a member access, i.e. right after '.' or '->'
                           (NEW may contain a dot, e.g. -m gyro_bias=gyro_bias.mean)
+  --lines A-B             only rename on lines A..B (1-based, inclusive) of a single file, e.g. one function
   --dry-run               list every hit with file:line and the line's code, change nothing
   --recursive             descend into sub-folders of folder PATHs
   --ext .cpp,.h,...       file extensions taken from folder PATHs (default .cpp,.cc,.c,.h,.hpp)
@@ -52,14 +54,19 @@ def collect_files(paths, recursive, exts):
     return sorted(set(files))
 
 
-def rename_text(src, plain, member):
-    """returns (new text, [(line, old, new)]) for one file's text (LF line endings)"""
+def rename_text(src, plain, member, lines=None):
+    """returns (new text, [(line, old, new)]) for one file's text (LF line endings); lines = (first, last) or None"""
     out, hits, pos = [], [], 0
     for m in TOKEN.finditer(src):
         tok = m.group(0)
         out.append(src[pos:m.start()])
         pos = m.end()
         new = tok
+        if lines is not None:
+            line = src.count("\n", 0, m.start()) + 1
+            if not lines[0] <= line <= lines[1]:
+                out.append(tok)
+                continue
         if tok in member:
             before = src[:m.start()].rstrip(" \t")
             if before.endswith(".") or before.endswith("->"):
@@ -79,16 +86,25 @@ def main():
     ap.add_argument("-r", "--rename", action="append", default=[], metavar="OLD=NEW")
     ap.add_argument("-m", "--member", action="append", default=[], metavar="OLD=NEW")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--lines", default=None, metavar="A-B")
     ap.add_argument("--recursive", action="store_true")
     ap.add_argument("--ext", default=".cpp,.cc,.c,.h,.hpp")
     args = ap.parse_args()
 
     try:
-        plain = parse_pairs(args.rename, allow_dot=False)
+        plain = parse_pairs(args.rename, allow_dot=True)
         member = parse_pairs(args.member, allow_dot=True)
         if not plain and not member:
             raise ValueError("nothing to rename: give -r and/or -m")
         files = collect_files(args.paths, args.recursive, set(args.ext.split(",")))
+        lines = None
+        if args.lines is not None:
+            m = re.fullmatch(r"(\d+)-(\d+)", args.lines)
+            if not m or int(m.group(1)) > int(m.group(2)):
+                raise ValueError("--lines expects A-B with A <= B, got %r" % args.lines)
+            if len(files) != 1:
+                raise ValueError("--lines needs exactly one file")
+            lines = (int(m.group(1)), int(m.group(2)))
     except ValueError as e:
         print("error: %s" % e, file=sys.stderr)
         return 2
@@ -99,7 +115,7 @@ def main():
             raw = f.read()
         nl = "\r\n" if "\r\n" in raw else "\n"
         src = raw.replace(nl, "\n")
-        new, hits = rename_text(src, plain, member)
+        new, hits = rename_text(src, plain, member, lines)
         if not hits:
             continue
         lines = src.split("\n")
