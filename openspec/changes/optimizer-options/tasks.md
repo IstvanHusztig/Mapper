@@ -10,8 +10,8 @@ Every code commit: both presets build `dMapper` and `lidar_odometry_tests`; `cte
 
 ## 2. Option structs
 
-- [ ] 2.1 Add `app/optimizer_options.{h,cpp}` with `ScanToMapOptions`, `MotionModelOptions`, `VelocityPrior`, `get_scan_to_map_options` and `get_motion_model_options` (design decision 1). Include the header from `app/lidar_odometry_utils.h`, and add both to `SOURCES`. Verify both presets build.
-- [ ] 2.2 Add `tests/optimizer_options_test.cpp` (design decision 6) and compile `app/optimizer_options.cpp` into the tests. Verify `ctest` passes, and that the test fails when two builder lines are swapped (try it once, then revert). Run the step checks. Commit.
+- [x] 2.1 Add `app/optimizer_options.{h,cpp}` with `ScanToMapOptions`, `MotionModelOptions`, `VelocityPrior`, `get_scan_to_map_options` and `get_motion_model_options` (design decision 1). Include the header from `app/lidar_odometry_utils.h`, and add both to `SOURCES`. Verify both presets build.
+- [x] 2.2 Add `tests/optimizer_options_test.cpp` (design decision 6) and compile `app/optimizer_options.cpp` into the tests. Verify `ctest` passes, and that the test fails when two builder lines are swapped (try it once, then revert). Run the step checks. Commit.
 
 ## 3. New signature
 

@@ -240,6 +240,8 @@ set(SOURCES
   app/folder_inputs.h
   app/output_ports.h
   app/window.h
+  app/optimizer_options.cpp
+  app/optimizer_options.h
   app/toml_config_repository.cpp
   app/toml_config_repository.h
   app/folder_result_sink.cpp

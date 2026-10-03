@@ -1,4 +1,5 @@
 #include "lidar_odometry_utils.h"
+#include "optimizer_options.h"
 #include <hash_utils.h>
 #include <mutex>
 
