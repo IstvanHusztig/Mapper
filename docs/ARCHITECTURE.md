@@ -1,7 +1,7 @@
 # Architecture goals
 
 Status: **in progress.** This is the target architecture for dMapper (`dMapper.exe`) and the
-plan for getting there. Each migration step is its own OpenSpec change; steps 0–4 are done (see
+plan for getting there. Each migration step is its own OpenSpec change; steps 0–4 and 5a are done (see
 the roadmap).
 
 ## Why
@@ -60,9 +60,9 @@ infrastructure and UI at the edge, and all source dependencies pointing inward.
   (`reference_buckets`, `buckets_indoor`/`buckets_outdoor`, `m_g`, `initial_points`, paths,
   `ImVec4 clear_color`). Step 1 split it into `OdometryConfig` (passed `const&`),
   `OdometryState` and `GuiPreferences`. Grouping `OdometryConfig` by section is left to step 5.
-- `WorkerData` (`core/include/structures.h`) carries cache file names and a GUI `show` flag
-  → a domain `Window` plus the `PointStore` port; view flags move to the GUI. Since step 4a the
-  app no longer uses the cache file names; they go away with `Window` in step 5.
+- ✅ `WorkerData` (`core/include/structures.h`) carried cache file names and a GUI `show` flag.
+  Step 4a moved the points behind the `PointStore` port, and step 5a replaced it in the app with
+  the domain `Window` (`app/window.h`). `WorkerData` stays in `core` only for `session.cpp`.
 - ✅ Globals in `lidar_odometry_gui.cpp` (`params`, `worker_data`, `imu_data`, `trajectory`,
   `pointsPerFile`, step flags). Step 2 moved the run data into `OdometryPipeline`. The GUI still
   keeps `params`, `gui_prefs`, its current `pipeline` and UI state as file-scope globals for the
@@ -126,7 +126,12 @@ Each step is one OpenSpec change, validated against the baseline.
      (`app/output_ports.h`) with the adapters `FolderResultSink` (every output file name and
      format) and `TomlConfigRepository`. `save_result` keeps only the computation, and the CLI and
      GUI change settings only through the repository.
-5. **Domain model:** `Window`, `Trajectory`, `GyroBiasState`; option structs for the optimizer.
+5. **Domain model**, split into two changes:
+   - 5a. ✅ **Domain types** (done 2026-10-03): `Window` (`poses`, `motion_model_poses`,
+     `timestamps`, `imu_angles`, `imu_acc`, `gyro_bias`), `GyroBiasState` and `ImuTrajectory` in
+     `app/window.h`; the app uses `windows` instead of `worker_data`.
+   - 5b. **Option structs** for `optimize_lidar_odometry` (about 35 positional parameters), built
+     from `OdometryConfig`.
 6. **Split the optimizer file** into domain services; first unit tests on synthetic data.
 7. **Layered CMake targets and folders;** move the `core/` pieces touched so far.
 

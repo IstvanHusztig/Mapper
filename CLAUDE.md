@@ -31,7 +31,7 @@ cmake --build --preset x64-Release --target dMapper
 ## Run
 
 - **Headless / CLI:** `dMapper <input_folder> <params.toml> <output_folder>`. Exactly 3 args triggers batch mode. The settings are the built-in defaults plus `<params.toml>` only, never a `default_settings.toml` from the working directory; an unreadable TOML exits 1.
-- **GUI:** any other argument count opens the freeglut + ImGui window, titled "dMapper". The menu bar has Start, View, Camera and Info:
+- **GUI:** any other argument count opens the freeglut + ImGui window, titled "dMapper". The menu bar has Start, View and Camera:
   - **Start → 1. Load parameters…** loads a TOML. This is the only way to change settings in the GUI; at start-up it loads `default_settings.toml` from the exe folder. The Start menu and the progress window show the active parameter file.
   - **Start → 2. Load data and process…** (Ctrl+O) picks the recording folder, then loads it on a worker thread, processes it with the same stages as the CLI, and saves `lio_result_<n>`. For the same input and settings the result is identical to the CLI's.
   - **View** has Show point cloud, Show trajectory, compass/ruler and Lock Z; **Camera** has the fixed views and orthographic projection.
@@ -51,10 +51,10 @@ The input folder is scanned non-recursively. `pair_recording_files` (`app/record
 
 Target architecture (Clean Architecture, layers, ports, migration roadmap) is in `docs/ARCHITECTURE.md`; refactors should move the code toward it. What follows describes the current code.
 
-**Pipeline:** `OdometryPipeline` (`app/odometry_pipeline.{h,cpp}`) owns one run's data (`points_per_file`, `imu`, `trajectory`, `worker_data`, `state`) and runs the stages `load` (1–3) → `run_odometry` (4) → `post_process` (loop closure if `use_loop_closure`, then consistency if `use_consistency`) → `save` (5). The CLI branch of `main()` and the GUI (global `pipeline`) both use it:
+**Pipeline:** `OdometryPipeline` (`app/odometry_pipeline.{h,cpp}`) owns one run's data (`points_per_file`, `imu`, `imu_trajectory`, `windows`, `state`) and runs the stages `load` (1–3) → `run_odometry` (4) → `post_process` (loop closure if `use_loop_closure`, then consistency if `use_consistency`) → `save` (5). The CLI branch of `main()` and the GUI (global `pipeline`) both use it:
 1. `load_data` — read the LAZ chunks and IMU CSV through the `RecordingSource`, shift the points by the lever arm, and sort them.
 2. `calculate_trajectory` — IMU-only orientation via Fusion AHRS (NWU/ENU/NED convention flags in params).
-3. `compute_step_1` — cut the data into `WorkerData` windows (points + intermediate trajectory per chunk).
+3. `compute_step_1` — cut the data into `Window`s (`app/window.h`: `poses`, `motion_model_poses`, `timestamps`, `imu_angles`, `imu_acc`, `gyro_bias`); each window's points go to the `PointStore`.
 4. `compute_step_2` (`app/lidar_odometry_utils_optimizers.cpp`) — per-window scan-to-map optimization against an NDT-bucket reference map (`optimize_lidar_odometry`, `optimize_sf*`, `optimize_icp`), optional `Consistency`/`Consistency2` passes (`run_consistency`, run in `post_process` when `use_consistency = true`). Loop closure: `run_loop_closure` (`app/loop_closure.cpp`).
 5. `save_result` (`app/lidar_odometry.cpp`) — concatenate the windows into output chunks, place the points and compute the relative trajectories, and hand everything to the `ResultSink`. It does no file I/O.
 
@@ -68,7 +68,7 @@ Target architecture (Clean Architecture, layers, ports, migration roadmap) is in
 - `DiskPointStore` (`<folder>/cache/*.cache`, window files numbered from 0);
 - `FolderPreviewSink` (`<folder>/preview`).
 
-The pipeline records the cache and preview folders in `state.paths` from the ports' `location()`. `WorkerData`'s `*_cache_file_name` fields are no longer used; they stay only because `core/src/session.cpp` reads one. **Output I/O and settings:** two ports from `app/output_ports.h`:
+The pipeline records the cache and preview folders in `state.paths` from the ports' `location()`. The app doesn't use `core`'s `WorkerData` any more; it only remains because `core/src/session.cpp` uses it. **Output I/O and settings:** two ports from `app/output_ports.h`:
 - `ResultSink` receives a finished run in a fixed order: point sizes, each chunk's cloud and `TrajectoryRow`s, the merged cloud, chunk poses, index poses, the `SessionSummary`, the parameters and the processing results.
 - `ConfigRepository` loads and saves `OdometryConfig` + `RunPaths` + `GuiPreferences` by location.
 
@@ -97,7 +97,7 @@ GUI defaults are loaded by `set_lidar_odometry_default_params` (in `lidar_odomet
 
 **IMU rotation prior and gyro bias** (in `optimize_lidar_odometry` / `compute_step_2`, all on by default):
 - `[motion_model_uncertainty]`: `use_time_scaled_rotation_sigma` replaces the constant `*_om/fi/ka_1_sigma_deg` with `max(rotation_sigma_inflation_k * gyro_arw_{x,y,z}_deg_sqrt_s * sqrt(dt), rotation_sigma_floor_deg)` per consecutive-node edge.
-- `[gyro_bias_estimation]`: `use_gyro_bias_estimation` adds a 3-axis gyro bias to each window's unknowns, carried to the next window as a prior. The prior sigma starts at `gyro_bias_initial_sigma_deg_s`, grows by `gyro_bias_rw_deg_s_sqrt_s`, and the bias is clamped at `gyro_bias_max_deg_s`. `handoff_tail_nodes` re-propagates each window's last nodes from the IMU before they seed the next window (0 = off). The per-window bias is written to `gyro_bias_per_window` in the results JSON.
+- `[gyro_bias_estimation]`: `use_gyro_bias_estimation` adds a 3-axis gyro bias to each window's unknowns (`Window::gyro_bias`, a `GyroBiasState` with `mean` and `covariance`), carried to the next window as a prior. The prior sigma starts at `gyro_bias_initial_sigma_deg_s`, grows by `gyro_bias_rw_deg_s_sqrt_s`, and the bias is clamped at `gyro_bias_max_deg_s`. `handoff_tail_nodes` re-propagates each window's last nodes from the IMU before they seed the next window (0 = off). The per-window bias is written to `gyro_bias_per_window` in the results JSON.
 - Switching all three off (`false`, `false`, `0`) reproduces the previous behaviour. The IMU CSV timestamps must be strictly increasing.
 - `tools/eval_odometry.py` (see `tools/README.md`) computes the trajectory and map-sharpness metrics used to validate changes here.
 

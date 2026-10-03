@@ -27,9 +27,9 @@ Every code commit: both presets build `dMapper` and `lidar_odometry_tests`; `cte
 
 - [ ] 3.1 Full 44 (background): verify IDENTICAL with `tools/baseline/44.manifest.json` (expected, since no arithmetic changed), or else that `compare_baseline.py --tolerance 1e-6` against `raw data/44_baseline` passes. Report which of the two.
 - [ ] 3.2 GUI check, **done by the user**: one `44_short` run (Start → 1 → `lidar-vertical.toml`, Start → 2 → `44_short`); the preview and trajectory look as before. I verify that the result is IDENTICAL with the manifest.
-- [ ] 3.3 Docs:
+- [x] 3.3 Docs:
   - `CLAUDE.md`: Pipeline (`windows`, `Window` in `app/window.h`), IMU rotation prior and gyro bias (`GyroBiasState`), and the note that `WorkerData` only remains for `core/src/session.cpp`;
   - `docs/ARCHITECTURE.md`: roadmap step 5 split into 5a (done) and 5b (option structs for `optimize_lidar_odometry`); §4, the `WorkerData` item is solved.
 
   Commit.
-- [ ] 3.4 Run `openspec validate domain-types --strict` and confirm it passes.
+- [x] 3.4 Run `openspec validate domain-types --strict` and confirm it passes.
