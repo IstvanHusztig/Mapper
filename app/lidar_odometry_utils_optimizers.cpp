@@ -5,8 +5,7 @@
 
 #include <export_laz.h>
 
-const double DEG_TO_RAD = M_PI / 180.0f;
-const double RAD_TO_DEG = 180.0f / M_PI;
+#include "angle_units.h"
 
 namespace
 {

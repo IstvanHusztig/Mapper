@@ -9,16 +9,16 @@ The GUI must be closed while building. Every move goes through `git diff`, which
 
 ## 1. Reference first
 
-- [ ] 1.1 Copy `out/build/x64-Release/bin` of master (dc71dcb) to the scratchpad. Run it on the full 44 in the background with `settings/lidar-vertical.toml` (design decision 7), then compare with `tools/baseline/44.manifest.json`. Count the "not used as prior" lines in the log. No builds or `44_short` runs until it finishes.
+- [x] 1.1 Copy `out/build/x64-Release/bin` of master (dc71dcb) to the scratchpad. Run it on the full 44 in the background with `settings/lidar-vertical.toml` (design decision 7), then compare with `tools/baseline/44.manifest.json`. Count the "not used as prior" lines in the log. No builds or `44_short` runs until it finishes.
   - **IDENTICAL:** keep the old folder as `raw data/44_baseline_2026-10-03` and make the run output the new `raw data/44_baseline`.
   - **DIFFERENT:** do the same, also rewrite `44.manifest.json` with `--write-manifest`, and commit the manifest on its own.
 
-  Report which case applied and the drop count.
-- [ ] 1.2 Replace `raw data/44_short_baseline` with a `44_short` run of master. Verify that the run is IDENTICAL with `44_short.manifest.json` before replacing the folder.
+  Report which case applied and the drop count. Result 2026-10-03: IDENTICAL, 35 files, 0 drops (2018 s); raw data/44_baseline replaced, old kept as 44_baseline_2026-10-03.
+- [x] 1.2 Replace `raw data/44_short_baseline` with a `44_short` run of master. Verify that the run is IDENTICAL with `44_short.manifest.json` before replacing the folder. Result 2026-10-03: IDENTICAL, 11 files; old folder kept as 44_short_baseline_2026-10-03.
 
 ## 2. Moves
 
-- [ ] 2.1 Add `app/angle_units.h` (design decision 4). Make the optimizer file include it instead of defining the constants. Run the step checks. Commit.
+- [x] 2.1 Add `app/angle_units.h` (design decision 4). Make the optimizer file include it instead of defining the constants. Run the step checks. Commit.
 - [ ] 2.2 Move `Blocks`, `SumBlocks` and `pose_band_to_sparse` to `app/normal_equations.{h,cpp}` (design decision 3).
   - Add `tests/normal_equations_test.cpp`:
     - `pose_band_to_sparse` of a matrix whose pose part has entries only within `max_offset` of the diagonal, plus full extra rows/columns, equals `sparseView()` of it;
