@@ -31,7 +31,7 @@ Every code commit: both presets build `dMapper` and `lidar_odometry_tests`; `cte
 
 ## 4. Integration
 
-- [ ] 4.1 Full 44 (background): verify IDENTICAL with `tools/baseline/44.manifest.json` (refreshed 2026-10-03), or else that `compare_baseline.py --tolerance 1e-6` against `raw data/44_baseline` passes. Report which.
+- [x] 4.1 Full 44 (background): verify IDENTICAL with `tools/baseline/44.manifest.json` (refreshed 2026-10-03), or else that `compare_baseline.py --tolerance 1e-6` against `raw data/44_baseline` passes. Report which. Result 2026-10-03: IDENTICAL, 35 files (2005 s).
 - [x] 4.2 Docs:
   - `CLAUDE.md` (Architecture: the option structs and `optimize_lidar_odometry`'s parameters; Testing: the new test source);
   - `docs/ARCHITECTURE.md` (roadmap 5b done; §4, the "about 40 positional arguments" item solved).
