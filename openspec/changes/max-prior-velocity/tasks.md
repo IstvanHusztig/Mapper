@@ -23,13 +23,13 @@ Every code commit: both presets build `dMapper` and `lidar_odometry_tests`. The 
 
 ## 2. Results
 
-- [ ] 2.1 Release CLI run on `44_short` with `settings/lidar-vertical.toml` and compare with `tools/baseline/44_short.manifest.json`. Count the "not used as prior" lines in the console log. Then:
+- [x] 2.1 Release CLI run on `44_short` with `settings/lidar-vertical.toml` and compare with `tools/baseline/44_short.manifest.json`. Count the "not used as prior" lines in the console log. Then:
   - **only the parameters TOML differs:** update that entry in `44_short.manifest.json`;
   - **other files differ too:** refresh `raw data/44_short_baseline` from the run and rewrite `44_short.manifest.json` with `--write-manifest`.
 
   In both cases, set the parameters TOML entry of `tools/baseline/44.manifest.json` to the new hash (design, Risks). No full 44 run (user decision, 2026-10-03).
 
-  Verify that the run compares IDENTICAL with the updated `44_short.manifest.json`. Report the drop count and which case applied. Commit the manifests on their own.
+  Verify that the run compares IDENTICAL with the updated `44_short.manifest.json`. Report the drop count and which case applied. Commit the manifests on their own. Result 2026-10-03: 0 drops; only the parameters TOML differed (the new line), so only that entry changed in both manifests; the re-compare is IDENTICAL, 11 files.
 
 ## 3. Docs
 
@@ -38,4 +38,4 @@ Every code commit: both presets build `dMapper` and `lidar_odometry_tests`. The 
   - one sentence in the "Velocity continuity" bullet of the Window optimization step.
 
   Verify that the page renders, by opening it in a browser or checking that the tags are balanced. Commit.
-- [ ] 3.2 Run `openspec validate max-prior-velocity --strict` and confirm it passes.
+- [x] 3.2 Run `openspec validate max-prior-velocity --strict` and confirm it passes.
