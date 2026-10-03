@@ -79,6 +79,8 @@ out/build/x64-Release/bin/dMapper.exe "<raw data>/44_short" settings/lidar-verti
 python tools/compare_baseline.py "<raw data>/44_short_check" tools/baseline/44_short.manifest.json
 ```
 
+The 44 reference was refreshed on 2026-10-03 from the output of the `domain-types` code (step 5a). Every 44 run since step 3 had differed from the 2026-10-01 reference by the same `/fp:fast` last-bit pattern, at most 1e-9 m. The old reference is kept as `raw data/44_baseline_2026-10-01`.
+
 The full 44 is checked against the manifest first. If that reports differences, check it again with `--tolerance 1e-6` against the baseline output folder `raw data/44_baseline`, which must be kept for this:
 
 ```
