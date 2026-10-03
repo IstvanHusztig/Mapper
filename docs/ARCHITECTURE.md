@@ -1,7 +1,7 @@
 # Architecture goals
 
 Status: **in progress.** This is the target architecture for dMapper (`dMapper.exe`) and the
-plan for getting there. Each migration step is its own OpenSpec change; steps 0–4 and 5a are done (see
+plan for getting there. Each migration step is its own OpenSpec change; steps 0–5 are done (see
 the roadmap).
 
 ## Why
@@ -70,8 +70,8 @@ infrastructure and UI at the edge, and all source dependencies pointing inward.
   changes `OdometryConfig` only through `ConfigRepository` (Start → Load parameters). It has no
   settings widgets and no georeferencing or editing tools. Georeferencing is planned as a
   separate post-processing module on result folders.
-- `optimize_lidar_odometry` takes about 40 positional arguments → option structs built from the
-  config.
+- ✅ `optimize_lidar_odometry` took about 35 positional arguments → since step 5b it takes a
+  `Window` and option structs built from the config (15 parameters).
 - `lidar_odometry_utils_optimizers.cpp` (about 3,000 lines) mixes optimizer math, the window loop,
   state hand-off and I/O → split into one domain service each.
 - `core/` mixes pure math (NDT, ICP, pose graph) with I/O (LAZ export, session, file dialogs)
@@ -130,8 +130,9 @@ Each step is one OpenSpec change, validated against the baseline.
    - 5a. ✅ **Domain types** (done 2026-10-03): `Window` (`poses`, `motion_model_poses`,
      `timestamps`, `imu_angles`, `imu_acc`, `gyro_bias`), `GyroBiasState` and `ImuTrajectory` in
      `app/window.h`; the app uses `windows` instead of `worker_data`.
-   - 5b. **Option structs** for `optimize_lidar_odometry` (about 35 positional parameters), built
-     from `OdometryConfig`.
+   - 5b. ✅ **Option structs** (done 2026-10-03): `optimize_lidar_odometry` takes the `Window` and
+     `ScanToMapOptions`, `MotionModelOptions` and `VelocityPrior` (`app/optimizer_options.h`, built
+     from `OdometryConfig`) instead of about 35 positional parameters.
 6. **Split the optimizer file** into domain services; first unit tests on synthetic data.
 7. **Layered CMake targets and folders;** move the `core/` pieces touched so far.
 
