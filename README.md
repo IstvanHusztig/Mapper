@@ -6,6 +6,8 @@ dMapper started as a standalone build of the LiDAR odometry (step 1) application
 
 **How a run works:** [`docs/PIPELINE.md`](docs/PIPELINE.md) explains the windows a run is cut into and how each stage uses them.
 
+**Performance:** [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) lists the performance fixes, the settings that trade speed, and the open findings.
+
 **Architecture goals:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) describes the target Clean Architecture and the migration roadmap (draft).
 
 ## Build
