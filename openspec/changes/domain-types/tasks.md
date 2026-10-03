@@ -26,7 +26,7 @@ Every code commit: both presets build `dMapper` and `lidar_odometry_tests`; `cte
 ## 3. Integration
 
 - [x] 3.1 Full 44 (background): verify IDENTICAL with `tools/baseline/44.manifest.json` (expected, since no arithmetic changed), or else that `compare_baseline.py --tolerance 1e-6` against `raw data/44_baseline` passes. Report which of the two. Result: not bit-identical against the manifest (30 of 35 files); within `--tolerance 1e-6`, max difference 1e-9, the same as every 44 run since step 3.
-- [ ] 3.2 GUI check, **done by the user**: one `44_short` run (Start → 1 → `lidar-vertical.toml`, Start → 2 → `44_short`); the preview and trajectory look as before. I verify that the result is IDENTICAL with the manifest.
+- [x] 3.2 GUI check, **done by the user**: one `44_short` run (Start → 1 → `lidar-vertical.toml`, Start → 2 → `44_short`); the preview and trajectory look as before. I verify that the result is IDENTICAL with the manifest. Result: `44_short/lio_result_10` from the GUI is IDENTICAL (11 files), in 192.8 s. At the user's request, the explanation of `Window` and how a run uses it went into `docs/PIPELINE.md` (linked from `README.md` and `CLAUDE.md`).
 - [x] 3.3 Docs:
   - `CLAUDE.md`: Pipeline (`windows`, `Window` in `app/window.h`), IMU rotation prior and gyro bias (`GyroBiasState`), and the note that `WorkerData` only remains for `core/src/session.cpp`;
   - `docs/ARCHITECTURE.md`: roadmap step 5 split into 5a (done) and 5b (option structs for `optimize_lidar_odometry`); §4, the `WorkerData` item is solved.

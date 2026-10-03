@@ -4,6 +4,8 @@ dMapper started as a standalone build of the LiDAR odometry (step 1) application
 
 **Full documentation:** open [`docs/index.html`](docs/index.html) in a browser. It covers the processing pipeline step by step and every parameter of `settings/lidar-vertical.toml`.
 
+**How a run works:** [`docs/PIPELINE.md`](docs/PIPELINE.md) explains the windows a run is cut into and how each stage uses them.
+
 **Architecture goals:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) describes the target Clean Architecture and the migration roadmap (draft).
 
 ## Build

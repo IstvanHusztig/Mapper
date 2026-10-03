@@ -54,7 +54,7 @@ Target architecture (Clean Architecture, layers, ports, migration roadmap) is in
 **Pipeline:** `OdometryPipeline` (`app/odometry_pipeline.{h,cpp}`) owns one run's data (`points_per_file`, `imu`, `imu_trajectory`, `windows`, `state`) and runs the stages `load` (1–3) → `run_odometry` (4) → `post_process` (loop closure if `use_loop_closure`, then consistency if `use_consistency`) → `save` (5). The CLI branch of `main()` and the GUI (global `pipeline`) both use it:
 1. `load_data` — read the LAZ chunks and IMU CSV through the `RecordingSource`, shift the points by the lever arm, and sort them.
 2. `calculate_trajectory` — IMU-only orientation via Fusion AHRS (NWU/ENU/NED convention flags in params).
-3. `compute_step_1` — cut the data into `Window`s (`app/window.h`: `poses`, `motion_model_poses`, `timestamps`, `imu_angles`, `imu_acc`, `gyro_bias`); each window's points go to the `PointStore`.
+3. `compute_step_1` — cut the data into `Window`s (explained in `docs/PIPELINE.md`; `app/window.h`: `poses`, `motion_model_poses`, `timestamps`, `imu_angles`, `imu_acc`, `gyro_bias`); each window's points go to the `PointStore`.
 4. `compute_step_2` (`app/lidar_odometry_utils_optimizers.cpp`) — per-window scan-to-map optimization against an NDT-bucket reference map (`optimize_lidar_odometry`, `optimize_sf*`, `optimize_icp`), optional `Consistency`/`Consistency2` passes (`run_consistency`, run in `post_process` when `use_consistency = true`). Loop closure: `run_loop_closure` (`app/loop_closure.cpp`).
 5. `save_result` (`app/lidar_odometry.cpp`) — concatenate the windows into output chunks, place the points and compute the relative trajectories, and hand everything to the `ResultSink`. It does no file I/O.
 
