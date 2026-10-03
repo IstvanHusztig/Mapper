@@ -56,8 +56,8 @@ namespace
     }
 }
 
-void optimize_sf2(std::vector<Point3Di> &intermediate_points, std::vector<Point3Di> &intermediate_points_sf, std::vector<Eigen::Affine3d> &intermediate_trajectory,
-                  const std::vector<Eigen::Affine3d> &intermediate_trajectory_motion_model,
+void optimize_sf2(std::vector<Point3Di> &intermediate_points, std::vector<Point3Di> &intermediate_points_sf, std::vector<Eigen::Affine3d> &trajectory,
+                  const std::vector<Eigen::Affine3d> &motion_model_trajectory,
                   const NDT::GridParameters &rgd_params, bool useMultithread, double wx,
                   double wy,
                   double wz,
@@ -66,7 +66,7 @@ void optimize_sf2(std::vector<Point3Di> &intermediate_points, std::vector<Point3
                   double wka)
 {
 
-    auto trj = intermediate_trajectory;
+    auto trj = trajectory;
     std::vector<Point3Di> point_cloud_global;
     std::vector<Eigen::Vector3d> point_cloud_global_sc;
     std::vector<int> indexes;
@@ -74,7 +74,7 @@ void optimize_sf2(std::vector<Point3Di> &intermediate_points, std::vector<Point3
     for (int i = 0; i < intermediate_points.size(); i++)
     {
         Point3Di pg = intermediate_points[i];
-        pg.point = intermediate_trajectory[intermediate_points[i].index_pose] * pg.point;
+        pg.point = trajectory[intermediate_points[i].index_pose] * pg.point;
         point_cloud_global.push_back(pg);
         double r_g = pg.point.norm();
         point_cloud_global_sc.emplace_back(r_g, atan2(pg.point.y(), pg.point.x()) * RAD_TO_DEG, acos(pg.point.z() / r_g) * RAD_TO_DEG);
@@ -107,7 +107,7 @@ void optimize_sf2(std::vector<Point3Di> &intermediate_points, std::vector<Point3
         if ((infm.array() < -threshold).any())
             return {Eigen::Matrix<double, 6, 6, Eigen::RowMajor>::Zero(), Eigen::Matrix<double, 6, 1>::Zero(), c};
 
-        const Eigen::Affine3d &m_pose = intermediate_trajectory[intermediate_points[indexes_i].index_pose];
+        const Eigen::Affine3d &m_pose = trajectory[intermediate_points[indexes_i].index_pose];
         const Eigen::Vector3d &p_s = intermediate_points[indexes_i].point;
         const TaitBryanPose pose_s = pose_tait_bryan_from_affine_matrix(m_pose);
 
@@ -144,9 +144,9 @@ void optimize_sf2(std::vector<Point3Di> &intermediate_points, std::vector<Point3
         return Blocks{AtPA * w, AtPB * w, c};
     };
 
-    Eigen::MatrixXd AtPAndt(intermediate_trajectory.size() * 6, intermediate_trajectory.size() * 6);
+    Eigen::MatrixXd AtPAndt(trajectory.size() * 6, trajectory.size() * 6);
     AtPAndt.setZero();
-    Eigen::MatrixXd AtPBndt(intermediate_trajectory.size() * 6, 1);
+    Eigen::MatrixXd AtPBndt(trajectory.size() * 6, 1);
     AtPBndt.setZero();
 
     std::vector<Blocks> AtPAndtBlocksToSum(intermediate_points.size());
@@ -161,14 +161,14 @@ void optimize_sf2(std::vector<Point3Di> &intermediate_points, std::vector<Point3
     std::vector<TaitBryanPose> poses;
     std::vector<TaitBryanPose> poses_desired;
 
-    for (size_t i = 0; i < intermediate_trajectory.size(); i++)
-        poses.push_back(pose_tait_bryan_from_affine_matrix(intermediate_trajectory[i]));
+    for (size_t i = 0; i < trajectory.size(); i++)
+        poses.push_back(pose_tait_bryan_from_affine_matrix(trajectory[i]));
 
-    for (size_t i = 0; i < intermediate_trajectory_motion_model.size(); i++)
-        poses_desired.push_back(pose_tait_bryan_from_affine_matrix(intermediate_trajectory_motion_model[i]));
+    for (size_t i = 0; i < motion_model_trajectory.size(); i++)
+        poses_desired.push_back(pose_tait_bryan_from_affine_matrix(motion_model_trajectory[i]));
 
     std::vector<std::pair<int, int>> odo_edges;
-    for (size_t i = 1; i < intermediate_trajectory.size(); i++)
+    for (size_t i = 1; i < trajectory.size(); i++)
         odo_edges.emplace_back(i - 1, i);
 
     for (size_t i = 0; i < odo_edges.size(); i++)
@@ -262,7 +262,7 @@ void optimize_sf2(std::vector<Point3Di> &intermediate_points, std::vector<Point3
     tripletListB.emplace_back(ir + 4, 0, 0);
     tripletListB.emplace_back(ir + 5, 0, 0);
 
-    Eigen::SparseMatrix<double> matA(tripletListB.size(), intermediate_trajectory.size() * 6);
+    Eigen::SparseMatrix<double> matA(tripletListB.size(), trajectory.size() * 6);
     Eigen::SparseMatrix<double> matP(tripletListB.size(), tripletListB.size());
     Eigen::SparseMatrix<double> matB(tripletListB.size(), 1);
 
@@ -270,8 +270,8 @@ void optimize_sf2(std::vector<Point3Di> &intermediate_points, std::vector<Point3
     matP.setFromTriplets(tripletListP.begin(), tripletListP.end());
     matB.setFromTriplets(tripletListB.begin(), tripletListB.end());
 
-    Eigen::SparseMatrix<double> AtPA(intermediate_trajectory.size() * 6, intermediate_trajectory.size() * 6);
-    Eigen::SparseMatrix<double> AtPB(intermediate_trajectory.size() * 6, 1);
+    Eigen::SparseMatrix<double> AtPA(trajectory.size() * 6, trajectory.size() * 6);
+    Eigen::SparseMatrix<double> AtPB(trajectory.size() * 6, 1);
 
     {
         Eigen::SparseMatrix<double> AtP = matA.transpose() * matP;
@@ -286,7 +286,7 @@ void optimize_sf2(std::vector<Point3Di> &intermediate_points, std::vector<Point3
     AtPA += AtPAndt.sparseView();
     AtPB += AtPBndt.sparseView();
 
-    Eigen::SparseMatrix<double> AtPA_I(intermediate_trajectory.size() * 6, intermediate_trajectory.size() * 6);
+    Eigen::SparseMatrix<double> AtPA_I(trajectory.size() * 6, trajectory.size() * 6);
     AtPA_I.setIdentity();
     AtPA += AtPA_I;
 
@@ -298,13 +298,13 @@ void optimize_sf2(std::vector<Point3Di> &intermediate_points, std::vector<Point3
         for (Eigen::SparseMatrix<double>::InnerIterator it(x, k); it; ++it)
             h_x.push_back(it.value());
 
-    if (h_x.size() == 6 * intermediate_trajectory.size())
+    if (h_x.size() == 6 * trajectory.size())
     {
         int counter = 0;
 
-        for (size_t i = 0; i < intermediate_trajectory.size(); i++)
+        for (size_t i = 0; i < trajectory.size(); i++)
         {
-            TaitBryanPose pose = pose_tait_bryan_from_affine_matrix(intermediate_trajectory[i]);
+            TaitBryanPose pose = pose_tait_bryan_from_affine_matrix(trajectory[i]);
             auto prev_pose = pose;
             pose.px += h_x[counter++] * 0.5;
             pose.py += h_x[counter++] * 0.5;
@@ -313,29 +313,29 @@ void optimize_sf2(std::vector<Point3Di> &intermediate_points, std::vector<Point3
             pose.fi += h_x[counter++] * 0.5;
             pose.ka += h_x[counter++] * 0.5;
 
-            intermediate_trajectory[i] = affine_matrix_from_pose_tait_bryan(pose);
+            trajectory[i] = affine_matrix_from_pose_tait_bryan(pose);
         }
 
         Eigen::Affine3d first = trj[0];
         std::vector<Eigen::Affine3d> out;
         out.push_back(first);
 
-        for (int i = 1; i < intermediate_trajectory.size(); i++)
+        for (int i = 1; i < trajectory.size(); i++)
         {
-            auto update = intermediate_trajectory[i - 1].inverse() * intermediate_trajectory[i];
+            auto update = trajectory[i - 1].inverse() * trajectory[i];
 
             first = first * update;
             out.push_back(first);
         }
 
-        intermediate_trajectory = out;
+        trajectory = out;
     }
 }
 
 void optimize_rigid_sf(
     const std::vector<Point3Di> &intermediate_points,
-    std::vector<Eigen::Affine3d> &intermediate_trajectory,
-    std::vector<Eigen::Affine3d> &intermediate_trajectory_motion_model,
+    std::vector<Eigen::Affine3d> &trajectory,
+    std::vector<Eigen::Affine3d> &motion_model_trajectory,
     const NDTBucketMapType &buckets,
     double distance_bucket,
     double polar_angle_deg,
@@ -351,10 +351,10 @@ void optimize_rigid_sf(
     double rgd_sf_sigma_ka_deg)
 {
 
-    auto shift = intermediate_trajectory[0].translation();
+    auto shift = trajectory[0].translation();
 
-    auto _intermediate_trajectory = intermediate_trajectory;
-    auto _intermediate_trajectory_motion_model = intermediate_trajectory_motion_model;
+    auto _intermediate_trajectory = trajectory;
+    auto _intermediate_trajectory_motion_model = motion_model_trajectory;
     auto _buckets = buckets;
 
     NDT::GridParameters rgd_params_sc;
@@ -600,8 +600,8 @@ void optimize_rigid_sf(
     for (int i = 0; i < _intermediate_trajectory.size(); i++)
         _intermediate_trajectory[i].translation() += shift;
 
-    intermediate_trajectory = _intermediate_trajectory;
-    intermediate_trajectory_motion_model = _intermediate_trajectory;
+    trajectory = _intermediate_trajectory;
+    motion_model_trajectory = _intermediate_trajectory;
 }
 
 void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window &window,

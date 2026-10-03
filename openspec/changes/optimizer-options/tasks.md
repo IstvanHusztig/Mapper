@@ -27,7 +27,7 @@ Every code commit: both presets build `dMapper` and `lidar_odometry_tests`; `cte
   - a grep for `lidar_odometry_motion_model_|ablation_study_|rgd_params_` in its body finds nothing.
 
   Run the step checks. Commit.
-- [ ] 3.2 Rename the parameters of `optimize_sf2` and `optimize_rigid_sf` (design decision 4), each with `--lines`, dry run first. Verify that a grep for `intermediate_trajectory` in `app/` finds nothing. Run the step checks. Commit.
+- [x] 3.2 Rename the parameters of `optimize_sf2` and `optimize_rigid_sf` (design decision 4), each with `--lines`, dry run first. Verify that a grep for `intermediate_trajectory` in `app/` finds nothing. Run the step checks. Commit.
 
 ## 4. Integration
 

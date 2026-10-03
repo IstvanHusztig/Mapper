@@ -310,8 +310,8 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
                              Eigen::Vector3d &acc_offset, Eigen::Matrix3d &acc_offset_cov, Logger &logger,
                              Eigen::Matrix3d *lidar_translation_information);
 
-void optimize_sf2(std::vector<Point3Di> &intermediate_points, std::vector<Point3Di> &intermediate_points_sf, std::vector<Eigen::Affine3d> &intermediate_trajectory,
-                  const std::vector<Eigen::Affine3d> &intermediate_trajectory_motion_model,
+void optimize_sf2(std::vector<Point3Di> &intermediate_points, std::vector<Point3Di> &intermediate_points_sf, std::vector<Eigen::Affine3d> &trajectory,
+                  const std::vector<Eigen::Affine3d> &motion_model_trajectory,
                   const NDT::GridParameters &rgd_params, bool useMultithread, double wx, double wy, double wz, double wom, double wfi, double wka);
 
 bool compute_step_2(std::vector<Window> &windows, const OdometryConfig &params, OdometryState &state, double &ts_failure, bool debugMsg, PointStore &point_store, PreviewSink &preview, Logger &logger, ProgressReporter &progress);
