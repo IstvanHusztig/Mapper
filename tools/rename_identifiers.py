@@ -120,13 +120,13 @@ def main():
         new, hits = rename_text(src, plain, member, lines)
         if not hits:
             continue
-        lines = src.split("\n")
+        src_lines = src.split("\n")
         counts = {}
         for line, old, repl in hits:
             counts[old] = counts.get(old, 0) + 1
             totals[old] = totals.get(old, 0) + 1
             if args.dry_run:
-                print("%s:%d: %s -> %s | %s" % (path, line, old, repl, lines[line - 1].strip()[:140]))
+                print("%s:%d: %s -> %s | %s" % (path, line, old, repl, src_lines[line - 1].strip()[:140]))
         if not args.dry_run:
             with open(path, "w", encoding="utf-8", newline="") as f:
                 f.write(new.replace("\n", nl))
