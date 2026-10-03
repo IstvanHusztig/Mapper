@@ -33,7 +33,7 @@ Every code commit: both presets build `dMapper` and `lidar_odometry_tests`. The 
 
 ## 3. Docs
 
-- [ ] 3.1 `docs/index.html`:
+- [x] 3.1 `docs/index.html`:
   - a row for `max_prior_velocity_mps` (5 m/s) in the `[motion_model_uncertainty]` table, after `lidar_odometry_motion_model_acc_1_sigma_mps2`. It says the setting is measured over the last 20 nodes (about 22 ms) and that 0 or below disables the prior;
   - one sentence in the "Velocity continuity" bullet of the Window optimization step.
 
