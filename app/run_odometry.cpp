@@ -194,6 +194,89 @@ namespace
             }
         }
     }
+
+    // use_robust_and_accurate_lidar_odometry: optimize_sf2 in spherical coordinates, then optimize_rigid_sf against the map
+    void run_robust_odometry(Window &window, const std::vector<Point3Di> &intermediate_points, OdometryState &state,
+                             const OdometryConfig &params, Logger &logger)
+    {
+        auto tr = window.poses;
+        auto trmm = window.motion_model_poses;
+
+        auto firstm = tr[0];
+
+        for (auto &t : tr)
+            t.translation() -= firstm.translation();
+
+        for (auto &t : trmm)
+            t.translation() -= firstm.translation();
+
+        NDT::GridParameters rgd_params_sc;
+
+        rgd_params_sc.resolution_X = params.distance_bucket;
+        rgd_params_sc.resolution_Y = params.polar_angle_deg;
+        rgd_params_sc.resolution_Z = params.azimutal_angle_deg;
+
+        std::vector<Point3Di> points_local_sf;
+        std::vector<Point3Di> points_local;
+
+        for (int ii = 0; ii < intermediate_points.size(); ii++)
+        {
+            double r_l = intermediate_points[ii].point.norm();
+
+            if (r_l > 0.5 && intermediate_points[ii].index_pose != -1 && r_l < params.max_distance_lidar_rigid_sf)
+            {
+                double polar_angle_deg_l = atan2(intermediate_points[ii].point.y(), intermediate_points[ii].point.x()) * RAD_TO_DEG;
+                double azimutal_angle_deg_l = acos(intermediate_points[ii].point.z() / r_l) * RAD_TO_DEG;
+
+                points_local.push_back(intermediate_points[ii]);
+
+                Point3Di p_sl = intermediate_points[ii];
+                p_sl.point.x() = r_l;
+                p_sl.point.y() = polar_angle_deg_l;
+                p_sl.point.z() = azimutal_angle_deg_l;
+
+                points_local_sf.push_back(p_sl);
+            }
+        }
+        log_info(logger) << "optimize_sf2";
+
+        double wx = 1000000;
+        double wy = 1000000;
+        double wz = 1000000;
+        double angle_sigma_rad = 0.1 * DEG_TO_RAD;
+        double wom = 1.0 / (angle_sigma_rad * angle_sigma_rad);
+        double wfi = 1.0 / (angle_sigma_rad * angle_sigma_rad);
+        double wka = 1.0 / (angle_sigma_rad * angle_sigma_rad);
+
+        for (int iter = 0; iter < params.robust_and_accurate_lidar_odometry_iterations; iter++)
+            optimize_sf2(points_local, points_local_sf, tr, trmm, rgd_params_sc, params.useMultithread, wx, wy, wz, wom, wfi, wka);
+
+        for (auto &t : tr)
+            t.translation() += firstm.translation();
+
+        for (auto &t : trmm)
+            t.translation() += firstm.translation();
+
+        window.poses = tr;
+        window.motion_model_poses = tr;
+
+        optimize_rigid_sf(intermediate_points,
+                          window.poses,
+                          window.motion_model_poses,
+                          state.buckets_indoor,
+                          params.distance_bucket_rigid_sf,
+                          params.polar_angle_deg_rigid_sf,
+                          params.azimutal_angle_deg_rigid_sf,
+                          params.robust_and_accurate_lidar_odometry_rigid_sf_iterations,
+                          params.max_distance_lidar_rigid_sf,
+                          params.useMultithread,
+                          params.rgd_sf_sigma_x_m,
+                          params.rgd_sf_sigma_y_m,
+                          params.rgd_sf_sigma_z_m,
+                          params.rgd_sf_sigma_om_deg,
+                          params.rgd_sf_sigma_fi_deg,
+                          params.rgd_sf_sigma_ka_deg);
+    }
 } // namespace
 
 bool compute_step_2(std::vector<Window> &windows, const OdometryConfig &params, OdometryState &state, double &ts_failure, bool debugMsg, PointStore &point_store, PreviewSink &preview, Logger &logger, ProgressReporter &progress)
@@ -299,85 +382,7 @@ bool compute_step_2(std::vector<Window> &windows, const OdometryConfig &params, 
             auto tmp_worker_data = windows[i].poses;
 
             if (params.use_robust_and_accurate_lidar_odometry)
-            {
-                auto tr = windows[i].poses;
-                auto trmm = windows[i].motion_model_poses;
-
-                auto firstm = tr[0];
-
-                for (auto &t : tr)
-                    t.translation() -= firstm.translation();
-
-                for (auto &t : trmm)
-                    t.translation() -= firstm.translation();
-
-                NDT::GridParameters rgd_params_sc;
-
-                rgd_params_sc.resolution_X = params.distance_bucket;
-                rgd_params_sc.resolution_Y = params.polar_angle_deg;
-                rgd_params_sc.resolution_Z = params.azimutal_angle_deg;
-
-                std::vector<Point3Di> points_local_sf;
-                std::vector<Point3Di> points_local;
-
-                for (int ii = 0; ii < intermediate_points.size(); ii++)
-                {
-                    double r_l = intermediate_points[ii].point.norm();
-
-                    if (r_l > 0.5 && intermediate_points[ii].index_pose != -1 && r_l < params.max_distance_lidar_rigid_sf)
-                    {
-                        double polar_angle_deg_l = atan2(intermediate_points[ii].point.y(), intermediate_points[ii].point.x()) * RAD_TO_DEG;
-                        double azimutal_angle_deg_l = acos(intermediate_points[ii].point.z() / r_l) * RAD_TO_DEG;
-
-                        points_local.push_back(intermediate_points[ii]);
-
-                        Point3Di p_sl = intermediate_points[ii];
-                        p_sl.point.x() = r_l;
-                        p_sl.point.y() = polar_angle_deg_l;
-                        p_sl.point.z() = azimutal_angle_deg_l;
-
-                        points_local_sf.push_back(p_sl);
-                    }
-                }
-                log_info(logger) << "optimize_sf2";
-
-                double wx = 1000000;
-                double wy = 1000000;
-                double wz = 1000000;
-                double angle_sigma_rad = 0.1 * DEG_TO_RAD;
-                double wom = 1.0 / (angle_sigma_rad * angle_sigma_rad);
-                double wfi = 1.0 / (angle_sigma_rad * angle_sigma_rad);
-                double wka = 1.0 / (angle_sigma_rad * angle_sigma_rad);
-
-                for (int iter = 0; iter < params.robust_and_accurate_lidar_odometry_iterations; iter++)
-                    optimize_sf2(points_local, points_local_sf, tr, trmm, rgd_params_sc, params.useMultithread, wx, wy, wz, wom, wfi, wka);
-
-                for (auto &t : tr)
-                    t.translation() += firstm.translation();
-
-                for (auto &t : trmm)
-                    t.translation() += firstm.translation();
-
-                windows[i].poses = tr;
-                windows[i].motion_model_poses = tr;
-
-                optimize_rigid_sf(intermediate_points,
-                                  windows[i].poses,
-                                  windows[i].motion_model_poses,
-                                  state.buckets_indoor,
-                                  params.distance_bucket_rigid_sf,
-                                  params.polar_angle_deg_rigid_sf,
-                                  params.azimutal_angle_deg_rigid_sf,
-                                  params.robust_and_accurate_lidar_odometry_rigid_sf_iterations,
-                                  params.max_distance_lidar_rigid_sf,
-                                  params.useMultithread,
-                                  params.rgd_sf_sigma_x_m,
-                                  params.rgd_sf_sigma_y_m,
-                                  params.rgd_sf_sigma_z_m,
-                                  params.rgd_sf_sigma_om_deg,
-                                  params.rgd_sf_sigma_fi_deg,
-                                  params.rgd_sf_sigma_ka_deg);
-            }
+                run_robust_odometry(windows[i], intermediate_points, state, params, logger);
 
             windows[i].motion_model_poses = windows[i].poses;
 
