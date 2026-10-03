@@ -86,6 +86,8 @@ The loop around it is `run_lm_iterations` (`app/run_odometry.cpp`, file-local). 
 
    If a target is missed, implementation pauses and the numbers are reported: it may be a real property of the optimizer, for example the 1e-4 m translation priors. The user decides whether to accept a different target or to look into the optimizer.
 
+7. **No app change, so no full 44.** `dMapper` is rebuilt from unchanged sources, so a `44_short` IDENTICAL check is enough to show it. This is the usual rule's exception for test-only changes, stated here so it isn't silently skipped.
+
 8. **The iteration count is measured on the two drift scenarios.**
    - The helper (decision 4) takes the number of iterations and an optional callback that records each iteration's `delta` and the largest position and heading error against the truth. The drift tests run it for 100 iterations, the default `nr_iter`.
    - After each iteration, the test records:
@@ -98,8 +100,6 @@ The loop around it is `run_lm_iterations` (`app/run_odometry.cpp`, file-local). 
      - the error against the truth at N_fast and at 100, and the run time per iteration.
    - The test asserts only that N_final < 100, so the result is meaningful. Everything else is reported, not asserted.
    - The numbers and the caveat go into `docs/PERFORMANCE.md`, under the `convergence_delta_threshold` and `nr_iter` rows. The caveat: a synthetic window is smaller, noise-free and well-conditioned, so a real window will need at least as many iterations. A real-data check would be the follow-up: log the iteration count per window on `44_short`.
-
-7. **No app change, so no full 44.** `dMapper` is rebuilt from unchanged sources, so a `44_short` IDENTICAL check is enough to show it. This is the usual rule's exception for test-only changes, stated here so it isn't silently skipped.
 
 ## Risks / Trade-offs
 
