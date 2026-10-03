@@ -76,7 +76,7 @@ Their adapters:
 - `FolderResultSink` (`app/folder_result_sink.{h,cpp}`) holds every output file name and format: the LAZ files and the merged LAZ writer, the trajectory CSV, `.mri`/`.mrp`, `index_poses.json`, `session.mjs`, and the parameters TOML (written through its `ConfigRepository`), plus the results JSON. It also has `get_next_result_path` (the GUI's `lio_result_<n>`).
 - `TomlConfigRepository` (`app/toml_config_repository.{h,cpp}`) wraps `TomlIO`.
 
-`OdometryPipeline::save(ResultSink&, gui, elapsed)` writes a run. The CLI builds a `FolderResultSink` on `argv[3]`, and the GUI builds one on the next `lio_result_<n>`. The CLI, the GUI defaults and Load/Save parameters load and save settings only through `TomlConfigRepository`; `TomlIO` is used only inside it.
+`OdometryPipeline::save(ResultSink&, gui, elapsed)` writes a run. The CLI builds a `FolderResultSink` on `argv[3]`, and the GUI builds one on the next `lio_result_<n>`. The CLI, the GUI defaults and Start → Load parameters load settings, and `FolderResultSink` saves them, only through `TomlConfigRepository`; `TomlIO` is used only inside it.
 
 **Reporting:** pipeline code never writes to the console and has no progress atomics or sleeps. It uses two ports from `app/run_reporting.h`, passed in explicitly:
 - `Logger` for messages: `log_info(logger) << ...`, also `log_debug`, `log_warning`, `log_error`. Each message has its own stream, so it sets its own precision.
