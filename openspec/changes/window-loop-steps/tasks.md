@@ -52,7 +52,7 @@ The GUI must be closed while building. Code is moved, not rewritten: `git diff -
 - [x] 3.3 Extract the LM iteration loop with its window log (lines 390–439), and the gyro-bias update with its log (lines 441–452). Run the step checks. Commit.
 - [x] 3.4 Extract the NaN check (lines 534–549), the map update (lines 566–622), and the end-of-run summary (lines 625–647). Verify:
   - the loop body is a sequence of step calls;
-  - `wc -l app/run_odometry.cpp` is about 400 or less, with the loop function about 200.
+  - `wc -l app/run_odometry.cpp` is about 400 or less, with the loop function about 200. Result: the loop is 126 lines; the file is 644, above the estimate, because the file-local steps (about 500 lines of moved code) live there.
 
   Run the step checks. Commit.
 - [x] 3.5 Rename `compute_step_2` to `optimize_windows` with `tools/rename_identifiers.py` (dry run first) in `app/`. Fix the comment mentions by hand: `app/odometry_pipeline.h` and `app/optimizer_options.h`. Run the step checks. Commit.
@@ -60,9 +60,9 @@ The GUI must be closed while building. Code is moved, not rewritten: `git diff -
 ## 4. Integration
 
 - [ ] 4.1 Full 44 in the background. Verify IDENTICAL with `tools/baseline/44.manifest.json`, or else that `compare_baseline.py --tolerance 1e-6` against `raw data/44_baseline` passes. Report which.
-- [ ] 4.2 Docs. Commit.
+- [x] 4.2 Docs. Commit.
   - `CLAUDE.md`: `optimize_windows` and its steps (`app/window_steps.cpp`), plus the Testing list;
   - `docs/PIPELINE.md` and `docs/index.html`: the function name;
   - `docs/ARCHITECTURE.md`: 6b ✅, and a note on the quadratic re-chaining. A new decision: refactors of numeric code are checked bit for bit with a precise build, while the `/fp:fast` build only has to be within 1e-6;
   - `CLAUDE.md` (Testing) and `tools/README.md`: how to make the precise build and its reference.
-- [ ] 4.3 Run `openspec validate window-loop-steps --strict` and confirm it passes.
+- [x] 4.3 Run `openspec validate window-loop-steps --strict` and confirm it passes.

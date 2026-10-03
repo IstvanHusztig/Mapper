@@ -89,6 +89,21 @@ python tools/compare_baseline.py --tolerance 1e-6 "<raw data>/44_check" "<raw da
 
 Why the tolerance: the Release build with `HD_CPU_OPTIMIZATION=AUTO` on an AMD CPU uses `/fp:fast` with whole-program optimization. The compiler may then evaluate floating-point expressions in a different order when unrelated code changes, which changes the last bits of a long run. In step 3 (`logger-progress-ports`), changing only console output moved the 44 trajectories by at most 1e-9, while `44_short` stayed identical.
 
+### Precise build for exact refactor checks
+
+A refactor that reshapes numeric code can change the last bits of the normal (`/fp:fast`) build although it is exact (see `docs/ARCHITECTURE.md`, Decisions). Such a change is checked with a second Release build without `/fp:fast`, built outside the repo's `out/` tree (it is not a preset):
+
+```
+cmake -S . -B <scratch>/bp -G Ninja -DCMAKE_BUILD_TYPE=Release -DHD_CPU_OPTIMIZATION=GENERIC -DCMAKE_C_COMPILER=cl.exe -DCMAKE_CXX_COMPILER=cl.exe
+cmake --build <scratch>/bp --target dMapper
+```
+
+1. Build master this way, run it on `44_short`, and write a manifest of its output: `compare_baseline.py --write-manifest <out> <scratch>/44_short_precise.manifest.json --dataset 44_short --params settings/lidar-vertical.toml --cpu-optimization GENERIC`.
+2. On every commit of the change, rebuild `<scratch>/bp`, run `44_short` again and compare with that manifest: it must be IDENTICAL.
+3. The normal build's `44_short` must then be within `--tolerance 1e-6` of `raw data/44_short_baseline`.
+
+The precise and the normal build differ from each other by millimetres over a run, so never compare one with the other's reference. In `window-loop-steps` (2026-10-03) every commit was precise-identical, while the normal build moved by at most 1e-11.
+
 ### compare_baseline.py
 
 Compares an output folder with a baseline output folder or a manifest. Pure Python 3.

@@ -34,7 +34,7 @@ recording ──► ImuTrajectory (AHRS orientation per IMU sample)
                 │   poses = motion_model_poses = IMU-based start guess
                 │   + timestamps, imu_angles, imu_acc; points -> PointStore
                 ▼
-  compute_step_2   for each window i, in order:
+  optimize_windows for each window i, in order:
                 │   - start from the end of window i-1 (velocity, gyro bias as prior)
                 │   - load its intermediate points, optimize the poses against the
                 │     NDT map + motion model + gyro bias  -> poses, gyro_bias
@@ -54,7 +54,7 @@ In more detail:
   - It builds the windows from the `ImuTrajectory`.
   - Every point is attached to the node just before its timestamp (at most 10 ms), so each point gets its own pose (motion compensation). Windows with too few points are dropped.
   - The original and decimated points go to the `PointStore`.
-- **`compute_step_2`** (`app/run_odometry.cpp`) runs the windows in order:
+- **`optimize_windows`** (`app/run_odometry.cpp`, steps in `app/window_steps.cpp`) runs the windows in order:
   - The previous window's end gives the start guess and the velocity.
   - Its `gyro_bias` becomes the next window's prior (the prior's uncertainty grows with time).
   - `optimize_lidar_odometry` adjusts the window's `poses` against the NDT map of the points so far, the motion-model prior and the gyro bias.

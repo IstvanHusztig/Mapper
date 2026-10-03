@@ -1,7 +1,7 @@
 # Architecture goals
 
 Status: **in progress.** This is the target architecture for dMapper (`dMapper.exe`) and the
-plan for getting there. Each migration step is its own OpenSpec change; steps 0–5 and 6a are done (see
+plan for getting there. Each migration step is its own OpenSpec change; steps 0–5, 6a and 6b are done (see
 the roadmap).
 
 ## Why
@@ -137,8 +137,11 @@ Each step is one OpenSpec change, validated against the baseline.
 6. **Split the optimizer file** into domain services, split into three changes:
    - 6a. ✅ **One file per service** (done 2026-10-03): pure moves out of the 2,922-line file;
      the first tests on synthetic data cover the IMU kinematics and the normal-equation helpers.
-   - 6b. **Window loop into named steps:** `compute_step_2` broken into functions with a
-     carried-state struct (velocity prior, gyro bias, acceleration offset, degeneracy gating, hand-off).
+   - 6b. ✅ **Window loop into named steps** (done 2026-10-03): `compute_step_2` became
+     `optimize_windows`, a 126-line loop of named steps with `OdometryRunSetup` and `WindowLoopCarry`;
+     the steps that only need window data are in `app/window_steps.cpp`, with tests. Found on the way:
+     after every window the loop re-chains all later windows (about 238,000 window chains on 44); removing
+     that changes the last bits of the results, so it is a separate change.
    - 6c. **Synthetic scan-to-map test** of `optimize_lidar_odometry` (the tests then link `core`).
 7. **Layered CMake targets and folders;** move the `core/` pieces touched so far.
 
@@ -171,6 +174,12 @@ Each step is one OpenSpec change, validated against the baseline.
   passes on 44 if every text output is within `--tolerance 1e-6` of the baseline folder (decided
   2026-10-02). A change that deliberately alters numerical behaviour sets a new baseline in its
   own commit.
+- **Exactness of a numeric refactor is checked with a precise build** (decided 2026-10-03, in step 6b).
+  Under `/fp:fast` the compiler decides per function whether to reassociate or fuse floating-point
+  operations, so moving locals into a struct already changed `44_short` by 1e-11. A Release build
+  without `/fp:fast` (`HD_CPU_OPTIMIZATION=GENERIC`) may not do that: an exact refactor stays
+  bit-identical there. Such a change checks every commit bit for bit with the precise build against
+  a precise reference from master, and the normal build within `--tolerance 1e-6`.
 - **Domain names in code.** Use cases are `SplitIntoWindows`, `RunOdometry`, `CloseLoops` and so
   on. "Step 1" and "Step 2" remain only as GUI labels and in the user docs.
 
