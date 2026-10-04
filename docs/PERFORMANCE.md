@@ -100,7 +100,7 @@ OpenSpec change `chain-next-window-only`. The full explanation, with diagrams an
 | `convergence_delta_threshold` | `1e-12` (all `nr_iter` iterations run) | `1e-2` is 3–4× faster | 0.5–1.5 % more occupied 3 cm cells on recordings 42/43, i.e. a slightly less sharp map |
 | `useMultithread` | `false` | `true` is about 40 % faster per window | the parallel float sum makes results differ from run to run |
 | `real_time_threshold_seconds` | `10.0` | caps a window's time | when a window hits it, results depend on machine speed and load |
-| `nr_iter` | 100 | fewer iterations are faster | less converged windows (but see below: a synthetic window converges in 4) |
+| `nr_iter` | 100 | fewer iterations are faster | real windows settle after median 51, at most 91 iterations on 44 (see below) |
 
 The defaults favour reproducible, sharp results over speed. `docs/index.html` has the details of each setting.
 
@@ -118,7 +118,24 @@ The unit test `scan-to-map: iterations needed` (`tests/scan_to_map_test.cpp`) ru
 
 On this window, 96 of the 100 iterations change nothing, and stopping at the fast-mode threshold costs 0.006 mm.
 
-**Caveat.** A synthetic window is small, well-conditioned and has no outliers; a real window has about 360 nodes, more points and harder geometry, so it may need more iterations. This is evidence that `nr_iter = 100` is generous, not proof. The next step would be to log the iteration count per window on `44_short` and `44`. Any change to `nr_iter` or `convergence_delta_threshold` would be its own change, checked with a full 44 run and `tools/eval_odometry.py`.
+A synthetic window is small, well-conditioned and has no outliers; a real window has about 360 nodes, more points and harder geometry. So the same two numbers were measured on the reference recordings.
+
+### How many iterations a real window needs (measured 2026-10-04)
+
+The debug setting `log_iteration_convergence` (`[lidar_odometry_debug_info]`, off by default) prints one `convergence window …` line per window and a summary at the end of the run. `tools/convergence_summary.py` turns a saved console log into histograms. The definitions are those of the synthetic test: a window has *settled* after the first iteration from which its poses stay within 0.1 mm and 0.001° of the result after all iterations; *fast stop* is the first iteration with `delta < 1e-2`, and its error is the largest node difference from the final poses at that point. The results are bit-identical with the setting on.
+
+| | Synthetic window | `44_short` (70 windows) | `44` (690 windows) |
+|---|---|---|---|
+| Settled after (median / p90 / max) | 4 | 52 / 74 / 83 | 51 / 79 / 91 |
+| `delta` first below `1e-2` after (median / p90 / max) | 3 | 19 / 43 / – | 27 / 52 / 72 |
+| Error at that point against the final poses (median / p90 / max) | 0.006 mm | 0.013 / 0.051 / 0.174 mm | 0.016 / 0.12 / 1.48 mm (window 329) |
+
+Every window reached `delta < 1e-2`, and every window settled before iteration 100. The 44 odometry took 1562 s with the setting on (1567 s for the last run without it), about 23 ms per iteration.
+
+**What this suggests** (no setting was changed):
+- **`nr_iter`:** a real window needs about ten times as many iterations as the synthetic one, and the slowest settle at 91 of 100. Part of that is the damping, which grows ×10 every 10 iterations and freezes the poses towards the end. A smaller `nr_iter` would save time only by cutting windows that are still moving, so 100 stays.
+- **`convergence_delta_threshold = 1e-2`:** it would stop a window after median 27 instead of 100 iterations, which matches the 3–4× speed-up measured earlier. The poses it leaves behind differ from the full run by a median 0.016 mm and at most 1.5 mm, but those small differences add up along the trajectory; on recordings 42/43 the map was 0.5–1.5 % less sharp. It remains the fast mode, not the default.
+- A change to either would be its own change, checked with a full 44 run and `tools/eval_odometry.py`.
 
 ## Open findings
 
