@@ -7,13 +7,21 @@
 ## 1. Fixture
 
 - [x] 1.1 Move the scene helpers of `tests/scan_to_map_test.cpp` (faces, face sampling, pose errors) into `tests/synthetic_recording.{h,cpp}` without changing them, and use them from there. Add `tests/memory_point_store.h` (decision 2), the DLL copy for the test target (decision 7), and the new files to `tests/CMakeLists.txt`. Verify: both presets, `ctest`; the 6c `MESSAGE` lines print the same numbers as before the move (diff the output of `lidar_odometry_tests -tc="scan-to-map*" -s`). Commit. Result: `NullLogger`, `Face`, `Scene`, `box_scene`, `face_point`, `face_area`, `sample_scene`, `pose`, `PoseError` and `max_error` moved verbatim into `namespace synthetic`. All 7 6c messages print the same numbers as in `ndt-bucket-statistics` 2.2 (0.366667 mm … corridor 1.72194 / 986.754). Both presets build and `ctest` passes (Release 4 s, Debug 56 s), and `src/` and `core/` are unchanged.
-- [ ] 1.2 Add the loop scene, the two-lap truth and the windows with their observations (decision 1), plus a fixture test:
+- [x] 1.2 Add the loop scene, the two-lap truth and the windows with their observations (decision 1), plus a fixture test:
   - every point lies on a face within 1 cm;
   - each point's timestamp maps to its own node by consistency's rule;
   - each window holds between 2,000 and 6,000 points;
   - the two laps pass each segment's place twice, more than 10 s apart.
 
   Report the recording's size, and the fixture's Release and Debug build times. Verify: both presets, `ctest`. Commit.
+
+  Result: two laps make 44 windows, 880 nodes and 132,000 points (3,000 per window); the lap takes 22.28 s. Building it takes 20 ms in Release and 0.8 s in Debug. The fixture test checks:
+  - points within 5.0 mm of their face;
+  - 0 timestamp mismatches;
+  - steps of 0.1 m and turns of at most 0.05 rad per node (the path is continuous where straights meet arcs);
+  - every first-lap node has a second-lap node within 6.6 cm.
+
+  Changed from the design: 2 m/s and 150 points per node instead of 1.5 m/s and 200, to keep Debug short (its `ctest` already took 56 s). Both presets build and `ctest` passes (Debug 60 s); `src/` and `core/` are unchanged.
 
 ## 2. Tests
 

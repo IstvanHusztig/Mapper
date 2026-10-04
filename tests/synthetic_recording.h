@@ -4,6 +4,7 @@
 // errors against a known truth (shared by scan_to_map_test, loop_closure_test and consistency_test).
 
 #include "run_reporting.h"
+#include "window.h"
 
 #include <Eigen/Dense>
 #include <structures.h>
@@ -54,4 +55,42 @@ std::vector<Point3Di> sample_scene(const Scene &s);
 Eigen::Affine3d pose(const Eigen::Vector3d &position, double yaw_rad);
 
 PoseError max_error(const std::vector<Eigen::Affine3d> &a, const std::vector<Eigen::Affine3d> &b);
+
+// ---- a recording that drives laps around a block (loop closure and consistency tests) ----
+
+// A floor of 20 m x 12 m x 3 m with a 12 m x 4 m block in the middle, so that four corridors, 4 m wide, form a loop.
+// Pillars and boxes stand along the walls at irregular spacing, so that no corridor is featureless (a straight corridor
+// with plain walls is degenerate along its length) and no stretch repeats another.
+Scene loop_scene();
+
+// One run through loop_scene: the true node poses and the points each node sees, cut into windows.
+struct Recording
+{
+    Scene scene;
+    double node_dt = 0.0;                            // [s]
+    double lap_time_s = 0.0;                         // time for one lap [s]
+    std::vector<Window> windows;                     // poses and motion_model_poses = the truth, timestamps per node
+    std::vector<std::vector<Eigen::Affine3d>> truth; // the true poses, per window and node
+    std::vector<std::vector<Point3Di>> points;       // per window: points in their node's frame, index_pose = node in window
+};
+
+// laps around the block's centreline (a rounded rectangle, 44.6 m) at 2 m/s, 1.5 m above the floor, moving forward
+// along the body x axis; nodes every 50 ms, windows of 20 nodes (1 s). Each node sees 150 points sampled on the faces
+// between 1 m and 15 m away (no occlusion), with +-5 mm noise along the face normal, from fixed seeds. A point's
+// timestamp is its node's time plus half a node interval, so that the consistency pass assigns it to the same node.
+Recording loop_recording(int laps);
+
+// all node poses, in order
+std::vector<Eigen::Affine3d> all_poses(const std::vector<Window> &windows);
+std::vector<Eigen::Affine3d> all_poses(const std::vector<std::vector<Eigen::Affine3d>> &per_window);
+
+// mean position [m] and rotation [rad] difference between two trajectories
+PoseError mean_error(const std::vector<Eigen::Affine3d> &a, const std::vector<Eigen::Affine3d> &b);
+
+// map sharpness as tools/eval_odometry.py measures it: the number of occupied voxels of edge `voxel` [m] when every
+// window's points are placed with its poses
+size_t occupied_voxels(const std::vector<Window> &windows, const std::vector<std::vector<Point3Di>> &points, double voxel);
+
+// distance of p to the nearest face of the scene that contains it in its extent
+double distance_to_scene(const Scene &s, const Eigen::Vector3d &p);
 }
