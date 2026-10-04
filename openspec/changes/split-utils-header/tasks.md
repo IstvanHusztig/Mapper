@@ -13,7 +13,7 @@ The scratchpad script `step_check.sh` runs all of them. Close the GUI before bui
 
 ## 2. The split
 
-- [ ] 2.1 Create `app/ndt_map.h`, `app/odometry_config.h` and `app/odometry_state.h` with the moved declarations (decision 1). Rename `app/lidar_odometry_utils.cpp` to `app/ndt_map.cpp` with `git mv`, and update `CMakeLists.txt` and `tests/CMakeLists.txt`. `lidar_odometry_utils.h` keeps only its third-party includes and includes of the three new headers. Verify: the step checks; `git diff -M` shows the blocks as moves. Commit.
+- [x] 2.1 Create `app/ndt_map.h`, `app/odometry_config.h` and `app/odometry_state.h` with the moved declarations (decision 1). Rename `app/lidar_odometry_utils.cpp` to `app/ndt_map.cpp` with `git mv`, and update `CMakeLists.txt` and `tests/CMakeLists.txt`. `lidar_odometry_utils.h` keeps only its third-party includes and includes of the three new headers. Verify: the step checks; `git diff -M` shows the blocks as moves. Commit. Result: both presets build, `ctest` passes, precise and fast `44_short` IDENTICAL (11 files).
 - [ ] 2.2 Delete `app/lidar_odometry_utils.h`. Give each file that no longer compiles the includes it uses, and an `fs` alias where it uses `fs::` (decision 4). Verify: the step checks; `grep -rn "lidar_odometry_utils" app tests CMakeLists.txt` finds nothing; no app header includes `laszip`, `nlohmann`, `ndt.h`, `session.h` or `freeglut` unless it declares something that needs it (list any exceptions here with the reason). Commit.
 
 ## 3. Include check and full run
