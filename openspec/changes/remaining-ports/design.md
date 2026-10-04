@@ -94,7 +94,7 @@ Where Fusion and TBB are used today (2026-10-04):
    - `lo_application`: no Fusion include directory, links only `lo_domain` (plus `PLATFORM_MISCELLANEOUS_LIBS` only if something besides TBB needs it, found out in the task).
    - `lo_infrastructure`: Fusion include directory and link, and TBB, all `PRIVATE`.
    - The test target drops the Fusion include directory.
-   - **The check:** temporarily add `#include <Fusion.h>` and `#include <tbb/tbb.h>` to `run_odometry.cpp`. Both must fail to compile; then revert.
+   - **The check:** temporarily add `#include <Fusion.h>` and `#include <tbb/tbb.h>` to `run_odometry.cpp`. Both must fail to compile; then revert. **Corrected in task 2.1:** `<Fusion.h>` alone still compiles, because the Windows .NET SDK has its own `Fusion.h` (`NETFXSDK\4.8\include\um`, on the compiler's system include path). The check therefore uses `<FusionAhrs.h>`, a header only the AHRS library has, and a Fusion type after `<Fusion.h>`.
 
 6. **Tests** (`tests/orientation_test.cpp`, serial executor in `tests/serial_executor.h`):
    - a recording fake `OrientationEstimator` (it records every call and returns a fixed rotation) on a hand-made `Imu`;

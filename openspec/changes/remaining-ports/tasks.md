@@ -15,7 +15,11 @@ Close the GUI before building. A precise `44_short` difference stops the task: f
 
 ## 2. Enforcement and tests
 
-- [ ] 2.1 CMake (decision 5): `lo_application` without the Fusion include directory, the `Fusion` link and TBB; `lo_infrastructure` with them, `PRIVATE`; the test target without the Fusion include directory; the comments above the libraries updated. Then the check: temporarily add `#include <Fusion.h>` and `#include <tbb/tbb.h>` to `src/application/run_odometry.cpp`; both must fail to compile (record the error text); revert. Verify: the step checks after the revert. Commit.
+- [x] 2.1 CMake (decision 5): `lo_application` without the Fusion include directory, the `Fusion` link and TBB; `lo_infrastructure` with them, `PRIVATE`; the test target without the Fusion include directory; the comments above the libraries updated. Then the check: temporarily add `#include <Fusion.h>` and `#include <tbb/tbb.h>` to `src/application/run_odometry.cpp`; both must fail to compile (record the error text); revert. Verify: the step checks after the revert. Commit. Result: `lo_application` now has only `src/application` and links only `lo_domain`; `lo_infrastructure` has the Fusion include directory and links `Fusion` and TBB, `PRIVATE`; the test target lost its Fusion directory. The check:
+  - `#include <tbb/tbb.h>` → `fatal error C1083 … "tbb/tbb.h": No such file or directory`, as intended;
+  - **finding:** `#include <Fusion.h>` compiled. The Windows .NET SDK has its own `Fusion.h` (`C:\Program Files (x86)\Windows Kits\NETFXSDK\4.8\include\um\Fusion.h`, on the system include path), so the name alone proves nothing. Checked instead: `#include <FusionAhrs.h>` → `C1083 … "FusionAhrs.h": No such file or directory`, and `<Fusion.h>` followed by `static FusionAhrs check_ahrs;` → `C4430` (unknown type). Design decision 5 is corrected.
+
+  Reverted; both presets build, `ctest` passes, and precise and fast `44_short` are IDENTICAL (11 files).
 - [ ] 2.2 Tests (decision 6): `tests/serial_executor.h` and `tests/orientation_test.cpp` with the recording fake estimator and the listed checks. Verify: both presets build, `ctest` passes (report the new cases' run time in Debug). Commit.
 - [ ] 2.3 Run the full 44 once (background or subagent). Verify: IDENTICAL with `tools/baseline/44.manifest.json`, or within `--tolerance 1e-6` of `raw data/44_baseline` (report the largest difference). Record the result here.
 
