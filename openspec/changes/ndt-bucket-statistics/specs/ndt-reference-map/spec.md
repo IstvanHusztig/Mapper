@@ -5,11 +5,15 @@ How the cells of the NDT reference maps (odometry map, loop closure, consistency
 ## ADDED Requirements
 
 ### Requirement: Cell statistics describe all of the cell's points
-With exact cell statistics enabled, each reference-map cell SHALL hold the mean of all points added to it and their covariance about that mean, with a weak isotropic prior worth one point so that cells with one or two points stay usable. The cell's surface normal SHALL be the direction of the smallest spread of that covariance, recomputed whenever the cell receives points, and oriented towards the viewpoint of the points that built it. The result SHALL NOT depend on the order in which a cell's points are added, beyond floating-point rounding.
+With exact cell statistics enabled, each reference-map cell SHALL hold the mean of all points added to it and their covariance about that mean, with a weak isotropic prior worth one point so that cells with one or two points stay usable. The cell's surface normal SHALL be the direction of the smallest spread of that covariance, recomputed whenever the cell receives points, and oriented towards the viewpoint of the points that built it. A cell whose two smallest spreads are too close to tell apart SHALL have no normal. The result SHALL NOT depend on the order in which a cell's points are added, beyond floating-point rounding.
 
 #### Scenario: Points on a plane, inserted along lines
 - **WHEN** points sampled on a flat surface are added to an empty map in grid order, line by line
 - **THEN** every cell with at least 10 points has its mean within 1 mm of the centroid of its points, and, if its points span an area rather than lie on one line, its normal within 5° of the surface normal
+
+#### Scenario: Points on one line
+- **WHEN** a cell's points lie along one line, so that their spread is the same in both directions across it
+- **THEN** the cell has no normal (a zero normal), while its mean and covariance are kept
 
 #### Scenario: Insertion order
 - **WHEN** the same points are added once in grid order and once in random order

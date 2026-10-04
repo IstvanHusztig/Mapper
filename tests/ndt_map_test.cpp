@@ -107,7 +107,10 @@ TEST_CASE("update_rgd exact: a plane inserted line by line gives the centroid an
             continue;
         CHECK((bucket.mean - e.centroid).norm() < 1e-3);
         if (!e.spans_area)
+        {
+            CHECK(bucket.normal_vector == Eigen::Vector3d::Zero()); // a sliver: points on one line define no plane
             continue;
+        }
         checked++;
         CHECK(angle_deg(bucket.normal_vector, plane.normal) < 5.0);
         CHECK(bucket.normal_vector.dot(plane.viewport - bucket.mean) > 0.0); // oriented towards the viewport
@@ -183,6 +186,28 @@ TEST_CASE("update_rgd exact: cells with fewer than 3 points have no normal")
     CHECK(buckets.begin()->second.number_of_points == 2);
     CHECK(buckets.begin()->second.normal_vector == Eigen::Vector3d::Zero());
     CHECK((buckets.begin()->second.mean - Eigen::Vector3d(0.65, 0.6, 0.6)).norm() < 1e-12);
+}
+
+TEST_CASE("update_rgd exact: points on one line give no normal")
+{
+    // 12 points along x with +-2 mm noise in z: the spread across the line is the same in y and z, so no normal is defined
+    std::mt19937 rng(5);
+    std::uniform_real_distribution<double> noise(-0.002, 0.002);
+    std::vector<Point3Di> points;
+    for (int i = 0; i < 12; i++)
+        points.push_back(make_point(Eigen::Vector3d(0.52 + 0.04 * i, 0.75, 0.7 + noise(rng))));
+    NDTBucketMapType buckets;
+    update_rgd(grid(0.5), buckets, points, Eigen::Vector3d(0.75, 0.75, 3.0), true);
+    REQUIRE(buckets.size() == 1);
+    CHECK(buckets.begin()->second.number_of_points == 12);
+    CHECK(buckets.begin()->second.normal_vector == Eigen::Vector3d::Zero());
+
+    // the same points with a second line next to them span a plane, which gets its normal
+    for (int i = 0; i < 12; i++)
+        points.push_back(make_point(Eigen::Vector3d(0.52 + 0.04 * i, 0.85, 0.7 + noise(rng))));
+    NDTBucketMapType plane;
+    update_rgd(grid(0.5), plane, points, Eigen::Vector3d(0.75, 0.75, 3.0), true);
+    CHECK(angle_deg(plane.begin()->second.normal_vector, Eigen::Vector3d::UnitZ()) < 5.0);
 }
 
 TEST_CASE("update_rgd exact: the far side of a thin wall doesn't enter the near side's cell")

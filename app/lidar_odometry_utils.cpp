@@ -139,6 +139,7 @@ void update_rgd(const NDT::GridParameters &rgd_params, NDTBucketMapType &buckets
     // as a prior worth one point; the normals of the cells this call changed are recomputed once, after all points
     const Eigen::Vector3d b(rgd_params.resolution_X, rgd_params.resolution_Y, rgd_params.resolution_Z);
     std::vector<uint64_t> touched;
+    constexpr double ambiguous_normal_ratio = 3.0;
 
     for (const auto &p : points_global)
     {
@@ -180,8 +181,14 @@ void update_rgd(const NDT::GridParameters &rgd_params, NDTBucketMapType &buckets
         auto &bucket = buckets.at(index);
         if (bucket.number_of_points < 3)
             continue;
-        // the direction of the smallest spread (eigenvalues ascending), flipped towards the viewport
+        // the direction of the smallest spread (eigenvalues ascending), flipped towards the viewport; none if the two
+        // smallest spreads are too close to tell apart, as for points on one line or one cross-section of the cell
         Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eigen_solver(bucket.cov, Eigen::ComputeEigenvectors);
+        if (eigen_solver.eigenvalues()(1) < ambiguous_normal_ratio * eigen_solver.eigenvalues()(0))
+        {
+            bucket.normal_vector = Eigen::Vector3d::Zero();
+            continue;
+        }
         Eigen::Vector3d nv = eigen_solver.eigenvectors().col(0).normalized();
         if (nv.dot(viewport - bucket.mean) < 0.0)
             nv *= -1.0;

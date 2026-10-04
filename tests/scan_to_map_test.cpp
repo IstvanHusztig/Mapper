@@ -10,7 +10,7 @@
 #include <random>
 
 // optimize_lidar_odometry on synthetic scenes with a known true trajectory: a closed box room (and an open corridor),
-// both NDT maps built with the app's update_rgd, and a window of nodes 10 ms apart moving through it. The options are
+// both NDT maps built with the app's update_rgd (exact cell statistics), and a window of nodes 10 ms apart moving through it. The options are
 // the values of settings/lidar-vertical.toml, set here so that tuning the shipped file doesn't change these tests.
 
 namespace
@@ -102,13 +102,14 @@ namespace
         NDTBucketMapType outdoor;
     };
 
-    // both reference maps, as seed_map builds them: update_rgd with the viewport at the scene centre
+    // both reference maps, as seed_map builds them: update_rgd with the viewport at the scene centre and the exact cell
+    // statistics (use_exact_ndt_bucket_statistics)
     Maps build_maps(const Scene &s, const ScanToMapOptions &options)
     {
         std::vector<Point3Di> points = sample_scene(s);
         Maps maps;
-        update_rgd(options.grid_indoor, maps.indoor, points, s.centre, false);
-        update_rgd(options.grid_outdoor, maps.outdoor, points, s.centre, false);
+        update_rgd(options.grid_indoor, maps.indoor, points, s.centre, true);
+        update_rgd(options.grid_outdoor, maps.outdoor, points, s.centre, true);
         return maps;
     }
 
@@ -340,15 +341,15 @@ TEST_CASE("scan-to-map: a perfect guess stays at the truth")
     Window w = make_window(truth);
     NullLogger logger;
 
-    // Measured 2026-10-04: 1.5 mm, 0.046 deg, delta 1.5e-4. About 1 mm of the position error is systematic: update_rgd keeps
-    // a bucket's first point as its mean (with the true centroids it is 0.5 mm). The rotation error scales with the point
-    // noise (0.022 deg at +-1 mm). The limits record today's behaviour with margin.
+    // Measured 2026-10-04 with exact cell statistics: 0.37 mm, 0.046 deg, delta 9e-8 (with the previous statistics, whose
+    // cell mean is the cell's first point: 1.5 mm, 0.046 deg, delta 1.5e-4). The rotation error scales with the point noise
+    // (0.022 deg at +-1 mm). The limits record this with margin.
     const double delta = run_iterations(points, w, maps, o, 5.0, 30, logger);
     const PoseError e = max_error(w.poses, truth);
     MESSAGE("perfect guess after 30 iterations: position ", e.position * 1000.0, " mm, rotation ", e.rotation / deg, " deg, delta ", delta);
-    CHECK(e.position < 0.003);
+    CHECK(e.position < 0.001);
     CHECK(e.rotation < 0.1 * deg);
-    CHECK(delta < 1e-3);
+    CHECK(delta < 1e-6);
 }
 
 TEST_CASE("scan-to-map: a yaw drift is corrected")
@@ -371,10 +372,10 @@ TEST_CASE("scan-to-map: a yaw drift is corrected")
     MESSAGE("yaw drift: end heading error ", heading_before / deg, " -> ", heading_after / deg, " deg; largest position error ",
             before.position * 1000.0, " -> ", after.position * 1000.0, " mm; largest rotation error ", before.rotation / deg, " -> ",
             after.rotation / deg, " deg");
-    // Measured 2026-10-04: 0.245 -> 0.016 deg at the end; the positions (exact in the guess) pick up 1.8 mm, the same
-    // systematic offset as with a perfect guess (bucket mean = first point)
+    // Measured 2026-10-04: 0.245 -> 0.014 deg at the end; the positions (exact in the guess) pick up 0.69 mm (1.8 mm with
+    // the previous cell statistics)
     CHECK(std::abs(heading_after) <= 0.1 * std::abs(heading_before));
-    CHECK(after.position < 0.003);
+    CHECK(after.position < 0.0015);
 }
 
 TEST_CASE("scan-to-map: the gyro bias is estimated")
@@ -396,7 +397,8 @@ TEST_CASE("scan-to-map: the gyro bias is estimated")
     const PoseError after = max_error(w.poses, truth);
     MESSAGE("estimated bias ", b.x(), " ", b.y(), " ", b.z(), " deg/s (injected 0 0 0.5); end heading error ",
             end_heading_error(w.poses, truth) / deg, " deg; largest position error ", after.position * 1000.0, " mm");
-    CHECK(b.z() == doctest::Approx(0.5).epsilon(0.2));
+    // Measured 2026-10-04: 0.038 -0.042 0.473 deg/s (0.045 -0.031 0.469 with the previous cell statistics)
+    CHECK(b.z() == doctest::Approx(0.5).epsilon(0.1));
     CHECK(std::abs(b.x()) < 0.05);
     CHECK(std::abs(b.y()) < 0.05);
 }
@@ -481,15 +483,15 @@ TEST_CASE("scan-to-map: the translation information is strong in every direction
     const Eigen::Vector3d eigenvalues =
         Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d>(translation_information(room(), options_from(test_config()))).eigenvalues();
     MESSAGE("room: information eigenvalues ", eigenvalues.x(), " ", eigenvalues.y(), " ", eigenvalues.z());
-    CHECK(eigenvalues.minCoeff() > 0.01 * eigenvalues.maxCoeff());
+    // Measured 2026-10-04: 477 807 1226 (677 740 1419 with the previous cell statistics)
+    CHECK(eigenvalues.minCoeff() > 0.1 * eigenvalues.maxCoeff());
 }
 
-// Expected to fail today (found 2026-10-04): update_rgd fixes a bucket's normal once, from its first 3 points and the initial
-// 3 cm isotropic covariance, and never updates it. On this corridor 60 % of the indoor buckets get a normal more than 30 deg
-// off the true face normal (12 % if the points are inserted in random order), so the information along the corridor is
-// large (measured 925 along x against 155 across). When the bucket statistics are fixed, doctest reports this test as
-// passing unexpectedly: then remove should_fail.
-TEST_CASE("scan-to-map: the translation information shows a degenerate corridor" * doctest::should_fail())
+// The previous cell statistics fail this (found 2026-10-04): they fix a cell's normal once, from its first 3 points and the
+// initial 3 cm isotropic covariance, so on this corridor 60 % of the indoor cells got a normal more than 30 deg off the
+// faces, and the information was 925 along x against 155 across. With the exact statistics and no normal for cells whose
+// points lie on one line, it is 1.7 along against 987 across (measured 2026-10-04).
+TEST_CASE("scan-to-map: the translation information shows a degenerate corridor")
 {
     const Eigen::Matrix3d info = translation_information(corridor(), options_from(test_config()));
     const double along = info(0, 0);

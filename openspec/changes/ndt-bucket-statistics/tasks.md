@@ -22,7 +22,7 @@ Close the GUI before building.
   Add the file to `tests/CMakeLists.txt`. Verify: the step checks with the switch off (the default), and `ctest` passes. Commit.
 
   Result: 5 new test cases pass. Both presets build, `ctest` passes, and precise and fast `44_short` are IDENTICAL (11 files). One finding: on the tilted plane, two edge cells (11 and 12 points) held a single grid line of points, a sliver cut off by a cell corner. Points on one line define no plane, so their normal came out 90° off. The test checks the normal only for cells whose points span an area (second spread above (1 cm)²), and the spec scenario says so.
-- [ ] 2.2 Switch `tests/scan_to_map_test.cpp` to exact statistics. Remove `should_fail` from the corridor test, and tighten the room limits to the measured values with margin. Report the old and new numbers:
+- [x] 2.2 Switch `tests/scan_to_map_test.cpp` to exact statistics. Remove `should_fail` from the corridor test, and tighten the room limits to the measured values with margin. Report the old and new numbers:
   - perfect-guess error;
   - drift;
   - bias;
@@ -30,6 +30,19 @@ Close the GUI before building.
   - corridor information.
 
   If the corridor test still fails, pause and report. Verify: `ctest` in both presets. Commit.
+
+  Result: with the exact statistics alone the corridor test still failed: 23.9 along x against 1073 across (45×, needs 100×). The rest came from 327 of 27,056 cells whose points lie on one line or one cross-section, where the normal is undefined. The user chose the ambiguous-normal rule (design decision 2: no normal when λ1 < 3·λ0), with a spec scenario and a unit test. Old → new (previous statistics → exact with the rule):
+
+  | | Previous | Exact |
+  |---|---|---|
+  | Perfect guess, 30 iterations | 1.53 mm, 0.046°, delta 1.5e-4 | 0.37 mm, 0.046°, delta 9e-8 |
+  | Yaw drift: end heading, largest position error | 0.245 → 0.016°, 1.77 mm | 0.245 → 0.014°, 0.69 mm |
+  | Gyro bias estimate (injected 0 0 0.5 °/s) | 0.045 −0.031 0.469 | 0.038 −0.042 0.473 |
+  | Iterations: N_final / N_fast (without, with bias) | 4 / 3, 4 / 3 | 5 / 3, 5 / 3 |
+  | Room information eigenvalues | 677 740 1419 | 477 807 1226 |
+  | Corridor information along / across | 925 / 155 | 1.7 / 987 |
+
+  The corridor test lost `should_fail`. New limits: perfect guess < 1 mm and delta < 1e-6, drift position < 1.5 mm, bias z within 10 %, room smallest > 0.1 × largest. `ctest` passes in both presets (45 cases), and precise and fast `44_short` with the switch off are IDENTICAL (11 files).
 
 ## 3. Evaluation (the user decides)
 
