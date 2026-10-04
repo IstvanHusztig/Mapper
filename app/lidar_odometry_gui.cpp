@@ -30,6 +30,7 @@
 #include <ctime>
 #include <chrono>
 #include "toml_config_repository.h"
+#include "format_time.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -376,32 +377,6 @@ std::string parameters_label(const std::string &source)
 {
     const fs::path p(source);
     return p.has_filename() && p.has_parent_path() ? p.filename().string() : source;
-}
-
-// Helper function to format time in human-readable format
-std::string formatTime(double seconds)
-{
-    if (seconds < 0)
-        return "Calculating...";
-
-    int hours = static_cast<int>(seconds / 3600);
-    int minutes = static_cast<int>((seconds - hours * 3600) / 60);
-    int secs = static_cast<int>(seconds - hours * 3600 - minutes * 60);
-
-    std::ostringstream oss;
-
-    if (hours > 0)
-    {
-        oss << std::setw(2) << std::setfill('0') << hours << "h ";
-    }
-    if (minutes > 0 || hours > 0)
-    {
-        oss << std::setw(2) << std::setfill('0') << minutes << "m ";
-    }
-
-    oss << std::setw(2) << std::setfill('0') << secs << "s";
-
-    return oss.str();
 }
 
 // Helper function to format estimated completion time
@@ -828,86 +803,23 @@ void mouse(int glut_button, int state, int x, int y)
     }
 }
 
-int main(int argc, char *argv[])
+// the GUI front end (any argument count other than the 3 of the CLI)
+int run_gui(int argc, char *argv[])
 {
-    try
-    {
-        if (argc == 4) //runnning from command line
-        {
-            // CLI settings: built-in defaults + the given file only (independent of the working directory)
-            OdometryConfig config{};
-            RunPaths paths;
-            GuiPreferences gui;
-            TomlConfigRepository config_repository;
-            if (!fs::is_regular_file(argv[2]) || !config_repository.load(argv[2], config, paths, gui))
-            {
-                std::cerr << "Cannot load parameters from: '" << argv[2] << "'" << std::endl;
-                return 1;
-            }
-            std::cout << "Parameters loaded OK from: " << argv[2] << std::endl;
+    std::cout << argv[0] << " input_folder parameters(*.toml) output_folder" << std::endl;
 
-            std::chrono::time_point<std::chrono::system_clock> start, end;
-            start = std::chrono::system_clock::now();
+    set_lidar_odometry_default_params(params, pipeline.state.paths, gui_prefs);
+    apply_background();
 
-            std::vector<std::string> input_file_names;
-            for (const auto &entry : fs::directory_iterator(argv[1]))
-            {
-                if (!entry.is_directory())
-                {
-                    std::cout << entry.path() << std::endl;
-                    input_file_names.push_back(entry.path().string());
-                }
-            }
+     
 
-            ConsoleReporter reporter;
-            OdometryPipeline pipeline(config, reporter, reporter, make_folder_inputs(input_file_names, reporter), paths);
-            if (pipeline.load())
-                log_info(reporter) << "step_1_done";
+    initGL(&argc, argv, winTitle, display, mouse);
+    glutCloseFunc(on_exit);
 
-            pipeline.run_all();
+    glutMainLoop();
 
-            end = std::chrono::system_clock::now();
-            std::chrono::duration<double> elapsed_seconds = end - start;
-            std::time_t end_time = std::chrono::system_clock::to_time_t(end);
-            std::cout << "calculations finished computation at "
-                      << std::ctime(&end_time)
-                      << "Elapsed time: " << formatTime(elapsed_seconds.count()).c_str() << "s\n";
-
-            FolderResultSink sink(argv[3], config_repository, reporter);
-            pipeline.save(sink, gui, elapsed_seconds.count());
-        }
-        else //full GUI mode
-        {
-            std::cout << argv[0] << " input_folder parameters(*.toml) output_folder" << std::endl;
-
-            set_lidar_odometry_default_params(params, pipeline.state.paths, gui_prefs);
-            apply_background();
-
-             
-
-            initGL(&argc, argv, winTitle, display, mouse);
-            glutCloseFunc(on_exit);
-
-            glutMainLoop();
-
-            ImGui_ImplOpenGL2_Shutdown();
-            ImGui_ImplGLUT_Shutdown();
-            ImGui::DestroyContext();
-        }
-    }
-    catch (const std::bad_alloc& e)
-    {
-        std::cerr << "System is out of memory : " << e.what() << std::endl;
-        mandeye::fd::OutOfMemMessage();
-    }
-    catch (const std::exception& e)
-    {
-        std::cout << e.what();
-    }
-    catch (...)
-    {
-        std::cerr << "Unknown fatal error occurred." << std::endl;
-    }
-
+    ImGui_ImplOpenGL2_Shutdown();
+    ImGui_ImplGLUT_Shutdown();
+    ImGui::DestroyContext();
     return 0;
 }

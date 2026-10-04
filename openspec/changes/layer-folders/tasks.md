@@ -15,13 +15,13 @@ Close the GUI before building. After task 2.1, the precise build tree must be re
   - `run_odometry.cpp` and `lidar_odometry.cpp` include `point_placement.h` instead of `export_laz.h`, and the unused `session.h` / `Version.hpp` includes go.
 
   Verify: the step checks; `grep -rn "get_rgd_index\|get_index\|hash_utils\|export_laz\|session.h" app tests` lists only adapters (`folder_*`, `recording_folder_source`) and the GUI. Commit. Result: 18 renames, all in `app/` and `tests/`. The grep now finds `export_laz.h` only in `folder_preview_sink.cpp`, `folder_result_sink.cpp` and the GUI. Removing `export_laz.h` also removed a `using namespace std` that two spots relied on, so `ofstream` (`lidar_odometry.cpp`) and `fixed` (`run_odometry.cpp`) are now `std::`-qualified. Both presets build, `ctest` passes, and precise and fast `44_short` are IDENTICAL (11 files).
-- [ ] 1.2 Split `main()` (decision 5) in `app/`:
+- [x] 1.2 Split `main()` (decision 5) in `app/`:
   - `app/main.cpp` with the `try`/`catch` and the dispatch;
   - `app/cli.{h,cpp}` with `run_cli`, today's CLI branch verbatim;
   - `run_gui` in `lidar_odometry_gui.cpp`;
   - `formatTime` in `app/format_time.h`.
 
-  Verify: the step checks (the CLI runs through `main.cpp`); start the GUI once with no arguments, and check that it opens and loads `default_settings.toml` (title "dMapper"); an unreadable TOML in CLI mode still exits 1. Commit.
+  Verify: the step checks (the CLI runs through `main.cpp`); start the GUI once with no arguments, and check that it opens and loads `default_settings.toml` (title "dMapper"); an unreadable TOML in CLI mode still exits 1. Commit. Result: both presets build, `ctest` passes, and precise and fast `44_short` are IDENTICAL (11 files) through `main.cpp`. The GUI started with no arguments opened a window titled "dMapper" and logged "Default settings loaded from: '…in\default_settings.toml'". `dMapper a b c` printed "Cannot load parameters from: 'b'" and exited 1.
 
 ## 2. Folders and libraries
 

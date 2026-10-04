@@ -214,6 +214,10 @@ target_include_directories(core PRIVATE
 
 set(SOURCES
   ${REPOSITORY_DIRECTORY}/core/src/utils.cpp
+  app/main.cpp
+  app/cli.cpp
+  app/cli.h
+  app/format_time.h
   app/lidar_odometry_gui.cpp
   app/lidar_odometry.cpp
   app/lidar_odometry.h
