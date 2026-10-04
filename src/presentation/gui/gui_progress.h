@@ -27,7 +27,11 @@ public:
 
     void stage_started(RunStage stage) override
     {
-        start_stage(stage);
+        {
+            // waits for a view that is reading finished windows (read_finished_windows)
+            std::lock_guard<std::mutex> lock(windows_mutex_);
+            start_stage(stage);
+        }
         console_->stage_started(stage);
     }
     void progress(std::size_t done, std::size_t total) override
@@ -61,6 +65,15 @@ public:
     float fraction() const { return fraction_.load(); }
     // windows the odometry has finished in the current run (their trajectory is final until post-processing)
     std::size_t windows_done() const { return windows_done_.load(); }
+    // Calls read(windows_done()) if the odometry is the current stage, under a lock that a stage change takes too.
+    // The run announces the next stage before it changes any pose again, so the windows below windows_done() don't
+    // change while read runs. Keep read short: the run waits for it at its next stage change.
+    template <class Read> void read_finished_windows(Read read)
+    {
+        std::lock_guard<std::mutex> lock(windows_mutex_);
+        if (stage_.load() == RunStage::Odometry)
+            read(windows_done_.load());
+    }
     // seconds since the current stage started
     double stage_seconds() const
     {
@@ -82,6 +95,7 @@ private:
     std::atomic<std::size_t> windows_done_{0};
     std::atomic<std::chrono::steady_clock::rep> stage_start_{std::chrono::steady_clock::now().time_since_epoch().count()};
     std::mutex mutex_;
+    std::mutex windows_mutex_; // read_finished_windows against stage changes
     std::condition_variable resumed_;
     bool paused_ = false;
 };

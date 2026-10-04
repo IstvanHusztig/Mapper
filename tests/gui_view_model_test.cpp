@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <filesystem>
+#include <future>
 #include <string>
 #include <thread>
 #include <vector>
@@ -105,14 +106,65 @@ TEST_CASE("gui view-model: a run on an empty folder fails to load")
     CHECK_FALSE(fs::exists(folder.path / "cache"));
 }
 
-TEST_CASE("gui progress: pause holds the run at its next checkpoint until resume; reset starts afresh")
+namespace
 {
     struct SilentReporter : ProgressReporter
     {
         void stage_started(RunStage) override {}
         void progress(std::size_t, std::size_t) override {}
         void checkpoint() override {}
-    } console;
+    };
+}
+
+TEST_CASE("gui progress: finished windows are read only during the odometry, and a stage change waits for a read")
+{
+    SilentReporter console;
+    GuiProgress progress(console);
+    int reads = 0;
+    std::size_t seen = 0;
+    const auto record = [&](std::size_t windows_done) {
+        reads++;
+        seen = windows_done;
+    };
+
+    progress.read_finished_windows(record); // loading: nothing to read
+    CHECK(reads == 0);
+
+    progress.stage_started(RunStage::Odometry);
+    progress.progress(5, 10);
+    progress.read_finished_windows(record);
+    CHECK(reads == 1);
+    CHECK(seen == 5);
+
+    // a read in progress holds the change to loop closure back until it returns
+    std::promise<void> reading, release;
+    std::shared_future<void> released = release.get_future().share();
+    std::thread viewer([&] { progress.read_finished_windows([&](std::size_t) {
+        reading.set_value();
+        released.wait();
+    }); });
+    reading.get_future().wait();
+    std::atomic<bool> changed{false};
+    std::thread run([&] {
+        progress.stage_started(RunStage::LoopClosure);
+        changed = true;
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    CHECK_FALSE(changed.load());
+    CHECK(progress.stage() == RunStage::Odometry);
+    release.set_value();
+    viewer.join();
+    run.join();
+    CHECK(changed.load());
+    CHECK(progress.stage() == RunStage::LoopClosure);
+
+    progress.read_finished_windows(record); // post-processing: nothing to read
+    CHECK(reads == 1);
+}
+
+TEST_CASE("gui progress: pause holds the run at its next checkpoint until resume; reset starts afresh")
+{
+    SilentReporter console;
     GuiProgress progress(console);
 
     progress.stage_started(RunStage::Odometry);
