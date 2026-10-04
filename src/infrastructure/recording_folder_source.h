@@ -31,8 +31,8 @@ private:
 //! @note imu_id is an optional column, if not present, it is assumed that all data comes from the same IMU.
 //! @param imu_file - path to file with IMU data
 //! @param imuToUse - id number of IMU to use, the same index as in pointcloud return by @ref load_point_cloud
-//! @return vector of tuples (std::pair<timestamp, timestampUnix>, angular_velocity, linear_acceleration)
-std::vector<std::tuple<std::pair<double, double>, FusionVector, FusionVector>> load_imu(const std::string &imu_file, int imuToUse, Logger &logger);
+//! @return the samples ((timestamp, timestampUnix), angular_velocity, linear_acceleration)
+Imu load_imu(const std::string &imu_file, int imuToUse, Logger &logger);
 
 //! This function load point cloud from LAS/LAZ file.
 //! Each point is shifted by the LiDAR-IMU lever arm.

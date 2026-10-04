@@ -5,21 +5,17 @@
 //   PointStore      - point sets kept between stages (per window, per session chunk)
 //   PreviewSink     - optional preview output while the run is going
 
+#include "imu_sample.h"
 #include "run_reporting.h"
 
 #include <Eigen/Dense>
-#include <Fusion.h>
 #include <structures.h>
 
 #include <cstddef>
 #include <memory>
 #include <string>
-#include <tuple>
 #include <utility>
 #include <vector>
-
-// IMU samples: ((timestamp, unix timestamp), angular velocity, acceleration)
-using Imu = std::vector<std::tuple<std::pair<double, double>, FusionVector, FusionVector>>;
 
 // which LiDAR points of a chunk are kept, and the lever arm added to each
 struct PointFilter

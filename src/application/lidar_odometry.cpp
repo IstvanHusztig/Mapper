@@ -48,7 +48,7 @@ bool load_data(RecordingSource& recording,
     // Sort once after merging
     std::sort(imu_data.begin(), imu_data.end(),
         [](const auto& a, const auto& b) {
-            return std::get<0>(a).first < std::get<0>(b).first;
+            return a.timestamps.first < b.timestamps.first;
         });
 
     log_info(logger) << "Loading point clouds (" << minSize << " files)..\n";
@@ -123,9 +123,9 @@ void calculate_trajectory(
             {
                 const auto& [timestamp_pair, gyr, acc] = imu_data[i];
 
-                gyr_x.push_back(gyr.axis.x * RAD_TO_DEG);
-                gyr_y.push_back(gyr.axis.y * RAD_TO_DEG);
-                gyr_z.push_back(gyr.axis.z * RAD_TO_DEG);
+                gyr_x.push_back(gyr.x() * RAD_TO_DEG);
+                gyr_y.push_back(gyr.y() * RAD_TO_DEG);
+                gyr_z.push_back(gyr.z() * RAD_TO_DEG);
             }
 
             double mean_x = 0, mean_y = 0, mean_z = 0;
@@ -176,11 +176,11 @@ void calculate_trajectory(
 
     for (const auto& [timestamp_pair, gyr, acc] : imu_data)
     {
-        const FusionVector gyroscope = { static_cast<float>(gyr.axis.x * RAD_TO_DEG) - bias_gyr_x, static_cast<float>(gyr.axis.y * RAD_TO_DEG) - bias_gyr_y, static_cast<float>(gyr.axis.z * RAD_TO_DEG) - bias_gyr_z };
-        const FusionVector accelerometer = { acc.axis.x , acc.axis.y, acc.axis.z };
+        const FusionVector gyroscope = { static_cast<float>(gyr.x() * RAD_TO_DEG) - bias_gyr_x, static_cast<float>(gyr.y() * RAD_TO_DEG) - bias_gyr_y, static_cast<float>(gyr.z() * RAD_TO_DEG) - bias_gyr_z };
+        const FusionVector accelerometer = { acc.x(), acc.y(), acc.z() };
      
         // DYNAMIC AHRS GAIN: Check accelerometer magnitude against 1.0G
-        double acc_mag = std::sqrt(acc.axis.x * acc.axis.x + acc.axis.y * acc.axis.y + acc.axis.z * acc.axis.z);
+        double acc_mag = std::sqrt(acc.x() * acc.x() + acc.y() * acc.y() + acc.z() * acc.z());
         if (acc_mag < 0.9 || acc_mag > 1.1)
         {
             ahrs.settings.gain = 0.0f; // Drop gain to prevent linear acceleration pitch/roll drift
@@ -288,10 +288,10 @@ bool compute_step_1(
         size_t j = 0;
         for (const auto& ts : timestamps)
         {
-            while (j + 1 < imu_data->size() && std::get<0>((*imu_data)[j]).first < ts.first)
+            while (j + 1 < imu_data->size() && (*imu_data)[j].timestamps.first < ts.first)
                 j++;
-            const FusionVector& a = std::get<2>((*imu_data)[j]);
-            accelerations.emplace_back(a.axis.x, a.axis.y, a.axis.z);
+            const Eigen::Vector3f& a = (*imu_data)[j].acc;
+            accelerations.emplace_back(a.x(), a.y(), a.z());
         }
     }
 

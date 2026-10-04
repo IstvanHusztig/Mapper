@@ -1,5 +1,4 @@
 #include "recording_folder_source.h"
-#include <Fusion.h>
 
 #include "csv.hpp"
 
@@ -32,9 +31,9 @@ std::vector<Point3Di> RecordingFolderSource::read_points(std::size_t chunk, cons
     return load_point_cloud(files_.laz[chunk].c_str(), filter.omit_zero_timestamp, filter.xy_inner, filter.xy_outer, filter.lever_arm, logger);
 }
 
-std::vector<std::tuple<std::pair<double, double>, FusionVector, FusionVector>> load_imu(const std::string &imu_file, int imuToUse, Logger &logger)
+Imu load_imu(const std::string &imu_file, int imuToUse, Logger &logger)
 {
-    std::vector<std::tuple<std::pair<double, double>, FusionVector, FusionVector>> all_data;
+    Imu all_data;
 
     csv::CSVFormat format;
     format.delimiter({' ', ',', '\t'});
@@ -82,15 +81,15 @@ std::vector<std::tuple<std::pair<double, double>, FusionVector, FusionVector>> l
                 {
                     double timestamp = row["timestamp"].get<double>();
                     double timestampUnix = row["timestampUnix"].get<double>();
-                    FusionVector gyr;
-                    gyr.axis.x = row["gyroX"].get<double>();
-                    gyr.axis.y = row["gyroY"].get<double>();
-                    gyr.axis.z = row["gyroZ"].get<double>();
-                    FusionVector acc;
-                    acc.axis.x = row["accX"].get<double>();
-                    acc.axis.y = row["accY"].get<double>();
-                    acc.axis.z = row["accZ"].get<double>();
-                    all_data.emplace_back(std::pair(timestamp / 1e9, timestampUnix / 1e9), gyr, acc);
+                    Eigen::Vector3f gyr;
+                    gyr.x() = row["gyroX"].get<double>();
+                    gyr.y() = row["gyroY"].get<double>();
+                    gyr.z() = row["gyroZ"].get<double>();
+                    Eigen::Vector3f acc;
+                    acc.x() = row["accX"].get<double>();
+                    acc.y() = row["accY"].get<double>();
+                    acc.z() = row["accZ"].get<double>();
+                    all_data.push_back({std::pair(timestamp / 1e9, timestampUnix / 1e9), gyr, acc});
                 }
             }
         }
@@ -118,17 +117,17 @@ std::vector<std::tuple<std::pair<double, double>, FusionVector, FusionVector>> l
                     }
                     if (data[0] > 0 && imuId == imuToUse)
                     {
-                        FusionVector gyr;
-                        gyr.axis.x = data[1];
-                        gyr.axis.y = data[2];
-                        gyr.axis.z = data[3];
+                        Eigen::Vector3f gyr;
+                        gyr.x() = data[1];
+                        gyr.y() = data[2];
+                        gyr.z() = data[3];
 
-                        FusionVector acc;
-                        acc.axis.x = data[4];
-                        acc.axis.y = data[5];
-                        acc.axis.z = data[6];
+                        Eigen::Vector3f acc;
+                        acc.x() = data[4];
+                        acc.y() = data[5];
+                        acc.z() = data[6];
 
-                        all_data.emplace_back(std::pair(data[0] / 1e9, timestampUnix / 1e9), gyr, acc);
+                        all_data.push_back({std::pair(data[0] / 1e9, timestampUnix / 1e9), gyr, acc});
                     }
                 }
                 myfile.close();
