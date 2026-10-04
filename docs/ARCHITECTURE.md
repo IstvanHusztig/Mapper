@@ -56,7 +56,7 @@ infrastructure and UI at the edge, and all source dependencies pointing inward.
 
 ## 4. Problems in today's code this addresses
 
-- ✅ `LidarOdometryParams` (`app/lidar_odometry_utils.h`) held settings **and** runtime state
+- ✅ `LidarOdometryParams` (then in `app/lidar_odometry_utils.h`, split up in step 7a) held settings **and** runtime state
   (`reference_buckets`, `buckets_indoor`/`buckets_outdoor`, `m_g`, `initial_points`, paths,
   `ImVec4 clear_color`). Step 1 split it into `OdometryConfig` (passed `const&`),
   `OdometryState` and `GuiPreferences`. Grouping `OdometryConfig` by section is left to step 5.
@@ -145,12 +145,23 @@ Each step is one OpenSpec change, validated against the baseline.
      `docs/window-chaining.html`.
    - 6c. ✅ **Synthetic scan-to-map test** (done 2026-10-04): `tests/scan_to_map_test.cpp` runs
      `optimize_lidar_odometry` on a synthetic room and corridor against the truth. No `core` link was needed: the
-     tests compile `scan_to_map.cpp` and `lidar_odometry_utils.cpp` directly. Found on the way: `update_rgd` keeps a
+     tests compile `scan_to_map.cpp` and `lidar_odometry_utils.cpp` (now `ndt_map.cpp`) directly. Found on the way: `update_rgd` keeps a
      cell's first point as its mean and fixes its normal from the first 3 points, which costs about 1 mm and makes the
      degeneracy information unreliable (`docs/degeneracy-information.html`). Change `ndt-bucket-statistics` (2026-10-04)
      added exact cell statistics behind `use_exact_ndt_bucket_statistics`; it was rejected for now (off), because on 44 the
      degeneracy threshold then marked 439 instead of 95 windows and the map was 5 % less sharp.
-7. **Layered CMake targets and folders;** move the `core/` pieces touched so far.
+7. **Layered CMake targets and folders,** split into two changes:
+   - 7a. ✅ **Includes first** (done 2026-10-04, `split-utils-header`): the catch-all `app/lidar_odometry_utils.h`
+     (LASzip, Fusion, json, `core`'s NDT and transformations, the jacobians) became `ndt_map.{h,cpp}`,
+     `odometry_config.h` and `odometry_state.h`, and every file includes what it uses. Found on the way: `core`'s
+     `ndt.h` includes `point_cloud.h` (and with it `GL/freeglut.h`) and `session.h`; the four NDT value structs moved to
+     `core/include/ndt_types.h`, with aliases left in class `NDT`. A `/showIncludes` check confirmed that `scan_to_map`,
+     `normal_equations`, `imu_kinematics`, `window_steps`, `ndt_map`, `optimizer_options` and `robust_lidar_odometry`
+     reach no LASzip, json, GL, `session.h` or Fusion. The window loop still does: Fusion through `input_ports.h` (step 9)
+     and `session.h` through `export_laz.h` in `run_odometry.cpp`.
+   - 7b. **Folders and libraries:** move the files into `src/domain`, `src/application`, `src/infrastructure` and
+     `src/presentation`, with `lo_domain`, `lo_application` and `lo_infrastructure` libraries whose links enforce the
+     dependency rule; the tests link the libraries instead of compiling app sources.
 
 Steps 8–11 were added on 2026-10-03. They cover the goals that steps 0–7 still leave open.
 

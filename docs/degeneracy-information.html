@@ -171,7 +171,7 @@ both are on in <code>settings/lidar-vertical.toml</code>.</p>
 The synthetic scan-to-map test (<code>tests/scan_to_map_test.cpp</code>, change <code>scan-to-map-test</code>) put a window
 in a 30 m corridor. The information came out <em>strongest</em> along the corridor (925 along x against 155 across), the
 opposite of the truth.</div>
-<p>The cause is in how the map cells are built (<code>update_rgd</code>, <code>app/lidar_odometry_utils.cpp</code>):</p>
+<p>The cause is in how the map cells are built (<code>update_rgd</code>, <code>app/ndt_map.cpp</code>):</p>
 <ul>
   <li>A cell's normal is computed <b>once</b>, when its third point arrives, from those 3 points plus the initial isotropic
   3 cm covariance, and it is <b>never updated</b>. If the first 3 points lie roughly on a line, the normal can point anywhere

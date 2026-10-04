@@ -199,7 +199,7 @@
 <ol class="steps">
 <li class="step" id="s-load">
 <h3>Loading and filtering the points</h3>
-<div class="where">load_data / load_point_cloud · app/lidar_odometry.cpp, app/lidar_odometry_utils.cpp</div>
+<div class="where">load_data / load_point_cloud · app/lidar_odometry.cpp, app/recording_folder_source.cpp</div>
 <p>Each point is read with its position in the <b>sensor frame</b>, its intensity and its timestamp. Then:</p>
 <ul>
 <li>Each point is shifted by the LiDAR→IMU <b>lever arm</b> (translation only), so that points and IMU share one origin. The L2 data from dLidar is already in the IMU axes (NWU: x forward, y left, z up).</li>

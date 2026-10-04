@@ -40,9 +40,11 @@ The scratchpad script `step_check.sh` runs all of them. Close the GUI before bui
 
 ## 4. Docs
 
-- [ ] 4.1 Update:
+- [x] 4.1 Update:
   - `CLAUDE.md`: the file names (`app/lidar_odometry_utils.*` → `ndt_map`, `odometry_config.h`, `odometry_state.h`) in the architecture section and the tests' source list;
   - `docs/ARCHITECTURE.md`: step 7 split into 7a (this change, done) and 7b (folders and libraries), with the finding that `ndt.h` pulls in GL;
   - any other doc that names `lidar_odometry_utils` (`grep -rn lidar_odometry_utils docs tools CLAUDE.md`).
 
   Verify: `grep -rn "lidar_odometry_utils" --include=*.md --include=*.html .` finds nothing outside `openspec/changes/archive`, and `openspec validate split-utils-header --strict` passes. Commit.
+
+  Result: updated `CLAUDE.md` (tests' source list, `update_rgd`'s files, the Settings-and-state headers), `docs/ARCHITECTURE.md` (step 7 → 7a done and 7b), `docs/degeneracy-information.html` and `docs/index.html`. The grep still finds four mentions in `ARCHITECTURE.md`, and all of them are history: the ✅ problem list, the 6c entry (now marked "now `ndt_map.cpp`"), the 7a entry itself, and `lidar_odometry_utils_optimizers.cpp`, a different file deleted in step 6a. `openspec validate --strict` passes.
