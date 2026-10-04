@@ -14,7 +14,8 @@ add_executable(lidar_odometry_tests
   scan_to_map_test.cpp
   ndt_map_test.cpp
   synthetic_recording.cpp
-  synthetic_recording_test.cpp)
+  synthetic_recording_test.cpp
+  loop_closure_test.cpp)
 
 # the code under test comes from the layer libraries (lo_infrastructure brings lo_application and lo_domain); core is
 # not linked

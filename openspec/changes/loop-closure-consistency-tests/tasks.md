@@ -1,6 +1,6 @@
 # Tasks
 
-**Checks on every commit** (design decision 8):
+**Checks on every commit** (design decision 9):
 - both presets build `lidar_odometry_tests`, and `ctest` passes;
 - `git diff --stat <change start> -- src core` stays empty: the product code doesn't change, so no `44_short` or 44 runs are needed.
 
@@ -25,7 +25,22 @@
 
 ## 2. Tests
 
-- [ ] 2.1 Add `tests/loop_closure_test.cpp` with the three loop-closure scenarios (decisions 3–5). First run them with logging only and record the numbers here: accepted loops, end error before and after, largest change on the truth case, Release and Debug run time. Then set the limits (decision 6). Verify: both presets, `ctest`. If the drift case misses the spec (error not halved, or no loop accepted), mark it `should_fail` with the cause, record it, and pause. Commit.
+- [x] 2.1 Add `tests/loop_closure_test.cpp` with the three loop-closure scenarios (decisions 3–5), skipped in the regular run (decision 8). First run them with logging only and record the numbers here: accepted loops, end error before and after, largest change on the truth case, Release and Debug run time. Then set the limits (decision 6). Verify: both presets, `ctest`. If the drift case misses the spec (error not halved, or no loop accepted), mark it `should_fail` with the cause, record it, and pause. Commit.
+
+  **Result (2026-10-04).** The run was paused after measuring, and the user decided: no loop-closure unit tests in the regular run, but the scenarios stay in the executable for debugging (design decision 8). All three cases are `doctest::skip()` and run with `-tc="loop closure*" --no-skip`. Drift and no revisit carry their checks; the truth case is `should_fail` with its cause. The plain run shows 46 passed and 3 skipped; with `--no-skip`, all 3 pass (one expected failure). Measurements: Fixture: 150 points per node within 15 m. Options: shipped values, with segments of 4 windows and a 10 s time gap.
+
+  | Case | Loops accepted | Result | Release time |
+  |---|---|---|---|
+  | Drift on lap 2 (0.5 m, 2°) | 5 | end error 568 → 113 mm, mean 112 → 35 mm (spec: halved, met) | 26.6 s |
+  | Truth | 5 | largest change **31 mm** / 0.095° (spec: 5 mm and 0.1°, **missed**) | 27.0 s |
+  | No revisit (16 windows) | 0 | poses bit-identical (met) | 13 ms |
+
+  Debug: one loop-closure case did not finish in 15 minutes.
+
+  Experiments, none of them committed:
+  - **The truth case's 31 mm comes from registration noise.** Each already-aligned revisit returns a "correction" of 1–3 cm and up to 0.2°. The pose graph trusts loop edges to `loop_closure_edge_sigma_m = 0.05` and spreads them onto the nodes. The exact NDT statistics don't change it (31.8 mm). Denser points help a little: 150 points within 8 m give 25 mm; 100 points within 8 m give 46 mm. With 50 points per node, no loop is accepted at all.
+  - **A false loop:** with points only within 6 m, loop closure accepted a wrong registration and moved the true trajectory by 1.5 m (6 loops accepted). The overlap threshold alone doesn't catch it.
+  - **Run time:** a 2 m search range (`loop_closure_max_correction_m`, shipped 6 m) gives 16 s instead of 26 s. The rest is the fixed fine stage of `coarse_search` (3,773 overlap evaluations over the 0.2 m voxels of the source).
 - [ ] 2.2 Add `tests/consistency_test.cpp` with the seam and truth scenarios, for both `Consistency` and `Consistency2` (through `run_consistency`). First run with logging only and record, per variant: mean and largest pose error before and after, occupied 3 cm voxels before and after, largest change on the truth case, Release and Debug run time. Then set the limits (decision 6). Verify: both presets, `ctest`. If a variant misses the spec, mark it `should_fail` with the cause, record it, and pause. Commit.
 
 ## 3. Docs

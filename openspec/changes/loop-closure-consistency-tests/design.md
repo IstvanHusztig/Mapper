@@ -67,7 +67,9 @@ The tests (`tests/CMakeLists.txt`) link `lo_infrastructure` and, with it, the in
 
 7. **The test target copies its runtime DLLs** (`$<TARGET_RUNTIME_DLLS:lidar_odometry_tests>`), as `dMapper` does. Today the tests only run because `dMapper` has copied TBB into the same `bin/`.
 
-8. **Checks:**
+8. **Loop closure is opt-in** (decided by the user during task 2.1). Each loop-closure run takes 15–27 s in Release, and one case didn't finish in 15 minutes in Debug, so the scenarios are marked `doctest::skip()`. `ctest` and a plain test run skip them. `lidar_odometry_tests -tc="loop closure*" --no-skip` runs them, in either build, to debug the loop closure. They keep their checks, so a request run still says whether the loop closure meets them.
+
+9. **Checks:**
    - both presets build `lidar_odometry_tests`, and `ctest` passes;
    - `git diff --stat -- src core` is empty for the whole change, so no `44_short` / 44 runs are needed: the product code doesn't change.
 

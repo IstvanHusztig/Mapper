@@ -1,7 +1,11 @@
 ## ADDED Requirements
 
 ### Requirement: Loop closure tested on synthetic data
-The unit tests SHALL run the loop closure on a synthetic recording with a known true trajectory that revisits a place, without recorded data, and SHALL check the corrected trajectory against that truth. The tests SHALL set the loop-closure options themselves.
+The unit-test executable SHALL contain loop-closure scenarios that run the loop closure on a synthetic recording with a known true trajectory that revisits a place, without recorded data, and check the corrected trajectory against that truth. The scenarios SHALL set the loop-closure options themselves. They SHALL be skipped in the regular test run, because each takes seconds in Release and many minutes in Debug, and SHALL run when requested explicitly, in either build, so that the loop closure can be debugged on them.
+
+#### Scenario: The regular run skips them
+- **WHEN** `ctest` or the test executable runs without options
+- **THEN** the loop-closure scenarios are skipped, and they run when requested with `--no-skip`
 
 #### Scenario: Drift on the second lap
 - **WHEN** the trajectory's second lap drifts away from the truth and its points were seen from the true poses
@@ -9,7 +13,7 @@ The unit tests SHALL run the loop closure on a synthetic recording with a known 
 
 #### Scenario: A trajectory that is already right
 - **WHEN** the trajectory equals the truth
-- **THEN** every node stays within 5 mm and 0.1° of the truth after the loop closure
+- **THEN** every node stays within 5 mm and 0.1° of the truth after the loop closure; as long as the loop closure doesn't meet this, the scenario SHALL be marked as an expected failure that names the cause
 
 #### Scenario: No revisit
 - **WHEN** the recording contains no pair of segments far enough apart in time and close enough in space
