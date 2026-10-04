@@ -191,8 +191,15 @@ Steps 8–11 were added on 2026-10-03. They cover the goals that steps 0–7 sti
    compile. `calculate_trajectory`'s bias, gain and time-step rules are tested with a fake estimator.
    Found on the way: the Windows .NET SDK has its own `Fusion.h` on the system include path, so a
    bare `#include <Fusion.h>` compiles anywhere; `<FusionAhrs.h>` is the reliable check.
-10. **GUI view-model:** move `params`, `gui_prefs`, the current `pipeline` and the UI state out of the
-    file-scope globals in `lidar_odometry_gui.cpp` into a view-model that the GLUT callbacks reach.
+10. ✅ **GUI view-model** (done 2026-10-04, `gui-view-model`): `GuiViewModel` holds the GUI's state
+    (settings and their source, the console, the progress, the current pipeline, the recording folder,
+    the run flag and the worker thread) and its actions with paths instead of dialogs; the worker reports
+    through `RunNotifier`, which the view implements with its message boxes. `lidar_odometry_gui.cpp`
+    keeps the view and one `view_model` pointer for the GLUT callbacks. `lo_gui_view_model` gets no
+    ImGui/GLUT/GL include paths and is unit-tested. Found on the way: `core`'s `session.h` reaches
+    `GL/freeglut.h` in the infrastructure, whose auto-link pragma made the tests need `freeglut.lib` once
+    they linked the result sink; `lo_infrastructure` now builds with `FREEGLUT_LIB_PRAGMAS=0` (no adapter
+    calls GLUT). `core`'s camera globals stay for step 11.
     - 10b. **Next after step 10: trajectory drawing race** (found 2026-10-04 while proposing step 10). The GUI
       draws every window's poses while the worker thread writes them (odometry and post-processing). The vectors
       aren't resized then, so the worst it shows is half-updated poses, but it is a data race. Fix: draw only the

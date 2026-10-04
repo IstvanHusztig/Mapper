@@ -23,8 +23,8 @@ Close the GUI before building.
 
 ## 4. Docs
 
-- [ ] 4.1 Update:
+- [x] 4.1 Update:
   - `CLAUDE.md`: the GUI globals paragraph (Architecture) becomes the view-model and the one pointer; the GUI section names `GuiViewModel` and `gui_progress.h`; Testing (the new test file); the layer list (`lo_gui_view_model`);
   - `docs/ARCHITECTURE.md`: step 10 done; the trajectory drawing race as an open finding.
 
-  Verify: `git diff --stat <change start> -- src/domain src/application src/infrastructure core` is empty, and `openspec validate gui-view-model --strict` passes. Commit.
+  Verify: `git diff --stat <change start> -- src/domain src/application src/infrastructure core` is empty, and `openspec validate gui-view-model --strict` passes. Commit. Result: `CLAUDE.md` (the layer list with `lo_gui_view_model` and the `FREEGLUT_LIB_PRAGMAS` note, `gui_progress.h`, the defaults loaded by `GuiViewModel::load_default_parameters`, the GUI-state paragraph, Testing) and `docs/ARCHITECTURE.md` (step 10 done with the finding; the drawing race was already added as roadmap item 10b). The layer folders and `core` are unchanged, and the change validates strictly.
