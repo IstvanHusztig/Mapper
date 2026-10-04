@@ -41,7 +41,24 @@
   - **The truth case's 31 mm comes from registration noise.** Each already-aligned revisit returns a "correction" of 1–3 cm and up to 0.2°. The pose graph trusts loop edges to `loop_closure_edge_sigma_m = 0.05` and spreads them onto the nodes. The exact NDT statistics don't change it (31.8 mm). Denser points help a little: 150 points within 8 m give 25 mm; 100 points within 8 m give 46 mm. With 50 points per node, no loop is accepted at all.
   - **A false loop:** with points only within 6 m, loop closure accepted a wrong registration and moved the true trajectory by 1.5 m (6 loops accepted). The overlap threshold alone doesn't catch it.
   - **Run time:** a 2 m search range (`loop_closure_max_correction_m`, shipped 6 m) gives 16 s instead of 26 s. The rest is the fixed fine stage of `coarse_search` (3,773 overlap evaluations over the 0.2 m voxels of the source).
-- [ ] 2.2 Add `tests/consistency_test.cpp` with the seam and truth scenarios, for both `Consistency` and `Consistency2` (through `run_consistency`). First run with logging only and record, per variant: mean and largest pose error before and after, occupied 3 cm voxels before and after, largest change on the truth case, Release and Debug run time. Then set the limits (decision 6). Verify: both presets, `ctest`. If a variant misses the spec, mark it `should_fail` with the cause, record it, and pause. Commit.
+- [x] 2.2 Add `tests/consistency_test.cpp` with the seam and truth scenarios, for both `Consistency` and `Consistency2` (through `run_consistency`). First run with logging only and record, per variant: mean and largest pose error before and after, occupied 3 cm voxels before and after, largest change on the truth case, Release and Debug run time. Then set the limits (decision 6). Verify: both presets, `ctest`. If a variant misses the spec, mark it `should_fail` with the cause, record it, and pause. Commit.
+
+  **Paused (2026-10-04) after the first measurement.** Both truth cases moved the true trajectory at the corner windows, against the fixture's instant turn-rate step (0 to 57°/s in one 50 ms node): `Consistency` 8.3 mm / 0.23°, `Consistency2` 27 mm / 3.2°. `Consistency2` didn't reduce the seams' rotation error (0.207° → 0.217°). The user decided: ramp the fixture's turn rate realistically, re-measure, then set limits, with remaining misses as expected failures with their cause.
+
+  **Fixture change:** each corner's curvature now ramps linearly from 0 to 1/(2 m) over 1 m (0.5 s at 2 m/s) and back (clothoid transitions). The straights stay on the corridor centrelines, and the lap is 44.4 m (22.20 s). The fixture test also checks that the turn changes by at most 0.005 rad from node to node. Loop closure, re-measured with `--no-skip`, is unchanged: drift 575 → 112 mm with 5 loops (20.6 s), truth 32 mm / 0.09° (still expected to fail), no revisit 0 loops.
+
+  **Result (2026-10-04)**, 3 passes; seams of ±3 cm / ±0.2° per window:
+
+  | Variant | Seams: mean error | Seams: 3 cm voxels (truth 125,898) | Truth: largest change (mean) | Release |
+  |---|---|---|---|---|
+  | `Consistency` | 27.9 mm / 0.207° → 19.5 mm / 0.147° | 127,956 → 126,563 | **6.4 mm** / 0.075° (2.1 mm) | 1.0 s |
+  | `Consistency2` | 27.9 mm / 0.207° → 14.6 mm / 0.125° | 127,956 → 126,324 | **16 mm / 0.46°** (5.2 mm) | 0.6 s |
+
+  - **Seams** (met by both): the checks are mean position and rotation error at most 0.8 × before, and the voxels' excess over the truth at most halved.
+  - **`Consistency` truth case** (`should_fail`): misses 5 mm by 1.4 mm. The change is spread evenly over all windows (2–6 mm, 0.03–0.07° each), which is the noise of fitting 150 points per node to 0.15 m cells, not a pull at the corners any more.
+  - **`Consistency2` truth case** (`should_fail`): the rotation changes sit in the corner windows (0.2–0.46°, against about 0.05° on the straights). Its smoothness term holds the change of turn rate to 0.01° per node, and the ramp changes the turn by 0.29° per node. With a 1 s ramp (tried, not kept) the corner windows drop to 0.18°, and an even 5–12 mm / 0.1° remains in every window.
+
+  Both presets build and `ctest` passes (Release 7 s; Debug 132 s, of which the four consistency cases take about 70 s, at the design's one-minute bound, so the fixture stays). `src/` and `core/` are unchanged.
 
 ## 3. Docs
 

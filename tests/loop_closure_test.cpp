@@ -11,7 +11,7 @@
 // trajectory. The options are those of settings/lidar-vertical.toml, except the segment length and the time gap,
 // which are shortened to fit the 44 s recording; they are set here, so tuning the shipped file doesn't change the tests.
 //
-// Skipped in the regular run (ctest): each case takes 15-27 s in Release and more than 15 minutes in Debug. To run them,
+// Skipped in the regular run (ctest): each case takes about 20 s in Release and more than 15 minutes in Debug. To run them,
 // e.g. to debug the loop closure:  lidar_odometry_tests -tc="loop closure*" --no-skip -s
 
 using namespace synthetic;
@@ -103,8 +103,8 @@ TEST_CASE("loop closure: drift on the second lap is reduced" * doctest::skip())
             " mm; largest ", max_before.position * 1000.0, " mm / ", max_before.rotation / deg, " deg -> ", max_after.position * 1000.0,
             " mm / ", max_after.rotation / deg, " deg; mean ", mean_before.position * 1000.0, " -> ", mean_after.position * 1000.0,
             " mm; ", result.ms, " ms");
-    // Measured 2026-10-04 (Release): 5 loops; end error 568 -> 113 mm, largest 568 mm / 2 deg -> 113 mm / 0.35 deg, mean
-    // 112 -> 35 mm; 26.6 s
+    // Measured 2026-10-04 (Release): 5 loops; end error 575 -> 112 mm, largest 575 mm / 2 deg -> 112 mm / 0.36 deg, mean
+    // 113 -> 34 mm; 20.6 s
     CHECK(result.loops >= 1);
     CHECK(end_after <= 0.5 * end_before);
 }
@@ -112,7 +112,7 @@ TEST_CASE("loop closure: drift on the second lap is reduced" * doctest::skip())
 // Expected to fail (found 2026-10-04): every already-aligned revisit still registers with a "correction" of 1-3 cm and
 // up to 0.2 deg (coarse search on 0.1 m / 0.75 deg steps, then NDT refinement on 0.5 / 0.25 m cells of sparse points),
 // and the pose graph, which trusts loop edges to loop_closure_edge_sigma_m = 0.05, spreads that onto the nodes: measured
-// 5 loops, largest change 31 mm / 0.095 deg (the exact NDT cell statistics give the same, 31.8 mm). When the loop
+// 5 loops, largest change 32 mm / 0.09 deg (the exact NDT cell statistics give the same). When the loop
 // closure leaves a correct trajectory alone, doctest reports this case as passing unexpectedly: then remove should_fail.
 TEST_CASE("loop closure: a trajectory that is already right stays" * doctest::skip() * doctest::should_fail())
 {

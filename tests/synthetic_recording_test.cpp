@@ -51,16 +51,22 @@ TEST_CASE("loop recording: points on the scene, timestamps map to their node, wi
         }
     CHECK(mismatches == 0);
 
-    // the path is continuous: 0.1 m between nodes at 2 m/s, and at most 1 rad/s * 50 ms of turn in the corners
+    // the path is continuous: 0.1 m between nodes at 2 m/s, at most 1 rad/s * 50 ms of turn in the corners, and the turn
+    // rate ramps in and out over 0.5 s (from node to node the turn changes by at most 0.05 rad / 10 nodes)
     const auto truth = all_poses(r.truth);
-    double longest_step = 0.0, largest_turn = 0.0;
+    double longest_step = 0.0, largest_turn = 0.0, largest_turn_change = 0.0, previous_turn = 0.0;
     for (size_t k = 1; k < truth.size(); k++)
     {
         longest_step = std::max(longest_step, (truth[k].translation() - truth[k - 1].translation()).norm());
-        largest_turn = std::max(largest_turn, Eigen::AngleAxisd(truth[k].linear() * truth[k - 1].linear().transpose()).angle());
+        const double turn = Eigen::AngleAxisd(truth[k].linear() * truth[k - 1].linear().transpose()).angle();
+        largest_turn = std::max(largest_turn, turn);
+        if (k > 1)
+            largest_turn_change = std::max(largest_turn_change, std::abs(turn - previous_turn));
+        previous_turn = turn;
     }
     CHECK(longest_step <= 0.1 + 1e-9);
     CHECK(largest_turn <= 0.05 + 1e-9);
+    CHECK(largest_turn_change <= 0.005 + 1e-6);
 
     // every node of the first lap has a node of the second lap within 0.1 m, more than 10 s later
     const size_t lap_nodes = static_cast<size_t>(r.lap_time_s / r.node_dt);

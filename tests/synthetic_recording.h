@@ -74,8 +74,9 @@ struct Recording
     std::vector<std::vector<Point3Di>> points;       // per window: points in their node's frame, index_pose = node in window
 };
 
-// laps around the block's centreline (a rounded rectangle, 44.6 m) at 2 m/s, 1.5 m above the floor, moving forward
-// along the body x axis; nodes every 50 ms, windows of 20 nodes (1 s). Each node sees 150 points sampled on the faces
+// laps around the block's centreline (a rounded rectangle, 44.4 m) at 2 m/s, 1.5 m above the floor, moving forward
+// along the body x axis; in each corner the turn rate ramps up to 1 rad/s over 0.5 s and back down over 0.5 s, as a
+// real turn does (no step). Nodes every 50 ms, windows of 20 nodes (1 s). Each node sees 150 points sampled on the faces
 // between 1 m and 15 m away (no occlusion), with +-5 mm noise along the face normal, from fixed seeds. A point's
 // timestamp is its node's time plus half a node interval, so that the consistency pass assigns it to the same node.
 Recording loop_recording(int laps);

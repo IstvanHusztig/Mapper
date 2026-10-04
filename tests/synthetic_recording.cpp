@@ -92,11 +92,59 @@ namespace
     }
 
     constexpr double pi = 3.14159265358979323846;
-    constexpr double corner_radius = 2.0;
 
-    // the centreline: straights along y = -4, x = 8, y = 4 and x = -8, joined by quarter circles of radius 2 around the
-    // block's corners, counter-clockwise from (0, -4)
-    double path_length() { return 2 * 12.0 + 2 * 4.0 + 2 * pi * corner_radius; }
+    // A corner turns left by 90 deg: the curvature ramps linearly from 0 to 1 / corner_radius over corner_ramp_m,
+    // stays there, and ramps back to 0 over corner_ramp_m (clothoid transitions), so the turn rate never jumps.
+    constexpr double corner_radius = 2.0;
+    constexpr double corner_ramp_m = 1.0; // 0.5 s at 2 m/s
+    constexpr double corner_arc_m = 0.5 * pi * corner_radius - corner_ramp_m;
+    constexpr double corner_length = corner_arc_m + 2.0 * corner_ramp_m;
+
+    // heading change [rad] after arc length u into a corner
+    double corner_heading(double u)
+    {
+        const double k = 1.0 / corner_radius;
+        if (u <= corner_ramp_m)
+            return 0.5 * k * u * u / corner_ramp_m;
+        if (u <= corner_ramp_m + corner_arc_m)
+            return 0.5 * k * corner_ramp_m + k * (u - corner_ramp_m);
+        const double rest = corner_length - u;
+        return 0.5 * pi - 0.5 * k * rest * rest / corner_ramp_m;
+    }
+
+    // position after arc length u into a corner that starts at the origin heading along x: Simpson's rule on each of the
+    // three sections, where the heading is smooth
+    Eigen::Vector2d corner_offset(double u)
+    {
+        const auto simpson = [](double from, double to) {
+            const int n = 64;
+            const double h = (to - from) / n;
+            Eigen::Vector2d sum = Eigen::Vector2d::Zero();
+            for (int i = 0; i <= n; i++)
+            {
+                const double a = corner_heading(from + i * h);
+                const double w = (i == 0 || i == n) ? 1.0 : (i % 2 == 1 ? 4.0 : 2.0);
+                sum += w * Eigen::Vector2d(std::cos(a), std::sin(a));
+            }
+            return Eigen::Vector2d(sum * h / 3.0);
+        };
+        const double bounds[] = {0.0, corner_ramp_m, corner_ramp_m + corner_arc_m, corner_length};
+        Eigen::Vector2d offset = Eigen::Vector2d::Zero();
+        for (int i = 0; i < 3 && u > bounds[i]; i++)
+            offset += simpson(bounds[i], std::min(u, bounds[i + 1]));
+        return offset;
+    }
+
+    // how far a corner advances along each axis (symmetric about its bisector)
+    double corner_extent() { return corner_offset(corner_length).x(); }
+
+    // the centreline: straights along y = -4, x = 8, y = 4 and x = -8, joined by the corners around the block's
+    // corners, counter-clockwise from (0, -4)
+    double path_length()
+    {
+        const double d = corner_extent();
+        return 2 * (16.0 - 2 * d) + 2 * (8.0 - 2 * d) + 4 * corner_length;
+    }
 
     struct PathPoint
     {
@@ -108,24 +156,24 @@ namespace
     PathPoint path_at(double s)
     {
         s = std::fmod(s, path_length());
-        const double arc = 0.5 * pi * corner_radius;
+        const double d = corner_extent();
         struct Piece
         {
             double length;
             Eigen::Vector2d start;
-            double heading; // at the start
-            bool is_arc;    // turning left
+            double heading;  // at the start
+            bool is_corner; // turning left
         };
         const Piece pieces[] = {
-            {6.0, {0.0, -4.0}, 0.0, false},
-            {arc, {6.0, -4.0}, 0.0, true},
-            {4.0, {8.0, -2.0}, 0.5 * pi, false},
-            {arc, {8.0, 2.0}, 0.5 * pi, true},
-            {12.0, {6.0, 4.0}, pi, false},
-            {arc, {-6.0, 4.0}, pi, true},
-            {4.0, {-8.0, 2.0}, 1.5 * pi, false},
-            {arc, {-8.0, -2.0}, 1.5 * pi, true},
-            {6.0, {-6.0, -4.0}, 2.0 * pi, false},
+            {8.0 - d, {0.0, -4.0}, 0.0, false},
+            {corner_length, {8.0 - d, -4.0}, 0.0, true},
+            {8.0 - 2 * d, {8.0, -4.0 + d}, 0.5 * pi, false},
+            {corner_length, {8.0, 4.0 - d}, 0.5 * pi, true},
+            {16.0 - 2 * d, {8.0 - d, 4.0}, pi, false},
+            {corner_length, {-8.0 + d, 4.0}, pi, true},
+            {8.0 - 2 * d, {-8.0, 4.0 - d}, 1.5 * pi, false},
+            {corner_length, {-8.0, -4.0 + d}, 1.5 * pi, true},
+            {8.0 - d, {-8.0 + d, -4.0}, 2.0 * pi, false},
         };
         for (const Piece &p : pieces)
         {
@@ -135,14 +183,11 @@ namespace
                 continue;
             }
             const Eigen::Vector2d dir(std::cos(p.heading), std::sin(p.heading));
-            if (!p.is_arc)
+            if (!p.is_corner)
                 return {p.start + s * dir, p.heading};
             const Eigen::Vector2d left(-dir.y(), dir.x());
-            const Eigen::Vector2d centre = p.start + corner_radius * left;
-            const double a = s / corner_radius;
-            const Eigen::Vector2d r0 = p.start - centre;
-            const Eigen::Vector2d r(std::cos(a) * r0.x() - std::sin(a) * r0.y(), std::sin(a) * r0.x() + std::cos(a) * r0.y());
-            return {centre + r, p.heading + a};
+            const Eigen::Vector2d o = corner_offset(s);
+            return {p.start + o.x() * dir + o.y() * left, p.heading + corner_heading(s)};
         }
         return {{0.0, -4.0}, 2.0 * pi};
     }
