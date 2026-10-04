@@ -82,8 +82,8 @@ infrastructure and UI at the edge, and all source dependencies pointing inward.
 
 ```
 src/domain/          -> lib  lo_domain          (Eigen, manif, observation_equations, core/include)
-src/application/     -> lib  lo_application     (lo_domain; Fusion and TBB until step 9)
-src/infrastructure/  -> lib  lo_infrastructure  (lo_application, LASzip, toml, json, core's I/O headers)
+src/application/     -> lib  lo_application     (lo_domain only)
+src/infrastructure/  -> lib  lo_infrastructure  (lo_application, LASzip, toml, json, Fusion, TBB, core's I/O headers)
 src/presentation/cli, src/presentation/gui (in the dMapper exe)
 src/main.cpp         -> exe  dMapper
 tests/               -> unit tests, linking lo_infrastructure (and with it the inner layers)
@@ -183,8 +183,14 @@ Steps 8–11 were added on 2026-10-03. They cover the goals that steps 0–7 sti
    - **Consistency** reduces window seams in both variants, but moves the truth by 6.4 mm (`Consistency`, even
      NDT-fit noise) and 16 mm / 0.46° (`Consistency2`, whose 0.01° rotation smoothness pulls against every change of
      turn rate, so the error sits at the corners).
-9. **Remaining ports:** `OrientationEstimator` (Fusion AHRS) and `ParallelExecutor` (TBB, see
-   Decisions), so the domain no longer calls Fusion or TBB directly.
+9. ✅ **Remaining ports** (done 2026-10-04, `remaining-ports`): `OrientationEstimator` (Fusion AHRS)
+   and `ParallelExecutor` (TBB) in `src/application/service_ports.h`, with their adapters
+   (`FusionOrientationEstimator`, `TbbExecutor`) in infrastructure, passed to the pipeline as
+   `RunServices`. IMU samples became the domain type `ImuSample` (float vectors, so the values stay
+   bit-identical). `lo_application` now links only `lo_domain`; a Fusion or TBB include there doesn't
+   compile. `calculate_trajectory`'s bias, gain and time-step rules are tested with a fake estimator.
+   Found on the way: the Windows .NET SDK has its own `Fusion.h` on the system include path, so a
+   bare `#include <Fusion.h>` compiles anywhere; `<FusionAhrs.h>` is the reliable check.
 10. **GUI view-model:** move `params`, `gui_prefs`, the current `pipeline` and the UI state out of the
     file-scope globals in `lidar_odometry_gui.cpp` into a view-model that the GLUT callbacks reach.
 11. **Split `core/`:** the pure math (NDT, ICP, pose graph) goes into the domain, the I/O (LAZ export,
@@ -202,7 +208,10 @@ Steps 8–11 were added on 2026-10-03. They cover the goals that steps 0–7 sti
 
 - **Parallelism is behind a port.** Domain and application code never include TBB; they use the
   `ParallelExecutor` port. The TBB adapter lives in infrastructure, and tests can use a serial,
-  deterministic executor. Eigen, manif and observation_equations are allowed in the domain.
+  deterministic executor. What remains: the `std::execution::par_unseq` loops in `scan_to_map`,
+  `robust_lidar_odometry` and `consistency` (standard library, only with `useMultithread`, which is
+  off because their accumulation isn't deterministic); moving them behind the port means reworking
+  that accumulation, a behaviour change of its own. Eigen, manif and observation_equations are allowed in the domain.
 - **`core/` is wrapped and moved on touch.** For now `core/` is treated as an external "math
   kernel" dependency. A piece of it moves into the layers only when a roadmap step touches it.
   There is no separate step for sorting all of `core/`.

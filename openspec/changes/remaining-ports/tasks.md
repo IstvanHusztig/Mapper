@@ -25,8 +25,8 @@ Close the GUI before building. A precise `44_short` difference stops the task: f
 
 ## 3. Docs
 
-- [ ] 3.1 Update:
+- [x] 3.1 Update:
   - `CLAUDE.md`: Layers (`lo_application` without exceptions; `lo_infrastructure` has Fusion and TBB), pipeline step 2 (`calculate_trajectory` through `OrientationEstimator`), the ports (`service_ports.h`, `RunServices`, `make_run_services`), Testing (the new test file);
   - `docs/ARCHITECTURE.md`: step 9 done, and §5's library line for `lo_application`; the `par_unseq` loops named as what remains of the parallelism decision.
 
-  Verify: `grep -rn -i "fusion\|tbb" CLAUDE.md docs/ARCHITECTURE.md` shows only the new wording and history, and `openspec validate remaining-ports --strict` passes. Commit.
+  Verify: `grep -rn -i "fusion\|tbb" CLAUDE.md docs/ARCHITECTURE.md` shows only the new wording and history, and `openspec validate remaining-ports --strict` passes. Commit. Result: `CLAUDE.md` Layers (no exceptions; the `.NET` `Fusion.h` note), pipeline step 2, `RunServices` next to `RunInputs`, Testing (the new test file); `ARCHITECTURE.md` step 9 done with the finding, the §5 library lines, and the parallelism decision naming the `par_unseq` loops as what remains. The other Fusion/TBB mentions in `ARCHITECTURE.md` are the target plan (§3, §4) and the history of 7a/7b. The change validates strictly.
