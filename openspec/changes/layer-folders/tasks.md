@@ -32,13 +32,36 @@ Close the GUI before building. After task 2.1, the precise build tree must be re
   - `default_settings.toml` is still copied next to both exes.
 
   Record any file whose layer had to change, and why. Commit. Result: the design's layer assignment held. All 59 files moved as renames with no content change; the build failed on nothing on the first attempt. `default_settings.toml` is copied next to the exe and is byte-identical with `settings/default_settings.toml`. Both presets build, `ctest` passes, and precise and fast `44_short` are IDENTICAL (11 files); the precise tree was reconfigured with the libraries.
-- [ ] 2.2 The enforcement check (decision 2): temporarily add `#include <laszip/laszip_api.h>` to `src/domain/scan_to_map.cpp` and `#include <nlohmann/json.hpp>` to `src/application/run_odometry.cpp`. Verify: both fail to compile, with the error text recorded here. Revert, and check that the tree builds again. No commit (nothing changes); record the result.
-- [ ] 2.3 Run the full 44 once (background or subagent). Verify: IDENTICAL with `tools/baseline/44.manifest.json`, or within `--tolerance 1e-6` of `raw data/44_baseline` (report the largest difference). Record the result here.
+- [x] 2.2 The enforcement check (decision 2): temporarily add `#include <laszip/laszip_api.h>` to `src/domain/scan_to_map.cpp` and `#include <nlohmann/json.hpp>` to `src/application/run_odometry.cpp`. Verify: both fail to compile, with the error text recorded here. Revert, and check that the tree builds again. No commit (nothing changes); record the result.
+
+  Result (both reverted, the tree builds again):
+  - **Fail as intended:** `scan_to_map.cpp` + `<laszip/laszip_api.h>` → `fatal error C1083 … "laszip/laszip_api.h": No such file or directory`; `run_odometry.cpp` + `<nlohmann/json.hpp>` → the same for `nlohmann/json.hpp`. `core`'s `export_laz.h` in the domain also fails, on its LASzip include.
+  - **Finding:** `core`'s `session.h` **compiles** in the domain. Its GL and ImGui includes (`point_cloud.h`, `control_points.h` …) sit behind `#if WITH_GUI == 1`, and the domain doesn't define `WITH_GUI`, so the session and point-cloud types are plain data there. Design decision 2 claimed they would fail. The user decided (2026-10-04) to document this gap instead of adding a guard: they stay a review rule until roadmap step 11 sorts `core`. Design decision 2 and `CLAUDE.md` are corrected.
+- [x] 2.3 Run the full 44 once (background or subagent). Verify: IDENTICAL with `tools/baseline/44.manifest.json`, or within `--tolerance 1e-6` of `raw data/44_baseline` (report the largest difference). Record the result here. Result (2026-10-04): IDENTICAL with `tools/baseline/44.manifest.json` (35 files), 2597 s wall time.
 
 ## 3. Docs
 
-- [ ] 3.1 Rewrite every `app/<file>` path in `CLAUDE.md`, `docs/*.md`, `docs/*.html` and `tools/README.md` to its new location (scripted), and update:
+- [x] 3.1 Rewrite every `app/<file>` path in `CLAUDE.md`, `docs/*.md`, `docs/*.html` and `tools/README.md` to its new location (scripted), and update:
   - the `CLAUDE.md` sections Build (output, the `default_settings.toml` copy), Testing (the tests link the libraries), and Architecture (the layer folders and libraries, the Fusion/TBB exceptions, the cell-index rename in the link-order paragraph);
   - `docs/ARCHITECTURE.md`: step 7b done, §4/§5 as built.
 
   Verify: `grep -rn "app/" CLAUDE.md docs tools/README.md` finds only history (list each one), and `openspec validate layer-folders --strict` passes. Commit.
+
+  Result: 80 paths rewritten by script, every one mapped:
+
+  | File | Paths |
+  |---|---|
+  | `CLAUDE.md` | 38 |
+  | `ARCHITECTURE.md` | 11 |
+  | `index.html` | 11 |
+  | `PIPELINE.md` | 7 |
+  | `degeneracy-information.html` | 5 |
+  | `window-chaining.html` | 5 |
+  | `PERFORMANCE.md` | 3 |
+
+  Reworded by hand:
+  - `CLAUDE.md`: a Layers paragraph, the tests link the libraries, the link-order paragraph with the rename, `run_cli`;
+  - `PIPELINE.md`: "the code is in `src/`";
+  - `ARCHITECTURE.md`: 7b done, §5 as built.
+
+  The `app/` mentions left are history: `ARCHITECTURE.md` lines 59 and 155 (`lidar_odometry_utils.h`), and the 7b entry itself. `openspec validate --strict` passes.

@@ -199,7 +199,7 @@
 <ol class="steps">
 <li class="step" id="s-load">
 <h3>Loading and filtering the points</h3>
-<div class="where">load_data / load_point_cloud · app/lidar_odometry.cpp, app/recording_folder_source.cpp</div>
+<div class="where">load_data / load_point_cloud · src/application/lidar_odometry.cpp, src/infrastructure/recording_folder_source.cpp</div>
 <p>Each point is read with its position in the <b>sensor frame</b>, its intensity and its timestamp. Then:</p>
 <ul>
 <li>Each point is shifted by the LiDAR→IMU <b>lever arm</b> (translation only), so that points and IMU share one origin. The L2 data from dLidar is already in the IMU axes (NWU: x forward, y left, z up).</li>
@@ -212,7 +212,7 @@
 
 <li class="step" id="s-imu">
 <h3>An orientation for every IMU sample</h3>
-<div class="where">calculate_trajectory · app/lidar_odometry.cpp</div>
+<div class="where">calculate_trajectory · src/application/lidar_odometry.cpp</div>
 <p>A Madgwick-type filter (Fusion AHRS, 6-axis, no magnetometer) integrates the gyro, and uses the accelerometer's gravity direction to correct roll and pitch. Heading (yaw) has no absolute reference, so it drifts with the gyro bias. That is what the LiDAR optimization and the bias estimation fix later. The accelerometer correction is switched off whenever |a| is outside 0.9–1.1 g (hard accelerations).</p>
 <p>If <code>use_remove_imu_bias_from_first_stationary_scan</code> is on, the median gyro value of the first 1000 samples is subtracted as bias, but only if the total gyro variance there is below 5 (°/s)². Handheld recordings usually fail that check ("Excessive movement detected") and continue with zero bias.</p>
 <p>Result: a trajectory map <i>timestamp → rotation</i> with one entry per IMU sample (about 1.1 ms apart). These are the <b>trajectory nodes</b>. Their positions are still zero at this stage.</p>
@@ -221,7 +221,7 @@
 
 <li class="step" id="s-windows">
 <h3>Windows and a pose for every point</h3>
-<div class="where">compute_step_1 · app/lidar_odometry.cpp</div>
+<div class="where">compute_step_1 · src/application/lidar_odometry.cpp</div>
 <ul>
 <li>The first <code>threshold_initial_points</code> points are set aside to build the initial map (step 4). Nodes before the time of the last of these points are skipped.</li>
 <li>The remaining nodes are cut into <b>windows</b> of <code>threshold_nr_poses</code> consecutive nodes (360 ≈ 0.4 s at 893 Hz). A leftover shorter than a full window is dropped.</li>
@@ -234,7 +234,7 @@
 
 <li class="step" id="s-map">
 <h3>The initial map</h3>
-<div class="where">optimize_windows (start) · app/run_odometry.cpp</div>
+<div class="where">optimize_windows (start) · src/application/run_odometry.cpp</div>
 <p>The set-aside initial points are transformed with the <b>first pose only</b> (no per-point motion compensation) and inserted into two <b>NDT grids</b>. Space is divided into cubes (0.15 m "indoor" and 0.4 m "outdoor" grid), and each cube stores the mean and covariance of the points in it, i.e. a small Gaussian that describes the local surface. A cube with 3 or more points also gets a normal vector facing the sensor.</p>
 <p>Because this map is not motion-compensated, stand still for the first second or two if you can. The first window is registered against this map, so its misfit is not allowed to affect the gyro bias estimate.</p>
 <div class="params"><span>in_out_params_indoor.resolution_*</span><span>in_out_params_outdoor.resolution_*</span><span>threshold_initial_points</span></div>
@@ -242,7 +242,7 @@
 
 <li class="step" id="s-guess">
 <h3>Initial guess for the next window</h3>
-<div class="where">optimize_windows · app/run_odometry.cpp</div>
+<div class="where">optimize_windows · src/application/run_odometry.cpp</div>
 <ul>
 <li>The window's first node is placed exactly on the previous window's last node.</li>
 <li>Rotations follow the IMU's relative rotations between nodes, <b>minus the gyro bias</b> estimated so far (bias × Δt per step).</li>
@@ -254,7 +254,7 @@
 
 <li class="step" id="s-opt">
 <h3>Window optimization</h3>
-<div class="where">optimize_lidar_odometry · app/scan_to_map.cpp</div>
+<div class="where">optimize_lidar_odometry · src/domain/scan_to_map.cpp</div>
 <p>The unknowns are the 6 pose parameters (x, y, z, ω, φ, κ) of every node of the window, plus 3 gyro-bias values: 6 × 360 + 3 = 2163 numbers. Each Levenberg–Marquardt iteration builds one least-squares system from these terms:</p>
 <ul>
 <li><b>Point to map (NDT, fine grid):</b> every decimated point with 3-D distance between <code>min_distance_lidar</code> and <code>max_distance_lidar</code> is transformed with its node's pose and looked up in the 0.15 m grid. Its distance to that cube's Gaussian, weighted by the inverse covariance, is minimized. Points hitting a cube whose normal faces away from the sensor, or whose covariance is degenerate, are skipped.</li>
@@ -271,7 +271,7 @@
 
 <li class="step" id="s-handoff">
 <h3>Hand-off and gyro bias</h3>
-<div class="where">optimize_windows · app/run_odometry.cpp</div>
+<div class="where">optimize_windows · src/application/run_odometry.cpp</div>
 <p>The last node of a window has no points, and the ones just before it have very few. Left free, they can spin by several degrees, and the next window would inherit that error permanently, which shows up as rotated "ghost" copies of walls. So after the optimization, the last <code>handoff_tail_nodes</code> nodes are <b>recomputed from the last well-constrained node</b> using the bias-corrected IMU rotation and the optimized velocity. The next window starts from that recomputed end.</p>
 <p>The window's bias estimate and its uncertainty become the prior for the next window, and they are printed and written to the results JSON.</p>
 <div class="params"><span>handoff_tail_nodes</span><span>gyro_bias_*</span></div>
@@ -279,21 +279,21 @@
 
 <li class="step" id="s-update">
 <h3>Map update</h3>
-<div class="where">optimize_windows · app/run_odometry.cpp</div>
+<div class="where">optimize_windows · src/application/run_odometry.cpp</div>
 <p>The window's decimated points, now transformed with their optimized poses, are added to both NDT grids (the Gaussians are updated incrementally). The map therefore grows with the whole recording. Once the travelled distance exceeds <code>sliding_window_trajectory_length_threshold</code>, the map is rebuilt from the most recent half of the points, voxel-decimated with <code>decimation</code>, which bounds memory on long runs. With the default 200 m this happens rarely on handheld recordings.</p>
 <div class="params"><span>sliding_window_trajectory_length_threshold</span></div>
 </li>
 
 <li class="step" id="s-export">
 <h3>Export</h3>
-<div class="where">save_result · app/lidar_odometry.cpp</div>
+<div class="where">save_result · src/application/lidar_odometry.cpp</div>
 <p>All <b>original</b> points (not the decimated ones) are transformed with their own optimized node pose. Points whose sensor-frame distance is below <code>threshould_output_filter</code> are removed from the export. Windows are grouped into chunks of 51, and each chunk becomes one <code>scan_lio_N.laz</code>, expressed relative to the chunk's first pose, with that pose stored in the session files. The remaining windows form a final, shorter chunk, which is written if it has more than <code>min_counter_concatenated_trajectory_nodes</code> windows (default 0, so it is always written).</p>
 <p>With <code>export_merged_laz = true</code> all chunks are additionally written into one <code>scan_lio_merged.laz</code> in world coordinates.</p>
 <div class="params"><span>threshould_output_filter</span><span>min_counter_concatenated_trajectory_nodes</span><span>export_merged_laz</span></div>
 </li>
 </ol>
 
-<div class="note"><b>Loop closure (after step 8, before the consistency pass)</b>With <code>use_loop_closure = true</code> the command-line mode corrects the finished trajectory when you come back to a place you have already scanned (<code>app/loop_closure.cpp</code>):
+<div class="note"><b>Loop closure (after step 8, before the consistency pass)</b>With <code>use_loop_closure = true</code> the command-line mode corrects the finished trajectory when you come back to a place you have already scanned (<code>src/application/loop_closure.cpp</code>):
 <ol>
 <li>The windows are grouped into <b>segments</b> of <code>loop_closure_segment_windows</code> windows (12 ≈ 5 s), each with its points in world coordinates.</li>
 <li><b>Revisit candidates</b>: for every segment, the closest earlier segment that is at least <code>loop_closure_min_time_gap_s</code> older, within <code>loop_closure_search_radius_m</code> horizontally and <code>loop_closure_max_vertical_offset_m</code> vertically (so different floors are not confused).</li>

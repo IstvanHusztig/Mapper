@@ -8,7 +8,7 @@ the roadmap).
 
 The app works and is validated on real scans, but its structure is inherited from HDMapping:
 
-- the pipeline, the GUI and the CLI shared file-scope globals in `app/lidar_odometry_gui.cpp`
+- the pipeline, the GUI and the CLI shared file-scope globals in `src/presentation/gui/lidar_odometry_gui.cpp`
   (fixed in step 2);
 - `LidarOdometryParams` mixed settings with runtime state (fixed in step 1);
 - the optimizers printed to the console (fixed in step 3) and read/write cache files;
@@ -62,7 +62,7 @@ infrastructure and UI at the edge, and all source dependencies pointing inward.
   `OdometryState` and `GuiPreferences`. Grouping `OdometryConfig` by section is left to step 5.
 - ✅ `WorkerData` (`core/include/structures.h`) carried cache file names and a GUI `show` flag.
   Step 4a moved the points behind the `PointStore` port, and step 5a replaced it in the app with
-  the domain `Window` (`app/window.h`). `WorkerData` stays in `core` only for `session.cpp`.
+  the domain `Window` (`src/domain/window.h`). `WorkerData` stays in `core` only for `session.cpp`.
 - ✅ Globals in `lidar_odometry_gui.cpp` (`params`, `worker_data`, `imu_data`, `trajectory`,
   `pointsPerFile`, step flags). Step 2 moved the run data into `OdometryPipeline`. The GUI still
   keeps `params`, `gui_prefs`, its current `pipeline` and UI state as file-scope globals for the
@@ -78,18 +78,19 @@ infrastructure and UI at the edge, and all source dependencies pointing inward.
 - `core/` mixes pure math (NDT, ICP, pose graph) with I/O (LAZ export, session, file dialogs)
   → the pure parts feed the domain, the rest becomes infrastructure (step 11).
 
-## 5. Target folder and CMake layout
+## 5. Folder and CMake layout (built in step 7b)
 
 ```
-src/domain/          -> lib  lo_domain          (Eigen, manif, observation_equations)
-src/application/     -> lib  lo_application     (lo_domain)
-src/infrastructure/  -> lib  lo_infrastructure  (lo_application, LASzip, TBB, Fusion, toml, json)
-src/presentation/cli, src/presentation/gui
+src/domain/          -> lib  lo_domain          (Eigen, manif, observation_equations, core/include)
+src/application/     -> lib  lo_application     (lo_domain; Fusion and TBB until step 9)
+src/infrastructure/  -> lib  lo_infrastructure  (lo_application, LASzip, toml, json, core's I/O headers)
+src/presentation/cli, src/presentation/gui (in the dMapper exe)
 src/main.cpp         -> exe  dMapper
-tests/               -> unit tests on lo_domain / lo_application
+tests/               -> unit tests, linking lo_infrastructure (and with it the inner layers)
 ```
 
-CMake target links enforce the dependency rule: a domain file that includes LASzip won't link.
+Each library's include directories enforce the dependency rule: a domain file that includes LASzip doesn't
+compile.
 The `core` static library and its `CORE_SOURCE_FILES` link-order constraint stay; pieces move out
 of it only when a roadmap step touches them. The vendored `3rdparty/` stays as it is (plus
 doctest).
@@ -105,7 +106,7 @@ Each step is one OpenSpec change, validated against the baseline.
 1. ✅ **Split config from state** (done 2026-10-01): `OdometryConfig` (const in the pipeline),
    `OdometryState` (incl. `RunPaths`) and `GuiPreferences`; the TOML file is byte-identical
    (golden test in `tests/`).
-2. ✅ **Extract `OdometryPipeline`** (done 2026-10-01): `app/odometry_pipeline.{h,cpp}`. CLI and
+2. ✅ **Extract `OdometryPipeline`** (done 2026-10-01): `src/application/odometry_pipeline.{h,cpp}`. CLI and
    GUI both run load → odometry → loop closure → consistency → save. The CLI ignores the working
    directory's `default_settings.toml`, and the GUI loads it from the exe folder.
    - This also fixes a known GUI/CLI gap: today the GUI never runs loop closure, which the CLI
@@ -113,33 +114,33 @@ Each step is one OpenSpec change, validated against the baseline.
    - After this step, the GUI's "Compute all" must run exactly the CLI sequence (step 2 → loop
      closure → consistency) and produce output bit-identical to the baseline.
    - The CLI output must not change.
-3. ✅ **Logger and ProgressReporter ports** (done 2026-10-02): `app/run_reporting.h` (ports),
+3. ✅ **Logger and ProgressReporter ports** (done 2026-10-02): `src/domain/run_reporting.h` (ports),
    `ConsoleReporter` (console adapter, whole thread-safe lines) and the GUI's `GuiProgress`. The
    pipeline code has no `std::cout`, progress atomics or sleeps. The GUI progress window shows
    the current stage, and Pause blocks the run at its next checkpoint. Logging stays on the
    console.
 4. **I/O ports**, split into two changes:
    - 4a. ✅ **Input side** (done 2026-10-02): `RecordingSource`, `PointStore` and `PreviewSink`
-     (`app/input_ports.h`) with the adapters `RecordingFolderSource`, `DiskPointStore` and
+     (`src/application/input_ports.h`) with the adapters `RecordingFolderSource`, `DiskPointStore` and
      `FolderPreviewSink`. The pipeline owns them (`RunInputs`, `make_folder_inputs`). The pairing
      rules and the point store have unit tests.
    - 4b. ✅ **Output side** (done 2026-10-02): `ResultSink` and `ConfigRepository`
-     (`app/output_ports.h`) with the adapters `FolderResultSink` (every output file name and
+     (`src/application/output_ports.h`) with the adapters `FolderResultSink` (every output file name and
      format) and `TomlConfigRepository`. `save_result` keeps only the computation, and the CLI and
      GUI change settings only through the repository.
 5. **Domain model**, split into two changes:
    - 5a. ✅ **Domain types** (done 2026-10-03): `Window` (`poses`, `motion_model_poses`,
      `timestamps`, `imu_angles`, `imu_acc`, `gyro_bias`), `GyroBiasState` and `ImuTrajectory` in
-     `app/window.h`; the app uses `windows` instead of `worker_data`.
+     `src/domain/window.h`; the app uses `windows` instead of `worker_data`.
    - 5b. ✅ **Option structs** (done 2026-10-03): `optimize_lidar_odometry` takes the `Window` and
-     `ScanToMapOptions`, `MotionModelOptions` and `VelocityPrior` (`app/optimizer_options.h`, built
+     `ScanToMapOptions`, `MotionModelOptions` and `VelocityPrior` (`src/domain/optimizer_options.h`, built
      from `OdometryConfig`) instead of about 35 positional parameters.
 6. **Split the optimizer file** into domain services, split into three changes:
    - 6a. ✅ **One file per service** (done 2026-10-03): pure moves out of the 2,922-line file;
      the first tests on synthetic data cover the IMU kinematics and the normal-equation helpers.
    - 6b. ✅ **Window loop into named steps** (done 2026-10-03): `compute_step_2` became
      `optimize_windows`, a 126-line loop of named steps with `OdometryRunSetup` and `WindowLoopCarry`;
-     the steps that only need window data are in `app/window_steps.cpp`, with tests. Found on the way:
+     the steps that only need window data are in `src/domain/window_steps.cpp`, with tests. Found on the way:
      after every window the loop placed all later windows again (about 238,000 placements on 44). Fixed in
      `chain-next-window-only` (2026-10-03): only the next window is placed; new baselines, see
      `docs/window-chaining.html`.
@@ -159,9 +160,15 @@ Each step is one OpenSpec change, validated against the baseline.
      `normal_equations`, `imu_kinematics`, `window_steps`, `ndt_map`, `optimizer_options` and `robust_lidar_odometry`
      reach no LASzip, json, GL, `session.h` or Fusion. The window loop still does: Fusion through `input_ports.h` (step 9)
      and `session.h` through `export_laz.h` in `run_odometry.cpp`.
-   - 7b. **Folders and libraries:** move the files into `src/domain`, `src/application`, `src/infrastructure` and
-     `src/presentation`, with `lo_domain`, `lo_application` and `lo_infrastructure` libraries whose links enforce the
-     dependency rule; the tests link the libraries instead of compiling app sources.
+   - 7b. ✅ **Folders and libraries** (done 2026-10-04, `layer-folders`): `app/` became `src/domain`,
+     `src/application`, `src/infrastructure`, `src/presentation/{cli,gui}` and `src/main.cpp` (the composition root,
+     with `run_cli` / `run_gui`), built as `lo_domain`, `lo_application` and `lo_infrastructure`. Each library gets
+     only the include directories of its layer, so a LASzip, json, Fusion or TBB include in the domain doesn't compile
+     (checked). The tests link the libraries. Prepared by renaming the app's cell-index functions
+     (`ndt_cell_key`/`ndt_cell_index`, no clash with `core`'s `hash_utils`) and moving `points_to_vector` to
+     `core/include/point_placement.h`; `default_settings.toml` moved to `settings/`. Remaining exceptions:
+     `lo_application` uses Fusion and TBB (step 9), and `core`'s session and point-cloud types still compile in the
+     domain, because their GL includes need `WITH_GUI` (a review rule until step 11).
 
 Steps 8–11 were added on 2026-10-03. They cover the goals that steps 0–7 still leave open.
 

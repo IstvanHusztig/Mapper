@@ -72,7 +72,7 @@
 <h1>Degeneracy information: when the LiDAR can't see where you moved</h1>
 <p class="lead">What the "LiDAR translation information" is, how dMapper uses it to decide when to trust the accelerometer,
 how to read its log line, and a known weakness found in October 2026. It is computed in <code>optimize_lidar_odometry</code>
-(<code>app/scan_to_map.cpp</code>) and used in <code>update_acc_term_after_window</code> (<code>app/run_odometry.cpp</code>).</p>
+(<code>src/domain/scan_to_map.cpp</code>) and used in <code>update_acc_term_after_window</code> (<code>src/application/run_odometry.cpp</code>).</p>
 
 <div class="note"><b>In one sentence</b>
 Every surface a window's points are matched to pins the motion only <em>across</em> that surface, along its normal. Adding
@@ -171,7 +171,7 @@ both are on in <code>settings/lidar-vertical.toml</code>.</p>
 The synthetic scan-to-map test (<code>tests/scan_to_map_test.cpp</code>, change <code>scan-to-map-test</code>) put a window
 in a 30 m corridor. The information came out <em>strongest</em> along the corridor (925 along x against 155 across), the
 opposite of the truth.</div>
-<p>The cause is in how the map cells are built (<code>update_rgd</code>, <code>app/ndt_map.cpp</code>):</p>
+<p>The cause is in how the map cells are built (<code>update_rgd</code>, <code>src/domain/ndt_map.cpp</code>):</p>
 <ul>
   <li>A cell's normal is computed <b>once</b>, when its third point arrives, from those 3 points plus the initial isotropic
   3 cm covariance, and it is <b>never updated</b>. If the first 3 points lie roughly on a line, the normal can point anywhere
@@ -213,8 +213,8 @@ test is a normal passing test.</p>
 
 <h2>6. Where to find it</h2>
 <ul>
-  <li>Computed: <code>optimize_lidar_odometry</code> in <code>app/scan_to_map.cpp</code> (<code>lidar_translation_information</code>).</li>
-  <li>Used: <code>prepare_acc_term</code> and <code>update_acc_term_after_window</code> in <code>app/run_odometry.cpp</code>.</li>
+  <li>Computed: <code>optimize_lidar_odometry</code> in <code>src/domain/scan_to_map.cpp</code> (<code>lidar_translation_information</code>).</li>
+  <li>Used: <code>prepare_acc_term</code> and <code>update_acc_term_after_window</code> in <code>src/application/run_odometry.cpp</code>.</li>
   <li>Settings: <a href="index.html#p-imu"><code>[imu_translation]</code></a> in the main documentation.</li>
   <li>Tests: <code>tests/scan_to_map_test.cpp</code> (room and corridor) and <code>tests/ndt_map_test.cpp</code> (the cell statistics).</li>
 </ul>

@@ -21,7 +21,7 @@ Times are for the reference recordings in `raw data/`, with the Release build an
 
 **Problem.** Each window's Levenberg–Marquardt iteration builds a dense normal matrix: 6 unknowns per trajectory node plus 3 gyro-bias unknowns. Every iteration, the whole dense matrix was scanned and turned into a sparse matrix for the Cholesky solver. Most of it is zero, because a node is only connected to its neighbours.
 
-**Fix.** Only the band that can hold values (neighbouring nodes and the bias unknowns) is converted to sparse form. Today this is `pose_band_to_sparse` in `app/normal_equations.cpp`, tested in `tests/normal_equations_test.cpp`.
+**Fix.** Only the band that can hold values (neighbouring nodes and the bias unknowns) is converted to sparse form. Today this is `pose_band_to_sparse` in `src/domain/normal_equations.cpp`, tested in `tests/normal_equations_test.cpp`.
 
 **Effect.** About 35 % less time per window, with bit-identical results. It also reduced how often a window reached the 10 s `real_time_threshold_seconds` under CPU load. Before this fix, recording b1 needed up to 9 s per window, so the time limit could cut iterations and change results.
 
@@ -63,7 +63,7 @@ This also changed results. A slow window stops at `real_time_threshold_seconds`:
 - `lio_result_5` differed from the CLI by 1–2 mm;
 - `lio_result_7` differed by 9e-9 m.
 
-**Fix.** `schedule_redraw()` in `app/lidar_odometry_gui.cpp` redraws on a `glutTimerFunc` timer:
+**Fix.** `schedule_redraw()` in `src/presentation/gui/lidar_odometry_gui.cpp` redraws on a `glutTimerFunc` timer:
 - about 10 frames per second during a run;
 - about 60 otherwise, so the camera stays smooth.
 
@@ -81,7 +81,7 @@ Commit `9b822c4`.
 
 ## 6. Place only the next window
 
-**Problem.** After each window, `optimize_windows` (`app/run_odometry.cpp`) places all later windows again, each after the new end of the one before it. That is quadratic in the number of windows: about 238,000 placements on 44, where 690 are enough. Only the next window's placement is ever read.
+**Problem.** After each window, `optimize_windows` (`src/application/run_odometry.cpp`) places all later windows again, each after the new end of the one before it. That is quadratic in the number of windows: about 238,000 placements on 44, where 690 are enough. Only the next window's placement is ever read.
 
 **Fix.** Place only window `i + 1`. If a run fails at a window, place the remaining windows once, so the saved trajectory stays continuous.
 

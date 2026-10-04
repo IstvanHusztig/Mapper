@@ -93,11 +93,11 @@ trajectory: a list of poses (<code>Window::poses</code>), one node every few mil
 <strong>690 windows of 360 nodes</strong> (248,400 nodes in all).</p>
 
 <p>Before the odometry, each window's poses come from the IMU alone, and the windows don't join up: each one starts somewhere
-on its own. The window loop <code>optimize_windows</code> (<code>app/run_odometry.cpp</code>) processes the windows in order, and
+on its own. The window loop <code>optimize_windows</code> (<code>src/application/run_odometry.cpp</code>) processes the windows in order, and
 each window has to start where the one before it ended. Moving a window so that it starts at a given pose while keeping its
 shape is <strong>placing</strong> it:</p>
 
-<pre><span class="cm">// app/window_steps.cpp</span>
+<pre><span class="cm">// src/domain/window_steps.cpp</span>
 void place_window_after(Window &amp;window, const Eigen::Affine3d &amp;start)
 {
     Eigen::Affine3d m_last = start;
@@ -260,7 +260,7 @@ failure path now places all remaining windows once:</p>
     return false;
 }</pre>
 
-<p><code>place_windows_after(windows, first)</code> is a new helper in <code>app/window_steps.cpp</code>. It places
+<p><code>place_windows_after(windows, first)</code> is a new helper in <code>src/domain/window_steps.cpp</code>. It places
 <code>windows[first]</code>, <code>windows[first + 1]</code>, … in order, each after its predecessor's end: n − first placements,
 once. It has a unit test (<code>tests/window_steps_test.cpp</code>) that checks the chaining, the kept relative poses, that
 earlier windows don't move, and that one call matches the old repeated placement within 1e-9.</p>
@@ -319,7 +319,7 @@ change, the change writes new baselines for <code>44_short</code> and <code>44</
 <ul>
   <li>OpenSpec change: <code>openspec/changes/chain-next-window-only/</code> (proposal, design, tasks; archived under
   <code>openspec/changes/archive/</code> once done).</li>
-  <li>Code: <code>app/run_odometry.cpp</code> (<code>optimize_windows</code>), <code>app/window_steps.{h,cpp}</code>
+  <li>Code: <code>src/application/run_odometry.cpp</code> (<code>optimize_windows</code>), <code>src/domain/window_steps.{h,cpp}</code>
   (<code>place_window_after</code>, <code>place_windows_after</code>), <code>tests/window_steps_test.cpp</code>.</li>
   <li>Commits: <code>9053ab1</code> (helper and tests), <code>7a99a94</code> (only the next window),
   <code>dfed690</code> (failure path).</li>

@@ -1,10 +1,10 @@
 # How a run works: windows
 
-A run is cut into short consecutive pieces of the recording, called **windows**. This page explains what a window holds and how each processing stage uses it. The code is in `app/`. For the parameters, see `docs/index.html`; for the target architecture, see `docs/ARCHITECTURE.md`.
+A run is cut into short consecutive pieces of the recording, called **windows**. This page explains what a window holds and how each processing stage uses it. The code is in `src/` (one folder per layer, see `docs/ARCHITECTURE.md`). For the parameters, see `docs/index.html`; for the target architecture, see `docs/ARCHITECTURE.md`.
 
 ## What a `Window` is
 
-A `Window` (`app/window.h`) holds `threshold_nr_poses` consecutive **trajectory nodes**, one per IMU sample:
+A `Window` (`src/domain/window.h`) holds `threshold_nr_poses` consecutive **trajectory nodes**, one per IMU sample:
 - That is 360 nodes with `settings/lidar-vertical.toml`, about 0.4 s of recording.
 - `44_short` has 70 windows, and the full 44 recording has 690.
 
@@ -17,13 +17,13 @@ A `Window` (`app/window.h`) holds `threshold_nr_poses` consecutive **trajectory 
 | `imu_acc` | The raw accelerometer per node, in g (body frame), for the optional acceleration term and the zero-velocity check. |
 | `gyro_bias` | A `GyroBiasState`: this window's estimated gyro bias (`mean`, rad/s) and its uncertainty (`covariance`). |
 
-**The points are not in the window.** They live in the `PointStore` (`app/input_ports.h`), under the window's index:
+**The points are not in the window.** They live in the `PointStore` (`src/application/input_ports.h`), under the window's index:
 - the original points;
 - a decimated "intermediate" set, which the optimizer uses.
 
 On disk that is `<recording>/cache/original_points_<i>.cache` and `intermediate_points_<i>.cache`. So a window is small (poses and IMU data), while its heavy point data stays on disk.
 
-The AHRS orientation track the windows start from is an `ImuTrajectory` (also in `app/window.h`): IMU timestamp → (pose, unix timestamp).
+The AHRS orientation track the windows start from is an `ImuTrajectory` (also in `src/domain/window.h`): IMU timestamp → (pose, unix timestamp).
 
 ## How a run uses the windows
 
@@ -50,16 +50,16 @@ recording ──► ImuTrajectory (AHRS orientation per IMU sample)
 ```
 
 In more detail:
-- **`compute_step_1`** (`app/lidar_odometry.cpp`):
+- **`compute_step_1`** (`src/application/lidar_odometry.cpp`):
   - It builds the windows from the `ImuTrajectory`.
   - Every point is attached to the node just before its timestamp (at most 10 ms), so each point gets its own pose (motion compensation). Windows with too few points are dropped.
   - The original and decimated points go to the `PointStore`.
-- **`optimize_windows`** (`app/run_odometry.cpp`, steps in `app/window_steps.cpp`) runs the windows in order:
+- **`optimize_windows`** (`src/application/run_odometry.cpp`, steps in `src/domain/window_steps.cpp`) runs the windows in order:
   - The previous window's end gives the start guess and the velocity.
   - Its `gyro_bias` becomes the next window's prior (the prior's uncertainty grows with time).
   - `optimize_lidar_odometry` adjusts the window's `poses` against the NDT map of the points so far, the motion-model prior and the gyro bias.
   - Afterwards the window's last nodes are re-propagated from the IMU (`handoff_tail_nodes`), and its points are added to the map. The map is a sliding local map, emptied as the trajectory advances.
-- **Loop closure** (`app/loop_closure.cpp`, with `use_loop_closure`):
+- **Loop closure** (`src/application/loop_closure.cpp`, with `use_loop_closure`):
   - It groups `loop_closure_segment_windows` windows into segments and looks for places visited twice.
   - Accepted loops correct the `poses` of all windows through a small pose graph.
 - **Consistency** (`run_consistency`, with `use_consistency`) adjusts the `poses` of all windows together for point-cloud consistency and trajectory smoothness.
