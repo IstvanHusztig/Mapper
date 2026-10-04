@@ -6,7 +6,7 @@ Close the GUI before building.
 
 ## 1. Report a window when it is final
 
-- [ ] 1.1 In `optimize_windows`, move `progress.progress(i + 1, windows.size())` after the `add_window_distance` check (decision 1). Verify: the step checks; the CLI log of `44_short` is the same as before apart from timings (diff the logs with numbers in `[s]` masked). Commit.
+- [x] 1.1 In `optimize_windows`, move `progress.progress(i + 1, windows.size())` after the `add_window_distance` check (decision 1). Verify: the step checks; the CLI log of `44_short` is the same as before apart from timings (diff the logs with numbers in `[s]` masked). Commit. Result: both presets build, `ctest` passes, precise and fast `44_short` are IDENTICAL (11 files). The CLI log (332 lines) differs from the one before only in the end-of-run time line ("finished computation at …", "Elapsed time"), after masking the per-window seconds.
 
 ## 2. The view
 

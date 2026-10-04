@@ -698,8 +698,6 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
                 repropagate_window_tail(windows[i], params.handoff_tail_nodes, bias_update);
             }
 
-            progress.progress(i + 1, windows.size());
-
             if (i % 100 == 0)
                 send_preview(i, intermediate_points, windows[i], params, preview);
 
@@ -709,6 +707,9 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
                 place_windows_after(windows, i + 1);
                 return false;
             }
+
+            // reported only now: from here on the odometry doesn't change this window again (a viewer may read it)
+            progress.progress(i + 1, windows.size());
 
             // the next window continues from the new end of this one; the windows after it are placed in their own turn,
             // since no step reads a window's placement before the window before it is done
