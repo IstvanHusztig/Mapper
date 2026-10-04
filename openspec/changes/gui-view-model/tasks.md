@@ -19,7 +19,7 @@ Close the GUI before building.
 
 ## 3. Tests
 
-- [ ] 3.1 `tests/gui_view_model_test.cpp` with a recording `RunNotifier` (decision 5); link `lo_gui_view_model` into the tests. Verify: both presets build, `ctest` passes (report the new cases' Debug time). Commit.
+- [x] 3.1 `tests/gui_view_model_test.cpp` with a recording `RunNotifier` (decision 5); link `lo_gui_view_model` into the tests. Verify: both presets build, `ctest` passes (report the new cases' Debug time). Commit. Result: 5 cases, all passing (34 assertions): defaults from a missing and a real file with their source; Load parameters, and an unreadable file that changes nothing; a folder that doesn't exist starts nothing; an empty folder starts, then reports `load_failed` with the folder, stops running, keeps the source the run started with, leaves `working_directory` empty and creates no cache; `GuiProgress` pause holds `checkpoint` until resume, and `reset` starts afresh. **Finding:** the first link failed with `LNK1104 freeglut.lib`, a pragma from `GL/freeglut.h` that `core`'s `session.h` brings into the result and preview sinks; `lo_infrastructure` now builds with `FREEGLUT_LIB_PRAGMAS=0`, and the link has no unresolved symbol (no adapter calls GLUT); design decision 4 records it. Both presets build, `ctest` passes, precise and fast `44_short` are IDENTICAL (11 files) with the new flag, and the layer folders and `core` are unchanged. The new cases take 0.18 s in Debug.
 
 ## 4. Docs
 

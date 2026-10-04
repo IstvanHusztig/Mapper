@@ -268,7 +268,9 @@ target_include_directories(lo_infrastructure
           ${FREEGLUT_INCLUDE_DIR}
           ${EXTERNAL_LIBRARIES_DIRECTORY}/portable-file-dialogs
           ${EXTERNAL_LIBRARIES_DIRECTORY}/Fusion/Fusion)
-target_compile_definitions(lo_infrastructure PRIVATE WITH_GUI=1)
+# FREEGLUT_LIB_PRAGMAS=0: core's I/O headers reach GL/freeglut.h (session.h -> point_cloud.h), whose auto-link pragma
+# would make everything that links the result or preview sinks link freeglut.lib; the adapters call no GLUT function
+target_compile_definitions(lo_infrastructure PRIVATE WITH_GUI=1 FREEGLUT_LIB_PRAGMAS=0)
 target_link_libraries(lo_infrastructure PUBLIC lo_application PRIVATE ${PLATFORM_LASZIP_LIB} Fusion ${PLATFORM_MISCELLANEOUS_LIBS})
 
 # presentation: the GUI's view-model (its state and actions). Only the infrastructure's include directories, no ImGui,

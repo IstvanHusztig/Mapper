@@ -17,11 +17,13 @@ add_executable(lidar_odometry_tests
   synthetic_recording_test.cpp
   loop_closure_test.cpp
   consistency_test.cpp
-  orientation_test.cpp)
+  orientation_test.cpp
+  gui_view_model_test.cpp)
 
-# the code under test comes from the layer libraries (lo_infrastructure brings lo_application and lo_domain); core is
+# the code under test comes from the layer libraries (lo_gui_view_model brings lo_infrastructure, lo_application and
+# lo_domain); core is
 # not linked
-target_link_libraries(lidar_odometry_tests PRIVATE lo_infrastructure)
+target_link_libraries(lidar_odometry_tests PRIVATE lo_gui_view_model lo_infrastructure)
 
 target_include_directories(
   lidar_odometry_tests
