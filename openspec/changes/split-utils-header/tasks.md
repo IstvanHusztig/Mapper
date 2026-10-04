@@ -21,7 +21,21 @@ The scratchpad script `step_check.sh` runs all of them. Close the GUI before bui
 
 ## 3. Include check and full run
 
-- [ ] 3.1 Write the `/showIncludes` script (decision 6) in the scratchpad and run it on `scan_to_map.cpp`, `normal_equations.cpp`, `imu_kinematics.cpp`, `window_steps.cpp`, `ndt_map.cpp`, `optimizer_options.cpp` and `robust_lidar_odometry.cpp`. Verify: none of them includes LASzip, nlohmann json, GL/freeglut, `session.h`, `point_cloud.h` or Fusion, directly or transitively. Record each file's result here. A file that still does is reported with the include chain, and implementation pauses.
+- [x] 3.1 Write the `/showIncludes` script (decision 6) in the scratchpad and run it on `scan_to_map.cpp`, `normal_equations.cpp`, `imu_kinematics.cpp`, `window_steps.cpp`, `ndt_map.cpp`, `optimizer_options.cpp` and `robust_lidar_odometry.cpp`. Verify: none of them includes LASzip, nlohmann json, GL/freeglut, `session.h`, `point_cloud.h` or Fusion, directly or transitively. Record each file's result here. A file that still does is reported with the include chain, and implementation pauses. Result: all 7 files pass:
+
+  | File | Includes |
+  |---|---|
+  | `scan_to_map.cpp` | 525 |
+  | `normal_equations.cpp` | 459 |
+  | `imu_kinematics.cpp` | 493 |
+  | `window_steps.cpp` | 462 |
+  | `ndt_map.cpp` | 494 |
+  | `optimizer_options.cpp` | 497 |
+  | `robust_lidar_odometry.cpp` | 516 |
+
+  The script was checked against two files that must fail, and it flagged both. Both chains are notes for 7b:
+  - `run_odometry.cpp`: `run_odometry.h` → `input_ports.h` → `Fusion.h`, and its own `export_laz.h` → `session.h` → `point_cloud.h`;
+  - `lidar_odometry.cpp`: the same `Fusion` chain, and `session.h` → `point_cloud.h`.
 - [ ] 3.2 Run the full 44 once (Release, `settings/lidar-vertical.toml`, in the background or through a subagent). Verify: IDENTICAL with `tools/baseline/44.manifest.json`, or within `--tolerance 1e-6` of `raw data/44_baseline` (report the largest difference; the params file there is older). Record the result here.
 
 ## 4. Docs
