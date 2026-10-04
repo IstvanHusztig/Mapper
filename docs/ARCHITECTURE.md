@@ -172,8 +172,17 @@ Each step is one OpenSpec change, validated against the baseline.
 
 Steps 8–11 were added on 2026-10-03. They cover the goals that steps 0–7 still leave open.
 
-8. **Tests for loop closure and consistency:** run `run_loop_closure` and `run_consistency` on synthetic
-   data, as 6c does for scan-to-map, so every algorithm in the Goals has a unit test.
+8. ✅ **Tests for loop closure and consistency** (done 2026-10-04, `loop-closure-consistency-tests`):
+   `tests/synthetic_recording.{h,cpp}` drives two laps around a block (44 windows, 132,000 points, corners with the
+   turn rate ramped over 0.5 s), shared with 6c's scene helpers, and `tests/memory_point_store.h` stands in for the
+   `PointStore`. Findings, kept as expected failures (`doctest::should_fail`) with their cause:
+   - **Loop closure** halves second-lap drift (575 → 112 mm, 5 loops), but moves a trajectory that is already right
+     by 32 mm / 0.09°: each aligned revisit still registers a 1–3 cm "correction", and the pose graph spreads it.
+     With points only within 6 m it accepted a false loop (1.5 m). Its scenarios take about 20 s each in Release and
+     more than 15 minutes in Debug, so they are skipped in the regular run and run with `--no-skip` (user decision).
+   - **Consistency** reduces window seams in both variants, but moves the truth by 6.4 mm (`Consistency`, even
+     NDT-fit noise) and 16 mm / 0.46° (`Consistency2`, whose 0.01° rotation smoothness pulls against every change of
+     turn rate, so the error sits at the corners).
 9. **Remaining ports:** `OrientationEstimator` (Fusion AHRS) and `ParallelExecutor` (TBB, see
    Decisions), so the domain no longer calls Fusion or TBB directly.
 10. **GUI view-model:** move `params`, `gui_prefs`, the current `pipeline` and the UI state out of the

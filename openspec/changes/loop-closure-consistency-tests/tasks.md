@@ -62,9 +62,9 @@
 
 ## 3. Docs
 
-- [ ] 3.1 Update:
+- [x] 3.1 Update:
   - `CLAUDE.md` Testing: the new test files, and the fixture shared with 6c;
   - `docs/ARCHITECTURE.md`: step 8 done, with the findings;
   - `docs/index.html`: any finding, where loop closure and consistency are described.
 
-  Verify: `git diff --stat <change start> -- src core` is empty, and `openspec validate loop-closure-consistency-tests --strict` passes. Commit.
+  Verify: `git diff --stat <change start> -- src core` is empty, and `openspec validate loop-closure-consistency-tests --strict` passes. Commit. Result: `CLAUDE.md` Testing names the fixture, the in-memory store, both test files, the `--no-skip` run and the `should_fail` convention; `docs/ARCHITECTURE.md` marks step 8 done with the findings; `docs/index.html` adds two known limitations (loop closure and consistency both move a correct trajectory, and the false loop at 6 m range). The change validates strictly, and `src/` and `core/` are unchanged.
