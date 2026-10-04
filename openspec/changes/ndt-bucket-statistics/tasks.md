@@ -46,13 +46,39 @@ Close the GUI before building.
 
 ## 3. Evaluation (the user decides)
 
-- [ ] 3.1 Run `44_short` and `44` with the switch on, in the background, from a scratchpad copy of `lidar-vertical.toml`. The switch-off result is the current baseline. Collect, for off against on (decision 7):
+- [x] 3.1 Run `44_short` and `44` with the switch on, in the background, from a scratchpad copy of `lidar-vertical.toml`. The switch-off result is the current baseline. Collect, for off against on (decision 7):
   - `eval_odometry.py` metrics, after the CloudCompare export;
   - degenerate-window and accelerometer-term counts, and the weakest directions;
   - loop-closure edges;
   - odometry time.
 
   Write them as a table in this task, and **pause for the user's decision**.
+
+  Result (2026-10-04). OFF = the previous statistics (`44_conv`, `44_short_conv`, identical with the baselines); ON = exact statistics with the ambiguous-normal rule (`44_exact`, `44_short_exact`). Both had `log_iteration_convergence` on.
+
+  | | 44_short OFF | 44_short ON | 44 OFF | 44 ON |
+  |---|---|---|---|---|
+  | Occupied cells 3/5/10 cm (chunk 0, about 51 windows) | 23478 / 12389 / 4454 | 24959 / 12903 / 4555 (+6.3 / +4.1 / +2.3 %) | 24044 / 12549 / 4499 | 25309 / 13095 / 4609 (+5.3 / +4.4 / +2.4 %) |
+  | Yaw jitter (median / p95) | 0.067 / 0.38 | 0.064 / 0.34 | 0.068 / 0.37 | 0.064 / 0.34 |
+  | Window difference (median, > 3) | 1.18 (2) | 1.11 (3) | 1.37 (5) | 1.27 (5) |
+  | End spikes (median, > 3) | 1.00 (3) | 1.00 (2) | 1.14 (6) | 1.04 (4) |
+  | Final yaw vs gyro [°] | −130.4 vs −139.0 | −129.4 vs −139.2 | −126.4 vs −136.9 | −126.3 vs −136.9 |
+  | Degenerate windows (ratio < 0.3) | 3 | 27 | 95 | 439 |
+  | Accelerometer term active | 3 | 26 | 93 | 411 |
+  | Median / min information ratio | 0.495 / 0.264 | 0.350 / 0.108 | 0.483 / 0.134 | 0.231 / 0.013 |
+  | Weakest direction of degenerate windows (x / y / z) | 3 / 0 / 0 | 6 / 20 / 1 | 23 / 62 / 10 | 146 / 289 / 4 |
+  | Loops accepted (largest correction) | none | none | 20 (0.78 m) | 21 (0.91 m) |
+  | Settled after (median / p90 / max) | 52 / 74 / 83 | 24 / 81 / 86 | 51 / 79 / 91 | 29 / 77 / 94 |
+  | `delta < 1e-2` after (median / p90) | 19 / 43 | 20 / 36 | 27 / 52 | 23 / 43 |
+  | Error at that point (median / p90 / max) [mm] | 0.013 / 0.051 / 0.17 | 0.017 / 0.084 / 0.29 | 0.016 / 0.12 / 1.48 | 0.024 / 0.17 / 8.84 (window 146) |
+  | Odometry elapsed | 164 s (night) / 206 s (same morning) | 199 s | 1562 s (night) | 2117 s |
+
+  Notes:
+  - `eval_odometry.py` reads only chunk 0 (`trajectory_lio_0.csv`, `scan_lio_0.asc`), so the map metrics cover the first ~51 windows, not all of 44.
+  - The time can't be compared yet: a switch-OFF `44_short` run on the same morning took 206 s, against 199 s ON. The 44 OFF time is from a night run.
+  - The degenerate count grows 4.6×. `imu_degenerate_information_ratio = 0.3` was tuned on the wrong normals (design risk), and the accelerometer term follows the count. That can itself change the map, so the sharpness loss isn't attributable to the cell statistics alone yet.
+
+  **Paused for the user's decision.**
 - [ ] 3.2 If accepted:
   - switch the default to `true` in `OdometryConfig`, `app/default_settings.toml` and `settings/lidar-vertical.toml`, and regenerate the golden TOML files;
   - in a commit of their own: new baselines for `44_short` and `44`, with the old folders kept as `*_2026-10-04`, and the refreshed precise reference;
