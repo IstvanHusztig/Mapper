@@ -25,13 +25,13 @@ Close the GUI before building. After task 2.1, the precise build tree must be re
 
 ## 2. Folders and libraries
 
-- [ ] 2.1 `git mv` every file of `app/` into `src/domain`, `src/application`, `src/infrastructure`, `src/presentation/cli`, `src/presentation/gui` and `src/main.cpp` (decision 1). Move `default_settings.toml` to `settings/` (decision 6). Define `lo_domain`, `lo_application` and `lo_infrastructure` with the include directories of decision 2, link `dMapper` from them, and make `tests/CMakeLists.txt` link the libraries instead of compiling app sources. Verify:
+- [x] 2.1 `git mv` every file of `app/` into `src/domain`, `src/application`, `src/infrastructure`, `src/presentation/cli`, `src/presentation/gui` and `src/main.cpp` (decision 1). Move `default_settings.toml` to `settings/` (decision 6). Define `lo_domain`, `lo_application` and `lo_infrastructure` with the include directories of decision 2, link `dMapper` from them, and make `tests/CMakeLists.txt` link the libraries instead of compiling app sources. Verify:
   - `app/` no longer exists;
   - `git diff -M --stat` shows the sources as renames with no content change;
   - the step checks pass;
   - `default_settings.toml` is still copied next to both exes.
 
-  Record any file whose layer had to change, and why. Commit.
+  Record any file whose layer had to change, and why. Commit. Result: the design's layer assignment held. All 59 files moved as renames with no content change; the build failed on nothing on the first attempt. `default_settings.toml` is copied next to the exe and is byte-identical with `settings/default_settings.toml`. Both presets build, `ctest` passes, and precise and fast `44_short` are IDENTICAL (11 files); the precise tree was reconfigured with the libraries.
 - [ ] 2.2 The enforcement check (decision 2): temporarily add `#include <laszip/laszip_api.h>` to `src/domain/scan_to_map.cpp` and `#include <nlohmann/json.hpp>` to `src/application/run_odometry.cpp`. Verify: both fail to compile, with the error text recorded here. Revert, and check that the tree builds again. No commit (nothing changes); record the result.
 - [ ] 2.3 Run the full 44 once (background or subagent). Verify: IDENTICAL with `tools/baseline/44.manifest.json`, or within `--tolerance 1e-6` of `raw data/44_baseline` (report the largest difference). Record the result here.
 

@@ -151,7 +151,7 @@ add_subdirectory(${EXTERNAL_LIBRARIES_DIRECTORY}/oneTBB)
 
 add_subdirectory(${EXTERNAL_LIBRARIES_DIRECTORY}/Fusion/Fusion)
 
-file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/app/default_settings.toml"
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/settings/default_settings.toml"
      DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
 
 # This must match core/CMakeLists.txt's CORE_SOURCE_FILES / CORE_SOURCE_FILES_GUI
@@ -212,67 +212,81 @@ target_include_directories(core PRIVATE
     ${EXTERNAL_LIBRARIES_DIRECTORY}/manif/include
     ${EXTERNAL_LIBRARIES_DIRECTORY}/portable-file-dialogs)
 
+# ---- layers (docs/ARCHITECTURE.md): each library gets only the include directories its layer may use, so a file that
+# includes something its layer must not see doesn't compile ----
+
+# domain: entities and the optimizers. Eigen, manif, observation_equations and core/include (the "math kernel"); no
+# LASzip, json, GL, ImGui, Fusion or TBB directories, so core's I/O headers (session.h, export_laz.h) don't compile here
+add_library(lo_domain STATIC
+  src/domain/ndt_map.cpp
+  src/domain/normal_equations.cpp
+  src/domain/imu_kinematics.cpp
+  src/domain/window_steps.cpp
+  src/domain/optimizer_options.cpp
+  src/domain/scan_to_map.cpp
+  src/domain/robust_lidar_odometry.cpp)
+target_include_directories(lo_domain PUBLIC
+  src/domain
+  core/include
+  ${EIGEN3_INCLUDE_DIR}
+  ${EXTERNAL_LIBRARIES_DIRECTORY}/manif/include
+  ${EXTERNAL_LIBRARIES_DIRECTORY}/observation_equations/codes)
+
+# application: the use cases and the ports. Exceptions until roadmap step 9 (OrientationEstimator, ParallelExecutor):
+# Fusion (part of the Imu port type) and TBB
+add_library(lo_application STATIC
+  src/application/odometry_pipeline.cpp
+  src/application/lidar_odometry.cpp
+  src/application/run_odometry.cpp
+  src/application/loop_closure.cpp
+  src/application/consistency.cpp)
+target_include_directories(lo_application PUBLIC
+  src/application
+  ${EXTERNAL_LIBRARIES_DIRECTORY}/Fusion/Fusion)
+target_link_libraries(lo_application PUBLIC lo_domain Fusion PRIVATE ${PLATFORM_MISCELLANEOUS_LIBS})
+
+# infrastructure: the adapters (folders, LAZ, CSV, TOML, JSON, console). core's I/O headers need the GUI include
+# directories and WITH_GUI=1 (as core is built), so their class layouts match core's
+add_library(lo_infrastructure STATIC
+  src/infrastructure/recording_folder_source.cpp
+  src/infrastructure/recording_files.cpp
+  src/infrastructure/disk_point_store.cpp
+  src/infrastructure/folder_preview_sink.cpp
+  src/infrastructure/folder_inputs.cpp
+  src/infrastructure/folder_result_sink.cpp
+  src/infrastructure/toml_io.cpp
+  src/infrastructure/toml_config_repository.cpp
+  src/infrastructure/console_reporting.cpp)
+target_include_directories(lo_infrastructure
+  PUBLIC src/infrastructure
+  PRIVATE ${EXTERNAL_LIBRARIES_DIRECTORY}/json/include
+          ${LASZIP_INCLUDE_DIR}/LASzip/include
+          ${EXTERNAL_LIBRARIES_DIRECTORY}/imgui
+          ${EXTERNAL_LIBRARIES_DIRECTORY}/imgui/backends
+          ${EXTERNAL_LIBRARIES_DIRECTORY}/ImGuizmo
+          ${FREEGLUT_INCLUDE_DIR}
+          ${EXTERNAL_LIBRARIES_DIRECTORY}/portable-file-dialogs)
+target_compile_definitions(lo_infrastructure PRIVATE WITH_GUI=1)
+target_link_libraries(lo_infrastructure PUBLIC lo_application PRIVATE ${PLATFORM_LASZIP_LIB})
+
+if (MSVC)
+  target_compile_options(lo_domain PRIVATE /bigobj)
+  target_compile_options(lo_application PRIVATE /bigobj)
+  target_compile_options(lo_infrastructure PRIVATE /bigobj)
+endif()
+
+# presentation (CLI, GUI) and the composition root
 set(SOURCES
   ${REPOSITORY_DIRECTORY}/core/src/utils.cpp
-  app/main.cpp
-  app/cli.cpp
-  app/cli.h
-  app/format_time.h
-  app/lidar_odometry_gui.cpp
-  app/lidar_odometry.cpp
-  app/lidar_odometry.h
-  app/ndt_map.h
-  app/ndt_map.cpp
-  app/odometry_config.h
-  app/odometry_state.h
-  app/run_odometry.cpp
-  app/run_odometry.h
-  app/loop_closure.cpp
-  app/loop_closure.h
-  app/odometry_pipeline.cpp
-  app/odometry_pipeline.h
-  app/run_reporting.h
-  app/console_reporting.cpp
-  app/console_reporting.h
-  app/input_ports.h
-  app/recording_files.cpp
-  app/recording_files.h
-  app/disk_point_store.cpp
-  app/disk_point_store.h
-  app/folder_preview_sink.cpp
-  app/folder_preview_sink.h
-  app/recording_folder_source.cpp
-  app/recording_folder_source.h
-  app/folder_inputs.cpp
-  app/folder_inputs.h
-  app/output_ports.h
-  app/window.h
-  app/window_steps.cpp
-  app/window_steps.h
-  app/angle_units.h
-  app/normal_equations.cpp
-  app/normal_equations.h
-  app/imu_kinematics.cpp
-  app/imu_kinematics.h
-  app/scan_to_map.cpp
-  app/scan_to_map.h
-  app/robust_lidar_odometry.cpp
-  app/robust_lidar_odometry.h
-  app/consistency.cpp
-  app/consistency.h
-  app/optimizer_options.cpp
-  app/optimizer_options.h
-  app/toml_config_repository.cpp
-  app/toml_config_repository.h
-  app/folder_result_sink.cpp
-  app/folder_result_sink.h
-  app/toml.hpp
-  app/toml_io.h
-  app/toml_io.cpp
+  src/main.cpp
+  src/presentation/format_time.h
+  src/presentation/cli/cli.cpp
+  src/presentation/cli/cli.h
+  src/presentation/gui/lidar_odometry_gui.cpp
 )
 
 if(WIN32)
-    list(APPEND SOURCES app/resource.rc)
+    list(APPEND SOURCES src/presentation/gui/resource.rc)
 endif()
 
 add_executable(${APP_NAME} ${SOURCES})
@@ -281,7 +295,9 @@ target_compile_definitions(${APP_NAME} PRIVATE -DWITH_GUI=1)
 
 target_include_directories(
   ${APP_NAME}
-  PRIVATE app
+  PRIVATE src/presentation
+          src/presentation/cli
+          src/presentation/gui
           ${REPOSITORY_DIRECTORY}/core/include
           ${EXTERNAL_LIBRARIES_DIRECTORY}
           ${EXTERNAL_LIBRARIES_DIRECTORY}/glm
@@ -300,7 +316,8 @@ target_include_directories(
 
 target_link_libraries(
           ${APP_NAME}
-          PRIVATE core
+          PRIVATE lo_infrastructure
+          core
           Fusion
           ${FREEGLUT_LIBRARY}
           ${OPENGL_gl_LIBRARY}
@@ -324,7 +341,7 @@ if(WIN32)
     TARGET ${APP_NAME}
     POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy
-            "${CMAKE_CURRENT_SOURCE_DIR}/app/default_settings.toml"
+            "${CMAKE_CURRENT_SOURCE_DIR}/settings/default_settings.toml"
             $<TARGET_FILE_DIR:${APP_NAME}>
 )
 endif()
