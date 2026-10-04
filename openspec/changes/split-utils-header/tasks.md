@@ -36,7 +36,7 @@ The scratchpad script `step_check.sh` runs all of them. Close the GUI before bui
   The script was checked against two files that must fail, and it flagged both. Both chains are notes for 7b:
   - `run_odometry.cpp`: `run_odometry.h` → `input_ports.h` → `Fusion.h`, and its own `export_laz.h` → `session.h` → `point_cloud.h`;
   - `lidar_odometry.cpp`: the same `Fusion` chain, and `session.h` → `point_cloud.h`.
-- [ ] 3.2 Run the full 44 once (Release, `settings/lidar-vertical.toml`, in the background or through a subagent). Verify: IDENTICAL with `tools/baseline/44.manifest.json`, or within `--tolerance 1e-6` of `raw data/44_baseline` (report the largest difference; the params file there is older). Record the result here.
+- [x] 3.2 Run the full 44 once (Release, `settings/lidar-vertical.toml`, in the background or through a subagent). Verify: IDENTICAL with `tools/baseline/44.manifest.json`, or within `--tolerance 1e-6` of `raw data/44_baseline` (report the largest difference; the params file there is older). Record the result here. Result (2026-10-04): IDENTICAL with `tools/baseline/44.manifest.json` (35 files), 2359 s wall time.
 
 ## 4. Docs
 
