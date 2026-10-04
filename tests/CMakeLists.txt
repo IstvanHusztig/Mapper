@@ -12,6 +12,7 @@ add_executable(lidar_odometry_tests
   imu_kinematics_test.cpp
   normal_equations_test.cpp
   scan_to_map_test.cpp
+  ndt_map_test.cpp
   ${REPOSITORY_DIRECTORY}/app/toml_io.cpp
   ${REPOSITORY_DIRECTORY}/app/console_reporting.cpp
   ${REPOSITORY_DIRECTORY}/app/recording_files.cpp

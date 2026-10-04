@@ -14,12 +14,14 @@ Close the GUI before building.
 
 ## 2. Exact statistics
 
-- [ ] 2.1 Implement the exact path (decisions 1–3): the running mean and covariance with the one-point prior, the view-point gate against the current normal, and the normals of touched cells recomputed at the end of the call. Add `tests/ndt_map_test.cpp` (decision 6):
+- [x] 2.1 Implement the exact path (decisions 1–3): the running mean and covariance with the one-point prior, the view-point gate against the current normal, and the normals of touched cells recomputed at the end of the call. Add `tests/ndt_map_test.cpp` (decision 6):
   - planes in line order and in random order: the mean within 1 mm of the centroid, the normal within 5°, and both orders agree within 1e-9;
   - the legacy path's quirks are pinned;
   - a thin wall seen from two viewports in two calls.
 
   Add the file to `tests/CMakeLists.txt`. Verify: the step checks with the switch off (the default), and `ctest` passes. Commit.
+
+  Result: 5 new test cases pass. Both presets build, `ctest` passes, and precise and fast `44_short` are IDENTICAL (11 files). One finding: on the tilted plane, two edge cells (11 and 12 points) held a single grid line of points, a sliver cut off by a cell corner. Points on one line define no plane, so their normal came out 90° off. The test checks the normal only for cells whose points span an area (second spread above (1 cm)²), and the spec scenario says so.
 - [ ] 2.2 Switch `tests/scan_to_map_test.cpp` to exact statistics. Remove `should_fail` from the corridor test, and tighten the room limits to the measured values with margin. Report the old and new numbers:
   - perfect-guess error;
   - drift;

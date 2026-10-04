@@ -9,7 +9,7 @@ With exact cell statistics enabled, each reference-map cell SHALL hold the mean 
 
 #### Scenario: Points on a plane, inserted along lines
 - **WHEN** points sampled on a flat surface are added to an empty map in grid order, line by line
-- **THEN** every cell with at least 10 points has its mean within 1 mm of the centroid of its points and its normal within 5° of the surface normal
+- **THEN** every cell with at least 10 points has its mean within 1 mm of the centroid of its points, and, if its points span an area rather than lie on one line, its normal within 5° of the surface normal
 
 #### Scenario: Insertion order
 - **WHEN** the same points are added once in grid order and once in random order

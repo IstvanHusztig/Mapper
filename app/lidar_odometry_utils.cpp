@@ -129,7 +129,64 @@ static void update_rgd_legacy(const NDT::GridParameters &rgd_params, NDTBucketMa
 void update_rgd(const NDT::GridParameters &rgd_params, NDTBucketMapType &buckets,
                 std::vector<Point3Di> &points_global, Eigen::Vector3d viewport, bool exact)
 {
-    update_rgd_legacy(rgd_params, buckets, points_global, viewport);
+    if (!exact)
+    {
+        update_rgd_legacy(rgd_params, buckets, points_global, viewport);
+        return;
+    }
+
+    // exact statistics: the running mean (Welford) and the covariance about it, with the initial isotropic covariance
+    // as a prior worth one point; the normals of the cells this call changed are recomputed once, after all points
+    const Eigen::Vector3d b(rgd_params.resolution_X, rgd_params.resolution_Y, rgd_params.resolution_Z);
+    std::vector<uint64_t> touched;
+
+    for (const auto &p : points_global)
+    {
+        const auto index_of_bucket = get_rgd_index(p.point, b);
+        auto bucket_it = buckets.find(index_of_bucket);
+
+        if (bucket_it == buckets.end())
+        {
+            NDT::Bucket bucket_to_add;
+            bucket_to_add.mean = p.point;
+            bucket_to_add.cov = Eigen::Matrix3d::Identity() * 0.03 * 0.03;
+            bucket_to_add.number_of_points = 1;
+            bucket_to_add.index_begin = 0;
+            bucket_to_add.index_end = 0;
+            bucket_to_add.normal_vector = Eigen::Vector3d::Zero(); // no normal below 3 points
+            buckets.emplace(index_of_bucket, bucket_to_add);
+            continue;
+        }
+
+        auto &bucket = bucket_it->second;
+        // the far side of a thin wall: a normal from an earlier call that faces away from this call's viewport
+        // (a zero normal passes)
+        if (bucket.normal_vector.dot(viewport - bucket.mean) < 0.0)
+            continue;
+
+        const double n = static_cast<double>(bucket.number_of_points);
+        const Eigen::Vector3d d = p.point - bucket.mean;
+        bucket.mean += d / (n + 1.0);
+        // (x - mean_old)(x - mean_new)^T, written symmetric: mean_new = mean_old + d / (n + 1)
+        bucket.cov = (n * bucket.cov + (n / (n + 1.0)) * d * d.transpose()) / (n + 1.0);
+        bucket.number_of_points++;
+        touched.push_back(index_of_bucket);
+    }
+
+    std::sort(touched.begin(), touched.end());
+    touched.erase(std::unique(touched.begin(), touched.end()), touched.end());
+    for (const auto index : touched)
+    {
+        auto &bucket = buckets.at(index);
+        if (bucket.number_of_points < 3)
+            continue;
+        // the direction of the smallest spread (eigenvalues ascending), flipped towards the viewport
+        Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eigen_solver(bucket.cov, Eigen::ComputeEigenvectors);
+        Eigen::Vector3d nv = eigen_solver.eigenvectors().col(0).normalized();
+        if (nv.dot(viewport - bucket.mean) < 0.0)
+            nv *= -1.0;
+        bucket.normal_vector = nv;
+    }
 }
 
 void update_rgd_spherical_coordinates(const NDT::GridParameters &rgd_params, NDTBucketMapType &buckets,
