@@ -218,12 +218,67 @@ private:
     std::chrono::steady_clock::time_point compiled_at_{};
 };
 
+// The trajectory as drawn: the node positions of the windows the odometry has finished during a run (it may still
+// change the others), and of all windows once the run has ended. Main thread only.
+class TrajectoryCopy
+{
+public:
+    void clear()
+    {
+        positions_.clear();
+        next_window_ = 0;
+    }
+
+    // copies windows next_window .. limit-1
+    void add_windows(const OdometryPipeline &run, std::size_t limit)
+    {
+        limit = std::min(limit, run.windows.size());
+        for (; next_window_ < limit; next_window_++)
+            for (const auto &pose : run.windows[next_window_].poses)
+                positions_.emplace_back(pose(0, 3), pose(1, 3), pose(2, 3));
+    }
+
+    // the nodes, and a cross at the last one
+    void draw() const
+    {
+        glPointSize(3);
+        glColor3f(0, 1, 1);
+        glBegin(GL_POINTS);
+        for (const auto &p : positions_)
+            glVertex3f(p.x(), p.y(), p.z());
+        glEnd();
+        glPointSize(1);
+
+        glColor3f(1, 0, 0);
+        glBegin(GL_LINES);
+        if (!positions_.empty())
+        {
+            const Eigen::Vector3f &it = positions_.back();
+
+            glVertex3f(it.x() - 1, it.y(), it.z());
+            glVertex3f(it.x() + 1, it.y(), it.z());
+
+            glVertex3f(it.x(), it.y() - 1, it.z());
+            glVertex3f(it.x(), it.y() + 1, it.z());
+
+            glVertex3f(it.x(), it.y(), it.z() - 1);
+            glVertex3f(it.x(), it.y(), it.z() + 1);
+        }
+        glEnd();
+    }
+
+private:
+    std::vector<Eigen::Vector3f> positions_;
+    std::size_t next_window_ = 0;
+};
+
 PreviewCloud preview_cloud;
+TrajectoryCopy trajectory_copy;
 bool show_point_cloud = true;
 bool preview_was_running = false; // a run was going in the previous frame: its end triggers the final rebuild
 bool preview_final_pending = false;
 
-// adds what is ready to the preview: finished windows during the odometry, all windows after the run
+// adds what is ready to the preview and the trajectory: finished windows during the odometry, all windows after the run
 void update_preview()
 {
     const bool running = view_model->running();
@@ -234,18 +289,21 @@ void update_preview()
         // the run has saved: rebuild from the final (post-processed) trajectory
         preview_cloud.clear();
         preview_final_pending = true;
+        trajectory_copy.clear();
+        trajectory_copy.add_windows(run, run.windows.size());
     }
     preview_was_running = running;
 
     if (running)
     {
-        if (view_model->progress().stage() == RunStage::Odometry)
-        {
+        // only windows the odometry has finished, and only while it runs (no stage change meanwhile)
+        view_model->progress().read_finished_windows([&](std::size_t windows_done) {
+            trajectory_copy.add_windows(run, windows_done);
             const std::size_t before = preview_cloud.next_window();
-            preview_cloud.add_windows(run, view_model->progress().windows_done(), console);
+            preview_cloud.add_windows(run, windows_done, console);
             if (before < run.windows.size() && preview_cloud.next_window() >= run.windows.size())
                 log_info(console) << "point cloud preview: " << preview_cloud.size() << " points after the odometry";
-        }
+        });
     }
     else if (preview_final_pending)
     {
@@ -397,53 +455,21 @@ void openData()
     const std::string input_folder_name = mandeye::fd::SelectFolder("Select recording folder (lidar*.laz + imu*.csv)");
     if (view_model->start_run(input_folder_name))
     {
-        // a fresh run: the preview starts empty
+        // a fresh run: the preview and the trajectory start empty
         preview_cloud.clear();
         preview_final_pending = false;
+        trajectory_copy.clear();
     }
 }
 
-// the current run's trajectory, with a cross at its last pose
+// the current run's point cloud preview and trajectory, with a cross at its last pose
 void draw_run_data()
 {
     if (show_point_cloud)
         preview_cloud.draw();
 
     if (show_trajectory)
-    {
-        glPointSize(3);
-        glColor3f(0, 1, 1);
-        glBegin(GL_POINTS);
-        for (const auto &wd : view_model->run().windows)
-        {
-            for (const auto &it : wd.poses)
-                glVertex3f(it(0, 3), it(1, 3), it(2, 3));
-        }
-        glEnd();
-        glPointSize(1);
-
-        glColor3f(1, 0, 0);
-        glBegin(GL_LINES);
-        const auto &windows = view_model->run().windows;
-        if (windows.size() > 0)
-        {
-            const auto &wd = windows[windows.size() - 1];
-            if (wd.poses.size() > 0)
-            {
-                const auto &it = wd.poses[wd.poses.size() - 1];
-
-                glVertex3f(it(0, 3) - 1, it(1, 3), it(2, 3));
-                glVertex3f(it(0, 3) + 1, it(1, 3), it(2, 3));
-
-                glVertex3f(it(0, 3), it(1, 3) - 1, it(2, 3));
-                glVertex3f(it(0, 3), it(1, 3) + 1, it(2, 3));
-
-                glVertex3f(it(0, 3), it(1, 3), it(2, 3) - 1);
-                glVertex3f(it(0, 3), it(1, 3), it(2, 3) + 1);
-            }
-        }
-        glEnd();
-    }
+        trajectory_copy.draw();
 }
 
 // The next frame is scheduled instead of requested at once: about 10 frames per second during a run (so the
