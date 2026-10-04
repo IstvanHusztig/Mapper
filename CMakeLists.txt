@@ -232,20 +232,18 @@ target_include_directories(lo_domain PUBLIC
   ${EXTERNAL_LIBRARIES_DIRECTORY}/manif/include
   ${EXTERNAL_LIBRARIES_DIRECTORY}/observation_equations/codes)
 
-# application: the use cases and the ports. Exceptions until roadmap step 9 (OrientationEstimator, ParallelExecutor):
-# Fusion (part of the Imu port type) and TBB
+# application: the use cases and the ports (input, output and service ports). Nothing third-party beyond the domain's:
+# the AHRS (Fusion) and the parallel loops (TBB) are reached through OrientationEstimator and ParallelExecutor
 add_library(lo_application STATIC
   src/application/odometry_pipeline.cpp
   src/application/lidar_odometry.cpp
   src/application/run_odometry.cpp
   src/application/loop_closure.cpp
   src/application/consistency.cpp)
-target_include_directories(lo_application PUBLIC
-  src/application
-  ${EXTERNAL_LIBRARIES_DIRECTORY}/Fusion/Fusion)
-target_link_libraries(lo_application PUBLIC lo_domain Fusion PRIVATE ${PLATFORM_MISCELLANEOUS_LIBS})
+target_include_directories(lo_application PUBLIC src/application)
+target_link_libraries(lo_application PUBLIC lo_domain)
 
-# infrastructure: the adapters (folders, LAZ, CSV, TOML, JSON, console). core's I/O headers need the GUI include
+# infrastructure: the adapters (folders, LAZ, CSV, TOML, JSON, console, the Fusion AHRS, the TBB executor). core's I/O headers need the GUI include
 # directories and WITH_GUI=1 (as core is built), so their class layouts match core's
 add_library(lo_infrastructure STATIC
   src/infrastructure/recording_folder_source.cpp
@@ -268,9 +266,10 @@ target_include_directories(lo_infrastructure
           ${EXTERNAL_LIBRARIES_DIRECTORY}/imgui/backends
           ${EXTERNAL_LIBRARIES_DIRECTORY}/ImGuizmo
           ${FREEGLUT_INCLUDE_DIR}
-          ${EXTERNAL_LIBRARIES_DIRECTORY}/portable-file-dialogs)
+          ${EXTERNAL_LIBRARIES_DIRECTORY}/portable-file-dialogs
+          ${EXTERNAL_LIBRARIES_DIRECTORY}/Fusion/Fusion)
 target_compile_definitions(lo_infrastructure PRIVATE WITH_GUI=1)
-target_link_libraries(lo_infrastructure PUBLIC lo_application PRIVATE ${PLATFORM_LASZIP_LIB} ${PLATFORM_MISCELLANEOUS_LIBS})
+target_link_libraries(lo_infrastructure PUBLIC lo_application PRIVATE ${PLATFORM_LASZIP_LIB} Fusion ${PLATFORM_MISCELLANEOUS_LIBS})
 
 if (MSVC)
   target_compile_options(lo_domain PRIVATE /bigobj)

@@ -30,8 +30,7 @@ target_include_directories(
           ${EIGEN3_INCLUDE_DIR}
           ${EXTERNAL_LIBRARIES_DIRECTORY}/json/include
           ${LASZIP_INCLUDE_DIR}/LASzip/include
-          ${EXTERNAL_LIBRARIES_DIRECTORY}/observation_equations/codes
-          ${EXTERNAL_LIBRARIES_DIRECTORY}/Fusion/Fusion)
+          ${EXTERNAL_LIBRARIES_DIRECTORY}/observation_equations/codes)
 
 # built without WITH_GUI: the code under test must not depend on the GUI
 target_compile_definitions(lidar_odometry_tests PRIVATE LO_REPO_DIR="${REPOSITORY_DIRECTORY}")
