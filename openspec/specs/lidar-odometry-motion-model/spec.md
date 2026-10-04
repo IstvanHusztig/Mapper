@@ -56,7 +56,7 @@ With multithreading disabled, processing the same input with the same parameters
 - **THEN** `trajectory_lio_0.csv` and `scan_lio_0.laz` of both runs are byte-identical
 
 #### Scenario: Default is single-threaded
-- **WHEN** parameters are loaded from `app/default_settings.toml` or `settings/lidar-vertical.toml`, or no TOML is given
+- **WHEN** parameters are loaded from `settings/default_settings.toml` or `settings/lidar-vertical.toml`, or no TOML is given
 - **THEN** `useMultithread` is false
 
 ### Requirement: Bias continuity across windows
