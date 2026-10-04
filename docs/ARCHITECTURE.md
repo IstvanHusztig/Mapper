@@ -147,7 +147,9 @@ Each step is one OpenSpec change, validated against the baseline.
      `optimize_lidar_odometry` on a synthetic room and corridor against the truth. No `core` link was needed: the
      tests compile `scan_to_map.cpp` and `lidar_odometry_utils.cpp` directly. Found on the way: `update_rgd` keeps a
      cell's first point as its mean and fixes its normal from the first 3 points, which costs about 1 mm and makes the
-     degeneracy information unreliable (`docs/degeneracy-information.html`); fixing it is a separate change.
+     degeneracy information unreliable (`docs/degeneracy-information.html`). Change `ndt-bucket-statistics` (2026-10-04)
+     added exact cell statistics behind `use_exact_ndt_bucket_statistics`; it was rejected for now (off), because on 44 the
+     degeneracy threshold then marked 439 instead of 95 windows and the map was 5 % less sharp.
 7. **Layered CMake targets and folders;** move the `core/` pieces touched so far.
 
 Steps 8–11 were added on 2026-10-03. They cover the goals that steps 0–7 still leave open.
