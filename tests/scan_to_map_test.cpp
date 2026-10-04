@@ -107,8 +107,8 @@ namespace
     {
         std::vector<Point3Di> points = sample_scene(s);
         Maps maps;
-        update_rgd(options.grid_indoor, maps.indoor, points, s.centre);
-        update_rgd(options.grid_outdoor, maps.outdoor, points, s.centre);
+        update_rgd(options.grid_indoor, maps.indoor, points, s.centre, false);
+        update_rgd(options.grid_outdoor, maps.outdoor, points, s.centre, false);
         return maps;
     }
 

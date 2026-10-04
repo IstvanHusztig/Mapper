@@ -48,8 +48,11 @@ std::vector<Point3Di> decimate(const std::vector<Point3Di>& points, double bucke
     return out;
 }
 
-void update_rgd(const NDT::GridParameters &rgd_params, NDTBucketMapType &buckets,
-                std::vector<Point3Di> &points_global, Eigen::Vector3d viewport)
+// the previous cell statistics, kept unchanged behind use_exact_ndt_bucket_statistics = false: the mean is the cell's
+// first point, the normal is fixed from the first 3 points, and later points update the covariance only if they pass
+// the view-point test against that normal
+static void update_rgd_legacy(const NDT::GridParameters &rgd_params, NDTBucketMapType &buckets,
+                              std::vector<Point3Di> &points_global, Eigen::Vector3d viewport)
 {
     Eigen::Vector3d b(rgd_params.resolution_X, rgd_params.resolution_Y, rgd_params.resolution_Z);
 
@@ -121,6 +124,12 @@ void update_rgd(const NDT::GridParameters &rgd_params, NDTBucketMapType &buckets
             buckets.emplace(index_of_bucket, bucket_to_add);
         }
     }
+}
+
+void update_rgd(const NDT::GridParameters &rgd_params, NDTBucketMapType &buckets,
+                std::vector<Point3Di> &points_global, Eigen::Vector3d viewport, bool exact)
+{
+    update_rgd_legacy(rgd_params, buckets, points_global, viewport);
 }
 
 void update_rgd_spherical_coordinates(const NDT::GridParameters &rgd_params, NDTBucketMapType &buckets,

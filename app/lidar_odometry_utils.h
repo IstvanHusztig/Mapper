@@ -263,9 +263,11 @@ unsigned long long int get_rgd_index(const Eigen::Vector3d p, const Eigen::Vecto
 // this function reduces number of points by preserving only first point for each bucket {bucket_x, bucket_y, bucket_z}
 std::vector<Point3Di> decimate(const std::vector<Point3Di> &points, double bucket_x, double bucket_y, double bucket_z);
 
-// this function updates each bucket (mean value, covariance) in regular grid decomposition
+// adds points to the cells of a regular-grid NDT map (mean, covariance, normal oriented towards viewport);
+// exact = OdometryConfig::use_exact_ndt_bucket_statistics: true uses the statistics of all of a cell's points,
+// false the previous ones
 void update_rgd(const NDT::GridParameters &rgd_params, NDTBucketMapType &buckets,
-                std::vector<Point3Di> &points_global, Eigen::Vector3d viewport = Eigen::Vector3d(0, 0, 0));
+                std::vector<Point3Di> &points_global, Eigen::Vector3d viewport, bool exact);
 
 void update_rgd_spherical_coordinates(const NDT::GridParameters &rgd_params, NDTBucketMapType &buckets,
                                       std::vector<Point3Di> &points_global, std::vector<Eigen::Vector3d> &points_global_spherical);

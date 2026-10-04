@@ -120,7 +120,8 @@ namespace
     }
 
     // fine registration: rigid point-to-distribution alignment of the source to NDT cells of the target
-    Eigen::Affine3d ndt_refine(const std::vector<Eigen::Vector3d> &source, const std::vector<Eigen::Vector3d> &target, Eigen::Affine3d T)
+    Eigen::Affine3d ndt_refine(const std::vector<Eigen::Vector3d> &source, const std::vector<Eigen::Vector3d> &target, Eigen::Affine3d T,
+                               bool exact_ndt_statistics)
     {
         std::vector<Point3Di> target_points(target.size());
         Eigen::Vector3d viewport = Eigen::Vector3d::Zero();
@@ -137,7 +138,7 @@ namespace
             NDT::GridParameters rgd_params;
             rgd_params.resolution_X = rgd_params.resolution_Y = rgd_params.resolution_Z = resolution;
             NDTBucketMapType buckets;
-            update_rgd(rgd_params, buckets, target_points, viewport);
+            update_rgd(rgd_params, buckets, target_points, viewport, exact_ndt_statistics);
             const Eigen::Vector3d b(resolution, resolution, resolution);
 
             for (int iter = 0; iter < 15; iter++)
@@ -374,7 +375,7 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
         const auto fitness_grid = voxel_set(target, 0.2);
         const double before = overlap(source, Eigen::Affine3d::Identity(), fitness_grid, 0.2);
         Eigen::Affine3d T = coarse_search(source, target, params.loop_closure_max_correction_m);
-        T = ndt_refine(source, target, T);
+        T = ndt_refine(source, target, T, params.use_exact_ndt_bucket_statistics);
         const double after = overlap(source, T, fitness_grid, 0.2);
         const double shift = T.translation().norm();
         const double angle = Eigen::AngleAxisd(T.linear()).angle() / DEG;

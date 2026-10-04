@@ -215,7 +215,7 @@ void Consistency(std::vector<Window> &windows, const OdometryConfig &params, Poi
 
         if (points_global.size() > 10000)
         {
-            update_rgd(params.in_out_params_indoor, buckets, points_global, trajectory[points_global[0].index_pose].translation());
+            update_rgd(params.in_out_params_indoor, buckets, points_global, trajectory[points_global[0].index_pose].translation(), params.use_exact_ndt_bucket_statistics);
 
             const auto hessian_fun = [&](const Point3Di &intermediate_points_i)
             {
