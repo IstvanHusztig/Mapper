@@ -228,7 +228,7 @@ namespace
         for (auto &t : trmm)
             t.translation() -= firstm.translation();
 
-        NDT::GridParameters rgd_params_sc;
+        NdtGridParameters rgd_params_sc;
 
         rgd_params_sc.resolution_X = params.distance_bucket;
         rgd_params_sc.resolution_Y = params.polar_angle_deg;

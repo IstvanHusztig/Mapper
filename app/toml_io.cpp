@@ -44,7 +44,7 @@ bool TomlIO::SaveParametersToTomlFile(const std::string &filepath, const Odometr
         tbl.insert(category, std::move(cat_tbl));
     }
     // separate grid params
-    auto insert_grid_params = [&](const std::string &name, const NDT::GridParameters &grid)
+    auto insert_grid_params = [&](const std::string &name, const NdtGridParameters &grid)
     {
         toml::table nested_tbl;
         nested_tbl.insert("bounding_box_min_X", grid.bounding_box_min_X);
@@ -93,7 +93,7 @@ bool TomlIO::SaveParametersToTomlFile(const std::string &filepath, const Odometr
 }
 
 template <typename T>
-void TomlIO::set_if_exists(NDT::GridParameters &grid, const toml::table *tbl, const std::string &key, T NDT::GridParameters::*member)
+void TomlIO::set_if_exists(NdtGridParameters &grid, const toml::table *tbl, const std::string &key, T NdtGridParameters::*member)
 {
     if (!tbl)
         return;
@@ -106,18 +106,18 @@ void TomlIO::set_if_exists(NDT::GridParameters &grid, const toml::table *tbl, co
     }
 }
 
-void TomlIO::read_grid_params(NDT::GridParameters &grid, const toml::table *grid_tbl)
+void TomlIO::read_grid_params(NdtGridParameters &grid, const toml::table *grid_tbl)
 {
-    set_if_exists(grid, grid_tbl, "bounding_box_min_X", &NDT::GridParameters::bounding_box_min_X);
-    set_if_exists(grid, grid_tbl, "bounding_box_min_Y", &NDT::GridParameters::bounding_box_min_Y);
-    set_if_exists(grid, grid_tbl, "bounding_box_min_Z", &NDT::GridParameters::bounding_box_min_Z);
-    set_if_exists(grid, grid_tbl, "bounding_box_max_X", &NDT::GridParameters::bounding_box_max_X);
-    set_if_exists(grid, grid_tbl, "bounding_box_max_Y", &NDT::GridParameters::bounding_box_max_Y);
-    set_if_exists(grid, grid_tbl, "bounding_box_max_Z", &NDT::GridParameters::bounding_box_max_Z);
-    set_if_exists(grid, grid_tbl, "bounding_box_extension", &NDT::GridParameters::bounding_box_extension);
-    set_if_exists(grid, grid_tbl, "number_of_buckets_X", &NDT::GridParameters::number_of_buckets_X);
-    set_if_exists(grid, grid_tbl, "number_of_buckets_Y", &NDT::GridParameters::number_of_buckets_Y);
-    set_if_exists(grid, grid_tbl, "number_of_buckets_Z", &NDT::GridParameters::number_of_buckets_Z);
+    set_if_exists(grid, grid_tbl, "bounding_box_min_X", &NdtGridParameters::bounding_box_min_X);
+    set_if_exists(grid, grid_tbl, "bounding_box_min_Y", &NdtGridParameters::bounding_box_min_Y);
+    set_if_exists(grid, grid_tbl, "bounding_box_min_Z", &NdtGridParameters::bounding_box_min_Z);
+    set_if_exists(grid, grid_tbl, "bounding_box_max_X", &NdtGridParameters::bounding_box_max_X);
+    set_if_exists(grid, grid_tbl, "bounding_box_max_Y", &NdtGridParameters::bounding_box_max_Y);
+    set_if_exists(grid, grid_tbl, "bounding_box_max_Z", &NdtGridParameters::bounding_box_max_Z);
+    set_if_exists(grid, grid_tbl, "bounding_box_extension", &NdtGridParameters::bounding_box_extension);
+    set_if_exists(grid, grid_tbl, "number_of_buckets_X", &NdtGridParameters::number_of_buckets_X);
+    set_if_exists(grid, grid_tbl, "number_of_buckets_Y", &NdtGridParameters::number_of_buckets_Y);
+    set_if_exists(grid, grid_tbl, "number_of_buckets_Z", &NdtGridParameters::number_of_buckets_Z);
     if (grid_tbl)
     {
         if (auto it = grid_tbl->find("number_of_buckets"); it != grid_tbl->end())
@@ -128,9 +128,9 @@ void TomlIO::read_grid_params(NDT::GridParameters &grid, const toml::table *grid
             }
         }
     }
-    set_if_exists(grid, grid_tbl, "resolution_X", &NDT::GridParameters::resolution_X);
-    set_if_exists(grid, grid_tbl, "resolution_Y", &NDT::GridParameters::resolution_Y);
-    set_if_exists(grid, grid_tbl, "resolution_Z", &NDT::GridParameters::resolution_Z);
+    set_if_exists(grid, grid_tbl, "resolution_X", &NdtGridParameters::resolution_X);
+    set_if_exists(grid, grid_tbl, "resolution_Y", &NdtGridParameters::resolution_Y);
+    set_if_exists(grid, grid_tbl, "resolution_Z", &NdtGridParameters::resolution_Z);
 }
 
 bool TomlIO::LoadParametersFromTomlFile(const std::string &filepath, OdometryConfig &params, RunPaths &paths, GuiPreferences &gui)

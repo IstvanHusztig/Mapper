@@ -21,12 +21,19 @@ unsigned long long int get_rgd_index(const Eigen::Vector3d p, const Eigen::Vecto
     return get_index(x, y, z);
 }
 
+// a point's index and its cell, as PointCloud::PointBucketIndexPair (same layout), without including point_cloud.h
+struct PointBucketIndex
+{
+    int index_of_point = 0;
+    long long unsigned int index_of_bucket = 0;
+};
+
 std::vector<Point3Di> decimate(const std::vector<Point3Di>& points, double bucket_x, double bucket_y, double bucket_z)
 {
     Eigen::Vector3d b(bucket_x, bucket_y, bucket_z);
     std::vector<Point3Di> out;
 
-    std::vector<PointCloud::PointBucketIndexPair> ip;
+    std::vector<PointBucketIndex> ip;
     ip.resize(points.size());
     out.reserve(points.size());
 
@@ -35,7 +42,7 @@ std::vector<Point3Di> decimate(const std::vector<Point3Di>& points, double bucke
         ip[i].index_of_point = i;
         ip[i].index_of_bucket = get_rgd_index(points[i].point, b);
     }
-    std::sort(ip.begin(), ip.end(), [](const PointCloud::PointBucketIndexPair& a, const PointCloud::PointBucketIndexPair& b)
+    std::sort(ip.begin(), ip.end(), [](const PointBucketIndex& a, const PointBucketIndex& b)
         { return a.index_of_bucket < b.index_of_bucket; });
 
     if (ip.size() != 0)
@@ -51,7 +58,7 @@ std::vector<Point3Di> decimate(const std::vector<Point3Di>& points, double bucke
 // the previous cell statistics, kept unchanged behind use_exact_ndt_bucket_statistics = false: the mean is the cell's
 // first point, the normal is fixed from the first 3 points, and later points update the covariance only if they pass
 // the view-point test against that normal
-static void update_rgd_legacy(const NDT::GridParameters &rgd_params, NDTBucketMapType &buckets,
+static void update_rgd_legacy(const NdtGridParameters &rgd_params, NDTBucketMapType &buckets,
                               std::vector<Point3Di> &points_global, Eigen::Vector3d viewport)
 {
     Eigen::Vector3d b(rgd_params.resolution_X, rgd_params.resolution_Y, rgd_params.resolution_Z);
@@ -113,7 +120,7 @@ static void update_rgd_legacy(const NDT::GridParameters &rgd_params, NDTBucketMa
         }
         else
         {
-            NDT::Bucket bucket_to_add;
+            NdtBucket bucket_to_add;
             bucket_to_add.mean = points_global[i].point;
             bucket_to_add.cov = Eigen::Matrix3d::Identity() * 0.03 * 0.03; //ToDo move to params
             bucket_to_add.number_of_points = 1;
@@ -126,7 +133,7 @@ static void update_rgd_legacy(const NDT::GridParameters &rgd_params, NDTBucketMa
     }
 }
 
-void update_rgd(const NDT::GridParameters &rgd_params, NDTBucketMapType &buckets,
+void update_rgd(const NdtGridParameters &rgd_params, NDTBucketMapType &buckets,
                 std::vector<Point3Di> &points_global, Eigen::Vector3d viewport, bool exact)
 {
     if (!exact)
@@ -148,7 +155,7 @@ void update_rgd(const NDT::GridParameters &rgd_params, NDTBucketMapType &buckets
 
         if (bucket_it == buckets.end())
         {
-            NDT::Bucket bucket_to_add;
+            NdtBucket bucket_to_add;
             bucket_to_add.mean = p.point;
             bucket_to_add.cov = Eigen::Matrix3d::Identity() * 0.03 * 0.03;
             bucket_to_add.number_of_points = 1;
@@ -196,7 +203,7 @@ void update_rgd(const NDT::GridParameters &rgd_params, NDTBucketMapType &buckets
     }
 }
 
-void update_rgd_spherical_coordinates(const NDT::GridParameters &rgd_params, NDTBucketMapType &buckets,
+void update_rgd_spherical_coordinates(const NdtGridParameters &rgd_params, NDTBucketMapType &buckets,
                                       std::vector<Point3Di> &points_global, std::vector<Eigen::Vector3d> &points_global_spherical)
 {
     Eigen::Vector3d b(rgd_params.resolution_X, rgd_params.resolution_Y, rgd_params.resolution_Z);
@@ -234,7 +241,7 @@ void update_rgd_spherical_coordinates(const NDT::GridParameters &rgd_params, NDT
         }
         else
         {
-            NDT::Bucket bucket_to_add;
+            NdtBucket bucket_to_add;
             bucket_to_add.mean = points_global[i].point;
             bucket_to_add.cov = Eigen::Matrix3d::Identity() * 0.03 * 0.03;
             bucket_to_add.number_of_points = 1;

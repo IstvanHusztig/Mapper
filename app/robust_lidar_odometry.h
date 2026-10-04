@@ -6,7 +6,7 @@
 
 void optimize_sf2(std::vector<Point3Di> &intermediate_points, std::vector<Point3Di> &intermediate_points_sf, std::vector<Eigen::Affine3d> &trajectory,
                   const std::vector<Eigen::Affine3d> &motion_model_trajectory,
-                  const NDT::GridParameters &rgd_params, bool useMultithread, double wx, double wy, double wz, double wom, double wfi, double wka);
+                  const NdtGridParameters &rgd_params, bool useMultithread, double wx, double wy, double wz, double wom, double wfi, double wka);
 
 void optimize_rigid_sf(
     const std::vector<Point3Di> &intermediate_points,

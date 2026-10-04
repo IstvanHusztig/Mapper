@@ -25,8 +25,8 @@
 
 namespace fs = std::filesystem;
 
-using NDTBucketMapType = std::unordered_map<uint64_t, NDT::Bucket>;
-using NDTBucketMapType2 = std::unordered_map<uint64_t, NDT::Bucket2>;
+using NDTBucketMapType = std::unordered_map<uint64_t, NdtBucket>;
+using NDTBucketMapType2 = std::unordered_map<uint64_t, NdtBucket2>;
 
 // Helper function for getting software version from CMake macros
 inline std::string get_software_version() {
@@ -69,8 +69,8 @@ struct OdometryConfig
     // a window stops iterating once the sum of |parameter updates| of an LM step falls below this value
     // (1e-12 is practically never reached, so all nr_iter iterations run)
     double convergence_delta_threshold = 1e-12;
-    NDT::GridParameters in_out_params_indoor{}; // value-initialized: NDT::GridParameters has no default member values
-    NDT::GridParameters in_out_params_outdoor{};
+    NdtGridParameters in_out_params_indoor{}; // value-initialized: NdtGridParameters has no default member values
+    NdtGridParameters in_out_params_outdoor{};
     double sliding_window_trajectory_length_threshold = 5.0;
     double max_distance_lidar = 30.0; // I am not processing data above dist distance in lidar odometry
     int threshold_initial_points = 10000;
@@ -266,10 +266,10 @@ std::vector<Point3Di> decimate(const std::vector<Point3Di> &points, double bucke
 // adds points to the cells of a regular-grid NDT map (mean, covariance, normal oriented towards viewport);
 // exact = OdometryConfig::use_exact_ndt_bucket_statistics: true uses the statistics of all of a cell's points,
 // false the previous ones
-void update_rgd(const NDT::GridParameters &rgd_params, NDTBucketMapType &buckets,
+void update_rgd(const NdtGridParameters &rgd_params, NDTBucketMapType &buckets,
                 std::vector<Point3Di> &points_global, Eigen::Vector3d viewport, bool exact);
 
-void update_rgd_spherical_coordinates(const NDT::GridParameters &rgd_params, NDTBucketMapType &buckets,
+void update_rgd_spherical_coordinates(const NdtGridParameters &rgd_params, NDTBucketMapType &buckets,
                                       std::vector<Point3Di> &points_global, std::vector<Eigen::Vector3d> &points_global_spherical);
 
 #endif

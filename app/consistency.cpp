@@ -602,7 +602,7 @@ void Consistency2(std::vector<Window> &windows, const OdometryConfig &params, Po
                 b.second.buckets[index_point_segment].point_indexes.push_back(index_pairs[i].second);
             else
             {
-                NDT::BucketCoef bc;
+                NdtBucketCoef bc;
                 bc.point_indexes.push_back(index_pairs[i].second);
                 b.second.buckets[index_point_segment] = bc;
             }

@@ -9,7 +9,7 @@ The scratchpad script `step_check.sh` runs all of them. Close the GUI before bui
 
 ## 1. NDT value types
 
-- [ ] 1.1 Add `core/include/ndt_types.h` with `NdtGridParameters`, `NdtBucket`, `NdtBucketCoef` and `NdtBucket2`, moved verbatim out of class `NDT` (decision 2), with `using` aliases left in `NDT`. Rename the app's and tests' uses (`NDT::GridParameters` → `NdtGridParameters`, and so on). In `decimate`, replace `PointCloud::PointBucketIndexPair` with a file-local struct of the same layout (decision 3). Verify: the step checks; `grep -rn "NDT::\|PointCloud::" app tests` finds nothing. Commit.
+- [x] 1.1 Add `core/include/ndt_types.h` with `NdtGridParameters`, `NdtBucket`, `NdtBucketCoef` and `NdtBucket2`, moved verbatim out of class `NDT` (decision 2), with `using` aliases left in `NDT`. Rename the app's and tests' uses (`NDT::GridParameters` → `NdtGridParameters`, and so on). In `decimate`, replace `PointCloud::PointBucketIndexPair` with a file-local struct of the same layout (decision 3). Verify: the step checks; `grep -rn "NDT::\|PointCloud::" app tests` finds nothing. Commit. Result: both presets build, `ctest` passes, precise and fast `44_short` IDENTICAL (11 files).
 
 ## 2. The split
 

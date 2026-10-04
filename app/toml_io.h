@@ -173,8 +173,8 @@ public:
     void HandleMissingVersion(OdometryConfig &params);
     
     template <typename T>
-    void set_if_exists(NDT::GridParameters &grid, const toml::table *tbl, const std::string &key, T NDT::GridParameters::*member);
-    void read_grid_params(NDT::GridParameters &grid, const toml::table *grid_tbl);
+    void set_if_exists(NdtGridParameters &grid, const toml::table *tbl, const std::string &key, T NdtGridParameters::*member);
+    void read_grid_params(NdtGridParameters &grid, const toml::table *grid_tbl);
     bool LoadParametersFromTomlFile(const std::string &filepath, OdometryConfig &params, RunPaths &paths, GuiPreferences &gui);
 };
 

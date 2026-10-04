@@ -7,7 +7,7 @@
 
 void optimize_sf2(std::vector<Point3Di> &intermediate_points, std::vector<Point3Di> &intermediate_points_sf, std::vector<Eigen::Affine3d> &trajectory,
                   const std::vector<Eigen::Affine3d> &motion_model_trajectory,
-                  const NDT::GridParameters &rgd_params, bool useMultithread, double wx,
+                  const NdtGridParameters &rgd_params, bool useMultithread, double wx,
                   double wy,
                   double wz,
                   double wom,
@@ -306,7 +306,7 @@ void optimize_rigid_sf(
     auto _intermediate_trajectory_motion_model = motion_model_trajectory;
     auto _buckets = buckets;
 
-    NDT::GridParameters rgd_params_sc;
+    NdtGridParameters rgd_params_sc;
 
     rgd_params_sc.resolution_X = distance_bucket;
     rgd_params_sc.resolution_Y = polar_angle_deg;

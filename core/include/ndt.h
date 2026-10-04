@@ -5,27 +5,12 @@
 #include <Eigen/Eigen>
 #include <thread>
 #include <session.h>
+#include <ndt_types.h>
 
 class NDT
 {
 public:
-	struct GridParameters
-	{
-		double bounding_box_min_X;
-		double bounding_box_min_Y;
-		double bounding_box_min_Z;
-		double bounding_box_max_X;
-		double bounding_box_max_Y;
-		double bounding_box_max_Z;
-		double bounding_box_extension;
-		int number_of_buckets_X;
-		int number_of_buckets_Y;
-		int number_of_buckets_Z;
-		long long unsigned int number_of_buckets;
-		double resolution_X;
-		double resolution_Y;
-		double resolution_Z;
-	};
+	using GridParameters = NdtGridParameters;
 
 	struct PointBucketIndexPair
 	{
@@ -34,33 +19,11 @@ public:
 		int index_pose;
 	};
 
-	struct Bucket
-	{
-		long long unsigned int index_begin;
-		long long unsigned int index_end;
-		long long unsigned int number_of_points;
-		Eigen::Vector3d mean;
-		Eigen::Matrix3d cov;
-		Eigen::Vector3d normal_vector;
-	};
+	using Bucket = NdtBucket;
 
-	struct BucketCoef
-	{
-		Eigen::Vector3d mean;
-		Eigen::Matrix3d cov;
-		Eigen::Vector3d normal_vector;
-		std::vector<long long unsigned int> point_indexes;
-		bool valid = false;
-	};
+	using BucketCoef = NdtBucketCoef;
 
-	struct Bucket2
-	{
-		int classification = 0; // 1 - ceiling, 2 - floor
-		long long unsigned int index_begin_inclusive;
-		long long unsigned int index_end_exclusive;
-		// long long unsigned int number_of_points;
-		std::unordered_map<long long unsigned int, BucketCoef> buckets;
-	};
+	using Bucket2 = NdtBucket2;
 
 	struct Job
 	{

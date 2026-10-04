@@ -7,8 +7,8 @@
 // scan-to-map settings of the LiDAR odometry, fixed for a run
 struct ScanToMapOptions
 {
-    NDT::GridParameters grid_indoor;
-    NDT::GridParameters grid_outdoor;
+    NdtGridParameters grid_indoor;
+    NdtGridParameters grid_outdoor;
     bool multithread = false;
     double min_distance = 0.0;              // points closer than this are not used [m]
     double min_distance_outdoor_grid = 0.0; // the same for the outdoor (coarse) grid [m]

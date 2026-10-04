@@ -13,9 +13,9 @@
 
 namespace
 {
-    NDT::GridParameters grid(double resolution)
+    NdtGridParameters grid(double resolution)
     {
-        NDT::GridParameters g{};
+        NdtGridParameters g{};
         g.resolution_X = g.resolution_Y = g.resolution_Z = resolution;
         return g;
     }
@@ -101,7 +101,7 @@ TEST_CASE("update_rgd exact: a plane inserted line by line gives the centroid an
     int checked = 0;
     for (const auto &[index, e] : expected)
     {
-        const NDT::Bucket &bucket = buckets.at(index);
+        const NdtBucket &bucket = buckets.at(index);
         CHECK(bucket.number_of_points == e.count);
         if (e.count < 10)
             continue;
@@ -129,7 +129,7 @@ TEST_CASE("update_rgd exact: the insertion order doesn't change the cells")
     REQUIRE(in_lines.size() == shuffled.size());
     for (const auto &[index, a] : in_lines)
     {
-        const NDT::Bucket &b = shuffled.at(index);
+        const NdtBucket &b = shuffled.at(index);
         CHECK(a.number_of_points == b.number_of_points);
         CHECK((a.mean - b.mean).cwiseAbs().maxCoeff() < 1e-9);
         CHECK((a.cov - b.cov).cwiseAbs().maxCoeff() < 1e-9);
@@ -160,7 +160,7 @@ TEST_CASE("update_rgd previous statistics: first point as mean, normal fixed fro
     NDTBucketMapType all;
     update_rgd(grid(0.5), all, points, viewport, false);
     REQUIRE(all.size() == 1);
-    const NDT::Bucket &cell = all.begin()->second;
+    const NdtBucket &cell = all.begin()->second;
     CHECK(cell.number_of_points == points.size());
     CHECK(cell.mean == points[0].point);
 
@@ -226,13 +226,13 @@ TEST_CASE("update_rgd exact: the far side of a thin wall doesn't enter the near 
     NDTBucketMapType buckets;
     update_rgd(grid(0.5), buckets, a, Eigen::Vector3d(-2.0, 0.75, 0.75), true);
     REQUIRE(buckets.size() == 1);
-    const NDT::Bucket before = buckets.begin()->second;
+    const NdtBucket before = buckets.begin()->second;
     CHECK(angle_deg(before.normal_vector, Eigen::Vector3d::UnitX()) < 1e-3);
     CHECK(before.normal_vector.x() < 0.0);
 
     update_rgd(grid(0.5), buckets, b, Eigen::Vector3d(4.0, 0.75, 0.75), true);
     REQUIRE(buckets.size() == 1);
-    const NDT::Bucket &after = buckets.begin()->second;
+    const NdtBucket &after = buckets.begin()->second;
     CHECK(after.number_of_points == before.number_of_points);
     CHECK(after.mean == before.mean);
     CHECK(after.cov == before.cov);

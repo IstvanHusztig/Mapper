@@ -135,7 +135,7 @@ namespace
 
         for (double resolution : {0.5, 0.25})
         {
-            NDT::GridParameters rgd_params;
+            NdtGridParameters rgd_params;
             rgd_params.resolution_X = rgd_params.resolution_Y = rgd_params.resolution_Z = resolution;
             NDTBucketMapType buckets;
             update_rgd(rgd_params, buckets, target_points, viewport, exact_ndt_statistics);
