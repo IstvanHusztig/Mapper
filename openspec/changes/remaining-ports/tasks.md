@@ -21,7 +21,7 @@ Close the GUI before building. A precise `44_short` difference stops the task: f
 
   Reverted; both presets build, `ctest` passes, and precise and fast `44_short` are IDENTICAL (11 files).
 - [x] 2.2 Tests (decision 6): `tests/serial_executor.h` and `tests/orientation_test.cpp` with the recording fake estimator and the listed checks. Verify: both presets build, `ctest` passes (report the new cases' run time in Debug). Commit. Result: 5 cases, 1,239 assertions, all passing: the convention and gain the filter starts with (4 flag combinations), the gyroscope in degrees without bias removal, with the median bias removed at rest and with no bias when the first 1000 samples move, the gain dropping to 0 at 1.5 g and 0.8 g, the time steps (1/200 s, the timestamp difference, 0.002 s for a repeated timestamp), one trajectory node per timestamp with the filter's rotation and the unix time, and the serial executor. Both presets build and `ctest` passes; the new cases take 0.12 s in Debug.
-- [ ] 2.3 Run the full 44 once (background or subagent). Verify: IDENTICAL with `tools/baseline/44.manifest.json`, or within `--tolerance 1e-6` of `raw data/44_baseline` (report the largest difference). Record the result here.
+- [x] 2.3 Run the full 44 once (background or subagent). Verify: IDENTICAL with `tools/baseline/44.manifest.json`, or within `--tolerance 1e-6` of `raw data/44_baseline` (report the largest difference). Record the result here. Result (2026-10-04): IDENTICAL with `tools/baseline/44.manifest.json` (35 files), 2021 s wall time.
 
 ## 3. Docs
 
