@@ -106,6 +106,7 @@ lm_factor_initial = 5.0
 sliding_window_trajectory_length_threshold = 200.0
 threshold_initial_points = 60000
 threshold_nr_poses = 360
+use_exact_ndt_bucket_statistics = false
 use_motion_from_previous_step = true
 
 [lidar_odometry_debug_info]

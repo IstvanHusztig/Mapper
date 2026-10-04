@@ -78,6 +78,9 @@ struct OdometryConfig
     double min_distance_lidar = 0.06;              // blind zone: points closer (3D norm) are skipped by the fine (indoor) NDT grid
     double min_distance_lidar_outdoor_grid = 1.0;  // points closer (3D norm) are skipped by the coarse (outdoor) NDT grid
     double lm_factor_initial = 5.0;                // initial Levenberg-Marquardt damping (x10 every 10 iterations)
+    // NDT map cells: true = mean, covariance and normal of all of a cell's points; false = the previous statistics
+    // (first point as mean, normal fixed from the first 3 points)
+    bool use_exact_ndt_bucket_statistics = false;
 
     //lidar-imu extrinsics (applied to raw points)
     double lidar_imu_lever_arm_x_m = 0.00667;
