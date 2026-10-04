@@ -7,7 +7,6 @@
 #include "odometry_state.h"
 #include <transformations.h>
 #include "consistency.h"
-#include "tbb/tbb.h"
 #include <mutex>
 
 namespace fs = std::filesystem;
@@ -20,6 +19,7 @@ bool load_data(RecordingSource& recording,
     std::vector<std::vector<Point3Di>>& pointsPerFile,
     Imu& imu_data,
     bool debugMsg,
+    ParallelExecutor& parallel,
     Logger& logger)
 {
     log_info(logger) << "Loading data..\n--------------\n";
@@ -31,13 +31,9 @@ bool load_data(RecordingSource& recording,
     // Each thread loads into its own local vector
     std::vector<Imu> imuChunks(minSize);
 
-    tbb::parallel_for(
-        tbb::blocked_range<size_t>(0, minSize),
-        [&](const tbb::blocked_range<size_t>& range) {
-            for (size_t i = range.begin(); i < range.end(); ++i)
-            {
-                imuChunks[i] = recording.read_imu(i, logger);
-            }
+    parallel.for_each_index(minSize, [&](size_t i)
+        {
+            imuChunks[i] = recording.read_imu(i, logger);
         });
 
     // Merge all chunks sequentially at the end
@@ -62,7 +58,7 @@ bool load_data(RecordingSource& recording,
     filter.lever_arm = get_lidar_imu_lever_arm(params);
 
     // --- Parallel load of LAZ files
-    tbb::parallel_for(size_t(0), minSize, [&](size_t i)
+    parallel.for_each_index(minSize, [&](size_t i)
         {
             auto data = recording.read_points(i, filter, logger);
 

@@ -14,7 +14,7 @@
 //   -> save (save_result)
 // Each stage is reported to the ProgressReporter (with a pause checkpoint at its start); messages go to
 // the Logger. The pipeline owns the run's inputs (recording, point store, preview). The config, logger and
-// reporter must outlive the pipeline. The services (the AHRS) come from make_run_services. The run's data members are public because
+// reporter must outlive the pipeline. The services (the AHRS, the parallel executor) come from make_run_services. The run's data members are public because
 // the GUI views them (trajectory, point cloud preview).
 class OdometryPipeline
 {

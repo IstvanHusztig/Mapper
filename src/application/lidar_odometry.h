@@ -9,7 +9,7 @@
 #include "service_ports.h"
 
 
-bool load_data(RecordingSource &recording, PreviewSink &preview, const OdometryConfig &params, std::vector<std::vector<Point3Di>> &pointsPerFile, Imu &imu_data, bool debugMsg, Logger &logger);
+bool load_data(RecordingSource &recording, PreviewSink &preview, const OdometryConfig &params, std::vector<std::vector<Point3Di>> &pointsPerFile, Imu &imu_data, bool debugMsg, ParallelExecutor &parallel, Logger &logger);
 void calculate_trajectory(
     ImuTrajectory &trajectory, Imu &imu_data, bool fusionConventionNwu, bool fusionConventionEnu, bool fusionConventionNed, double ahrs_gain, bool debugMsg, bool use_removie_imu_bias_from_first_stationary_scan, OrientationEstimator &ahrs, Logger &logger);
 bool compute_step_1(

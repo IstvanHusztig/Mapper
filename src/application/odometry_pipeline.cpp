@@ -19,7 +19,7 @@ bool OdometryPipeline::load()
         return false;
     state.paths.working_directory_preview = inputs_.preview->location();
     state.paths.working_directory_cache = inputs_.points->location();
-    if (!load_data(*inputs_.recording, *inputs_.preview, params, points_per_file, imu, debug_, *logger_))
+    if (!load_data(*inputs_.recording, *inputs_.preview, params, points_per_file, imu, debug_, *services_.parallel, *logger_))
         return false;
     calculate_trajectory(imu_trajectory, imu, params.fusionConventionNwu, params.fusionConventionEnu, params.fusionConventionNed,
                          params.ahrs_gain, debug_, params.use_remove_imu_bias_from_first_stationary_scan, *services_.orientation, *logger_);

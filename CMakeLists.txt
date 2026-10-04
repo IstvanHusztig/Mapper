@@ -255,6 +255,7 @@ add_library(lo_infrastructure STATIC
   src/infrastructure/folder_inputs.cpp
   src/infrastructure/fusion_orientation_estimator.cpp
   src/infrastructure/run_services.cpp
+  src/infrastructure/tbb_executor.cpp
   src/infrastructure/folder_result_sink.cpp
   src/infrastructure/toml_io.cpp
   src/infrastructure/toml_config_repository.cpp
@@ -269,7 +270,7 @@ target_include_directories(lo_infrastructure
           ${FREEGLUT_INCLUDE_DIR}
           ${EXTERNAL_LIBRARIES_DIRECTORY}/portable-file-dialogs)
 target_compile_definitions(lo_infrastructure PRIVATE WITH_GUI=1)
-target_link_libraries(lo_infrastructure PUBLIC lo_application PRIVATE ${PLATFORM_LASZIP_LIB})
+target_link_libraries(lo_infrastructure PUBLIC lo_application PRIVATE ${PLATFORM_LASZIP_LIB} ${PLATFORM_MISCELLANEOUS_LIBS})
 
 if (MSVC)
   target_compile_options(lo_domain PRIVATE /bigobj)
