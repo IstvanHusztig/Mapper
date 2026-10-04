@@ -6,7 +6,6 @@
 #include "ndt_map.h"
 #include "odometry_state.h"
 #include <transformations.h>
-#include <Fusion.h>
 #include "consistency.h"
 #include "tbb/tbb.h"
 #include <mutex>
@@ -87,19 +86,32 @@ bool load_data(RecordingSource& recording,
     return true;
 }
 
-void calculate_trajectory(
-    ImuTrajectory& trajectory, Imu& imu_data, bool fusionConventionNwu, bool fusionConventionEnu, bool fusionConventionNed, double ahrs_gain, bool debugMsg, bool use_remove_imu_bias_from_first_stationary_scan, Logger& logger)
+namespace
 {
-    FusionAhrs ahrs;
-    FusionAhrsInitialise(&ahrs);
+    // roll, pitch, yaw [deg] of an orientation, as Fusion's FusionQuaternionToEuler computes them (float)
+    Eigen::Vector3f roll_pitch_yaw_deg(const Eigen::Quaternionf& q)
+    {
+        const float to_deg = 180.0f / (float)M_PI;
+        const float half_minus_qy_squared = 0.5f - q.y() * q.y();
+        const float sin_pitch = 2.0f * (q.w() * q.y() - q.z() * q.x());
+        const float pitch = sin_pitch <= -1.0f ? (float)M_PI / -2.0f : (sin_pitch >= 1.0f ? (float)M_PI / 2.0f : asinf(sin_pitch));
+        return { atan2f(q.w() * q.x() + q.y() * q.z(), half_minus_qy_squared - q.x() * q.x()) * to_deg, pitch * to_deg,
+                 atan2f(q.w() * q.z() + q.x() * q.y(), half_minus_qy_squared - q.z() * q.z()) * to_deg };
+    }
+}
 
+void calculate_trajectory(
+    ImuTrajectory& trajectory, Imu& imu_data, bool fusionConventionNwu, bool fusionConventionEnu, bool fusionConventionNed, double ahrs_gain, bool debugMsg, bool use_remove_imu_bias_from_first_stationary_scan, OrientationEstimator& ahrs, Logger& logger)
+{
+    // the first convention set, else north-west-up (the filter's default)
+    AxesConvention convention = AxesConvention::Nwu;
     if (fusionConventionNwu)
-        ahrs.settings.convention = FusionConventionNwu;
+        convention = AxesConvention::Nwu;
     else if (fusionConventionEnu)
-        ahrs.settings.convention = FusionConventionEnu;
+        convention = AxesConvention::Enu;
     else if (fusionConventionNed)
-        ahrs.settings.convention = FusionConventionNed;
-    ahrs.settings.gain = ahrs_gain;
+        convention = AxesConvention::Ned;
+    ahrs.reset(convention, ahrs_gain);
     int counter = 1;
 
     bool first = true;
@@ -176,23 +188,26 @@ void calculate_trajectory(
 
     for (const auto& [timestamp_pair, gyr, acc] : imu_data)
     {
-        const FusionVector gyroscope = { static_cast<float>(gyr.x() * RAD_TO_DEG) - bias_gyr_x, static_cast<float>(gyr.y() * RAD_TO_DEG) - bias_gyr_y, static_cast<float>(gyr.z() * RAD_TO_DEG) - bias_gyr_z };
-        const FusionVector accelerometer = { acc.x(), acc.y(), acc.z() };
+        // the bias is a double, so each difference is a double, narrowed to float for the filter
+        const Eigen::Vector3f gyroscope(static_cast<float>(static_cast<float>(gyr.x() * RAD_TO_DEG) - bias_gyr_x),
+                                        static_cast<float>(static_cast<float>(gyr.y() * RAD_TO_DEG) - bias_gyr_y),
+                                        static_cast<float>(static_cast<float>(gyr.z() * RAD_TO_DEG) - bias_gyr_z));
+        const Eigen::Vector3f accelerometer(acc.x(), acc.y(), acc.z());
      
         // DYNAMIC AHRS GAIN: Check accelerometer magnitude against 1.0G
         double acc_mag = std::sqrt(acc.x() * acc.x() + acc.y() * acc.y() + acc.z() * acc.z());
         if (acc_mag < 0.9 || acc_mag > 1.1)
         {
-            ahrs.settings.gain = 0.0f; // Drop gain to prevent linear acceleration pitch/roll drift
+            ahrs.set_gain(0.0f); // Drop gain to prevent linear acceleration pitch/roll drift
         }
         else
         {
-            ahrs.settings.gain = ahrs_gain; // Restore user gain when stable
+            ahrs.set_gain(ahrs_gain); // Restore user gain when stable
         }
 
         if (first)
         {
-            FusionAhrsUpdateNoMagnetometer(&ahrs, gyroscope, accelerometer, 1.0 / 200.0);
+            ahrs.update(gyroscope, accelerometer, 1.0 / 200.0);
             first = false;
         }
         else
@@ -204,14 +219,14 @@ void calculate_trajectory(
             if (ts_diff <= 0.0)
                 ts_diff = 0.002;
 
-            FusionAhrsUpdateNoMagnetometer(&ahrs, gyroscope, accelerometer, ts_diff);
+            ahrs.update(gyroscope, accelerometer, ts_diff);
         }
 
         last_ts = timestamp_pair.first;
 
-        FusionQuaternion quat = FusionAhrsGetQuaternion(&ahrs);
+        const Eigen::Quaternionf quat = ahrs.orientation();
 
-        Eigen::Quaterniond d{ quat.element.w, quat.element.x, quat.element.y, quat.element.z };
+        Eigen::Quaterniond d{ quat.w(), quat.x(), quat.y(), quat.z() };
         Eigen::Affine3d t{ Eigen::Matrix4d::Identity() };
         t.rotate(d);
 
@@ -219,11 +234,11 @@ void calculate_trajectory(
 
         if (debugMsg)
         {
-            const FusionEuler euler = FusionQuaternionToEuler(quat);
+            const Eigen::Vector3f euler = roll_pitch_yaw_deg(quat);
             counter++;
             if (counter % 100 == 0)
             {
-                log_debug(logger) << std::fixed << std::setprecision(1) << "Roll " << euler.angle.roll << ", Pitch " << euler.angle.pitch << ", Yaw " << euler.angle.yaw
+                log_debug(logger) << std::fixed << std::setprecision(1) << "Roll " << euler.x() << ", Pitch " << euler.y() << ", Yaw " << euler.z()
                                   << " [" << counter++ << " of " << (int)imu_data.size() << "]";
             }
         }

@@ -253,6 +253,8 @@ add_library(lo_infrastructure STATIC
   src/infrastructure/disk_point_store.cpp
   src/infrastructure/folder_preview_sink.cpp
   src/infrastructure/folder_inputs.cpp
+  src/infrastructure/fusion_orientation_estimator.cpp
+  src/infrastructure/run_services.cpp
   src/infrastructure/folder_result_sink.cpp
   src/infrastructure/toml_io.cpp
   src/infrastructure/toml_config_repository.cpp

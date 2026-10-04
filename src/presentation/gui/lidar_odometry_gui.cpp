@@ -12,6 +12,7 @@
 #include "odometry_pipeline.h"
 #include "console_reporting.h"
 #include "folder_inputs.h"
+#include "run_services.h"
 #include "folder_result_sink.h"
 #include <export_laz.h>
 
@@ -425,7 +426,8 @@ bool select_input(std::string &input_folder_name, std::vector<std::string> &inpu
     gui_progress.reset();
     preview_cloud.clear();
     preview_final_pending = false;
-    pipeline = OdometryPipeline(params, console, gui_progress, make_folder_inputs(input_file_names, console), pipeline.state.paths);
+    pipeline = OdometryPipeline(params, console, gui_progress, make_folder_inputs(input_file_names, console), make_run_services(),
+                                pipeline.state.paths);
     return true;
 }
 

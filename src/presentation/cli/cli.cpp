@@ -6,6 +6,7 @@
 #include "format_time.h"
 #include "odometry_config.h"
 #include "odometry_pipeline.h"
+#include "run_services.h"
 #include "toml_config_repository.h"
 
 #include <chrono>
@@ -45,7 +46,7 @@ int run_cli(char *argv[])
     }
 
     ConsoleReporter reporter;
-    OdometryPipeline pipeline(config, reporter, reporter, make_folder_inputs(input_file_names, reporter), paths);
+    OdometryPipeline pipeline(config, reporter, reporter, make_folder_inputs(input_file_names, reporter), make_run_services(), paths);
     if (pipeline.load())
         log_info(reporter) << "step_1_done";
 

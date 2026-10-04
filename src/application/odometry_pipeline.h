@@ -14,15 +14,15 @@
 //   -> save (save_result)
 // Each stage is reported to the ProgressReporter (with a pause checkpoint at its start); messages go to
 // the Logger. The pipeline owns the run's inputs (recording, point store, preview). The config, logger and
-// reporter must outlive the pipeline. The run's data members are public because
+// reporter must outlive the pipeline. The services (the AHRS) come from make_run_services. The run's data members are public because
 // the GUI views them (trajectory, point cloud preview).
 class OdometryPipeline
 {
 public:
     // initial_paths: the [paths] section loaded with the settings; the run fills in the working folders
-    // inputs: from make_folder_inputs; empty inputs make load() fail
+    // inputs: from make_folder_inputs; services: from make_run_services; empty inputs or services make load() fail
     OdometryPipeline(const OdometryConfig &config, Logger &logger, ProgressReporter &progress, RunInputs inputs = {},
-                     RunPaths initial_paths = {}, bool debug = false);
+                     RunServices services = {}, RunPaths initial_paths = {}, bool debug = false);
 
     // reads the recording, estimates the IMU orientation and cuts the windows; false if loading failed
     bool load();
@@ -54,4 +54,5 @@ private:
     ProgressReporter *progress_;
     bool debug_;
     RunInputs inputs_;
+    RunServices services_;
 };

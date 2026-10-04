@@ -4,8 +4,8 @@
 #include "loop_closure.h"
 
 OdometryPipeline::OdometryPipeline(const OdometryConfig &config, Logger &logger, ProgressReporter &progress, RunInputs inputs,
-                                   RunPaths initial_paths, bool debug)
-    : config_(&config), logger_(&logger), progress_(&progress), debug_(debug), inputs_(std::move(inputs))
+                                   RunServices services, RunPaths initial_paths, bool debug)
+    : config_(&config), logger_(&logger), progress_(&progress), debug_(debug), inputs_(std::move(inputs)), services_(std::move(services))
 {
     state.paths = std::move(initial_paths);
 }
@@ -15,14 +15,14 @@ bool OdometryPipeline::load()
     const OdometryConfig &params = *config_;
     progress_->stage_started(RunStage::Loading);
     progress_->checkpoint();
-    if (!inputs_.complete() || !inputs_.recording->open(*logger_))
+    if (!inputs_.complete() || !services_.complete() || !inputs_.recording->open(*logger_))
         return false;
     state.paths.working_directory_preview = inputs_.preview->location();
     state.paths.working_directory_cache = inputs_.points->location();
     if (!load_data(*inputs_.recording, *inputs_.preview, params, points_per_file, imu, debug_, *logger_))
         return false;
     calculate_trajectory(imu_trajectory, imu, params.fusionConventionNwu, params.fusionConventionEnu, params.fusionConventionNed,
-                         params.ahrs_gain, debug_, params.use_remove_imu_bias_from_first_stationary_scan, *logger_);
+                         params.ahrs_gain, debug_, params.use_remove_imu_bias_from_first_stationary_scan, *services_.orientation, *logger_);
     compute_step_1(points_per_file, params, state, imu_trajectory, windows, *inputs_.points, *logger_, *progress_, &imu);
     return true;
 }
