@@ -137,6 +137,8 @@ Every window reached `delta < 1e-2`, and every window settled before iteration 1
 - **`convergence_delta_threshold = 1e-2`:** it would stop a window after median 27 instead of 100 iterations, which matches the 3–4× speed-up measured earlier. The poses it leaves behind differ from the full run by a median 0.016 mm and at most 1.5 mm, but those small differences add up along the trajectory; on recordings 42/43 the map was 0.5–1.5 % less sharp. It remains the fast mode, not the default.
 - A change to either would be its own change, checked with a full 44 run and `tools/eval_odometry.py`.
 
+With `use_exact_ndt_bucket_statistics = true` (off by default, change `ndt-bucket-statistics`), the median window settled after 29 iterations on 44 instead of 51, while p90 and max stayed at 77 and 94. Its run time couldn't be compared fairly: the switch-off reference was a night run, and on the same morning a switch-off `44_short` run took 206 s against 199 s with the switch on.
+
 ## Open findings
 
 - **GUI memory with the live preview** (2026-10-02, accepted for now). On the full 44 run, the GUI uses about 3 GB more than the CLI:

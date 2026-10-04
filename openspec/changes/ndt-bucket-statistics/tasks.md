@@ -79,19 +79,23 @@ Close the GUI before building.
   - The degenerate count grows 4.6×. `imu_degenerate_information_ratio = 0.3` was tuned on the wrong normals (design risk), and the accelerometer term follows the count. That can itself change the map, so the sharpness loss isn't attributable to the cell statistics alone yet.
 
   **Paused for the user's decision.**
-- [ ] 3.2 If accepted:
+- [x] 3.2 If accepted:
   - switch the default to `true` in `OdometryConfig`, `app/default_settings.toml` and `settings/lidar-vertical.toml`, and regenerate the golden TOML files;
   - in a commit of their own: new baselines for `44_short` and `44`, with the old folders kept as `*_2026-10-04`, and the refreshed precise reference;
   - note the refresh in `tools/README.md`.
 
   Verify: both manifests check IDENTICAL against their new folders. Commit. If rejected, record the decision here and leave the default `false`.
 
+  Decision (user, 2026-10-04): **rejected for now.** The default stays `false` everywhere, so results and baselines are unchanged. The exact statistics stay in the code behind the switch, with their tests. If this is picked up again, start with a 44 run with `imu_degenerate_information_ratio` lowered until about 95 windows count as degenerate (roughly 0.1–0.15), next to a switch-off run made under the same conditions. That separates the cell statistics from the degeneracy gating and gives a fair run time, and the sharpness should be measured on all chunks, not just chunk 0.
+
 ## 4. Docs
 
-- [ ] 4.1 Update the docs:
+- [x] 4.1 Update the docs:
   - `docs/degeneracy-information.html`: section 5 says fixed (or not), with the new corridor numbers and the 44 degeneracy counts;
   - `docs/index.html`: the Known-limitations entry, and the new setting's row in `[lidar_odometry_control]`;
   - `docs/PERFORMANCE.md`: the run time;
   - `CLAUDE.md`: `update_rgd`, the switch and the new test file.
 
   Verify: `openspec validate ndt-bucket-statistics --strict` passes. Commit.
+
+  Result: written for the rejected outcome. Section 5 of `degeneracy-information.html` says the fix exists but is off, with the corridor and 44 numbers. `index.html` has the setting's row and an updated Known-limitations entry. `PERFORMANCE.md` notes the iterations with the switch on and why the time couldn't be compared. `CLAUDE.md` describes the tests and `update_rgd`'s switch.

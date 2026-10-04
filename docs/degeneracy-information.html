@@ -188,18 +188,35 @@ opposite of the truth.</div>
 <p>On real data the ratio is therefore noisy. Degenerate stretches were still detected on b1 (0.16–0.30 against 0.36 and more
 in rooms), but the wrong normals eat into that margin, and the reported weakest direction can be off. The same wrong normals
 make the view-point check in the scan-to-map optimization skip good cells.</p>
-<p><b>Status.</b> The corridor test keeps the correct expectation and is marked as an expected failure
-(<code>doctest::should_fail</code>). A separate change is planned to compute the cell statistics properly: a running mean
-and covariance, and the normal from the final covariance. It changes every run's results, so it will be measured on
-recording 44 before it is accepted. Once it works, the corridor test starts passing, doctest reports that, and the marker is
-removed.</p>
+<p><b>Status (2026-10-04): a fix exists, but it is off.</b> Change <code>ndt-bucket-statistics</code> added exact cell
+statistics behind the setting <code>use_exact_ndt_bucket_statistics</code> (<code>[lidar_odometry_control]</code>, default
+<code>false</code>):</p>
+<ul>
+  <li>the mean and covariance are running statistics of all of a cell's points, with the 3 cm covariance as a prior worth one point;</li>
+  <li>the normal is recomputed from the covariance at the end of each map update;</li>
+  <li>a cell whose two smallest spreads differ by less than 3× gets no normal. Its points lie on one line or one cross-section, so no surface is defined.</li>
+</ul>
+<div class="table-wrap"><table>
+  <tr><th></th><th class="num">Previous statistics (default)</th><th class="num">Exact statistics</th></tr>
+  <tr><td>Synthetic corridor: information along / across</td><td class="num">925 / 155</td><td class="num">1.7 / 987</td></tr>
+  <tr><td>Synthetic room, perfect guess: position error</td><td class="num">1.5 mm</td><td class="num">0.37 mm</td></tr>
+  <tr><td>Recording 44: windows with ratio &lt; 0.3</td><td class="num">95 of 690</td><td class="num">439 of 690</td></tr>
+  <tr><td>Recording 44: median ratio</td><td class="num">0.48</td><td class="num">0.23</td></tr>
+  <tr><td>Recording 44: occupied 3 cm cells (first ~51 windows)</td><td class="num">24,044</td><td class="num">25,309 (+5.3 %)</td></tr>
+</table></div>
+<p>With correct normals, the ratios on real data are much lower, and the threshold of 0.3, tuned on the wrong normals, then
+marks most of recording 44 as degenerate and switches the accelerometer term on in 411 windows. The map came out less sharp,
+but that mixes the new statistics with the much more frequent accelerometer term. The switch stays off for now (decision of
+2026-10-04). The next step would be a run with <code>imu_degenerate_information_ratio</code> lowered until about as many
+windows count as degenerate as before (roughly 0.1–0.15). The test suite already runs on the exact statistics, so the corridor
+test is a normal passing test.</p>
 
 <h2>6. Where to find it</h2>
 <ul>
   <li>Computed: <code>optimize_lidar_odometry</code> in <code>app/scan_to_map.cpp</code> (<code>lidar_translation_information</code>).</li>
   <li>Used: <code>prepare_acc_term</code> and <code>update_acc_term_after_window</code> in <code>app/run_odometry.cpp</code>.</li>
   <li>Settings: <a href="index.html#p-imu"><code>[imu_translation]</code></a> in the main documentation.</li>
-  <li>Tests: <code>tests/scan_to_map_test.cpp</code> (room and corridor).</li>
+  <li>Tests: <code>tests/scan_to_map_test.cpp</code> (room and corridor) and <code>tests/ndt_map_test.cpp</code> (the cell statistics).</li>
 </ul>
 
 </main>
