@@ -6,7 +6,7 @@
 
 ## 1. Fixture
 
-- [ ] 1.1 Move the scene helpers of `tests/scan_to_map_test.cpp` (faces, face sampling, pose errors) into `tests/synthetic_recording.{h,cpp}` without changing them, and use them from there. Add `tests/memory_point_store.h` (decision 2), the DLL copy for the test target (decision 7), and the new files to `tests/CMakeLists.txt`. Verify: both presets, `ctest`; the 6c `MESSAGE` lines print the same numbers as before the move (diff the output of `lidar_odometry_tests -tc="scan-to-map*" -s`). Commit.
+- [x] 1.1 Move the scene helpers of `tests/scan_to_map_test.cpp` (faces, face sampling, pose errors) into `tests/synthetic_recording.{h,cpp}` without changing them, and use them from there. Add `tests/memory_point_store.h` (decision 2), the DLL copy for the test target (decision 7), and the new files to `tests/CMakeLists.txt`. Verify: both presets, `ctest`; the 6c `MESSAGE` lines print the same numbers as before the move (diff the output of `lidar_odometry_tests -tc="scan-to-map*" -s`). Commit. Result: `NullLogger`, `Face`, `Scene`, `box_scene`, `face_point`, `face_area`, `sample_scene`, `pose`, `PoseError` and `max_error` moved verbatim into `namespace synthetic`. All 7 6c messages print the same numbers as in `ndt-bucket-statistics` 2.2 (0.366667 mm … corridor 1.72194 / 986.754). Both presets build and `ctest` passes (Release 4 s, Debug 56 s), and `src/` and `core/` are unchanged.
 - [ ] 1.2 Add the loop scene, the two-lap truth and the windows with their observations (decision 1), plus a fixture test:
   - every point lies on a face within 1 cm;
   - each point's timestamp maps to its own node by consistency's rule;

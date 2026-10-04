@@ -12,7 +12,8 @@ add_executable(lidar_odometry_tests
   imu_kinematics_test.cpp
   normal_equations_test.cpp
   scan_to_map_test.cpp
-  ndt_map_test.cpp)
+  ndt_map_test.cpp
+  synthetic_recording.cpp)
 
 # the code under test comes from the layer libraries (lo_infrastructure brings lo_application and lo_domain); core is
 # not linked
@@ -34,6 +35,15 @@ target_compile_definitions(lidar_odometry_tests PRIVATE LO_REPO_DIR="${REPOSITOR
 
 if (MSVC)
   target_compile_options(lidar_odometry_tests PRIVATE /bigobj)
+endif()
+
+# the runtime DLLs (TBB) next to the test executable, as for dMapper
+if(WIN32)
+  add_custom_command(
+    TARGET lidar_odometry_tests
+    POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_RUNTIME_DLLS:lidar_odometry_tests> $<TARGET_FILE_DIR:lidar_odometry_tests>
+    COMMAND_EXPAND_LISTS)
 endif()
 
 add_test(NAME lidar_odometry_tests COMMAND lidar_odometry_tests)

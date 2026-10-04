@@ -2,6 +2,7 @@
 
 #include "angle_units.h"
 #include "scan_to_map.h"
+#include "synthetic_recording.h"
 
 #include <algorithm>
 #include <chrono>
@@ -15,86 +16,12 @@
 
 namespace
 {
+    using namespace synthetic;
+
     const double deg = DEG_TO_RAD;
-
-    struct NullLogger : Logger
-    {
-        int messages = 0;
-        void write(LogLevel, std::string_view) override { messages++; }
-    };
-
-    // an axis-aligned plane face of the scene: points p with p[axis] == value, within [lo, hi] on the other two axes
-    struct Face
-    {
-        int axis;
-        double value;
-        Eigen::Vector3d lo;
-        Eigen::Vector3d hi;
-    };
-
-    struct Scene
-    {
-        std::vector<Face> faces;
-        Eigen::Vector3d centre;
-    };
-
-    // a box with the given corners; open_x leaves out the two faces normal to x (a corridor)
-    Scene box_scene(const Eigen::Vector3d &lo, const Eigen::Vector3d &hi, bool open_x)
-    {
-        Scene s;
-        for (int axis = 0; axis < 3; axis++)
-        {
-            if (open_x && axis == 0)
-                continue;
-            s.faces.push_back({axis, lo[axis], lo, hi});
-            s.faces.push_back({axis, hi[axis], lo, hi});
-        }
-        s.centre = 0.5 * (lo + hi);
-        return s;
-    }
 
     Scene room() { return box_scene({-4.0, -2.5, 0.0}, {4.0, 2.5, 3.0}, false); }
     Scene corridor() { return box_scene({-15.0, -2.5, 0.0}, {15.0, 2.5, 3.0}, true); }
-
-    // a point on face f at in-plane coordinates (u, v) in [0, 1], moved by jitter along the face normal
-    Eigen::Vector3d face_point(const Face &f, double u, double v, double jitter)
-    {
-        const int a = (f.axis + 1) % 3, b = (f.axis + 2) % 3;
-        Eigen::Vector3d p;
-        p[f.axis] = f.value + jitter;
-        p[a] = f.lo[a] + u * (f.hi[a] - f.lo[a]);
-        p[b] = f.lo[b] + v * (f.hi[b] - f.lo[b]);
-        return p;
-    }
-
-    double face_area(const Face &f)
-    {
-        const int a = (f.axis + 1) % 3, b = (f.axis + 2) % 3;
-        return (f.hi[a] - f.lo[a]) * (f.hi[b] - f.lo[b]);
-    }
-
-    // the scene sampled on a 5 cm grid, with a +-5 mm jitter along the face normal (fixed seed)
-    std::vector<Point3Di> sample_scene(const Scene &s)
-    {
-        std::mt19937 rng(42);
-        std::uniform_real_distribution<double> jitter(-0.005, 0.005);
-        std::vector<Point3Di> points;
-        for (const Face &f : s.faces)
-        {
-            const int a = (f.axis + 1) % 3, b = (f.axis + 2) % 3;
-            const int na = static_cast<int>(std::round((f.hi[a] - f.lo[a]) / 0.05));
-            const int nb = static_cast<int>(std::round((f.hi[b] - f.lo[b]) / 0.05));
-            for (int i = 0; i <= na; i++)
-                for (int j = 0; j <= nb; j++)
-                {
-                    Point3Di p{};
-                    p.point = face_point(f, double(i) / na, double(j) / nb, jitter(rng));
-                    p.index_point = static_cast<int>(points.size());
-                    points.push_back(p);
-                }
-        }
-        return points;
-    }
 
     struct Maps
     {
@@ -111,14 +38,6 @@ namespace
         update_rgd(options.grid_indoor, maps.indoor, points, s.centre, true);
         update_rgd(options.grid_outdoor, maps.outdoor, points, s.centre, true);
         return maps;
-    }
-
-    Eigen::Affine3d pose(const Eigen::Vector3d &position, double yaw_rad)
-    {
-        Eigen::Affine3d m = Eigen::Affine3d::Identity();
-        m.linear() = Eigen::AngleAxisd(yaw_rad, Eigen::Vector3d::UnitZ()).toRotationMatrix();
-        m.translation() = position;
-        return m;
     }
 
     constexpr int n_nodes = 50;
@@ -261,24 +180,6 @@ namespace
                 lm_factor *= 10.0;
         }
         return delta;
-    }
-
-    // largest position [m] and rotation [rad] difference between two trajectories
-    struct PoseError
-    {
-        double position = 0.0;
-        double rotation = 0.0;
-    };
-
-    PoseError max_error(const std::vector<Eigen::Affine3d> &a, const std::vector<Eigen::Affine3d> &b)
-    {
-        PoseError e;
-        for (size_t k = 0; k < a.size(); k++)
-        {
-            e.position = std::max(e.position, (a[k].translation() - b[k].translation()).norm());
-            e.rotation = std::max(e.rotation, Eigen::AngleAxisd(a[k].linear() * b[k].linear().transpose()).angle());
-        }
-        return e;
     }
 
     // signed heading (yaw) of a's last node relative to b's last node [rad]
