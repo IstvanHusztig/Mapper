@@ -193,6 +193,11 @@ Steps 8–11 were added on 2026-10-03. They cover the goals that steps 0–7 sti
    bare `#include <Fusion.h>` compiles anywhere; `<FusionAhrs.h>` is the reliable check.
 10. **GUI view-model:** move `params`, `gui_prefs`, the current `pipeline` and the UI state out of the
     file-scope globals in `lidar_odometry_gui.cpp` into a view-model that the GLUT callbacks reach.
+    - 10b. **Next after step 10: trajectory drawing race** (found 2026-10-04 while proposing step 10). The GUI
+      draws every window's poses while the worker thread writes them (odometry and post-processing). The vectors
+      aren't resized then, so the worst it shows is half-updated poses, but it is a data race. Fix: draw only the
+      windows the odometry reported done, as the point cloud preview does, and the whole trajectory after the run.
+      A visible behaviour change, so its own proposal.
 11. **Split `core/`:** the pure math (NDT, ICP, pose graph) goes into the domain, the I/O (LAZ export,
     session, file dialogs) into infrastructure. This is the riskiest step because of the
     `CORE_SOURCE_FILES` link-order constraint. Keeping `core` as a vendored "math kernel" dependency
