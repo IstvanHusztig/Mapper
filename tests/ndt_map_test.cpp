@@ -71,7 +71,7 @@ namespace
         std::map<uint64_t, std::vector<Eigen::Vector3d>> grouped;
         const Eigen::Vector3d b(resolution, resolution, resolution);
         for (const auto &p : points)
-            grouped[get_rgd_index(p.point, b)].push_back(p.point);
+            grouped[ndt_cell_index(p.point, b)].push_back(p.point);
         std::map<uint64_t, CellPoints> cells;
         for (const auto &[index, ps] : grouped)
         {

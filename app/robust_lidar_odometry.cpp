@@ -7,7 +7,6 @@
 
 #include "angle_units.h"
 #include "normal_equations.h"
-#include <hash_utils.h>
 #include <mutex>
 
 void optimize_sf2(std::vector<Point3Di> &intermediate_points, std::vector<Point3Di> &intermediate_points_sf, std::vector<Eigen::Affine3d> &trajectory,
@@ -43,7 +42,7 @@ void optimize_sf2(std::vector<Point3Di> &intermediate_points, std::vector<Point3
     const auto hessian_fun = [&](const int &indexes_i) -> Blocks
     {
         int c = intermediate_points[indexes_i].index_pose * 6;
-        auto index_of_bucket = get_rgd_index(point_cloud_global_sc[indexes_i], b);
+        auto index_of_bucket = ndt_cell_index(point_cloud_global_sc[indexes_i], b);
         auto bucket_it = buckets.find(index_of_bucket);
         // no bucket found
         if (bucket_it == buckets.end())
@@ -383,7 +382,7 @@ void optimize_rigid_sf(
             double polar_angle_deg_l = atan2(point_global.y(), point_global.x()) * RAD_TO_DEG;
             double azimutal_angle_deg_l = acos(point_global.z() / r_l) * RAD_TO_DEG;
 
-            auto index_of_bucket = get_rgd_index({r_l, polar_angle_deg_l, azimutal_angle_deg_l}, {rgd_params_sc.resolution_X, rgd_params_sc.resolution_Y, rgd_params_sc.resolution_Z});
+            auto index_of_bucket = ndt_cell_index({r_l, polar_angle_deg_l, azimutal_angle_deg_l}, {rgd_params_sc.resolution_X, rgd_params_sc.resolution_Y, rgd_params_sc.resolution_Z});
 
             auto bucket_it = buckets_sf.find(index_of_bucket);
             // no bucket found

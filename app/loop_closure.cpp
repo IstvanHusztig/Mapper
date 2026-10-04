@@ -153,7 +153,7 @@ namespace
                 int used = 0;
                 for (const auto &p : source)
                 {
-                    const auto it = buckets.find(get_rgd_index(T * p, b));
+                    const auto it = buckets.find(ndt_cell_index(T * p, b));
                     if (it == buckets.end() || it->second.number_of_points < 3)
                         continue;
                     const Eigen::Matrix3d infm = it->second.cov.inverse();

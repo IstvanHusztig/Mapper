@@ -2,7 +2,7 @@
 #include <algorithm>
 
 // this function provides unique index
-unsigned long long int get_index(const int16_t x, const int16_t y, const int16_t z)
+unsigned long long int ndt_cell_key(const int16_t x, const int16_t y, const int16_t z)
 {
     return ((static_cast<unsigned long long int>(x) << 32) & (0x0000FFFF00000000ull)) |
            ((static_cast<unsigned long long int>(y) << 16) & (0x00000000FFFF0000ull)) |
@@ -10,12 +10,12 @@ unsigned long long int get_index(const int16_t x, const int16_t y, const int16_t
 }
 
 // this function provides unique index for input point p and 3D space decomposition into buckets b
-unsigned long long int get_rgd_index(const Eigen::Vector3d p, const Eigen::Vector3d b)
+unsigned long long int ndt_cell_index(const Eigen::Vector3d p, const Eigen::Vector3d b)
 {
     int16_t x = static_cast<int16_t>(p.x() / b.x());
     int16_t y = static_cast<int16_t>(p.y() / b.y());
     int16_t z = static_cast<int16_t>(p.z() / b.z());
-    return get_index(x, y, z);
+    return ndt_cell_key(x, y, z);
 }
 
 // a point's index and its cell, as PointCloud::PointBucketIndexPair (same layout), without including point_cloud.h
@@ -37,7 +37,7 @@ std::vector<Point3Di> decimate(const std::vector<Point3Di>& points, double bucke
     for (int i = 0; i < points.size(); i++)
     {
         ip[i].index_of_point = i;
-        ip[i].index_of_bucket = get_rgd_index(points[i].point, b);
+        ip[i].index_of_bucket = ndt_cell_index(points[i].point, b);
     }
     std::sort(ip.begin(), ip.end(), [](const PointBucketIndex& a, const PointBucketIndex& b)
         { return a.index_of_bucket < b.index_of_bucket; });
@@ -62,7 +62,7 @@ static void update_rgd_legacy(const NdtGridParameters &rgd_params, NDTBucketMapT
 
     for (int i = 0; i < points_global.size(); i++)
     {
-        auto index_of_bucket = get_rgd_index(points_global[i].point, b);
+        auto index_of_bucket = ndt_cell_index(points_global[i].point, b);
 
         auto bucket_it = buckets.find(index_of_bucket);
 
@@ -147,7 +147,7 @@ void update_rgd(const NdtGridParameters &rgd_params, NDTBucketMapType &buckets,
 
     for (const auto &p : points_global)
     {
-        const auto index_of_bucket = get_rgd_index(p.point, b);
+        const auto index_of_bucket = ndt_cell_index(p.point, b);
         auto bucket_it = buckets.find(index_of_bucket);
 
         if (bucket_it == buckets.end())
@@ -207,7 +207,7 @@ void update_rgd_spherical_coordinates(const NdtGridParameters &rgd_params, NDTBu
 
     for (int i = 0; i < points_global.size(); i++)
     {
-        auto index_of_bucket = get_rgd_index(points_global_spherical[i], b);
+        auto index_of_bucket = ndt_cell_index(points_global_spherical[i], b);
 
         auto bucket_it = buckets.find(index_of_bucket);
 

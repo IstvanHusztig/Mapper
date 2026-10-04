@@ -9,12 +9,12 @@ Close the GUI before building. After task 2.1, the precise build tree must be re
 
 ## 1. Preparations in `app/`
 
-- [ ] 1.1 Preparations a–c (decisions 3 and 4):
+- [x] 1.1 Preparations a–c (decisions 3 and 4):
   - rename `get_index` → `ndt_cell_key` and `get_rgd_index` → `ndt_cell_index` in `app/` and `tests/` (`tools/rename_identifiers.py`, `--dry-run` first), and drop the then unused `<hash_utils.h>` includes;
   - move `points_to_vector` verbatim into `core/include/point_placement.h`, with `export_laz.h` including it;
   - `run_odometry.cpp` and `lidar_odometry.cpp` include `point_placement.h` instead of `export_laz.h`, and the unused `session.h` / `Version.hpp` includes go.
 
-  Verify: the step checks; `grep -rn "get_rgd_index\|get_index\|hash_utils\|export_laz\|session.h" app tests` lists only adapters (`folder_*`, `recording_folder_source`) and the GUI. Commit.
+  Verify: the step checks; `grep -rn "get_rgd_index\|get_index\|hash_utils\|export_laz\|session.h" app tests` lists only adapters (`folder_*`, `recording_folder_source`) and the GUI. Commit. Result: 18 renames, all in `app/` and `tests/`. The grep now finds `export_laz.h` only in `folder_preview_sink.cpp`, `folder_result_sink.cpp` and the GUI. Removing `export_laz.h` also removed a `using namespace std` that two spots relied on, so `ofstream` (`lidar_odometry.cpp`) and `fixed` (`run_odometry.cpp`) are now `std::`-qualified. Both presets build, `ctest` passes, and precise and fast `44_short` are IDENTICAL (11 files).
 - [ ] 1.2 Split `main()` (decision 5) in `app/`:
   - `app/main.cpp` with the `try`/`catch` and the dispatch;
   - `app/cli.{h,cpp}` with `run_cli`, today's CLI branch verbatim;

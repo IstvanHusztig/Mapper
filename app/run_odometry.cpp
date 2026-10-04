@@ -8,7 +8,7 @@
 #include "robust_lidar_odometry.h"
 #include "scan_to_map.h"
 #include "window_steps.h"
-#include <export_laz.h>
+#include <point_placement.h>
 
 #include <algorithm>
 #include <cmath>
@@ -375,8 +375,8 @@ namespace
         auto msg = log_info(logger);
         msg << "finished at iteration " << optimization.last_iteration + 1 << "/" << params.nr_iter;
         msg << " optimizing window " << i + 1 << "/" << n_windows
-            << " with acc_distance " << fixed << std::setprecision(2) << acc_distance << "[m] in "
-            << fixed << std::setprecision(2) << elapsed_s
+            << " with acc_distance " << std::fixed << std::setprecision(2) << acc_distance << "[m] in "
+            << std::fixed << std::setprecision(2) << elapsed_s
             << "[s], delta ";
         if (optimization.delta >= params.convergence_delta_threshold)
             msg << std::setprecision(10) << optimization.delta << "!!!";

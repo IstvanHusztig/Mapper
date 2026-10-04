@@ -8,7 +8,6 @@
 
 #include "angle_units.h"
 #include "normal_equations.h"
-#include <hash_utils.h>
 #include <mutex>
 
 void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window &window,
@@ -66,7 +65,7 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
             return;
 
         Eigen::Vector3d point_global = window.poses[intermediate_points_i.index_pose] * intermediate_points_i.point;
-        auto index_of_bucket = get_rgd_index(point_global, b_indoor);
+        auto index_of_bucket = ndt_cell_index(point_global, b_indoor);
 
         auto bucket_it = buckets_indoor.find(index_of_bucket);
         // no bucket found
@@ -167,7 +166,7 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
                 return;
 
             Eigen::Vector3d point_global = window.poses[intermediate_points_i.index_pose] * intermediate_points_i.point;
-            auto index_of_bucket = get_rgd_index(point_global, b_outdoor);
+            auto index_of_bucket = ndt_cell_index(point_global, b_outdoor);
 
             auto bucket_it = buckets_outdoor.find(index_of_bucket);
             // no bucket found

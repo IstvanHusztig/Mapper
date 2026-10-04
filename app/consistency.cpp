@@ -6,7 +6,6 @@
 #include <python-scripts/constraints/smoothness_tait_bryan_wc_jacobian.h>
 
 #include "angle_units.h"
-#include <hash_utils.h>
 #include <mutex>
 
 void Consistency(std::vector<Window> &windows, const OdometryConfig &params, PointStore &point_store, Logger &logger)
@@ -228,7 +227,7 @@ void Consistency(std::vector<Window> &windows, const OdometryConfig &params, Poi
                     return;
 
                 Eigen::Vector3d point_global = trajectory[intermediate_points_i.index_pose] * intermediate_points_i.point;
-                auto index_of_bucket = get_rgd_index(point_global, b);
+                auto index_of_bucket = ndt_cell_index(point_global, b);
 
                 auto bucket_it = buckets.find(index_of_bucket);
                 // no bucket found
@@ -576,7 +575,7 @@ void Consistency2(std::vector<Window> &windows, const OdometryConfig &params, Po
     std::vector<std::pair<unsigned long long int, unsigned int>> index_pairs;
     for (int i = 0; i < points_global.size(); i++)
     {
-        auto index_of_bucket = get_rgd_index(points_global[i].point, b);
+        auto index_of_bucket = ndt_cell_index(points_global[i].point, b);
         index_pairs.emplace_back(index_of_bucket, i);
     }
     std::sort(index_pairs.begin(), index_pairs.end(),
@@ -674,7 +673,7 @@ void Consistency2(std::vector<Window> &windows, const OdometryConfig &params, Po
         if (points_local[i].point.norm() < params.consistency_min_distance)
             continue;
 
-        auto index_of_bucket = get_rgd_index(points_global[i].point, b);
+        auto index_of_bucket = ndt_cell_index(points_global[i].point, b);
         auto bucket_it = buckets.find(index_of_bucket);
         // no bucket found
         if (bucket_it == buckets.end())

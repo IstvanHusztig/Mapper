@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <iostream>
 #include <session.h>
+#include <point_placement.h>
 #include <laszip/laszip_api.h>
 // #include <laszip_api.h>
 
@@ -414,38 +415,6 @@ inline void save_processed_pc(const fs::path &file_path_in, const fs::path &file
     }
 
     std::cout << "saving to " << file_path_put << std::endl;
-}
-
-inline void points_to_vector(
-    const std::vector<Point3Di> points, std::vector<Eigen::Affine3d> &trajectory, double threshold_output_filter, std::vector<int> *index_poses,
-    std::vector<Eigen::Vector3d> &pointcloud, std::vector<unsigned short> &intensity, std::vector<double> &timestamps, bool use_first_pose, bool save_index_pose)
-{
-    Eigen::Affine3d m_pose = trajectory[0].inverse();
-    for (const auto &org_p : points)
-    {
-        Point3Di p = org_p;
-        if (p.point.norm() > threshold_output_filter)
-        {
-            if (use_first_pose)
-            {
-                p.point = m_pose * (trajectory[org_p.index_pose] * org_p.point);
-            }
-            else
-            {
-                p.point = trajectory[org_p.index_pose] * org_p.point;
-            }
-            pointcloud.push_back(p.point);
-            intensity.push_back(p.intensity);
-            timestamps.push_back(p.timestamp);
-            if (save_index_pose)
-            {
-                if (index_poses)
-                {
-                    index_poses->push_back(org_p.index_pose);
-                }
-            }
-        }
-    }
 }
 
 inline void save_all_to_las(const Session &session, std::string output_las_name, bool as_local, bool skip_ts_0)

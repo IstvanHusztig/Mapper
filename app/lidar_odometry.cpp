@@ -1,9 +1,8 @@
 #include "lidar_odometry.h"
-#include <session.h>
-#include <HDMapping/Version.hpp>
-#include <export_laz.h>
+#include <point_placement.h>
 #include <iomanip>
 #include <sstream>
+#include <fstream>
 #include "ndt_map.h"
 #include "odometry_state.h"
 #include <transformations.h>
@@ -570,7 +569,7 @@ void save_result(std::vector<Window> &windows, const OdometryConfig &params, con
 
 void save_trajectory_to_ascii(std::vector<Window> &windows, std::string output_file_name)
 {
-    ofstream file;
+    std::ofstream file;
     file.open(output_file_name);
     for (const auto &wd : windows)
     {

@@ -13,8 +13,8 @@
 using NDTBucketMapType = std::unordered_map<uint64_t, NdtBucket>;
 using NDTBucketMapType2 = std::unordered_map<uint64_t, NdtBucket2>;
 
-unsigned long long int get_index(const int16_t x, const int16_t y, const int16_t z);
-unsigned long long int get_rgd_index(const Eigen::Vector3d p, const Eigen::Vector3d b);
+unsigned long long int ndt_cell_key(const int16_t x, const int16_t y, const int16_t z);
+unsigned long long int ndt_cell_index(const Eigen::Vector3d p, const Eigen::Vector3d b);
 
 // this function reduces number of points by preserving only first point for each bucket {bucket_x, bucket_y, bucket_z}
 std::vector<Point3Di> decimate(const std::vector<Point3Di> &points, double bucket_x, double bucket_y, double bucket_z);

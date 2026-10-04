@@ -22,7 +22,7 @@ add_executable(lidar_odometry_tests
   ${REPOSITORY_DIRECTORY}/app/window_steps.cpp
   ${REPOSITORY_DIRECTORY}/app/imu_kinematics.cpp
   ${REPOSITORY_DIRECTORY}/app/normal_equations.cpp
-  # the scan-to-map optimizer and the NDT map helpers (update_rgd, get_rgd_index); compiled directly, core is not linked
+  # the scan-to-map optimizer and the NDT map helpers (update_rgd, ndt_cell_index); compiled directly, core is not linked
   ${REPOSITORY_DIRECTORY}/app/scan_to_map.cpp
   ${REPOSITORY_DIRECTORY}/app/ndt_map.cpp)
 
