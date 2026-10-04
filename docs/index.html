@@ -293,7 +293,7 @@
 </li>
 </ol>
 
-<div class="note"><b>Loop closure (after step 8, before the consistency pass)</b>With <code>use_loop_closure = true</code> the command-line mode corrects the finished trajectory when you come back to a place you have already scanned (<code>src/application/loop_closure.cpp</code>):
+<div class="note"><b>Loop closure (after step 8, before the consistency pass)</b>With <code>use_loop_closure = true</code> the run (command line and GUI alike) corrects the finished trajectory when you come back to a place you have already scanned (<code>src/application/loop_closure.cpp</code>):
 <ol>
 <li>The windows are grouped into <b>segments</b> of <code>loop_closure_segment_windows</code> windows (12 ≈ 5 s), each with its points in world coordinates.</li>
 <li><b>Revisit candidates</b>: for every segment, the closest earlier segment that is at least <code>loop_closure_min_time_gap_s</code> older, within <code>loop_closure_search_radius_m</code> horizontally and <code>loop_closure_max_vertical_offset_m</code> vertically (so different floors are not confused).</li>
@@ -303,7 +303,7 @@
 </ol>
 The log lists every candidate with its overlap before/after and the correction. Errors larger than the search range (for example a 20° heading failure) are rejected on purpose; they come from the odometry and have to be fixed there.</div>
 
-<div class="warn"><b>Optional: consistency pass (between steps 8 and 9)</b>With <code>use_consistency = true</code> the command-line mode runs <code>run_consistency</code> after the odometry, before the export (the GUI has a button for it). It re-optimizes <b>the whole trajectory at once</b>, <code>num_constistency_iter</code> times: every node is pulled towards a smooth trajectory (relative-pose prior between consecutive nodes), and points from <b>all</b> windows must agree with one NDT map built from the whole recording. This can remove residual misalignment between windows, such as a wall seen at the start and again at the end, but it is slow and it can also smear the trajectory if the smoothness prior is too strong. Two variants (<code>use_mutliple_gaussian</code>):
+<div class="warn"><b>Optional: consistency pass (between steps 8 and 9)</b>With <code>use_consistency = true</code> the run (command line and GUI alike) calls <code>run_consistency</code> after the odometry and loop closure, before the export. It re-optimizes <b>the whole trajectory at once</b>, <code>num_constistency_iter</code> times: every node is pulled towards a smooth trajectory (relative-pose prior between consecutive nodes), and points from <b>all</b> windows must agree with one NDT map built from the whole recording. This can remove residual misalignment between windows, such as a wall seen at the start and again at the end, but it is slow and it can also smear the trajectory if the smoothness prior is too strong. Two variants (<code>use_mutliple_gaussian</code>):
 <ul>
 <li><b>Consistency</b> (false): one Gaussian per indoor-grid cube, rotation smoothness 0.1°, points closer than a hard-coded 1 m are ignored.</li>
 <li><b>Consistency2</b> (true): several Gaussians per cube, one per time segment of 1M points (a cube needs ≥ 5 points in the segment), so different passes through the same place are matched against each other. Rotation smoothness 0.01°, points closer than <code>consistency_min_distance</code> are ignored.</li>
@@ -422,7 +422,7 @@ See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 <p>Automatic loop closure after the odometry, described in the note after step 8 of the <a href="#pipeline">pipeline</a>. On b1 it reduced the offset of the revisited rooms from 0.4–0.7 m to 0.1 m; 42 and 43 have no revisits and stay unchanged.</p>
 <div class="table-wrap"><table>
 <tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr>
-<tr><td>use_loop_closure <span class="badge b-key">key</span></td><td class="val">true</td><td>Run loop closure in the command-line mode, before the consistency pass and the export.</td></tr>
+<tr><td>use_loop_closure <span class="badge b-key">key</span></td><td class="val">true</td><td>Run loop closure after the odometry, before the consistency pass and the export (command line and GUI).</td></tr>
 <tr><td>loop_closure_segment_windows</td><td class="val">12</td><td>Windows per segment (≈ 5 s). A segment is moved as a unit in the pose graph; the correction is interpolated between segments.</td></tr>
 <tr><td>loop_closure_min_time_gap_s</td><td class="val">30 s</td><td>Minimum time between two visits to count as a revisit (shorter gaps are already consistent through the odometry).</td></tr>
 <tr><td>loop_closure_search_radius_m</td><td class="val">8 m</td><td>Maximum horizontal distance between the centres of the two segments.</td></tr>
@@ -437,7 +437,7 @@ See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 <p>Optional whole-trajectory refinement after the odometry, described in the <a href="#pipeline">pipeline</a> note after step 8. The key names keep the original spelling (<code>constistency</code>, <code>mutliple</code>).</p>
 <div class="table-wrap"><table>
 <tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr>
-<tr><td>use_consistency</td><td class="val">true</td><td>Run the consistency pass in the command-line mode, after the odometry and before the export. The GUI ignores it and uses its button instead.</td></tr>
+<tr><td>use_consistency</td><td class="val">true</td><td>Run the consistency pass after the odometry and loop closure, before the export (command line and GUI).</td></tr>
 <tr><td>num_constistency_iter</td><td class="val">10</td><td>Number of passes. Each pass re-optimizes all nodes and rebuilds the whole-recording NDT map, so runtime grows linearly with it. 0 disables the pass even when <code>use_consistency</code> is true.</td></tr>
 <tr><td>use_mutliple_gaussian</td><td class="val">false</td><td>false: <b>Consistency</b> (one Gaussian per cube, smoothness 0.1°, fixed 1 m minimum distance). true: <b>Consistency2</b> (one Gaussian per cube per 1M-point time segment, smoothness 0.01°).</td></tr>
 <tr><td>consistency_min_distance</td><td class="val">0.4 m</td><td>Consistency2 only: points closer than this to the sensor are ignored (masks the operator).</td></tr>
@@ -484,7 +484,7 @@ See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 </ul>
 <h3>Processing</h3>
 <ul>
-<li>Use the Release build and the command-line mode with <code>settings/lidar-vertical.toml</code>. Loop closure and the consistency pass only run in the command-line mode.</li>
+<li>Use the Release build with <code>settings/lidar-vertical.toml</code>, from the command line or loaded in the GUI (Start → Load parameters); both run the same stages, including loop closure and the consistency pass, and give the same result.</li>
 <li>For dLidar recordings, repair the IMU timestamps first with <code>tools/fix_imu_timestamps.py</code>.</li>
 <li>Check the result per floor: walls seen on different passes should overlap as one surface. If a room appears twice or a floor is rotated, see the <a href="#tuning">tuning cheat sheet</a>.</li>
 </ul>
@@ -534,7 +534,7 @@ See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 <li><b>dLidar IMU timestamps.</b> Older recordings stamp samples in bursts (about 0.02 ms apart, then several ms gaps); newer ones are steady after startup but still have a buffer dump in the first ~2 s and clock corrections applied as jumps (0.77–0.9 ms steps instead of 1.2 ms). <code>tools/fix_imu_timestamps.py</code> repairs both offline; on b1 the repaired timestamps avoided an odometry failure in a stairwell. This should be fixed in dLidar.</li>
 <li><b>Stairwells.</b> On b1 the heading drifted up to ~10° between floors with several settings, and the return from the 1st to the 2nd floor failed in some runs by 20–90°, which is beyond what loop closure accepts. Repaired timestamps avoided it in the tests; more multi-floor recordings are needed to tune this.</li>
 <li><b>NDT cell normals.</b> By default a map cell's normal is fixed from its first 3 points and its mean is its first point; neither is updated later. Many normals are wrong (60 % on a synthetic corridor), which makes the degeneracy test noisy and costs about 1 mm in the scan-to-map fit. <code>use_exact_ndt_bucket_statistics = true</code> fixes the statistics, but it is off: on recording 44 it marked 439 instead of 95 windows as degenerate with the current threshold, and the map was 5 % less sharp. See <a href="degeneracy-information.html">Degeneracy information</a>.</li>
-<li><b>Loop closure</b> only corrects revisits it can register (≥ 50% overlap, ≤ 6 m, ≤ 15°). It runs only in the command-line mode.</li>
+<li><b>Loop closure</b> only corrects revisits it can register (≥ 50% overlap, ≤ 6 m, ≤ 15°).</li>
 <li><b>Loop closure also moves a correct trajectory.</b> On the synthetic two-lap recording of the unit tests (<code>tests/loop_closure_test.cpp</code>) it halves a second-lap drift, but a trajectory that is already exact is moved by up to 3 cm and 0.1°: every revisit registers with a residual of 1–3 cm, and the pose graph trusts loop edges to 5 cm. With points only within 6 m it accepted a wrong registration and moved the trajectory by 1.5 m; the overlap threshold alone does not catch that.</li>
 <li><b>The consistency pass also moves a correct trajectory</b>, on the same synthetic recording (<code>tests/consistency_test.cpp</code>): Consistency by up to 6 mm (spread evenly, the noise of the NDT fit), Consistency2 by up to 16 mm and 0.5°, mostly where the turn rate changes, because its 0.01° rotation smoothness resists any change of turn rate. Both remove offsets between windows.</li>
 </ul>
