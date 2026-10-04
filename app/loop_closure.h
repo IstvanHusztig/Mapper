@@ -1,6 +1,10 @@
 #pragma once
 
-#include "lidar_odometry_utils.h"
+#include <vector>
+#include "input_ports.h"
+#include "odometry_config.h"
+#include "run_reporting.h"
+#include "window.h"
 
 // Automatic loop closure on the finished odometry (before the consistency pass and the export):
 //  1. the windows are grouped into segments of loop_closure_segment_windows windows,

@@ -1,8 +1,5 @@
 #include "ndt_map.h"
-#include <filesystem>
 #include <algorithm>
-
-namespace fs = std::filesystem;
 
 // this function provides unique index
 unsigned long long int get_index(const int16_t x, const int16_t y, const int16_t z)

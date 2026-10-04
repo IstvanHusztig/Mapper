@@ -1,4 +1,6 @@
 #include "run_odometry.h"
+#include "ndt_map.h"
+#include "odometry_state.h"
 
 #include "angle_units.h"
 #include "imu_kinematics.h"

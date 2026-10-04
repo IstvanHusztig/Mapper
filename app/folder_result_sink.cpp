@@ -1,4 +1,5 @@
 #include "folder_result_sink.h"
+#include "odometry_state.h"
 
 #include <HDMapping/Version.hpp>
 #include <export_laz.h>

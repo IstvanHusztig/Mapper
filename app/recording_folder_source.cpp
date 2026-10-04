@@ -1,4 +1,5 @@
 #include "recording_folder_source.h"
+#include <Fusion.h>
 
 #include "csv.hpp"
 

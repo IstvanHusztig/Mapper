@@ -1,12 +1,9 @@
 #ifndef _LIDAR_ODOMETRY_H_
 #define _LIDAR_ODOMETRY_H_
 
-#include "lidar_odometry_utils.h"
-#include <session.h>
-#include <HDMapping/Version.hpp>
-#include <export_laz.h>
-#include <iomanip>
-#include <sstream>
+#include "odometry_config.h"
+#include "odometry_state.h"
+#include "window.h"
 #include "input_ports.h"
 #include "output_ports.h"
 

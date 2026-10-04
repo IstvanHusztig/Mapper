@@ -6,6 +6,7 @@
 //   HDMapping_params_<version>_<date-time>.toml (through a ConfigRepository), HDMapping_results_<version>_<date-time>.json
 
 #include "output_ports.h"
+#include "run_reporting.h"
 
 #include <filesystem>
 #include <memory>

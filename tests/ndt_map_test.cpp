@@ -1,6 +1,6 @@
 #include <doctest/doctest.h>
 
-#include "lidar_odometry_utils.h"
+#include "ndt_map.h"
 
 #include <algorithm>
 #include <cmath>

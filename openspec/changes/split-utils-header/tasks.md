@@ -14,7 +14,10 @@ The scratchpad script `step_check.sh` runs all of them. Close the GUI before bui
 ## 2. The split
 
 - [x] 2.1 Create `app/ndt_map.h`, `app/odometry_config.h` and `app/odometry_state.h` with the moved declarations (decision 1). Rename `app/lidar_odometry_utils.cpp` to `app/ndt_map.cpp` with `git mv`, and update `CMakeLists.txt` and `tests/CMakeLists.txt`. `lidar_odometry_utils.h` keeps only its third-party includes and includes of the three new headers. Verify: the step checks; `git diff -M` shows the blocks as moves. Commit. Result: both presets build, `ctest` passes, precise and fast `44_short` IDENTICAL (11 files).
-- [ ] 2.2 Delete `app/lidar_odometry_utils.h`. Give each file that no longer compiles the includes it uses, and an `fs` alias where it uses `fs::` (decision 4). Verify: the step checks; `grep -rn "lidar_odometry_utils" app tests CMakeLists.txt` finds nothing; no app header includes `laszip`, `nlohmann`, `ndt.h`, `session.h` or `freeglut` unless it declares something that needs it (list any exceptions here with the reason). Commit.
+- [x] 2.2 Delete `app/lidar_odometry_utils.h`. Give each file that no longer compiles the includes it uses, and an `fs` alias where it uses `fs::` (decision 4). Verify: the step checks; `grep -rn "lidar_odometry_utils" app tests CMakeLists.txt` finds nothing; no app header includes `laszip`, `nlohmann`, `ndt.h`, `session.h` or `freeglut` unless it declares something that needs it (list any exceptions here with the reason). Commit. Result: both presets build, `ctest` passes, and precise and fast `44_short` are IDENTICAL (11 files).
+  - **The one exception:** `input_ports.h` still includes `Fusion.h`, because the `Imu` port type uses Fusion (roadmap step 9).
+  - **`lidar_odometry.h`** no longer includes `session.h`, `export_laz.h`, `Version.hpp`, `<iomanip>` or `<sstream>`, since none of its declarations needs them; they moved into `lidar_odometry.cpp`.
+  - **Headers that got their own includes:** `folder_result_sink.h` (`run_reporting.h`, for `Logger`) and `scan_to_map.h` (`ndt_map.h`, `window.h`, `run_reporting.h`).
 
 ## 3. Include check and full run
 

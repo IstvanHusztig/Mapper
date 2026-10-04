@@ -217,7 +217,6 @@ set(SOURCES
   app/lidar_odometry_gui.cpp
   app/lidar_odometry.cpp
   app/lidar_odometry.h
-  app/lidar_odometry_utils.h
   app/ndt_map.h
   app/ndt_map.cpp
   app/odometry_config.h

@@ -2,7 +2,11 @@
 
 // Named options of optimize_lidar_odometry, built from OdometryConfig (replace its former positional parameters).
 
-#include "lidar_odometry_utils.h"
+#include <Eigen/Dense>
+#include <vector>
+#include <ndt_types.h>
+#include <structures.h>
+#include "odometry_config.h"
 
 // scan-to-map settings of the LiDAR odometry, fixed for a run
 struct ScanToMapOptions

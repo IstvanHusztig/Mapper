@@ -1,12 +1,13 @@
 ﻿#include <imgui.h>
 #include <imgui_impl_glut.h>
+#include <iostream>
 #include <imgui_impl_opengl2.h>
 #include <imgui_internal.h>
 
 #include <GL/freeglut.h>
 #include <portable-file-dialogs.h>
 
-#include "lidar_odometry_utils.h"
+#include "odometry_config.h"
 #include "lidar_odometry.h"
 #include "odometry_pipeline.h"
 #include "console_reporting.h"

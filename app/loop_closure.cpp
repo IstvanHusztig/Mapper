@@ -1,4 +1,8 @@
 #include "loop_closure.h"
+#include "ndt_map.h"
+#include <transformations.h>
+#include <python-scripts/point-to-point-metrics/point_to_point_source_to_target_tait_bryan_wc_jacobian_simplified.h>
+#include <python-scripts/constraints/relative_pose_tait_bryan_wc_jacobian.h>
 
 #include <unordered_set>
 

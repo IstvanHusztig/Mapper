@@ -4,7 +4,9 @@
 //   ResultSink       - the result of one run (clouds, trajectories, poses, session, parameters, report)
 //   ConfigRepository - loading and saving the settings
 
-#include "lidar_odometry_utils.h"
+#include "odometry_config.h"
+#include "odometry_state.h"
+#include "window.h"
 
 #include <Eigen/Dense>
 

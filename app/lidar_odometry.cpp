@@ -1,4 +1,13 @@
 #include "lidar_odometry.h"
+#include <session.h>
+#include <HDMapping/Version.hpp>
+#include <export_laz.h>
+#include <iomanip>
+#include <sstream>
+#include "ndt_map.h"
+#include "odometry_state.h"
+#include <transformations.h>
+#include <Fusion.h>
 #include "consistency.h"
 #include "tbb/tbb.h"
 #include <mutex>

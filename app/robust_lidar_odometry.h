@@ -2,7 +2,10 @@
 
 // Optimizers of use_robust_and_accurate_lidar_odometry.
 
-#include "lidar_odometry_utils.h"
+#include <Eigen/Dense>
+#include <vector>
+#include <structures.h>
+#include "ndt_map.h"
 
 void optimize_sf2(std::vector<Point3Di> &intermediate_points, std::vector<Point3Di> &intermediate_points_sf, std::vector<Eigen::Affine3d> &trajectory,
                   const std::vector<Eigen::Affine3d> &motion_model_trajectory,
