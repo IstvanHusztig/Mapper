@@ -200,11 +200,13 @@ Steps 8–11 were added on 2026-10-03. They cover the goals that steps 0–7 sti
     `GL/freeglut.h` in the infrastructure, whose auto-link pragma made the tests need `freeglut.lib` once
     they linked the result sink; `lo_infrastructure` now builds with `FREEGLUT_LIB_PRAGMAS=0` (no adapter
     calls GLUT). `core`'s camera globals stay for step 11.
-    - 10b. **Next after step 10: trajectory drawing race** (found 2026-10-04 while proposing step 10). The GUI
+    - 10b. ✅ **Trajectory drawing race** (done 2026-10-04, `trajectory-view-race`; found while proposing step 10). The GUI
       draws every window's poses while the worker thread writes them (odometry and post-processing). The vectors
       aren't resized then, so the worst it shows is half-updated poses, but it is a data race. Fix: draw only the
       windows the odometry reported done, as the point cloud preview does, and the whole trajectory after the run.
-      A visible behaviour change, so its own proposal.
+      A visible behaviour change, so its own proposal. Done: the view draws a main-thread copy (`TrajectoryCopy`)
+      filled inside `GuiProgress::read_finished_windows`, whose lock a stage change also takes, and
+      `optimize_windows` reports a window done only after the failure check that could still restore it.
 11. **Split `core/`:** the pure math (NDT, ICP, pose graph) goes into the domain, the I/O (LAZ export,
     session, file dialogs) into infrastructure. This is the riskiest step because of the
     `CORE_SOURCE_FILES` link-order constraint. Keeping `core` as a vendored "math kernel" dependency

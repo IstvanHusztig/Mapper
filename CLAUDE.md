@@ -43,6 +43,8 @@ cmake --build --preset x64-Release --target dMapper
     - thinned to 0.10 m voxels across all windows and coloured by height, at most 4 windows per frame;
     - rebuilt once from the final trajectory after the run (after loop closure and consistency);
     - it never changes processing or results.
+  - **Trajectory** (`TrajectoryCopy` in `lidar_odometry_gui.cpp`): drawn from a main-thread copy of node positions, never from poses the run may still change. During the odometry it grows with the windows reported done (the red cross marks the last finished pose); during loop closure, consistency and saving it stays; after the run it is rebuilt from the final trajectory, together with the preview.
+  - **Reading a run's windows:** the view reads them only inside `GuiProgress::read_finished_windows`, which runs its reader under a lock that `stage_started` takes too, and only while the stage is Odometry. The run announces each post-processing stage before it writes a pose, and `optimize_windows` reports a window done only after the last step that can change it, so the windows read there are final until the run ends.
   - The progress window shows the current stage (Loading, Odometry with percentage and estimate, Loop closure, Consistency, Saving) and can pause the run.
   - The window redraws on a timer (`schedule_redraw`): about 10 frames per second during a run and 60 otherwise, so the redraw doesn't slow the processing. A slower run would change results through `real_time_threshold_seconds`.
   - The background colour comes from `[misc] clear_color` in the loaded TOML.
