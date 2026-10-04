@@ -271,6 +271,13 @@ target_include_directories(lo_infrastructure
 target_compile_definitions(lo_infrastructure PRIVATE WITH_GUI=1)
 target_link_libraries(lo_infrastructure PUBLIC lo_application PRIVATE ${PLATFORM_LASZIP_LIB} Fusion ${PLATFORM_MISCELLANEOUS_LIBS})
 
+# presentation: the GUI's view-model (its state and actions). Only the infrastructure's include directories, no ImGui,
+# GLUT, GL or file dialogs, so it builds and is tested without a display
+add_library(lo_gui_view_model STATIC
+  src/presentation/gui/gui_view_model.cpp)
+target_include_directories(lo_gui_view_model PUBLIC src/presentation/gui)
+target_link_libraries(lo_gui_view_model PUBLIC lo_infrastructure)
+
 if (MSVC)
   target_compile_options(lo_domain PRIVATE /bigobj)
   target_compile_options(lo_application PRIVATE /bigobj)
@@ -318,7 +325,8 @@ target_include_directories(
 
 target_link_libraries(
           ${APP_NAME}
-          PRIVATE lo_infrastructure
+          PRIVATE lo_gui_view_model
+          lo_infrastructure
           core
           Fusion
           ${FREEGLUT_LIBRARY}

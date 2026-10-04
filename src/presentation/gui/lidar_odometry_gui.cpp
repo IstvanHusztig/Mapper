@@ -7,13 +7,7 @@
 #include <GL/freeglut.h>
 #include <portable-file-dialogs.h>
 
-#include "odometry_config.h"
-#include "lidar_odometry.h"
-#include "odometry_pipeline.h"
-#include "console_reporting.h"
-#include "folder_inputs.h"
-#include "run_services.h"
-#include "folder_result_sink.h"
+#include "gui_view_model.h"
 #include <export_laz.h>
 
 #include <utils.hpp>
@@ -30,9 +24,7 @@
 #include <pfd_wrapper.hpp>
 #include <ctime>
 #include <chrono>
-#include "toml_config_repository.h"
 #include "format_time.h"
-#include "gui_progress.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -49,19 +41,45 @@ std::string winTitle = "dMapper";
 namespace fs = std::filesystem;
 
 bool show_trajectory = true;
-std::string working_directory = "";
 
-OdometryConfig params;
-GuiPreferences gui_prefs;
-ConsoleReporter console;  // run messages and stages on the console
+// the GUI's state and actions (settings, the current run); set in run_gui, because GLUT callbacks take no user data
+GuiViewModel *view_model = nullptr;
 
-GuiProgress gui_progress{console};
-OdometryPipeline pipeline{params, console, gui_progress}; // the current run (data shown and edited by the GUI)
+// what a run reports, shown as message boxes (on the run's worker thread)
+class MessageBoxNotifier : public RunNotifier
+{
+public:
+    // tells the user and closes the program
+    void load_failed(const std::string &folder) override
+    {
+        std::string message_info = "Problem with loading data from folder '" + folder + "' (Pease check if folder exists). Program will close once You click OK!!!";
+        std::cout << message_info << std::endl;
+        [[maybe_unused]]
+        pfd::message message(
+            "Information",
+            message_info.c_str(),
+            pfd::choice::ok, pfd::icon::info);
+        message.result();
 
-// where the current settings came from (shown in the Start menu and the progress window)
-std::string active_parameters = "built-in defaults";
-std::string run_parameters; // active_parameters when the current run started
-std::atomic<bool> loRunning{false}; // the one-click flow's worker thread is running (the progress window is shown)
+        exit(1);
+    }
+
+    void run_saved(const std::string &working_directory, double trajectory_length_m, double elapsed_seconds) override
+    {
+        std::ostringstream oss;
+        oss << "Data saved to folder:\n'" << working_directory << "\\lio_result_*'\n"
+            << "Calculated trajectory length: "
+            << std::fixed << std::setprecision(1) << trajectory_length_m << "[m]\n"
+            << "Elapsed time: " << formatTime(elapsed_seconds).c_str();
+
+        [[maybe_unused]]
+        pfd::message message(
+            "Information",
+            oss.str(),
+            pfd::choice::ok, pfd::icon::info);
+        message.result();
+    }
+};
 
 // Live point cloud preview, built and drawn on the main thread only. Each finished window's stored (decimated)
 // points are placed with that window's optimized trajectory and thinned to a display voxel across all windows.
@@ -202,13 +220,15 @@ private:
 
 PreviewCloud preview_cloud;
 bool show_point_cloud = true;
-bool preview_was_running = false; // loRunning in the previous frame: its end triggers the final rebuild
+bool preview_was_running = false; // a run was going in the previous frame: its end triggers the final rebuild
 bool preview_final_pending = false;
 
 // adds what is ready to the preview: finished windows during the odometry, all windows after the run
 void update_preview()
 {
-    const bool running = loRunning.load();
+    const bool running = view_model->running();
+    const OdometryPipeline &run = view_model->run();
+    Logger &console = view_model->console();
     if (preview_was_running && !running)
     {
         // the run has saved: rebuild from the final (post-processed) trajectory
@@ -219,25 +239,24 @@ void update_preview()
 
     if (running)
     {
-        if (gui_progress.stage() == RunStage::Odometry)
+        if (view_model->progress().stage() == RunStage::Odometry)
         {
             const std::size_t before = preview_cloud.next_window();
-            preview_cloud.add_windows(pipeline, gui_progress.windows_done(), console);
-            if (before < pipeline.windows.size() && preview_cloud.next_window() >= pipeline.windows.size())
+            preview_cloud.add_windows(run, view_model->progress().windows_done(), console);
+            if (before < run.windows.size() && preview_cloud.next_window() >= run.windows.size())
                 log_info(console) << "point cloud preview: " << preview_cloud.size() << " points after the odometry";
         }
     }
     else if (preview_final_pending)
     {
-        preview_cloud.add_windows(pipeline, pipeline.windows.size(), console);
-        if (preview_cloud.next_window() >= pipeline.windows.size())
+        preview_cloud.add_windows(run, run.windows.size(), console);
+        if (preview_cloud.next_window() >= run.windows.size())
         {
             preview_final_pending = false;
             log_info(console) << "point cloud preview: " << preview_cloud.size() << " points (final)";
         }
     }
 }
-std::chrono::time_point<std::chrono::system_clock> loStartTime;
 
 ///////////////////////////////////////////////////////////////////////////////////
 
@@ -253,26 +272,10 @@ fs::path exe_folder()
     return fs::current_path();
 }
 
-// GUI defaults: default_settings.toml next to the exe, independent of the working directory
-void set_lidar_odometry_default_params(OdometryConfig &params, RunPaths &paths, GuiPreferences &gui)
-{
-    const fs::path file = exe_folder() / "default_settings.toml";
-    if (!fs::is_regular_file(file))
-    {
-        std::cout << "Default settings not found: '" << file.string() << "' (using built-in defaults)" << std::endl;
-        return;
-    }
-    TomlConfigRepository config_repository;
-    if (config_repository.load(file.string(), params, paths, gui))
-    {
-        active_parameters = file.string();
-        std::cout << "Default settings loaded from: '" << file.string() << "'" << std::endl;
-    }
-}
-
 // the view background comes from the loaded settings ([misc] clear_color)
 void apply_background()
 {
+    const GuiPreferences &gui_prefs = view_model->preferences();
     bg_color = ImVec4(gui_prefs.clear_color[0], gui_prefs.clear_color[1], gui_prefs.clear_color[2], gui_prefs.clear_color[3]);
 }
 
@@ -282,20 +285,8 @@ void load_parameters_file()
     auto input_file_names = mandeye::fd::OpenFileDialog("Load parameters file", mandeye::fd::Toml_filter, ".toml");
     if (input_file_names.empty())
         return;
-    try
-    {
-        TomlConfigRepository config_repository;
-        if (config_repository.load(input_file_names[0], params, pipeline.state.paths, gui_prefs))
-        {
-            active_parameters = input_file_names[0];
-            apply_background();
-        }
-        std::cout << "Parameters loaded from: " << input_file_names[0] << std::endl;
-    }
-    catch (const std::exception& e)
-    {
-        std::cerr << "Error loading TOML file: " << e.what() << std::endl;
-    }
+    if (view_model->load_parameters(input_file_names[0]))
+        apply_background();
 }
 
 // file name of a parameter source for display ("built-in defaults" stays as it is)
@@ -329,76 +320,17 @@ std::string formatCompletionTime(double remainingSeconds)
     return std::string(timeStr);
 }
 
-// Asks for the recording folder and lists its files; on the main thread (file dialog). Then starts a
-// fresh run: nothing from a previous folder carries over (the [paths] loaded with the settings do).
-// Returns false if no existing folder was picked.
-bool select_input(std::string &input_folder_name, std::vector<std::string> &input_file_names)
-{
-    input_folder_name = mandeye::fd::SelectFolder("Select recording folder (lidar*.laz + imu*.csv)");
-
-    std::cout << "Selected folder: '" << input_folder_name << std::endl;
-
-    if (!fs::exists(input_folder_name))
-        return false;
-
-
-    for (const auto &entry : fs::directory_iterator(input_folder_name))
-        if (entry.is_regular_file())
-            input_file_names.push_back(entry.path().string());
-    if (!input_file_names.empty())
-        working_directory = fs::path(input_file_names[0]).parent_path().string();
-
-    gui_progress.reset();
-    preview_cloud.clear();
-    preview_final_pending = false;
-    pipeline = OdometryPipeline(params, console, gui_progress, make_folder_inputs(input_file_names, console), make_run_services(),
-                                pipeline.state.paths);
-    return true;
-}
-
-// loads the recording into the current run; if that fails, tells the user and closes the program
-void load_input(const std::string &input_folder_name, const std::vector<std::string> &input_file_names)
-{
-    if (pipeline.load())
-        return;
-
-    std::string message_info = "Problem with loading data from folder '" + input_folder_name + "' (Pease check if folder exists). Program will close once You click OK!!!";
-    std::cout << message_info << std::endl;
-    [[maybe_unused]]
-    pfd::message message(
-        "Information",
-        message_info.c_str(),
-        pfd::choice::ok, pfd::icon::info);
-    message.result();
-
-    exit(1);
-}
-
-// odometry + post-processing (loop closure, consistency), the same stages as the CLI
-void step2()
-{
-    pipeline.run_all();
-}
-
-// writes the run to the next free lio_result_<n> in the recording's folder
-void save_results(double elapsed_seconds)
-{
-    fs::path outwd = get_next_result_path(working_directory);
-    TomlConfigRepository config_repository;
-    FolderResultSink sink(outwd, config_repository, console);
-    pipeline.save(sink, gui_prefs, elapsed_seconds);
-}
-
 void progress_window()
 {
     ImGui::Begin("Progress", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
-    ImGui::Text(("Working directory:\n'" + working_directory +  "'").c_str());
-    ImGui::Text("Parameters: %s", parameters_label(run_parameters).c_str());
+    GuiProgress &gui_progress = view_model->progress();
+    ImGui::Text(("Working directory:\n'" + view_model->working_directory() +  "'").c_str());
+    ImGui::Text("Parameters: %s", parameters_label(view_model->run_parameters()).c_str());
     if (ImGui::IsItemHovered())
-        ImGui::SetTooltip("%s", run_parameters.c_str());
+        ImGui::SetTooltip("%s", view_model->run_parameters().c_str());
 
-    const double elapsedSeconds = std::chrono::duration<double>(std::chrono::system_clock::now() - loStartTime).count();
+    const double elapsedSeconds = view_model->elapsed_seconds();
     const RunStage stage = gui_progress.stage();
 
     char timeInfo[512];
@@ -459,51 +391,15 @@ void progress_window()
     ImGui::End();
 }
 
+// Start -> Load data and process: asks for the recording folder (main thread, file dialog) and starts the run
 void openData()
 {
-
-    std::string input_folder_name;
-    std::vector<std::string> input_file_names;
-    if (select_input(input_folder_name, input_file_names))
+    const std::string input_folder_name = mandeye::fd::SelectFolder("Select recording folder (lidar*.laz + imu*.csv)");
+    if (view_model->start_run(input_folder_name))
     {
-        // the progress window is shown from here on; loading runs on the worker thread so it stays visible
-        loRunning.store(true);
-        loStartTime = std::chrono::system_clock::now();
-        run_parameters = active_parameters;
-
-        std::thread loThread(
-            [input_folder_name, input_file_names]()
-            {
-                load_input(input_folder_name, input_file_names);
-
-                std::chrono::time_point<std::chrono::system_clock> start, end;
-                start = std::chrono::system_clock::now();
-
-                step2();
-
-                end = std::chrono::system_clock::now();
-                std::chrono::duration<double> elapsed_seconds = end - start;
-
-                save_results(elapsed_seconds.count());
-
-                loRunning = false;
-
-                std::ostringstream oss;
-                oss << "Data saved to folder:\n'" << working_directory << "\\lio_result_*'\n"
-                    << "Calculated trajectory length: "
-                    << std::fixed << std::setprecision(1) << pipeline.state.total_length_of_calculated_trajectory << "[m]\n"
-                    << "Elapsed time: " << formatTime(elapsed_seconds.count()).c_str();
-
-                [[maybe_unused]]
-                pfd::message message(
-                    "Information",
-                    oss.str(),
-                    pfd::choice::ok, pfd::icon::info);
-                message.result();
-
-            });
-
-        loThread.detach();
+        // a fresh run: the preview starts empty
+        preview_cloud.clear();
+        preview_final_pending = false;
     }
 }
 
@@ -518,7 +414,7 @@ void draw_run_data()
         glPointSize(3);
         glColor3f(0, 1, 1);
         glBegin(GL_POINTS);
-        for (const auto &wd : pipeline.windows)
+        for (const auto &wd : view_model->run().windows)
         {
             for (const auto &it : wd.poses)
                 glVertex3f(it(0, 3), it(1, 3), it(2, 3));
@@ -528,9 +424,10 @@ void draw_run_data()
 
         glColor3f(1, 0, 0);
         glBegin(GL_LINES);
-        if (pipeline.windows.size() > 0)
+        const auto &windows = view_model->run().windows;
+        if (windows.size() > 0)
         {
-            const auto &wd = pipeline.windows[pipeline.windows.size() - 1];
+            const auto &wd = windows[windows.size() - 1];
             if (wd.poses.size() > 0)
             {
                 const auto &it = wd.poses[wd.poses.size() - 1];
@@ -564,7 +461,7 @@ void schedule_redraw()
     if (redraw_scheduled)
         return;
     redraw_scheduled = true;
-    glutTimerFunc(loRunning ? 100 : 16, redraw_timer, 0);
+    glutTimerFunc(view_model->running() ? 100 : 16, redraw_timer, 0);
 }
 
 void display()
@@ -602,7 +499,7 @@ void display()
     showAxes();
 
     // the run's data is not drawn while it is loaded: the worker thread is still growing its vectors
-    if (!(loRunning && gui_progress.stage() == RunStage::Loading))
+    if (!(view_model->running() && view_model->progress().stage() == RunStage::Loading))
     {
         update_preview();
         draw_run_data();
@@ -625,7 +522,7 @@ void display()
         io.AddKeyEvent(ImGuiMod_Ctrl, false);
     }
 
-    if (!loRunning)
+    if (!view_model->running())
     {
         if (ImGui::BeginMainMenuBar())
         {
@@ -643,10 +540,10 @@ void display()
 
                 ImGui::Separator();
                 ImGui::BeginDisabled();
-                ImGui::MenuItem(("Parameters: " + parameters_label(active_parameters)).c_str());
+                ImGui::MenuItem(("Parameters: " + parameters_label(view_model->active_parameters())).c_str());
                 ImGui::EndDisabled();
                 if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                    ImGui::SetTooltip("%s", active_parameters.c_str());
+                    ImGui::SetTooltip("%s", view_model->active_parameters().c_str());
 
                 ImGui::EndMenu();
             }
@@ -672,7 +569,7 @@ void display()
         }
     }
 
-    if (loRunning)
+    if (view_model->running())
         progress_window();
 
     cor_window();
@@ -688,10 +585,7 @@ void display()
 }
 
 void on_exit(){
-    // remove cache
-    std::cout << "remove cache: '" << pipeline.state.paths.working_directory_cache << "' START" << std::endl;
-    pipeline.clear_point_store();
-    std::cout << "remove cache: '" << pipeline.state.paths.working_directory_cache << "' FINISHED" << std::endl;
+    view_model->clear_point_store();
 }
 
 void mouse(int glut_button, int state, int x, int y)
@@ -735,7 +629,12 @@ int run_gui(int argc, char *argv[])
 {
     std::cout << argv[0] << " input_folder parameters(*.toml) output_folder" << std::endl;
 
-    set_lidar_odometry_default_params(params, pipeline.state.paths, gui_prefs);
+    MessageBoxNotifier notifier;
+    GuiViewModel model(notifier);
+    view_model = &model;
+
+    // GUI defaults: default_settings.toml next to the exe, independent of the working directory
+    view_model->load_default_parameters(exe_folder() / "default_settings.toml");
     apply_background();
 
      
