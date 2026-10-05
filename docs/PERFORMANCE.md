@@ -141,7 +141,7 @@ With `use_exact_ndt_bucket_statistics = true` (off by default, change `ndt-bucke
 
 ## Analysis (2026-10-05) and planned fixes
 
-A code review of the processing path (not profiled yet; the costs are estimates). A window has 360 nodes, i.e. 2166 unknowns, and runs 100 LM iterations of about 23 ms each.
+A code review of the processing path; the measured profile that followed it is [below](#measured-profile-2026-10-05). A window has 360 nodes, i.e. 2166 unknowns, and runs 100 LM iterations of about 23 ms each.
 
 **Why `useMultithread` is not deterministic.** Only `optimize_lidar_odometry` (`src/domain/scan_to_map.cpp`) is affected. Each point adds its 6×6 / 6×1 terms into its own node's diagonal block under a per-node mutex; with `par_unseq` the points of one node arrive in thread order, so the sums differ in the last bits. (A mutex inside `par_unseq` is also formally undefined behaviour.) `optimize_sf2` and `optimize_rigid_sf` already compute per point in parallel and sum in order (`SumBlocks`), so they are deterministic.
 
@@ -157,7 +157,54 @@ A code review of the processing path (not profiled yet; the costs are estimates)
 | 4 | `ndt_map.h` | NDT maps are node-based `std::unordered_map` (hash + pointer chase per lookup, per point, 2 grids × 100 iterations) | a flat open-addressing map, where nothing depends on iteration order |
 | 5 | several | `auto _buckets = buckets;` per window in `optimize_rigid_sf`; `points_to_vector` takes points by value; `load_point_cloud` has no `reserve` and doesn't destroy the laszip handle; `save_result` writes `session_chunk` files and reads them straight back; consistency re-reads every window file each iteration; `ImuTrajectory` is a `std::map` used like a vector | remove copies, reserve, cache, prefetch the next window |
 
-Planned order (each its own change, bit-identical with the precise build): `stage-timing` (measure first), `deterministic-multithread`, `banded-normal-matrix`, `ndt-lookup-cache`, `io-and-copies`. Result-changing levers (a convergence stop rule, per-pose blocks in `Consistency`) come later, each judged with `eval_odometry.py`.
+### Measured profile (2026-10-05)
+
+The debug setting `log_stage_timing` (`[lidar_odometry_debug_info]`, off by default; change `stage-timing`) logs the time of each pipeline step and, at the end of the odometry, where the window loop spent it. The results are bit-identical with the setting on. These runs used the Release (`/fp:fast`) build with `settings/lidar-vertical.toml` and nothing else running; the machine has 16 logical cores, and the run uses one of them.
+
+**Pipeline steps:**
+
+| Step | `44_short` (70 windows) | `44` (690 windows) |
+|---|---|---|
+| `load_data` | 1.0 s | 7.6 s |
+| `calculate_trajectory` | 0.0 s | 0.1 s |
+| `compute_step_1` | 0.4 s | 4.2 s |
+| `odometry` | 166.0 s (83 %) | 1578.5 s (79 %) |
+| `loop_closure` | 0.2 s | 53.7 s (3 %) |
+| `consistency` | 30.8 s (15 %) | 324.5 s (16 %) |
+| `save` | 1.8 s | 21.7 s (1 %) |
+
+**Inside the odometry** (`44`, 69,000 LM iterations of about 22.8 ms; `44_short` has the same shares within 1 %):
+
+| Phase | Time | Share of odometry | Per iteration |
+|---|---|---|---|
+| NDT point loop, indoor grid | 417.5 s | 26.4 % | 6.05 ms |
+| NDT point loop, outdoor grid | 319.2 s | 20.2 % | 4.63 ms |
+| setup: allocate and zero the dense normal matrix | 277.4 s | 17.6 % | 4.02 ms |
+| damped Cholesky solve | 138.7 s | 8.8 % | 2.01 ms |
+| covariance solve (gyro bias, acc. offset) | 117.4 s | 7.4 % | 1.70 ms |
+| rest of the iterations (see below) | 112.7 s | 7.1 % | 1.63 ms |
+| motion-model, bias, velocity and acc. terms | 102.1 s | 6.5 % | 1.48 ms |
+| assembly: fixed-origin triplets, `pose_band_to_sparse` | 84.7 s | 5.4 % | 1.23 ms |
+| pose update | 3.4 s | 0.2 % | 0.05 ms |
+| window loop outside the iterations (point load, map update, preview) | 5.4 s | 0.3 % | – |
+
+"Rest of the iterations" is the time in `run_lm_iterations` after each call's `update` timer stopped: the end of `optimize_lidar_odometry`, where its matrices are freed (among them the 37 MB normal matrix), and the loop around the calls. That is read from the code; it isn't timed separately.
+
+**What the profile says:**
+- **The NDT point loops are 47 % of the odometry (37 % of the whole run).** They are what `useMultithread` runs in parallel, so `deterministic-multithread` comes first. With 16 cores, an ideal speed-up of those loops would save about 690 s of the 1990 s run on 44.
+- **The dense normal matrix costs at least 17.6 % of the odometry**, and up to about 25 % with freeing it. That is more than the 2–4 ms estimate expected, and it confirms `banded-normal-matrix` as second. The band store would also shrink `assembly`.
+- **The two Cholesky solves are 16 %.** Reusing the symbolic analysis goes with `banded-normal-matrix`.
+- **Consistency is 16 % of the whole run**, more than the review assumed. It is serial, rereads every window file in each of its passes, and builds a large sparse triple product. It deserves its own analysis.
+- **I/O is negligible in the odometry:** loading points takes 0.7 s and the map update 4.4 s on 44. `io-and-copies` therefore goes last. The save takes 22 s, and its `session_chunk` round trip is part of that.
+
+**Planned order**, updated from the profile; each is its own change, bit-identical with the precise build:
+1. `deterministic-multithread`;
+2. `banded-normal-matrix` (with the Cholesky reuse);
+3. `ndt-lookup-cache` (it shortens the NDT loops, and its gain after multithreading is to be measured);
+4. a consistency analysis;
+5. `io-and-copies`.
+
+Result-changing levers come later, each judged with `eval_odometry.py`: a convergence stop rule, and per-pose blocks in `Consistency`.
 
 ## Open findings
 

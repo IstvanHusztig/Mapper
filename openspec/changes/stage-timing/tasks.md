@@ -58,14 +58,22 @@ Close the GUI before building. Never run two jobs on the same input folder at on
 
 ## 3. Measurement and docs
 
-- [ ] 3.1 Run `44_short` with the setting off, then with it on, and report:
+- [x] 3.1 Run `44_short` with the setting off, then with it on, and report:
   - the profile;
   - the overhead (on vs off).
 
   Then run the full 44 in the background with the setting on. Verify: the output matches `tools/baseline/44.manifest.json`, apart from the params TOML. Report the profile and the odometry time against the last 44 run (1562–1567 s). If the result isn't identical, pause.
-- [ ] 3.2 Docs:
+
+  Result:
+  - `44_short`: on/off as in 2.4.
+  - Full 44 with the setting on: 1990 s run. Against `tools/baseline/44.manifest.json`, 33 of 35 files are identical; the params TOML differs because it records the setting. The results JSON differs only in `working_directory_preview`, whose path was spelled `raw data/44` with a forward slash on the command line (a mixed-separator path the normalization doesn't cover). So every data file is identical.
+  - Odometry 1578.5 s, against 1562–1567 s for the last 44 runs (+1 %, within day-to-day variation).
+  - Profile: NDT loops 46.6 %, dense-matrix setup 17.6 %, the solves 16.2 %, the rest of the iterations (freeing the matrices) 7.1 %, motion terms 6.5 %, assembly 5.4 %. Consistency took 324.5 s, 16 % of the run.
+- [x] 3.2 Docs:
   - `docs/PERFORMANCE.md`: the measured profile (44 and `44_short`), what it confirms or contradicts in the 2026-10-05 analysis (especially the share of the dense-matrix setup), and the "Planned order" updated from it;
   - `docs/index.html`: the setting's row in the debug table, next to `log_iteration_convergence`;
   - `CLAUDE.md`: only if something it says changes.
 
   Verify: the numbers in `PERFORMANCE.md` match the 3.1 report. Commit.
+
+  Result: `PERFORMANCE.md` has a "Measured profile (2026-10-05)" section (steps, LM phases, conclusions) and the planned order updated from it: `deterministic-multithread`, `banded-normal-matrix` (with the Cholesky reuse), `ndt-lookup-cache`, a consistency analysis, then `io-and-copies`. `index.html` has the setting's row. `CLAUDE.md` unchanged.
