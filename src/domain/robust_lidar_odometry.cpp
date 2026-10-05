@@ -7,7 +7,6 @@
 
 #include "angle_units.h"
 #include "normal_equations.h"
-#include <mutex>
 
 void optimize_sf2(std::vector<Point3Di> &intermediate_points, std::vector<Point3Di> &intermediate_points_sf, std::vector<Eigen::Affine3d> &trajectory,
                   const std::vector<Eigen::Affine3d> &motion_model_trajectory,
@@ -437,7 +436,8 @@ void optimize_rigid_sf(
 
         std::vector<Blocks> blocks(indexes.size());
 
-        if (useMultithread) // ToDo fix for this case
+        // per-point blocks in parallel, summed in index order by SumBlocks: the result doesn't depend on useMultithread
+        if (useMultithread)
             std::transform(std::execution::par_unseq, std::begin(indexes), std::end(indexes), std::begin(blocks), hessian_fun);
         else
             std::transform(std::begin(indexes), std::end(indexes), std::begin(blocks), hessian_fun);

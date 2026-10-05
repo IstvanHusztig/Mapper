@@ -29,7 +29,9 @@ Close the GUI before building. Never run two jobs on the same input folder at on
   - Step checks with the setting off: both presets and `ctest` pass, and precise and fast `44_short` are IDENTICAL (11 files).
   - Setting on: precise and fast `44_short` differ from the manifests only in the params TOML, and they are IDENTICAL with the setting-off runs of the same build apart from it.
   - Speed (fast `44_short`, against the `stage-timing` profile): NDT indoor 6.27 → 1.76 ms per iteration (3.6×, including the grouping), outdoor 5.06 → 0.85 ms (6×); odometry 166.0 → 108.8 s (−34 %); whole run 200 → 144 s (−28 %).
-- [ ] 1.3 `robust_lidar_odometry.cpp`: remove the stale `// ToDo fix for this case` and the unused `<mutex>` include. Verify: build (robust mode is off in `lidar-vertical.toml`, so it is only build-checked). Commit.
+- [x] 1.3 `robust_lidar_odometry.cpp`: remove the stale `// ToDo fix for this case` and the unused `<mutex>` include. Verify: build (robust mode is off in `lidar-vertical.toml`, so it is only build-checked). Commit.
+
+  Result: the include and the ToDo are gone, and a comment says why the loop is deterministic. The Release build passes; the Debug build is checked with 2.1.
 
 ## 2. New default
 
