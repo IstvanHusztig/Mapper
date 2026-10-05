@@ -5,6 +5,7 @@
 #include "angle_units.h"
 #include "imu_kinematics.h"
 #include "optimizer_options.h"
+#include "phase_timing.h"
 #include "robust_lidar_odometry.h"
 #include "scan_to_map.h"
 #include "window_steps.h"
@@ -35,6 +36,19 @@ namespace
         PosePredictionOptions prediction;         // how the initial guess of a window is predicted
     };
 
+    // log_stage_timing: where the window loop spends its time, summed over all windows
+    struct OdometryTiming
+    {
+        ScanToMapTiming lm;      // inside optimize_lidar_odometry
+        PhaseTime point_load;    // reading the window's points from the PointStore
+        PhaseTime robust;        // run_robust_odometry (use_robust_and_accurate_lidar_odometry)
+        PhaseTime lm_iterations; // run_lm_iterations as a whole
+        PhaseTime preview;       // send_preview
+        PhaseTime add_to_map;    // add_window_to_map (update_rgd, sliding-map rebuild)
+        PhaseTime window_total;  // one window, from loading its points to adding it to the map
+        std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now(); // the breakdown is relative to the time since
+    };
+
     // what the window loop carries from one window to the next
     struct WindowLoopCarry
     {
@@ -49,6 +63,7 @@ namespace
         int turn_windows = 0;
         int acc_term_windows = 0;
         std::vector<IterationConvergence> convergence; // per window, with log_iteration_convergence
+        OdometryTiming timing;                         // with log_stage_timing
     };
 
     OdometryRunSetup prepare_run(const std::vector<Window> &windows, const OdometryConfig &params, Logger &logger)
@@ -315,7 +330,7 @@ namespace
     WindowOptimization run_lm_iterations(std::vector<Point3Di> &intermediate_points, Window &window, OdometryState &state,
                                          const OdometryRunSetup &setup, AccTerm &acc_term, const MotionModelRotationOptions &window_rotation_options,
                                          const VelocityPrior &velocity_prior, Eigen::Vector3d &acc_offset, Eigen::Matrix3d &lidar_translation_information,
-                                         const OdometryConfig &params, bool debugMsg, Logger &logger)
+                                         const OdometryConfig &params, bool debugMsg, Logger &logger, ScanToMapTiming *timing)
     {
         double delta = 100000.0;
         double lm_factor = params.lm_factor_initial;
@@ -336,7 +351,7 @@ namespace
             optimize_lidar_odometry(intermediate_points, window, state.buckets_indoor, state.buckets_outdoor,
                                     setup.scan_to_map, acc_term.motion_model, window_rotation_options, acc_term.options,
                                     velocity_prior, lm_factor, delta, acc_offset, acc_term.offset_cov, logger,
-                                    setup.acc_gated ? &lidar_translation_information : nullptr);
+                                    setup.acc_gated ? &lidar_translation_information : nullptr, timing);
             if (params.log_iteration_convergence)
             {
                 poses_after.push_back(window.poses);
@@ -566,6 +581,42 @@ namespace
             << percentile(fast_error_mm, 100.0) << " mm";
     }
 
+    // log_stage_timing: one line per phase, with its share of the odometry time
+    void log_phase_time(Logger &logger, const char *name, const PhaseTime &t, double total_s)
+    {
+        auto msg = log_info(logger);
+        msg << "timing   " << std::left << std::setw(20) << name << std::right << std::fixed << std::setprecision(1) << std::setw(8) << t.seconds
+            << " s " << std::setw(5) << (total_s > 0.0 ? 100.0 * t.seconds / total_s : 0.0) << " %";
+        if (t.calls > 0)
+            msg << " " << std::setw(8) << t.calls << " calls " << std::setprecision(3) << std::setw(9) << 1000.0 * t.seconds / t.calls << " ms";
+    }
+
+    void log_odometry_timing(const OdometryTiming &t, double total_s, size_t n_windows, Logger &logger)
+    {
+        log_info(logger) << "timing odometry breakdown over " << n_windows << " windows, " << std::fixed << std::setprecision(1) << total_s << " s:";
+        const ScanToMapTiming &lm = t.lm;
+        log_phase_time(logger, "lm setup", lm.setup, total_s);
+        log_phase_time(logger, "lm ndt_indoor", lm.ndt_indoor, total_s);
+        log_phase_time(logger, "lm ndt_outdoor", lm.ndt_outdoor, total_s);
+        log_phase_time(logger, "lm motion_terms", lm.motion_terms, total_s);
+        log_phase_time(logger, "lm assembly", lm.assembly, total_s);
+        log_phase_time(logger, "lm covariance_solve", lm.covariance_solve, total_s);
+        log_phase_time(logger, "lm solve", lm.solve, total_s);
+        log_phase_time(logger, "lm update", lm.update, total_s);
+        const double lm_named = lm.setup.seconds + lm.ndt_indoor.seconds + lm.ndt_outdoor.seconds + lm.motion_terms.seconds +
+                                lm.assembly.seconds + lm.covariance_solve.seconds + lm.solve.seconds + lm.update.seconds;
+        // the rest of run_lm_iterations: the loop around the calls and the end of each call, where its matrices are freed
+        log_phase_time(logger, "lm other", PhaseTime{t.lm_iterations.seconds - lm_named, 0}, total_s);
+        log_phase_time(logger, "lm_iterations", t.lm_iterations, total_s);
+        log_phase_time(logger, "point_load", t.point_load, total_s);
+        log_phase_time(logger, "robust", t.robust, total_s);
+        log_phase_time(logger, "preview", t.preview, total_s);
+        log_phase_time(logger, "add_to_map", t.add_to_map, total_s);
+        log_phase_time(logger, "window_total", t.window_total, total_s);
+        const double named = t.lm_iterations.seconds + t.point_load.seconds + t.robust.seconds + t.preview.seconds + t.add_to_map.seconds;
+        log_phase_time(logger, "other", PhaseTime{total_s - named, 0}, total_s);
+    }
+
     // after the last window: the motion-model poses follow the result, the trajectory length and the summary
     void finish_run(std::vector<Window> &windows, const std::chrono::time_point<std::chrono::system_clock> &start,
                     const OdometryRunSetup &setup, const WindowLoopCarry &carry, OdometryState &state,
@@ -596,6 +647,8 @@ namespace
             log_info(logger) << "turn windows (gyro trusted more): " << carry.turn_windows << " of " << windows.size();
         if (params.log_iteration_convergence && !carry.convergence.empty())
             log_convergence_summary(carry.convergence, logger);
+        if (params.log_stage_timing)
+            log_odometry_timing(carry.timing, std::chrono::duration<double>(std::chrono::steady_clock::now() - carry.timing.start).count(), windows.size(), logger);
     }
 } // namespace
 
@@ -612,10 +665,16 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
         OdometryRunSetup setup = prepare_run(windows, params, logger);
         WindowLoopCarry carry = start_carry(setup, windows);
 
+        // log_stage_timing: the timers get a target only when the setting is on
+        const auto timed = [&params](PhaseTime &t) { return params.log_stage_timing ? &t : nullptr; };
+
         for (int i = 0; i < windows.size(); i++)
         {
+            PhaseTimer window_timer(timed(carry.timing.window_total));
             std::vector<Point3Di> intermediate_points;
+            PhaseTimer point_load_timer(timed(carry.timing.point_load));
             point_store.load(PointSet::WindowIntermediate, i, intermediate_points);
+            point_load_timer.stop();
 
             progress.checkpoint();
 
@@ -676,12 +735,18 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
             const std::vector<Eigen::Affine3d> poses_before_optimization = windows[i].poses;
 
             if (params.use_robust_and_accurate_lidar_odometry)
+            {
+                PhaseTimer robust_timer(timed(carry.timing.robust));
                 run_robust_odometry(windows[i], intermediate_points, state, params, logger);
+            }
 
             windows[i].motion_model_poses = windows[i].poses;
 
+            PhaseTimer lm_timer(timed(carry.timing.lm_iterations));
             const WindowOptimization optimization = run_lm_iterations(intermediate_points, windows[i], state, setup, acc_term, window_rotation_options,
-                                                                      velocity_prior, acc_offset, lidar_translation_information, params, debugMsg, logger);
+                                                                      velocity_prior, acc_offset, lidar_translation_information, params, debugMsg, logger,
+                                                                      params.log_stage_timing ? &carry.timing.lm : nullptr);
+            lm_timer.stop();
 
             const std::chrono::duration<double> window_seconds = std::chrono::system_clock::now() - window_start;
             log_window_result(i, windows.size(), optimization, carry.acc_distance, window_seconds.count(), params, logger);
@@ -699,7 +764,10 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
             }
 
             if (i % 100 == 0)
+            {
+                PhaseTimer preview_timer(timed(carry.timing.preview));
                 send_preview(i, intermediate_points, windows[i], params, preview);
+            }
 
             if (!add_window_distance(windows[i], poses_before_optimization, carry, ts_failure, logger))
             {
@@ -716,7 +784,9 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
             if (i + 1 < windows.size())
                 place_window_after(windows[i + 1], windows[i].poses[windows[i].poses.size() - 1]);
 
+            PhaseTimer add_to_map_timer(timed(carry.timing.add_to_map));
             add_window_to_map(intermediate_points, windows[i], carry, state, params);
+            add_to_map_timer.stop();
 
             if (i > 1)
             {
