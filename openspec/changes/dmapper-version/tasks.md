@@ -11,7 +11,9 @@ Close the GUI before building.
 
 ## 2. Tools
 
-- [ ] 2.1 `compare_baseline.py` and `eval_odometry.py` match the `dMapper_*` names (decision 5); `tools/README.md` follows. Verify: run `44_short` with the normal and the precise build; against the current manifests every file except the two version-stamped ones is IDENTICAL; the two files, diffed against `raw data/44_short_baseline`'s with versions and date-times masked, show no other difference (record the diff). Commit.
+- [x] 2.1 `compare_baseline.py` and `eval_odometry.py` match the `dMapper_*` names (decision 5); `tools/README.md` follows. Verify: run `44_short` with the normal and the precise build; against the current manifests every file except the two version-stamped ones is IDENTICAL; the two files, diffed against `raw data/44_short_baseline`'s with versions and date-times masked, show no other difference (record the diff). Commit.
+
+  - **Recorded (2026-10-05):** the new build's `44_short` (fast 204 s, precise 205 s) differs from the old manifests in the two renamed files and `session.mjs`, which also carries the version (`"lidar_odometry_version": "v0.1.0"`). Mapped back to HDMapping 0.95.0 (file names plus exactly five lines: the TOML's two header comments and `software_version`, the JSON's `software_version`, `session.mjs`'s `lidar_odometry_version`), both folders are IDENTICAL with the old manifests (11 files each) under the old `compare_baseline.py`. (A direct diff against `raw data/44_short_baseline`'s params TOML also shows `use_exact_ndt_bucket_statistics` / `log_iteration_convergence`: that folder predates those settings, the manifest doesn't.)
 
 ## 3. New baselines
 

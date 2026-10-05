@@ -132,7 +132,7 @@ python tools/compare_baseline.py --write-manifest <out_dir> <manifest.json> --da
 ```
 
 - Every file is compared by SHA-256. The only things normalized are the values that change on every run:
-  - the date-time in the `HDMapping_params_*`/`HDMapping_results_*` file names;
+  - the date-time in the `dMapper_params_*`/`dMapper_results_*` file names;
   - `elapsed time seconds`, `elapsed_time_seconds`, `processing_date` and `build_date`, plus the `# Created on` line of the params TOML;
   - absolute paths of the output and input folders, which become `<OUT>` and `<IN>`.
 

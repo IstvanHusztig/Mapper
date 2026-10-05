@@ -64,7 +64,7 @@ def load_trajectory(result):
 
 def load_bias_track(result):
     """[(t_start_s, bias_z_rad_s)] from the processing-results JSON, or []."""
-    for fn in glob.glob(os.path.join(result, "HDMapping_results_*.json")):
+    for fn in glob.glob(os.path.join(result, "dMapper_results_*.json")):
         with open(fn) as f:
             track = json.load(f).get("gyro_bias_per_window", [])
         return [(e["t_start_s"], e["bias_deg_s"][2] / D) for e in track]

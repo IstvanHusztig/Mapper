@@ -26,11 +26,11 @@ import re
 import subprocess
 import sys
 
-# file names: the date-time of the run is part of the two HDMapping_* names
+# file names: the date-time of the run is part of the two dMapper_* names
 NAME_DATETIME = re.compile(r"_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}(?=\.(toml|json)$)")
 
 # text files whose content is normalized; every other file is hashed as raw bytes
-TEXT_FILE = re.compile(r"^(session\.mjs|HDMapping_params_.*\.toml|HDMapping_results_.*\.json)$")
+TEXT_FILE = re.compile(r"^(session\.mjs|dMapper_params_.*\.toml|dMapper_results_.*\.json)$")
 
 # run-dependent values, replaced by <IGNORED> (key = value / "key": value, up to the end of the value)
 NORMALIZE_JSON_KEYS = ["elapsed time seconds", "elapsed_time_seconds", "processing_date", "build_date"]
@@ -59,7 +59,7 @@ def find_prefixes(folder):
         with open(mjs, encoding="utf-8") as f:
             out_prefix = json.load(f).get("Session Settings", {}).get("out_folder_name") or None
     for name in os.listdir(folder):
-        if name.startswith("HDMapping_params_") and name.endswith(".toml"):
+        if name.startswith("dMapper_params_") and name.endswith(".toml"):
             with open(os.path.join(folder, name), encoding="utf-8") as f:
                 m = re.search(r"^working_directory_preview = '(.*)'$", f.read(), re.M)
             if m and m.group(1):
