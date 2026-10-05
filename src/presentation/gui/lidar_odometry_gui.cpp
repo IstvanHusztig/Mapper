@@ -8,9 +8,7 @@
 #include <portable-file-dialogs.h>
 
 #include "gui_view_model.h"
-#include <export_laz.h>
-
-#include <utils.hpp>
+#include "viewer.h"
 
 #include <mutex>
 #include <condition_variable>
@@ -21,7 +19,7 @@
 #include <limits>
 #include <unordered_set>
 #include <HDMapping/Version.hpp>
-#include <pfd_wrapper.hpp>
+#include "file_dialogs.h"
 #include <ctime>
 #include <chrono>
 #include "format_time.h"

@@ -292,7 +292,10 @@ endif()
 
 # presentation (CLI, GUI) and the composition root
 set(SOURCES
-  ${REPOSITORY_DIRECTORY}/core/src/utils.cpp
+  src/presentation/gui/viewer.cpp
+  src/presentation/gui/viewer.h
+  src/presentation/gui/file_dialogs.cpp
+  src/presentation/gui/file_dialogs.h
   src/main.cpp
   src/presentation/format_time.h
   src/presentation/cli/cli.cpp

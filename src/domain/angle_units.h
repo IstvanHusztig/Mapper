@@ -1,7 +1,8 @@
 #pragma once
 
 // Angle conversion in double precision for the odometry optimizers (formerly defined in the optimizer file).
-// core/include/utils.hpp defines float constants with the same names: never include both in one translation unit.
+// The GUI viewer (src/presentation/gui/viewer.h) defines float constants with the same names: never include both in one
+// translation unit.
 
 #include <cmath>
 
