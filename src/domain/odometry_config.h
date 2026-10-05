@@ -5,19 +5,12 @@
 
 #include <Eigen/Dense>
 #include <string>
+#include "dmapper_version.h"
 #include <ndt_types.h>
 #include <structures.h>
 
 // Helper function for getting software version from CMake macros
-inline std::string get_software_version() {
-    #ifdef HDMAPPING_VERSION_MAJOR
-        return std::to_string(HDMAPPING_VERSION_MAJOR) + "." + 
-               std::to_string(HDMAPPING_VERSION_MINOR) + "." + 
-               std::to_string(HDMAPPING_VERSION_PATCH);
-    #else
-        return "0.84.0"; // fallback if CMake macros not available
-    #endif
-}
+inline std::string get_software_version() { return dmapper_version(); }
 
 struct OdometryConfig
 {

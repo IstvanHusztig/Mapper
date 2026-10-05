@@ -10,7 +10,7 @@
 # Stand still >= 1-2 s at the start (IMU gyro bias removal + initial map).
 
 [version_info]
-software_version = "0.95.0"
+software_version = "0.1.0"
 config_version = "1.0"
 build_date = "Mar 28 2026"
 

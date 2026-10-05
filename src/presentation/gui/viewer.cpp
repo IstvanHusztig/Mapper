@@ -13,7 +13,6 @@
 #include <cmath>
 #include <cstdio>
 #include <iostream>
-#include <HDMapping/Version.hpp>
 #include <filesystem>
 #include <regex>
 

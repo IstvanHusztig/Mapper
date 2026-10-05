@@ -1,7 +1,7 @@
 #include "folder_result_sink.h"
 #include "odometry_state.h"
 
-#include <HDMapping/Version.hpp>
+#include <dmapper_version.h>
 #include "laz_export.h"
 #include <laszip/laszip_api.h>
 #include <nlohmann/json.hpp>
@@ -282,7 +282,7 @@ void FolderResultSink::session(const SessionSummary &summary)
     j["poses_file_name"] = path2.string();
     j["initial_poses_file_name"] = path.string();
     j["out_poses_file_name"] = path2.string();
-    j["lidar_odometry_version"] = HDMAPPING_VERSION_STRING;
+    j["lidar_odometry_version"] = "v" + dmapper_version();
     j["length of trajectory[m]"] = summary.trajectory_length_m;
     j["elapsed time seconds"] = summary.elapsed_seconds;
     if (summary.index_poses){
@@ -326,7 +326,7 @@ void FolderResultSink::parameters(const OdometryConfig &config, const RunPaths &
     std::string datetime_str = datetime_stream.str();
 
     // Create filename with version info and datetime for TOML parameters
-    std::string toml_filename = "HDMapping_params_" + config.software_version + "_" + datetime_str + ".toml";
+    std::string toml_filename = "dMapper_params_" + config.software_version + "_" + datetime_str + ".toml";
     fs::path toml_path = outwd_ / toml_filename;
 
     try
@@ -362,7 +362,7 @@ void FolderResultSink::processing_results(const OdometryConfig &config, const Od
     std::string datetime_str = datetime_stream.str();
 
     // Create filename for processing results and complex data
-    std::string json_filename = "HDMapping_results_" + config.software_version + "_" + datetime_str + ".json";
+    std::string json_filename = "dMapper_results_" + config.software_version + "_" + datetime_str + ".json";
     fs::path json_path = outwd_ / json_filename;
 
     try

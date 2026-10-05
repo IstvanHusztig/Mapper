@@ -18,7 +18,7 @@
 #include <cstdint>
 #include <limits>
 #include <unordered_set>
-#include <HDMapping/Version.hpp>
+#include <dmapper_version.h>
 #include "file_dialogs.h"
 #include <ctime>
 #include <chrono>
@@ -34,7 +34,7 @@
 // dMapper: LiDAR + IMU mapping. Computes the trajectory and point cloud of a recording folder
 // (lidar*.laz + imu*.csv) and saves them as a result folder (session.mjs, trajectories, LAZ point clouds).
 
-std::string winTitle = "dMapper v 0.1";
+std::string winTitle = "dMapper v " + dmapper_version_short();
 
 namespace fs = std::filesystem;
 

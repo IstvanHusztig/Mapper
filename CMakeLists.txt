@@ -6,11 +6,10 @@ set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 set(APP_NAME dMapper)
 project(${APP_NAME})
 
-add_definitions(-DHDMAPPING_VERSION_MAJOR=0)
-add_definitions(-DHDMAPPING_VERSION_MINOR=95)
-add_definitions(-DHDMAPPING_VERSION_PATCH=0)
-
-include_directories(shared/include)
+# dMapper's version (src/domain/dmapper_version.h): in the result files' names and contents and the GUI title
+add_definitions(-DDMAPPER_VERSION_MAJOR=0)
+add_definitions(-DDMAPPER_VERSION_MINOR=1)
+add_definitions(-DDMAPPER_VERSION_PATCH=0)
 
 set(OpenGL_GL_PREFERENCE GLVND)
 set(CMAKE_CXX_STANDARD 20)

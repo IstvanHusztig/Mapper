@@ -3,7 +3,7 @@
 // ResultSink adapter: one output folder (infrastructure). File names and formats:
 //   point_sizes_per_chunk.json, scan_lio_<i>.laz, scan_lio_merged.laz, trajectory_lio_<i>.csv,
 //   session_ini_poses.mri, session_poses.mrp, index_poses.json, session.mjs,
-//   HDMapping_params_<version>_<date-time>.toml (through a ConfigRepository), HDMapping_results_<version>_<date-time>.json
+//   dMapper_params_<version>_<date-time>.toml (through a ConfigRepository), dMapper_results_<version>_<date-time>.json
 
 #include "output_ports.h"
 #include "run_reporting.h"

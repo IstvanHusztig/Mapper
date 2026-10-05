@@ -2,6 +2,8 @@
 
 #include "toml_config_repository.h"
 
+#include <dmapper_version.h>
+
 #include <filesystem>
 
 namespace fs = std::filesystem;
@@ -34,7 +36,8 @@ TEST_CASE("TomlConfigRepository saves and loads the settings")
         config.use_loop_closure = !config.use_loop_closure; // bool
         config.nr_iter = 77;                                // int
         config.decimation = 0.0625;                         // double
-        config.software_version = "test-version";           // string
+        config.config_version = "test-version";             // string
+        config.software_version = "9.9.9";                  // replaced by the build's version on loading
         RunPaths paths;
         paths.current_output_dir = "out_dir";
         paths.working_directory_preview = "preview_dir";
@@ -49,7 +52,8 @@ TEST_CASE("TomlConfigRepository saves and loads the settings")
         CHECK(loaded.use_loop_closure == config.use_loop_closure);
         CHECK(loaded.nr_iter == 77);
         CHECK(loaded.decimation == 0.0625);
-        CHECK(loaded.software_version == "test-version");
+        CHECK(loaded.config_version == "test-version");
+        CHECK(loaded.software_version == dmapper_version());
         CHECK(loaded_paths.current_output_dir == "out_dir");
         CHECK(loaded_paths.working_directory_preview == "preview_dir");
         CHECK(loaded_gui.clear_color[0] == 0.25f);

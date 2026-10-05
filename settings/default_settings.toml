@@ -7,7 +7,7 @@
 # Version information is stored in [version_info] section for compatibility checking.
 
 [version_info]
-software_version = "0.95.0"
+software_version = "0.1.0"
 config_version = "1.0"
 build_date = "Mar 27 2026"
 
