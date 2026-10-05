@@ -252,6 +252,7 @@ add_library(lo_infrastructure STATIC
   src/infrastructure/recording_files.cpp
   src/infrastructure/disk_point_store.cpp
   src/infrastructure/folder_preview_sink.cpp
+  src/infrastructure/laz_export.cpp
   src/infrastructure/folder_inputs.cpp
   src/infrastructure/fusion_orientation_estimator.cpp
   src/infrastructure/run_services.cpp

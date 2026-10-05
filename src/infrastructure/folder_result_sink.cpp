@@ -2,7 +2,7 @@
 #include "odometry_state.h"
 
 #include <HDMapping/Version.hpp>
-#include <export_laz.h>
+#include "laz_export.h"
 #include <laszip/laszip_api.h>
 #include <nlohmann/json.hpp>
 

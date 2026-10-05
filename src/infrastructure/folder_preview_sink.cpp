@@ -1,6 +1,6 @@
 #include "folder_preview_sink.h"
 
-#include <export_laz.h>
+#include "laz_export.h"
 
 #include <algorithm>
 #include <fstream>
