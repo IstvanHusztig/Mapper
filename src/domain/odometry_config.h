@@ -64,6 +64,8 @@ struct OdometryConfig
     bool save_calibration_validation = false;
     // diagnostics only: log per window after how many iterations the poses settle (results unchanged)
     bool log_iteration_convergence = false;
+    // diagnostics only: log the wall-clock time of each pipeline step and of the odometry's phases (results unchanged)
+    bool log_stage_timing = false;
     int calibration_validation_points = 1000000;
 
     //consistency

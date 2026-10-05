@@ -98,7 +98,7 @@ OpenSpec change `chain-next-window-only`. The full explanation, with diagrams an
 | Setting | Default | Effect on speed | Cost |
 |---|---|---|---|
 | `convergence_delta_threshold` | `1e-12` (all `nr_iter` iterations run) | `1e-2` is 3–4× faster | 0.5–1.5 % more occupied 3 cm cells on recordings 42/43, i.e. a slightly less sharp map |
-| `useMultithread` | `false` | `true` is about 40 % faster per window | the parallel float sum makes results differ from run to run |
+| `useMultithread` | `false` | `true` is about 40 % faster per window | the parallel float sum makes results differ from run to run (cause and planned fix: [Analysis](#analysis-2026-10-05-and-planned-fixes)) |
 | `real_time_threshold_seconds` | `10.0` | caps a window's time | when a window hits it, results depend on machine speed and load |
 | `nr_iter` | 100 | fewer iterations are faster | real windows settle after median 51, at most 91 iterations on 44 (see below) |
 
@@ -139,6 +139,26 @@ Every window reached `delta < 1e-2`, and every window settled before iteration 1
 
 With `use_exact_ndt_bucket_statistics = true` (off by default, change `ndt-bucket-statistics`), the median window settled after 29 iterations on 44 instead of 51, while p90 and max stayed at 77 and 94. Its run time couldn't be compared fairly: the switch-off reference was a night run, and on the same morning a switch-off `44_short` run took 206 s against 199 s with the switch on.
 
+## Analysis (2026-10-05) and planned fixes
+
+A code review of the processing path (not profiled yet; the costs are estimates). A window has 360 nodes, i.e. 2166 unknowns, and runs 100 LM iterations of about 23 ms each.
+
+**Why `useMultithread` is not deterministic.** Only `optimize_lidar_odometry` (`src/domain/scan_to_map.cpp`) is affected. Each point adds its 6×6 / 6×1 terms into its own node's diagonal block under a per-node mutex; with `par_unseq` the points of one node arrive in thread order, so the sums differ in the last bits. (A mutex inside `par_unseq` is also formally undefined behaviour.) `optimize_sf2` and `optimize_rigid_sf` already compute per point in parallel and sum in order (`SumBlocks`), so they are deterministic.
+
+**Planned fix:** run the nodes in parallel and sum each node's points in their original order. That is exactly the serial order of additions per block, so the multithreaded result should be bit-identical with the serial one, and `useMultithread` could then default to `true`.
+
+**Other gaps, by likely impact:**
+
+| # | Where | Gap | Fix (results unchanged) |
+|---|---|---|---|
+| 1 | `scan_to_map.cpp` | a dense 2166×2166 normal matrix (37 MB) is allocated and zeroed every LM iteration, about 69,000 times on 44; only its band is read | a block-band store with the same `+=` order |
+| 2 | `scan_to_map.cpp` | per point and iteration: `cov.inverse()` + threshold test, `pose_tait_bryan_from_affine_matrix`, the planarity eigen-solve | cache per bucket (map is constant during a window) and per pose |
+| 3 | `scan_to_map.cpp` | `SimplicialCholesky` rebuilt every iteration though the pattern never changes | `analyzePattern` once, `factorize` per iteration |
+| 4 | `ndt_map.h` | NDT maps are node-based `std::unordered_map` (hash + pointer chase per lookup, per point, 2 grids × 100 iterations) | a flat open-addressing map, where nothing depends on iteration order |
+| 5 | several | `auto _buckets = buckets;` per window in `optimize_rigid_sf`; `points_to_vector` takes points by value; `load_point_cloud` has no `reserve` and doesn't destroy the laszip handle; `save_result` writes `session_chunk` files and reads them straight back; consistency re-reads every window file each iteration; `ImuTrajectory` is a `std::map` used like a vector | remove copies, reserve, cache, prefetch the next window |
+
+Planned order (each its own change, bit-identical with the precise build): `stage-timing` (measure first), `deterministic-multithread`, `banded-normal-matrix`, `ndt-lookup-cache`, `io-and-copies`. Result-changing levers (a convergence stop rule, per-pose blocks in `Consistency`) come later, each judged with `eval_odometry.py`.
+
 ## Open findings
 
 - **GUI memory with the live preview** (2026-10-02, accepted for now). On the full 44 run, the GUI uses about 3 GB more than the CLI:
@@ -149,4 +169,7 @@ With `use_exact_ndt_bucket_statistics = true` (off by default, change `ndt-bucke
   - log the preview's point count;
   - a switch to turn the preview off;
   - a 0.2 m voxel if the 3-million-point cap is reached.
+- **Two suspected bugs found in the 2026-10-05 review** (not fixed; each changes results, so each is its own change with an evaluation):
+  - `Consistency2` sets `index_end_exclusive = i` (`src/application/consistency.cpp`), which looks like it drops the last point of every cell;
+  - `ndt_cell_index` uses `static_cast<int16_t>(p / b)`, which truncates toward zero, so cell 0 is twice as wide on every axis (`src/domain/ndt_map.cpp`).
 - **Results depend on machine load through `real_time_threshold_seconds`** (2026-10-02). One slow GUI run differed by 1–2 mm; a repeat was identical. The value was not changed. A higher limit in `settings/lidar-vertical.toml` would make runs reproducible under load, but it is a decision still to be made.
