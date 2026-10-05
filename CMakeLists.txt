@@ -117,8 +117,6 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 include(cmake/platform.cmake)
 include(cmake/imgui.cmake)
-include(cmake/imguizmo.cmake)
-include(cmake/implot.cmake)
 
 add_subdirectory(${EXTERNAL_LIBRARIES_DIRECTORY}/eigen)
 set(EIGEN3_INCLUDE_DIR ${EXTERNAL_LIBRARIES_DIRECTORY}/eigen)
@@ -131,12 +129,6 @@ set(FREEGLUT_LIBRARY freeglut)
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(freeglut PRIVATE -Wno-unused-const-variable)
 endif()
-
-# GLEW is only used for its headers by lidar_odometry_gui.cpp (no glewInit()/GLEW
-# symbols are actually called or linked); kept for the include path only, matching
-# the original app's behavior.
-add_subdirectory(${EXTERNAL_LIBRARIES_DIRECTORY}/glew-cmake)
-set(GLEW_INCLUDE_DIR ${EXTERNAL_LIBRARIES_DIRECTORY}/glew-cmake/include)
 
 add_subdirectory(${EXTERNAL_LIBRARIES_DIRECTORY}/LASzip)
 set(LASZIP_INCLUDE_DIR ${EXTERNAL_LIBRARIES_DIRECTORY})
@@ -247,12 +239,9 @@ target_include_directories(
           src/presentation/cli
           src/presentation/gui
           ${EXTERNAL_LIBRARIES_DIRECTORY}
-          ${EXTERNAL_LIBRARIES_DIRECTORY}/glm
           ${EIGEN3_INCLUDE_DIR}
           ${EXTERNAL_LIBRARIES_DIRECTORY}/imgui
           ${EXTERNAL_LIBRARIES_DIRECTORY}/imgui/backends
-          ${EXTERNAL_LIBRARIES_DIRECTORY}/ImGuizmo
-          ${EXTERNAL_LIBRARIES_DIRECTORY}/glew-cmake/include
           ${FREEGLUT_INCLUDE_DIR}
           ${EXTERNAL_LIBRARIES_DIRECTORY}/json/include
           ${EXTERNAL_LIBRARIES_DIRECTORY}/portable-file-dialogs
@@ -271,9 +260,7 @@ target_link_libraries(
           OpenGL::GLU
           ${PLATFORM_LASZIP_LIB}
           ${PLATFORM_MISCELLANEOUS_LIBS}
-          imgui
-          imguizmo
-          implot)
+          imgui)
 
 if(WIN32)
   add_custom_command(

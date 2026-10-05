@@ -54,7 +54,6 @@ extern bool show_axes;
 extern ImVec4 bg_color;
 extern int point_size;
 
-extern bool info_gui;
 extern bool compass_ruler;
 
 extern Eigen::Affine3f viewLocal;
@@ -80,11 +79,6 @@ extern float new_translate_z;
 // Transition timing
 extern bool camera_transition_active;
 
-struct ShortcutEntry {
-    std::string type;
-    std::string shortcut;
-    std::string description;
-};
 
 #define IDI_ICON1                        101 //application icon (double defined in resource.h)
 
@@ -105,8 +99,6 @@ void camMenu();
 void view_kbd_shortcuts();
 void cor_window();
 
-void ImGuiHyperlink(const char* url, ImVec4 color = ImVec4(0.2f, 0.4f, 0.8f, 1.0f));
-void info_window(const std::vector<std::string>& infoLines, const std::vector<ShortcutEntry>& appShortcuts);
 
 void drawMiniCompassWithRuler();
 

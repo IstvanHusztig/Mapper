@@ -2,7 +2,6 @@
 // utils.cpp (retire-core) without its session-picking functions, which dMapper doesn't use.
 #include <imgui_impl_glut.h>
 #include <imgui_impl_opengl2.h>
-#include <GL/glew.h>
 #include <GL/freeglut.h>
 
 #include "viewer.h"
@@ -20,7 +19,6 @@
 
 #ifdef _WIN32
 #include <windows.h>
-#include <shellapi.h>
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////////
@@ -37,7 +35,6 @@ bool show_axes = true;
 ImVec4 bg_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 int point_size = 1;
 
-bool info_gui = false;
 bool compass_ruler = true;
 
 Eigen::Affine3f viewLocal;
@@ -72,90 +69,7 @@ int scroll_hint_count = 0;
 float scroll_hint_accu = 0.0f;
 double scroll_hint_lastT = 0.0;
 
-bool show_about = false;
 
-// General shortcuts applicable to any app
-static const std::vector<ShortcutEntry> shortcuts = {
-    {"Normal keys", "A", ""},
-    {"", "Ctrl+A", ""},
-    {"", "B", "camera Back"},
-    {"", "Ctrl+B", ""},
-    {"", "C", "Compass/ruler"},
-    {"", "Ctrl+C", ""},
-    {"", "D", ""},
-    {"", "Ctrl+D", ""},
-    {"", "E", ""},
-    {"", "Ctrl+E", ""},
-    {"", "F", "camera Front"},
-    {"", "Ctrl+F", ""},
-    {"", "G", ""},
-    {"", "Ctrl+G", ""},
-    {"", "H", ""},
-    {"", "Ctrl+H", ""},
-    {"", "I", "camera Isometric"},
-    {"", "Ctrl+I", ""},
-    {"", "J", ""},
-    {"", "Ctrl+J", ""},
-    {"", "K", ""},
-    {"", "Ctrl+K", ""},
-    {"", "L", "camera Left"},
-    {"", "Ctrl+L", ""},
-    {"", "M", ""},
-    {"", "Ctrl+M", ""},
-    {"", "N", ""},
-    {"", "Ctrl+N", ""},
-    {"", "O", "Ortographic view"},
-    {"", "Ctrl+O", "Open/load session/data"},
-    {"", "P", ""},
-    {"", "Ctrl+P", ""},
-    {"", "Q", ""},
-    {"", "Ctrl+Q", ""},
-    {"", "R", "camera Right"},
-    {"", "Ctrl+R", ""},
-    {"", "Shift+R", "Rotation center"},
-    {"", "S", ""},
-    {"", "Ctrl+S", ""},
-    {"", "Ctrl+Shift+S", ""},
-    {"", "T", "camera Top"},
-    {"", "Ctrl+T", ""},
-    {"", "U", "camera bottom (Under)"},
-    {"", "Ctrl+U", ""},
-    {"", "V", ""},
-    {"", "Ctrl+V", ""},
-    {"", "W", ""},
-    {"", "Ctrl+W", ""},
-    {"", "X", "show aXes"},
-    {"", "Ctrl+X", ""},
-    {"", "Y", ""},
-    {"", "Ctrl+Y", ""},
-    {"", "Z", "camera reset"},
-    {"", "Ctrl+Z", ""},
-    {"", "Shift+Z", "Lock Z"},
-    {"", "1-9", "point size"},
-    {"Special keys", "Up arrow", ""},
-    {"", "Shift + up arrow", "camera translate Up"},
-    {"", "Ctrl + up arrow", ""},
-    {"", "Down arrow", ""},
-    {"", "Shift + down arrow", "camera translate Down"},
-    {"", "Ctrl + down arrow", ""},
-    {"", "Left arrow", ""},
-    {"", "Shift + left arrow", "camera translate Left"},
-    {"", "Ctrl + left arrow", ""},
-    {"", "Right arrow", ""},
-    {"", "Shift + right arrow", "camera translate Right"},
-    {"", "Ctrl + right arrow", ""},
-    {"", "Pg down", ""},
-    {"", "Pg up", ""},
-    {"", "- key", ""},
-    {"", "+ key", ""},
-    {"Mouse related", "Left click + drag", "camera rotate"},
-    {"", "Right click + drag", "camera pan"},
-    {"", "Scroll", "camera zoom"},
-    {"", "Shift + scroll", "camera 5x zoom"},
-    {"", "Shift + drag", "Dock window to screen edges"},
-    {"", "Ctrl + left click", ""},
-    {"", "Ctrl + right click", "change center of rotation"},
-    {"", "Ctrl + middle click", "change center of rotation (if no CP GUI active)"}};
 
 ///////////////////////////////////////////////////////////////////////////////////
 
@@ -943,157 +857,6 @@ void cor_window()
 
         ImGui::EndPopup();
     }
-}
-
-void ImGuiHyperlink(const char *url, ImVec4 color)
-{
-    ImGui::PushStyleColor(ImGuiCol_Text, color);
-    ImGui::TextUnformatted(url);
-    ImGui::PopStyleColor();
-
-    // Get the item's rectangle
-    ImVec2 pos = ImGui::GetItemRectMin();
-    ImVec2 size = ImGui::GetItemRectSize();
-
-    // Change cursor on hover
-    if (ImGui::IsItemHovered())
-        ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-
-    // Draw underline on hover
-    if (ImGui::IsItemHovered())
-    {
-        ImDrawList *draw_list = ImGui::GetWindowDrawList();
-        draw_list->AddLine(
-            ImVec2(pos.x, pos.y + size.y),
-            ImVec2(pos.x + size.x, pos.y + size.y),
-            ImColor(color));
-    }
-
-    // Open URL on click
-    if (ImGui::IsItemClicked())
-    {
-#ifdef _WIN32
-        ShellExecuteA(0, "open", url, 0, 0, SW_SHOWNORMAL);
-#elif __APPLE__
-        std::string cmd = std::string("open ") + url;
-        system(cmd.c_str());
-#else
-        std::string cmd = std::string("xdg-open ") + url;
-        system(cmd.c_str());
-#endif
-    }
-}
-
-void ShowShortcutsTable(const std::vector<ShortcutEntry> appShortcuts)
-{
-    if (ImGui::BeginTable("ShortcutsTable", 2,
-                          ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY, ImVec2(-FLT_MIN, 200)))
-    {
-        ImGui::TableSetupScrollFreeze(0, 1);
-        ImGui::TableSetupColumn("Shortcut", ImGuiTableColumnFlags_WidthFixed, 120);
-        ImGui::TableSetupColumn("Description");
-        ImGui::TableHeadersRow();
-
-        std::string lastType;
-
-        for (size_t i = 0; i < shortcuts.size(); ++i)
-        {
-            const auto &s = shortcuts[i];
-
-            // Insert a "fake" type row when type changes
-            if (!s.type.empty() && s.type != lastType)
-            {
-                lastType = s.type;
-                ImGui::TableNextRow();
-
-                ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, IM_COL32(70, 70, 140, 255));
-
-                ImGui::TableSetColumnIndex(0);
-                ImGui::TextColored(ImVec4(0.8f, 0.8f, 1.0f, 1.0f), "%s", lastType.c_str());
-                ImGui::TableSetColumnIndex(1);
-                ImGui::TextUnformatted("");
-            }
-
-            auto description = s.description;
-
-            if (description.empty())
-                description = appShortcuts[i].description;
-
-            if (!description.empty())
-            {
-                // Normal row
-                ImGui::TableNextRow();
-                ImGui::TableSetColumnIndex(0);
-                ImGui::TextUnformatted(s.shortcut.c_str());
-                ImGui::TableSetColumnIndex(1);
-                ImGui::TextUnformatted(description.c_str());
-            }
-        }
-
-        ImGui::EndTable();
-    }
-}
-
-void info_window(const std::vector<std::string> &infoLines, const std::vector<ShortcutEntry> &appShortcuts)
-{
-    if (!info_gui)
-        return;
-
-    if (ImGui::Begin("Info", &info_gui, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoCollapse))
-    {
-        bool firstLine = true;
-        for (const auto &line : infoLines)
-        {
-            if (line.empty())
-                ImGui::NewLine();
-            else if (line.rfind("https://", 0) == 0) // starts with "https://"
-                ImGuiHyperlink(line.c_str());
-            else
-                ImGui::Text(line.c_str());
-
-            if (firstLine)
-            {
-                ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::CalcTextSize("ImGui").x - ImGui::GetStyle().ItemSpacing.x * 2 - ImGui::GetStyle().FramePadding.x * 2);
-                if (ImGui::Button("ImGui"))
-                    show_about = true;
-                if (ImGui::IsItemHovered())
-                {
-                    ImGui::BeginTooltip();
-                    // Query versions info
-                    const GLubyte *renderer = glGetString(GL_RENDERER);
-                    const GLubyte *version = glGetString(GL_VERSION);
-                    const GLubyte *glslVersion = glGetString(GL_SHADING_LANGUAGE_VERSION);
-
-                    ImGui::Text("Renderer: %s", renderer);
-                    ImGui::Text("OpenGL version supported: %s", version);
-                    ImGui::Text("GLSL version: %s", glslVersion);
-                    ImGui::EndTooltip();
-                }
-
-                firstLine = false;
-            }
-        }
-
-        ImGui::NewLine();
-        ImGui::Text("Author: Janusz Bedkowski & contributors");
-        ImGui::NewLine();
-        ImGui::Text("Part of HDMapping software suite");
-        ImGui::Text("Version: %s (%s)", HDMAPPING_VERSION_STRING, __DATE__);
-        ImGui::Text("Project page: ");
-        ImGui::SameLine();
-        ImGuiHyperlink("https://github.com/MapsHD/HDMapping");
-
-        ImGui::NewLine();
-        ImGui::Separator();
-        ImGui::NewLine();
-
-        ShowShortcutsTable(appShortcuts);
-
-        if (show_about)
-            ImGui::ShowAboutWindow(&show_about);
-    }
-
-    ImGui::End();
 }
 
 void drawMiniCompassWithRuler()
