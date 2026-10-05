@@ -437,7 +437,7 @@ namespace
     }
 
     // preview of window i's points, placed with its optimized poses
-    // (window is not const: core's points_to_vector takes the poses by non-const reference)
+    // (window is not const: points_to_vector takes the poses by non-const reference)
     void send_preview(int i, const std::vector<Point3Di> &intermediate_points, Window &window, const OdometryConfig &params, PreviewSink &preview)
     {
         std::vector<Eigen::Vector3d> global_pointcloud;

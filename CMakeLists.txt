@@ -154,71 +154,11 @@ add_subdirectory(${EXTERNAL_LIBRARIES_DIRECTORY}/Fusion/Fusion)
 file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/settings/default_settings.toml"
      DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
 
-# This must match core/CMakeLists.txt's CORE_SOURCE_FILES / CORE_SOURCE_FILES_GUI
-# in the original hd-mapping repo exactly (not a glob of core/src/*.cpp). The
-# original app links this as a static lib; the linker then only ever pulls a
-# .obj out of the archive when something needs a symbol it uniquely provides.
-# That's why hash_utils.cpp's get_index()/get_rgd_index() never collide with
-# the app's own definitions of the same names, and why surface.cpp (which
-# duplicates pose_graph_slam.cpp's global `rd`/`gen`) is simply never part of
-# this list. Compiling every core/src/*.cpp flat into one exe (as core_no_gui-
-# style single-TU builds do) breaks both of those and fails to link.
-set(CORE_SOURCE_FILES
-    core/src/color_las_loader.cpp
-    core/src/gnss.cpp
-    core/src/icp.cpp
-    core/src/ndt.cpp
-    core/src/nns.cpp
-    core/src/nmea.cpp
-    core/src/optimization_point_to_point_source_to_target.cpp
-    core/src/optimize_distance_point_to_plane_source_to_target.cpp
-    core/src/optimize_plane_to_plane_source_to_target.cpp
-    core/src/optimize_point_to_plane_source_to_target.cpp
-    core/src/optimize_point_to_projection_onto_plane_source_to_target.cpp
-    core/src/pcl_wrapper.cpp
-    core/src/plycpp.cpp
-    core/src/point_cloud.cpp
-    core/src/point_clouds.cpp
-    core/src/pose_graph_slam.cpp
-    core/src/pose_graph_loop_closure.cpp
-    core/src/session.cpp
-    core/src/wgs84_do_puwg92.cc
-    core/src/pair_wise_iterative_closest_point.cpp
-    core/src/hash_utils.cpp
-    core/src/ground_control_points.cpp
-    core/src/control_points.cpp
-    core/src/registration_plane_feature.cpp
-)
-
-set(CORE_SOURCE_FILES_GUI
-    core/src/pfd_wrapper.cpp
-    core/src/manual_pose_graph_loop_closure.cpp
-    core/src/observation_picking.cpp
-)
-
-add_library(core STATIC ${CORE_SOURCE_FILES} ${CORE_SOURCE_FILES_GUI})
-target_compile_definitions(core PRIVATE WITH_GUI=1)
-target_link_libraries(core PRIVATE ${PLATFORM_LASZIP_LIB} ${PLATFORM_MISCELLANEOUS_LIBS})
-target_include_directories(core PRIVATE
-    core/include
-    ${EIGEN3_INCLUDE_DIR}
-    ${EXTERNAL_LIBRARIES_DIRECTORY}/json/include
-    ${EXTERNAL_LIBRARIES_DIRECTORY}/imgui
-    ${EXTERNAL_LIBRARIES_DIRECTORY}/imgui/backends
-    ${EXTERNAL_LIBRARIES_DIRECTORY}/ImGuizmo
-    ${LASZIP_INCLUDE_DIR}/LASzip/include
-    ${FREEGLUT_INCLUDE_DIR}
-    ${EXTERNAL_LIBRARIES_DIRECTORY}/observation_equations/codes
-    ${EXTERNAL_LIBRARIES_DIRECTORY}/manif/include
-    ${EXTERNAL_LIBRARIES_DIRECTORY}/portable-file-dialogs
-    # the headers dMapper took over (retire-core); core goes in a later commit of that change
-    src/domain)
-
 # ---- layers (docs/ARCHITECTURE.md): each library gets only the include directories its layer may use, so a file that
 # includes something its layer must not see doesn't compile ----
 
-# domain: entities and the optimizers. Eigen, manif, observation_equations and core/include (the "math kernel"); no
-# LASzip, json, GL, ImGui, Fusion or TBB directories, so core's I/O headers (session.h, export_laz.h) don't compile here
+# domain: entities and the optimizers. Eigen, manif and observation_equations only; no LASzip, json, GL, ImGui, Fusion
+# or TBB directories
 add_library(lo_domain STATIC
   src/domain/ndt_map.cpp
   src/domain/normal_equations.cpp
@@ -229,7 +169,6 @@ add_library(lo_domain STATIC
   src/domain/robust_lidar_odometry.cpp)
 target_include_directories(lo_domain PUBLIC
   src/domain
-  core/include
   ${EIGEN3_INCLUDE_DIR}
   ${EXTERNAL_LIBRARIES_DIRECTORY}/manif/include
   ${EXTERNAL_LIBRARIES_DIRECTORY}/observation_equations/codes)
@@ -245,8 +184,8 @@ add_library(lo_application STATIC
 target_include_directories(lo_application PUBLIC src/application)
 target_link_libraries(lo_application PUBLIC lo_domain)
 
-# infrastructure: the adapters (folders, LAZ, CSV, TOML, JSON, console, the Fusion AHRS, the TBB executor). core's I/O headers need the GUI include
-# directories and WITH_GUI=1 (as core is built), so their class layouts match core's
+# infrastructure: the adapters (folders, LAZ, CSV, TOML, JSON, console, the Fusion AHRS, the TBB executor), with the
+# include directories of those libraries only: no ImGui, GLUT or GL
 add_library(lo_infrastructure STATIC
   src/infrastructure/recording_folder_source.cpp
   src/infrastructure/recording_files.cpp
@@ -266,15 +205,7 @@ target_include_directories(lo_infrastructure
   PRIVATE ${EXTERNAL_LIBRARIES_DIRECTORY}/json/include
           ${EXTERNAL_LIBRARIES_DIRECTORY}/csv-parser
           ${LASZIP_INCLUDE_DIR}/LASzip/include
-          ${EXTERNAL_LIBRARIES_DIRECTORY}/imgui
-          ${EXTERNAL_LIBRARIES_DIRECTORY}/imgui/backends
-          ${EXTERNAL_LIBRARIES_DIRECTORY}/ImGuizmo
-          ${FREEGLUT_INCLUDE_DIR}
-          ${EXTERNAL_LIBRARIES_DIRECTORY}/portable-file-dialogs
           ${EXTERNAL_LIBRARIES_DIRECTORY}/Fusion/Fusion)
-# FREEGLUT_LIB_PRAGMAS=0: core's I/O headers reach GL/freeglut.h (session.h -> point_cloud.h), whose auto-link pragma
-# would make everything that links the result or preview sinks link freeglut.lib; the adapters call no GLUT function
-target_compile_definitions(lo_infrastructure PRIVATE WITH_GUI=1 FREEGLUT_LIB_PRAGMAS=0)
 target_link_libraries(lo_infrastructure PUBLIC lo_application PRIVATE ${PLATFORM_LASZIP_LIB} Fusion ${PLATFORM_MISCELLANEOUS_LIBS})
 
 # presentation: the GUI's view-model (its state and actions). Only the infrastructure's include directories, no ImGui,
@@ -309,14 +240,12 @@ endif()
 
 add_executable(${APP_NAME} ${SOURCES})
 
-target_compile_definitions(${APP_NAME} PRIVATE -DWITH_GUI=1)
 
 target_include_directories(
   ${APP_NAME}
   PRIVATE src/presentation
           src/presentation/cli
           src/presentation/gui
-          ${REPOSITORY_DIRECTORY}/core/include
           ${EXTERNAL_LIBRARIES_DIRECTORY}
           ${EXTERNAL_LIBRARIES_DIRECTORY}/glm
           ${EIGEN3_INCLUDE_DIR}
@@ -336,7 +265,6 @@ target_link_libraries(
           ${APP_NAME}
           PRIVATE lo_gui_view_model
           lo_infrastructure
-          core
           Fusion
           ${FREEGLUT_LIBRARY}
           ${OPENGL_gl_LIBRARY}

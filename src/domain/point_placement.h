@@ -1,8 +1,7 @@
 #ifndef _POINT_PLACEMENT_H_
 #define _POINT_PLACEMENT_H_
 
-// points_to_vector without the rest of export_laz.h (which pulls in session.h, point_cloud.h, GL and LASzip);
-// export_laz.h includes this header, so its users still see it
+// points_to_vector: the points of a window placed with its trajectory (from HDMapping core's export_laz.h)
 
 #include <Eigen/Eigen>
 #include <vector>

@@ -21,21 +21,18 @@ add_executable(lidar_odometry_tests
   gui_view_model_test.cpp)
 
 # the code under test comes from the layer libraries (lo_gui_view_model brings lo_infrastructure, lo_application and
-# lo_domain); core is
-# not linked
+# lo_domain)
 target_link_libraries(lidar_odometry_tests PRIVATE lo_gui_view_model lo_infrastructure)
 
 target_include_directories(
   lidar_odometry_tests
   PRIVATE ${EXTERNAL_LIBRARIES_DIRECTORY}/doctest
-          ${REPOSITORY_DIRECTORY}/core/include
           ${EXTERNAL_LIBRARIES_DIRECTORY}
           ${EIGEN3_INCLUDE_DIR}
           ${EXTERNAL_LIBRARIES_DIRECTORY}/json/include
           ${LASZIP_INCLUDE_DIR}/LASzip/include
           ${EXTERNAL_LIBRARIES_DIRECTORY}/observation_equations/codes)
 
-# built without WITH_GUI: the code under test must not depend on the GUI
 target_compile_definitions(lidar_odometry_tests PRIVATE LO_REPO_DIR="${REPOSITORY_DIRECTORY}")
 
 if (MSVC)
