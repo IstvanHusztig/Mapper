@@ -17,7 +17,9 @@ Close the GUI before building.
 
 ## 3. New baselines
 
-- [ ] 3.1 The new baselines (decision 6): the full 44 run (background or subagent), first checked like 2.1 (every data file IDENTICAL with `tools/baseline/44.manifest.json`, the two text files differing only in version and date-time); then new `44.manifest.json` and `44_short.manifest.json`, a new precise manifest from this build, and new `raw data/44_baseline` / `44_short_baseline` folders (old ones renamed `*_2026-10-05`). Verify: `compare_baseline.py` reports IDENTICAL for the new runs against the new manifests. Commit (manifests only).
+- [x] 3.1 The new baselines (decision 6): the full 44 run (background or subagent), first checked like 2.1 (every data file IDENTICAL with `tools/baseline/44.manifest.json`, the two text files differing only in version and date-time); then new `44.manifest.json` and `44_short.manifest.json`, a new precise manifest from this build, and new `raw data/44_baseline` / `44_short_baseline` folders (old ones renamed `*_2026-10-05`). Verify: `compare_baseline.py` reports IDENTICAL for the new runs against the new manifests. Commit (manifests only).
+
+  - **Recorded (2026-10-05):** full 44 (1986 s), mapped back to 0.95.0 (the same five lines), IDENTICAL with the old `44.manifest.json` (35 files). New manifests written from `raw data/44_baseline` (35 files), `44_short_baseline` and `44_short_precise_baseline` (11 each), each IDENTICAL with its folder; old folders kept as `*_2026-10-05`, the old precise manifest as `44_short_precise.manifest_2026-10-05.json` in the scratchpad.
 
 ## 4. Docs
 
