@@ -20,9 +20,9 @@ Close the GUI before building.
 
 ## 3. Docs
 
-- [ ] 3.1 Update:
+- [x] 3.1 Update:
   - `CLAUDE.md`: the intro's dependency list, Testing (tests don't link `core` — now there is none), the layers (no `core/include`, no review rule for session types, no `WITH_GUI`/`FREEGLUT_LIB_PRAGMAS` in infrastructure), the `core/` library and link-order paragraphs (removed), the GUI paragraph (viewer and dialogs in `src/presentation/gui`, its globals in `viewer.cpp`);
   - `docs/ARCHITECTURE.md`: step 11 done; the decision "`core/` is wrapped and moved on touch" closed; §5 without `core`;
   - other mentions of `core/` in `docs/` and `tools/README.md` (grep, list each).
 
-  Verify: `grep -rn "core/" CLAUDE.md docs tools/README.md` lists only history; `openspec validate retire-core --strict` passes. Commit.
+  Verify: `grep -rn "core/" CLAUDE.md docs tools/README.md` lists only history; `openspec validate retire-core --strict` passes. Commit. Result: `CLAUDE.md` (dependency list, Testing, the domain and infrastructure layers, the viewer and dialogs, the `core/` and link-order paragraphs replaced by a short "no `core/` any more", the camera globals now in `viewer.h`) and `docs/ARCHITECTURE.md` (§4 and §5 without `core`, with `lo_gui_view_model`; step 11 done; the decision about `core/` closed; the `WorkerData` history line annotated). `docs/*` and `tools/README.md` have no other mentions. The remaining `core` mentions in `ARCHITECTURE.md` are history (steps 6c, 7a, 7b, 10). The change validates strictly.

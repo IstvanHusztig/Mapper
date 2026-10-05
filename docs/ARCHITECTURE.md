@@ -62,7 +62,7 @@ infrastructure and UI at the edge, and all source dependencies pointing inward.
   `OdometryState` and `GuiPreferences`. Grouping `OdometryConfig` by section is left to step 5.
 - ✅ `WorkerData` (`core/include/structures.h`) carried cache file names and a GUI `show` flag.
   Step 4a moved the points behind the `PointStore` port, and step 5a replaced it in the app with
-  the domain `Window` (`src/domain/window.h`). `WorkerData` stays in `core` only for `session.cpp`.
+  the domain `Window` (`src/domain/window.h`). `WorkerData` stays in `core` only for `session.cpp` (since step 11 it is an unused struct in `src/domain/structures.h`).
 - ✅ Globals in `lidar_odometry_gui.cpp` (`params`, `worker_data`, `imu_data`, `trajectory`,
   `pointsPerFile`, step flags). Step 2 moved the run data into `OdometryPipeline`. The GUI still
   keeps `params`, `gui_prefs`, its current `pipeline` and UI state as file-scope globals for the
@@ -76,24 +76,24 @@ infrastructure and UI at the edge, and all source dependencies pointing inward.
   state hand-off and I/O → since step 6a one file per service: `scan_to_map`, `robust_lidar_odometry`,
   `consistency`, `imu_kinematics`, `normal_equations` and the window loop in `run_odometry`.
 - `core/` mixes pure math (NDT, ICP, pose graph) with I/O (LAZ export, session, file dialogs)
-  → the pure parts feed the domain, the rest becomes infrastructure (step 11).
+  → ✅ step 11: dMapper took over the few parts it used, and `core/` is gone.
 
 ## 5. Folder and CMake layout (built in step 7b)
 
 ```
-src/domain/          -> lib  lo_domain          (Eigen, manif, observation_equations, core/include)
+src/domain/          -> lib  lo_domain          (Eigen, manif, observation_equations)
 src/application/     -> lib  lo_application     (lo_domain only)
-src/infrastructure/  -> lib  lo_infrastructure  (lo_application, LASzip, toml, json, Fusion, TBB, core's I/O headers)
-src/presentation/cli, src/presentation/gui (in the dMapper exe)
+src/infrastructure/  -> lib  lo_infrastructure  (lo_application, LASzip, toml, json, csv-parser, Fusion, TBB)
+src/presentation/gui -> lib  lo_gui_view_model  (lo_infrastructure; the view-model only)
+src/presentation/cli, src/presentation/gui (in the dMapper exe: ImGui, freeglut, GL, file dialogs)
 src/main.cpp         -> exe  dMapper
 tests/               -> unit tests, linking lo_infrastructure (and with it the inner layers)
 ```
 
 Each library's include directories enforce the dependency rule: a domain file that includes LASzip doesn't
 compile.
-The `core` static library and its `CORE_SOURCE_FILES` link-order constraint stay; pieces move out
-of it only when a roadmap step touches them. The vendored `3rdparty/` stays as it is (plus
-doctest).
+There is no `core` library any more (step 11). The vendored `3rdparty/` holds only what dMapper
+builds against.
 
 ## 6. Migration roadmap
 
@@ -207,10 +207,16 @@ Steps 8–11 were added on 2026-10-03. They cover the goals that steps 0–7 sti
       A visible behaviour change, so its own proposal. Done: the view draws a main-thread copy (`TrajectoryCopy`)
       filled inside `GuiProgress::read_finished_windows`, whose lock a stage change also takes, and
       `optimize_windows` reports a window done only after the failure check that could still restore it.
-11. **Split `core/`:** the pure math (NDT, ICP, pose graph) goes into the domain, the I/O (LAZ export,
-    session, file dialogs) into infrastructure. This is the riskiest step because of the
-    `CORE_SOURCE_FILES` link-order constraint. Keeping `core` as a vendored "math kernel" dependency
-    instead is a valid outcome and is decided when the step is proposed.
+11. ✅ **Retire `core/`** (done 2026-10-05, `retire-core`; planned as "split `core/`"). Measured first:
+    the exe linked `core.lib` for three file-dialog functions only, infrastructure used only `exportLaz`
+    (LASzip + Eigen, but its header pulled `session.h` and GL in), the GUI used the viewer part of
+    `utils.cpp`, and the domain four header-only files. The user chose to retire `core/` rather than
+    keep it as a math kernel: `structures.h`, `transformations.h`, `ndt_types.h` and `point_placement.h`
+    moved into `src/domain` unchanged, `exportLaz` into `src/infrastructure/laz_export`, the viewer and
+    the dialogs into `src/presentation/gui`, `csv.hpp` into `3rdparty/csv-parser`; the rest of `core/`
+    (about 38,000 lines) was deleted, with `CORE_SOURCE_FILES` and its link-order rules, `WITH_GUI` and
+    the `FREEGLUT_LIB_PRAGMAS` workaround. GLEW, ImGuizmo, implot and glm went too; GLEW was only
+    needed for one OpenGL 2.0 constant in the unused Info window, which went with it.
 
 ## 7. Rules and conventions
 
@@ -226,9 +232,8 @@ Steps 8–11 were added on 2026-10-03. They cover the goals that steps 0–7 sti
   `robust_lidar_odometry` and `consistency` (standard library, only with `useMultithread`, which is
   off because their accumulation isn't deterministic); moving them behind the port means reworking
   that accumulation, a behaviour change of its own. Eigen, manif and observation_equations are allowed in the domain.
-- **`core/` is wrapped and moved on touch.** For now `core/` is treated as an external "math
-  kernel" dependency. A piece of it moves into the layers only when a roadmap step touches it.
-  There is no separate step for sorting all of `core/`.
+- **`core/` was wrapped and moved on touch** until step 11, which retired it (2026-10-05): what
+  dMapper used lives in the layers, and new code doesn't take anything from HDMapping's `core` again.
 - **Test framework: doctest**, vendored under `3rdparty/` (single header, fast to compile).
 - **Baseline: `raw data/44`.** The validated scan (loops on every floor) with
   `settings/lidar-vertical.toml` is the golden reference.
