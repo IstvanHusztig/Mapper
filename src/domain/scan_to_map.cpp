@@ -17,8 +17,11 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
                              const MotionModelTranslationImuOptions &translation_imu_options,
                              const VelocityPrior &velocity_prior, double lm_factor, double &delta,
                              Eigen::Vector3d &acc_offset, Eigen::Matrix3d &acc_offset_cov, Logger &logger,
-                             Eigen::Matrix3d *lidar_translation_information)
+                             Eigen::Matrix3d *lidar_translation_information, ScanToMapTiming *timing)
 {
+    const auto phase = [timing](PhaseTime ScanToMapTiming::*p) { return timing ? &(timing->*p) : nullptr; };
+    PhaseTimer setup_timer(phase(&ScanToMapTiming::setup));
+
     const bool have_dt = window.timestamps.size() == window.poses.size();
     const bool time_scaled_sigma = rotation_options.time_scaled_sigma && have_dt;
     const bool estimate_bias = rotation_options.estimate_bias && have_dt;
@@ -58,6 +61,7 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
     std::vector<Eigen::Matrix3d> normal_information;
     if (lidar_translation_information)
         normal_information.assign(window.poses.size(), Eigen::Matrix3d::Zero());
+    setup_timer.stop();
 
     const auto hessian_fun_indoor = [&](const Point3Di &intermediate_points_i)
     {
@@ -150,10 +154,12 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
             normal_information[intermediate_points_i.index_pose] += this_bucket.normal_vector * this_bucket.normal_vector.transpose();
     };
 
+    PhaseTimer indoor_timer(phase(&ScanToMapTiming::ndt_indoor));
     if (scan_to_map.multithread)
         std::for_each(std::execution::par_unseq, std::begin(intermediate_points), std::end(intermediate_points), hessian_fun_indoor);
     else
         std::for_each(std::begin(intermediate_points), std::end(intermediate_points), hessian_fun_indoor);
+    indoor_timer.stop();
 
     if (scan_to_map.use_hierarchical_rgd)
     {
@@ -238,11 +244,14 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
             AtPBndt.block<6, 1>(c, 0) -= AtPB;
         };
 
+        PhaseTimer outdoor_timer(phase(&ScanToMapTiming::ndt_outdoor));
         if (scan_to_map.multithread)
             std::for_each(std::execution::par_unseq, std::begin(intermediate_points), std::end(intermediate_points), hessian_fun_outdoor);
         else
             std::for_each(std::begin(intermediate_points), std::end(intermediate_points), hessian_fun_outdoor);
     }
+
+    PhaseTimer motion_terms_timer(phase(&ScanToMapTiming::motion_terms));
 
     // geometric translation constraint of this window (world frame, summed over the nodes)
     if (lidar_translation_information)
@@ -573,6 +582,9 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
         AtPBndt.block<3, 1>(io, 0) += prior_inf * (translation_imu_options.offset_prior_mean - acc_offset);
     }
 
+    motion_terms_timer.stop();
+    PhaseTimer assembly_timer(phase(&ScanToMapTiming::assembly));
+
     int ic = 0;
     int ir = tripletListB.size();
     tripletListA.emplace_back(ir, ic * 6 + 0, 1);
@@ -620,6 +632,9 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
     AtPA += pose_band_to_sparse(AtPAndt, n_pose_params, pose_band_offset);
     AtPB += AtPBndt.sparseView();
 
+    assembly_timer.stop();
+    PhaseTimer covariance_timer(phase(&ScanToMapTiming::covariance_solve));
+
     const int n_extra = n_params - n_pose_params;
     if (n_extra > 0)
     {
@@ -641,6 +656,9 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
             }
         }
     }
+
+    covariance_timer.stop();
+    PhaseTimer solve_timer(phase(&ScanToMapTiming::solve));
 
     Eigen::SparseMatrix<double> AtPA_I(n_params, n_params);
     if (n_extra > 0)
@@ -665,6 +683,8 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
     for (int k = 0; k < x.outerSize(); ++k)
         for (Eigen::SparseMatrix<double>::InnerIterator it(x, k); it; ++it)
             h_x.push_back(it.value());
+    solve_timer.stop();
+    PhaseTimer update_timer(phase(&ScanToMapTiming::update));
 
     delta = 1000000.0;
     if (h_x.size() == static_cast<size_t>(n_params))
