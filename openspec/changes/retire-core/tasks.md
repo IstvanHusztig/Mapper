@@ -1,0 +1,28 @@
+# Tasks
+
+**Checks on every code commit** (design decision 8), run by the scratchpad's `step_check_gvm.sh`: both presets build `dMapper` and `lidar_odometry_tests`, `ctest` passes; precise `44_short` IDENTICAL with the precise manifest from master; fast `44_short` IDENTICAL, or within `--tolerance 1e-6` of `raw data/44_short_baseline` (report the largest difference). Reconfigure the precise build tree after a CMake change.
+
+Close the GUI before building.
+
+## 1. Move what dMapper uses
+
+- [ ] 1.1 `git mv` `structures.h`, `transformations.h`, `ndt_types.h` and `point_placement.h` from `core/include` to `src/domain`, and `csv.hpp` to `3rdparty/csv-parser/` (decision 1); add `3rdparty/csv-parser` to `lo_infrastructure`'s private include directories. `core` still builds until task 2.1 and includes these headers too, so append `src/domain` (after `core/include`) to the `core` target's include directories meanwhile. Verify: the step checks; `git diff -M --stat` shows the five files as renames without content change. Commit.
+- [ ] 1.2 `exportLaz` into `src/infrastructure/laz_export.{h,cpp}` (decision 2); `folder_preview_sink.cpp` and `folder_result_sink.cpp` include it instead of `export_laz.h`. Verify: the step checks; the function body is unchanged (diff against `core/include/export_laz.h`); `grep -rn "export_laz.h" src/infrastructure` finds nothing. Commit.
+- [ ] 1.3 `src/presentation/gui/viewer.{h,cpp}` and `file_dialogs.{h,cpp}` (decisions 3 and 4); `lidar_odometry_gui.cpp` and `main.cpp` include them instead of `utils.hpp`, `pfd_wrapper.hpp` and `export_laz.h`; the exe compiles `viewer.cpp` and `file_dialogs.cpp` instead of `core/src/utils.cpp`. List what was dropped from `utils.cpp` and why. Verify: the step checks; `grep -rn "<utils.hpp>\|pfd_wrapper\|export_laz" src` finds nothing. Commit.
+- [ ] 1.4 GUI run by the user (decision 8): start-up (title, background), Start → Load parameters (`lidar-vertical.toml`), View options, Camera presets and orthographic view, Ctrl + right-click sets the rotation centre, the compass/ruler (key C), Load data and process on `44_short`. Verify: `lio_result_<n>` IDENTICAL with `tools/baseline/44_short.manifest.json`; record what the user saw.
+
+## 2. Retire core
+
+- [ ] 2.1 Remove the `core` target, `CORE_SOURCE_FILES` and every `core/include` include directory from `CMakeLists.txt` and `tests/CMakeLists.txt`; `git rm -r core`; drop `WITH_GUI=1` and `FREEGLUT_LIB_PRAGMAS=0` from `lo_infrastructure` (decision 5). Record any include that had to be added because a deleted header used to bring it. Verify: the step checks (precise tree reconfigured); `git ls-files core` is empty; `grep -rn "core/" CMakeLists.txt tests/CMakeLists.txt` finds nothing. Commit.
+- [ ] 2.2 Unused vendored libraries (decision 6): remove glew, implot, ImGuizmo and the glm include path from the build one at a time, each followed by a build of both presets; delete the `3rdparty/` folders of those removed. Record which went and which stayed (and why). Verify: the step checks. Commit.
+- [ ] 2.3 Run the full 44 once (background or subagent). Verify: IDENTICAL with `tools/baseline/44.manifest.json`, or within `--tolerance 1e-6` of `raw data/44_baseline`. Record the result here.
+- [ ] 2.4 If 2.2 removed anything the GUI links (implot, ImGuizmo): a second short GUI run by the user (start-up, menus, one `44_short` run, IDENTICAL). Otherwise record that 1.4 covers it.
+
+## 3. Docs
+
+- [ ] 3.1 Update:
+  - `CLAUDE.md`: the intro's dependency list, Testing (tests don't link `core` — now there is none), the layers (no `core/include`, no review rule for session types, no `WITH_GUI`/`FREEGLUT_LIB_PRAGMAS` in infrastructure), the `core/` library and link-order paragraphs (removed), the GUI paragraph (viewer and dialogs in `src/presentation/gui`, its globals in `viewer.cpp`);
+  - `docs/ARCHITECTURE.md`: step 11 done; the decision "`core/` is wrapped and moved on touch" closed; §5 without `core`;
+  - other mentions of `core/` in `docs/` and `tools/README.md` (grep, list each).
+
+  Verify: `grep -rn "core/" CLAUDE.md docs tools/README.md` lists only history; `openspec validate retire-core --strict` passes. Commit.
