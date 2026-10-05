@@ -21,7 +21,7 @@ cmake --build --preset x64-Release --target dMapper
 
 - Output: `out/build/<preset>/bin/dMapper.exe` (the name is `APP_NAME` in `CMakeLists.txt`). On Windows, runtime DLLs (TBB etc.) and `settings/default_settings.toml` are copied next to the exe post-build. Debug is unoptimized and many times slower; always process data with Release.
 - `-DHD_CPU_OPTIMIZATION=AUTO|INTEL|AMD|ARM|GENERIC` selects release optimization flags (AMD on MSVC adds `/fp:fast`).
-- The version (`HDMAPPING_VERSION_MAJOR/MINOR/PATCH`) is defined in the root `CMakeLists.txt`; `shared/include/HDMapping/Version.hpp` errors if it's missing.
+- dMapper's version (`DMAPPER_VERSION_MAJOR/MINOR/PATCH`, now 0.1.0) is defined in the root `CMakeLists.txt`; `src/domain/dmapper_version.h` turns it into `dmapper_version()` ("0.1.0") and `dmapper_version_short()` ("0.1", the GUI title) and errors if it's missing. The output folder's `dMapper_params_<version>_<date-time>.toml` and `dMapper_results_<version>_<date-time>.json` carry it in their names, and they and `session.mjs` (`lidar_odometry_version`) carry it inside. A loaded TOML's `[version_info]` only feeds the compatibility warning (major and minor must match); a run records the build's version.
 
 ## Testing
 
@@ -36,7 +36,7 @@ cmake --build --preset x64-Release --target dMapper
 ## Run
 
 - **Headless / CLI:** `dMapper <input_folder> <params.toml> <output_folder>`. Exactly 3 args triggers batch mode. The settings are the built-in defaults plus `<params.toml>` only, never a `default_settings.toml` from the working directory; an unreadable TOML exits 1.
-- **GUI:** any other argument count opens the freeglut + ImGui window, titled "dMapper v 0.1" (`winTitle` in `lidar_odometry_gui.cpp`). The menu bar has Start, View and Camera:
+- **GUI:** any other argument count opens the freeglut + ImGui window, titled "dMapper v 0.1" (`winTitle` in `lidar_odometry_gui.cpp`, from `dmapper_version_short()`). The menu bar has Start, View and Camera:
   - **Start → 1. Load parameters…** loads a TOML. This is the only way to change settings in the GUI; at start-up it loads `default_settings.toml` from the exe folder. The Start menu and the progress window show the active parameter file.
   - **Start → 2. Load data and process…** (Ctrl+O) picks the recording folder, then loads it on a worker thread, processes it with the same stages as the CLI, and saves `lio_result_<n>`. For the same input and settings the result is identical to the CLI's.
   - **View** has Show point cloud, Show trajectory, compass/ruler and Lock Z; **Camera** has the fixed views and orthographic projection.

@@ -157,7 +157,7 @@
 <tr><td>imu*.csv</td><td><code>gyroX gyroY gyroZ</code> (rad/s), <code>accX accY accZ</code> (g), <code>imuId</code>, <code>timestamp</code> (ns, same clock as the points), <code>timestampUnix</code>. <b>Every</b> <code>.csv</code> in the folder is read as IMU data. The timestamps must be strictly increasing and should be steady; recordings with bursty or stepped timestamps can be repaired with <code>tools/fix_imu_timestamps.py</code>.</td><td>yes</td></tr>
 <tr><td>anything else</td><td>Ignored (e.g. <code>*.json</code>, <code>*.sn</code>). Only a single LiDAR is supported; there is no per-LiDAR calibration file.</td><td>no</td></tr>
 </table></div>
-<p>The run command is <code>dMapper &lt;input_folder&gt; settings/lidar-vertical.toml &lt;output_folder&gt;</code>. The output folder receives <code>scan_lio_N.laz</code> (the map), <code>trajectory_lio_N.csv</code> (one pose per IMU sample, 4×3 matrix plus the raw IMU angles), <code>session.mjs</code> with <code>session_poses.mrp</code> (loadable in HDMapping), the parameters used (<code>HDMapping_params_*.toml</code>) and <code>HDMapping_results_*.json</code> (trajectory length, grid info, and the gyro bias per window in <code>gyro_bias_per_window</code>).</p>
+<p>The run command is <code>dMapper &lt;input_folder&gt; settings/lidar-vertical.toml &lt;output_folder&gt;</code>. The output folder receives <code>scan_lio_N.laz</code> (the map), <code>trajectory_lio_N.csv</code> (one pose per IMU sample, 4×3 matrix plus the raw IMU angles), <code>session.mjs</code> with <code>session_poses.mrp</code> (loadable in HDMapping), the parameters used (<code>dMapper_params_*.toml</code>) and <code>dMapper_results_*.json</code> (trajectory length, grid info, and the gyro bias per window in <code>gyro_bias_per_window</code>).</p>
 
 <h2 id="pipeline">The pipeline</h2>
 <div class="diagram" role="img" aria-label="Pipeline: LAZ points and IMU samples are loaded, the IMU gives an orientation per sample, points are attached to poses and grouped into windows, each window is optimized against the NDT map, then the map is updated and the next window starts; finally all points are exported with their own pose.">
@@ -311,7 +311,7 @@ The log lists every candidate with its overlap before/after and the correction. 
 See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 
 <h2 id="params">Parameter reference</h2>
-<p>One table per TOML section, in the order that matters most. Values are those of <code>settings/lidar-vertical.toml</code>. Labels: <span class="badge b-key">key</span> strongly affects results, <span class="badge b-gui">GUI only</span> only affects the GUI, <span class="badge b-off">inactive</span> read but has no effect with the current settings or code. Missing keys fall back to built-in defaults, and every run saves the complete set it used to <code>HDMapping_params_*.toml</code>.</p>
+<p>One table per TOML section, in the order that matters most. Values are those of <code>settings/lidar-vertical.toml</code>. Labels: <span class="badge b-key">key</span> strongly affects results, <span class="badge b-gui">GUI only</span> only affects the GUI, <span class="badge b-off">inactive</span> read but has no effect with the current settings or code. Missing keys fall back to built-in defaults, and every run saves the complete set it used to <code>dMapper_params_*.toml</code>.</p>
 
 <h3 id="p-filter">[filter_points]</h3>
 <div class="table-wrap"><table>
@@ -469,7 +469,7 @@ See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 <tr><td>log_iteration_convergence</td><td class="val">false</td><td>Prints per window after how many iterations the poses settled (within 0.1 mm / 0.001&deg;) and when <code>delta</code> first fell below 1e-2, with the pose error at that point, and a summary at the end of the run. Doesn't change results. <code>tools/convergence_summary.py</code> makes histograms from the saved log; the 44 numbers are in <code>docs/PERFORMANCE.md</code>.</td></tr>
 <tr><td>working_directory_preview, current_output_dir</td><td class="val">(paths)</td><td>Written by the program: the preview folder (<code>&lt;input&gt;/preview</code>, which holds a temporary point cloud of window 1 and every 100th window after it) and the output folder. Recalculated on every run, so the stored value doesn't matter.</td></tr>
 <tr><td>clear_color <span class="badge b-gui">GUI only</span></td><td class="val">RGBA</td><td>Background colour of the 3-D view.</td></tr>
-<tr><td>software_version, config_version, build_date</td><td class="val">0.95.0</td><td>Compatibility check when loading: the file counts as compatible when major and minor version match the program (0.95); otherwise a warning is printed.</td></tr>
+<tr><td>software_version, config_version, build_date</td><td class="val">0.1.0</td><td>Compatibility check when loading: the file counts as compatible when major and minor version match the program (0.1); otherwise a warning is printed. A run always records the program's own version, whatever the file says.</td></tr>
 </table></div>
 
 <h2 id="practice">Best practices</h2>

@@ -21,4 +21,4 @@ Close the GUI before building.
 
 ## 4. Docs
 
-- [ ] 4.1 `CLAUDE.md` (Build: the version in `CMakeLists.txt` and `dmapper_version.h`; Testing and elsewhere: the `dMapper_*` file names) and every other `HDMapping_params`/`HDMapping_results`/`Version.hpp` mention in `docs/` and `tools/README.md`. Verify: `grep -rn "HDMapping_params\|HDMapping_results\|Version.hpp\|HDMAPPING_VERSION" CLAUDE.md docs tools src` lists only history; `openspec validate dmapper-version --strict` passes. Commit.
+- [x] 4.1 `CLAUDE.md` (Build: the version in `CMakeLists.txt` and `dmapper_version.h`; Testing and elsewhere: the `dMapper_*` file names) and every other `HDMapping_params`/`HDMapping_results`/`Version.hpp` mention in `docs/` and `tools/README.md`. Verify: `grep -rn "HDMapping_params\|HDMapping_results\|Version.hpp\|HDMAPPING_VERSION" CLAUDE.md docs tools src` lists only history; `openspec validate dmapper-version --strict` passes. Commit.
