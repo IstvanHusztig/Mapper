@@ -36,7 +36,7 @@
 // dMapper: LiDAR + IMU mapping. Computes the trajectory and point cloud of a recording folder
 // (lidar*.laz + imu*.csv) and saves them as a result folder (session.mjs, trajectories, LAZ point clouds).
 
-std::string winTitle = "dMapper";
+std::string winTitle = "dMapper v 0.1";
 
 namespace fs = std::filesystem;
 

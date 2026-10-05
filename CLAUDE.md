@@ -34,7 +34,7 @@ cmake --build --preset x64-Release --target dMapper
 ## Run
 
 - **Headless / CLI:** `dMapper <input_folder> <params.toml> <output_folder>`. Exactly 3 args triggers batch mode. The settings are the built-in defaults plus `<params.toml>` only, never a `default_settings.toml` from the working directory; an unreadable TOML exits 1.
-- **GUI:** any other argument count opens the freeglut + ImGui window, titled "dMapper". The menu bar has Start, View and Camera:
+- **GUI:** any other argument count opens the freeglut + ImGui window, titled "dMapper v 0.1" (`winTitle` in `lidar_odometry_gui.cpp`). The menu bar has Start, View and Camera:
   - **Start → 1. Load parameters…** loads a TOML. This is the only way to change settings in the GUI; at start-up it loads `default_settings.toml` from the exe folder. The Start menu and the progress window show the active parameter file.
   - **Start → 2. Load data and process…** (Ctrl+O) picks the recording folder, then loads it on a worker thread, processes it with the same stages as the CLI, and saves `lio_result_<n>`. For the same input and settings the result is identical to the CLI's.
   - **View** has Show point cloud, Show trajectory, compass/ruler and Lock Z; **Camera** has the fixed views and orthographic projection.
