@@ -21,19 +21,23 @@ Close the GUI before building. Never run two jobs on the same input folder at on
 
 ## 2. Timers
 
-- [ ] 2.1 Add `src/domain/phase_timing.h` with `PhaseTime`, `ScanToMapTiming` and `PhaseTimer` (design decision 2). Add a test in `tests/` showing that:
+- [x] 2.1 Add `src/domain/phase_timing.h` with `PhaseTime`, `ScanToMapTiming` and `PhaseTimer` (design decision 2). Add a test in `tests/` showing that:
   - a `PhaseTimer` on a null target does nothing;
   - on a target, it adds one call and a non-negative time;
   - two timers on the same target add up.
 
   Verify: build, `ctest`. Commit.
-- [ ] 2.2 Add the parameter `ScanToMapTiming *timing = nullptr` to `optimize_lidar_odometry`, and time its eight phases (decision 3) without reordering any statement. Verify:
+
+  Result: `tests/phase_timing_test.cpp`, three cases; both presets build and `ctest` passes.
+- [x] 2.2 Add the parameter `ScanToMapTiming *timing = nullptr` to `optimize_lidar_odometry`, and time its eight phases (decision 3) without reordering any statement. Verify:
   - the step checks with the setting off;
   - the precise `44_short` is bit-identical;
   - the synthetic scan-to-map tests still pass unchanged.
 
   Commit.
-- [ ] 2.3 In `run_odometry.cpp`, add `OdometryTiming` to `WindowLoopCarry`. When the setting is on:
+
+  Result: eight `PhaseTimer`s, started and stopped around the existing statements; no statement moved. Checked together with 2.3 and 2.4: both presets and `ctest` pass, and with the setting off, precise and fast `44_short` are IDENTICAL (11 files), the fast build too.
+- [x] 2.3 In `run_odometry.cpp`, add `OdometryTiming` to `WindowLoopCarry`. When the setting is on:
   - `run_lm_iterations` passes the `ScanToMapTiming`;
   - the window loop times `point_load`, `lm_iterations`, `add_to_map`, `preview` and `window_total`;
   - `finish_run` logs the breakdown (decision 4).
@@ -44,7 +48,13 @@ Close the GUI before building. Never run two jobs on the same input folder at on
   - the LM phases add up to `lm_iterations` within about 1 %.
 
   Commit.
-- [ ] 2.4 Add the per-step lines in `odometry_pipeline.cpp` (decision 5). Verify: the `44_short` run with the setting on prints one line per step, and the steps add up to the CLI's total elapsed time within about 1 %. Results are as in 2.3. Commit.
+
+  Result: with the setting on, precise and fast `44_short` differ from the manifests only in the params TOML (`log_stage_timing = true`). The breakdown is printed. The total is measured with `steady_clock`, like the phases; a first version used the `system_clock` total of the "elapsed time" line, which was 3 s shorter than the phases on one run, giving a negative `other`.
+
+  Deviation: the eight named LM phases add up to 93 % of `lm_iterations`, not 99 %. The rest (11.9 s of 165.5 s on `44_short`) is logged as `lm other`. It is the loop in `run_lm_iterations` plus the end of each `optimize_lidar_odometry` call, after the `update` timer has stopped, where the call's matrices (the dense 37 MB normal matrix among them) are freed. That is read from the code; it isn't timed separately.
+- [x] 2.4 Add the per-step lines in `odometry_pipeline.cpp` (decision 5). Verify: the `44_short` run with the setting on prints one line per step, and the steps add up to the CLI's total elapsed time within about 1 %. Results are as in 2.3. Commit.
+
+  Result: one line per step (`load_data` 1.0 s, `calculate_trajectory` 0.0 s, `compute_step_1` 0.4 s, `odometry` 166.0 s, `loop_closure` 0.2 s, `consistency` 30.8 s, `save` 1.8 s). Up to the save, they add up to 199.4 s against the 198.5 s "Processing time" (+0.5 %). Overhead: 44_short took 200 s off and 200 s on (fast), 206 s off and 203 s on (precise), which is within run-to-run noise.
 
 ## 3. Measurement and docs
 
