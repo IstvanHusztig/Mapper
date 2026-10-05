@@ -400,3 +400,83 @@ TEST_CASE("scan-to-map: the translation information shows a degenerate corridor"
     MESSAGE("corridor: information along x ", along, ", across (smaller of y and z) ", across);
     CHECK(along <= 0.01 * across);
 }
+
+namespace
+{
+    // one window optimization with useMultithread on or off: the room or corridor, the drifting guess of a 0.5 deg/s gyro bias
+    // with bias estimation on, the points in scene order (grouped by node) or shuffled (as decimate leaves them, ordered by
+    // cell, not by node)
+    struct MultithreadRun
+    {
+        std::vector<Eigen::Affine3d> poses;
+        Eigen::Vector3d bias;
+        Eigen::Matrix3d translation_information;
+        double delta = 0.0;
+    };
+
+    MultithreadRun run_window(const Scene &s, bool multithread, bool shuffled, int iterations)
+    {
+        OdometryConfig c = test_config();
+        c.use_gyro_bias_estimation = true;
+        c.useMultithread = multithread;
+        const Options o = options_from(c);
+        Maps maps = build_maps(s, o.scan_to_map);
+        const std::vector<Eigen::Affine3d> truth = true_poses();
+        std::vector<Point3Di> points = observe(s, truth);
+        if (shuffled)
+            std::shuffle(points.begin(), points.end(), std::mt19937(11));
+        Window w = make_window(drifting_guess(truth, 0.5 * deg));
+        NullLogger logger;
+        MultithreadRun r;
+        r.translation_information = Eigen::Matrix3d::Zero();
+        r.delta = run_iterations(points, w, maps, o, 5.0, iterations, logger, &r.translation_information);
+        r.poses = w.poses;
+        r.bias = w.gyro_bias.mean;
+        return r;
+    }
+
+    // bit for bit: every element of every pose, the bias, the translation information and the last delta
+    bool identical(const MultithreadRun &a, const MultithreadRun &b)
+    {
+        if (a.poses.size() != b.poses.size() || a.delta != b.delta || a.bias != b.bias || a.translation_information != b.translation_information)
+            return false;
+        for (size_t k = 0; k < a.poses.size(); k++)
+            if (a.poses[k].matrix() != b.poses[k].matrix())
+                return false;
+        return true;
+    }
+}
+
+// useMultithread must not change results (change deterministic-multithread): each node's point terms are summed in point
+// order whether the nodes run in parallel or one after the other
+// should_fail until the accumulation is per node (deterministic-multithread 1.2): today the points of a node are added
+// under a lock in thread order, so the sums change with the thread timing
+TEST_CASE("scan-to-map: multithreaded equals single-threaded, bit for bit" * doctest::should_fail())
+{
+    for (const bool use_corridor : {false, true})
+        for (const bool shuffled : {false, true})
+            for (const int iterations : {1, 30})
+            {
+                CAPTURE(use_corridor);
+                CAPTURE(shuffled);
+                CAPTURE(iterations);
+                const Scene s = use_corridor ? corridor() : room();
+                const MultithreadRun single = run_window(s, false, shuffled, iterations);
+                const MultithreadRun multi = run_window(s, true, shuffled, iterations);
+                CHECK(identical(single, multi));
+            }
+}
+
+// should_fail until the accumulation is per node (deterministic-multithread 1.2): today the points of a node are added
+// under a lock in thread order, so the sums change with the thread timing
+TEST_CASE("scan-to-map: two multithreaded runs are identical, bit for bit" * doctest::should_fail())
+{
+    for (const bool use_corridor : {false, true})
+    {
+        CAPTURE(use_corridor);
+        const Scene s = use_corridor ? corridor() : room();
+        const MultithreadRun first = run_window(s, true, true, 30);
+        const MultithreadRun second = run_window(s, true, true, 30);
+        CHECK(identical(first, second));
+    }
+}

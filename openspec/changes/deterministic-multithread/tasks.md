@@ -9,11 +9,13 @@ Close the GUI before building. Never run two jobs on the same input folder at on
 
 ## 1. Deterministic accumulation
 
-- [ ] 1.1 Add the multithread equality tests to `tests/scan_to_map_test.cpp` (design decision 5.1), on the synthetic room and corridor, with the points in scene order and shuffled:
+- [x] 1.1 Add the multithread equality tests to `tests/scan_to_map_test.cpp` (design decision 5.1), on the synthetic room and corridor, with the points in scene order and shuffled:
   - one iteration and a 30-iteration optimization with `multithread = true` and `false` give exactly equal poses, gyro bias and translation information;
   - two multithreaded runs are equal.
 
   Expect the multithreaded cases to fail before 1.2; mark them `doctest::should_fail` with the cause, as the test rules say. Verify: build, `ctest`. Commit.
+
+  Result: two cases in `tests/scan_to_map_test.cpp` (`run_window`, `identical`). Without the fix, all 10 checks failed in each of 3 runs, two multithreaded runs against each other included. Both cases are marked `should_fail`; Release build and `ctest` pass (the Debug build is checked with 1.2).
 - [ ] 1.2 In `optimize_lidar_odometry`, group the points by node in their original order and run the indoor, then the outdoor pass per node, with `std::execution::par` or sequentially (decisions 1–3). Remove the mutexes and `<mutex>`. Verify:
   - the 1.1 tests pass, and their `should_fail` markers go;
   - the step checks with `useMultithread = false`;
