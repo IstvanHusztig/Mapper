@@ -35,12 +35,14 @@ Close the GUI before building. Never run two jobs on the same input folder at on
 
 ## 2. New default
 
-- [ ] 2.1 Set `useMultithread = true` in `OdometryConfig` (and update its comment), `settings/default_settings.toml` and `settings/lidar-vertical.toml` (decision 4). Regenerate the golden TOML files with `LO_UPDATE_GOLDEN=1` in their own commit. Verify:
+- [x] 2.1 Set `useMultithread = true` in `OdometryConfig` (and update its comment), `settings/default_settings.toml` and `settings/lidar-vertical.toml` (decision 4). Regenerate the golden TOML files with `LO_UPDATE_GOLDEN=1` in their own commit. Verify:
   - the step checks;
   - the `44_short` params TOML differs only in `useMultithread = true`;
   - update its hash in the 44 and 44_short manifests and the precise reference in the same commit.
 
   `44_short` (fast and precise) is then IDENTICAL. Commit.
+
+  Result: both presets build and `ctest` passes (Debug too). Precise and fast `44_short` differed only in the params TOML (`useMultithread = true`). Its hash `5c242431` → `fdf6688b` is updated in the 44 and 44_short manifests and the precise reference; both runs are then IDENTICAL (11 files). `44_short` took 147 s (precise and fast), against 197 s single-threaded.
 
 ## 3. Full run, GUI, docs
 
