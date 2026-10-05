@@ -7,7 +7,7 @@ Close the GUI before building.
 ## 1. One version
 
 - [x] 1.1 `src/domain/dmapper_version.h` (decision 1); `DMAPPER_VERSION_*` = 0.1.0 in `CMakeLists.txt` in place of `HDMAPPING_VERSION_*`; `shared/` and `include_directories(shared/include)` removed; `get_software_version()` uses the new header; `folder_result_sink`, `toml_io` and the GUI as in decisions 2 and 3 (the unused `Version.hpp` includes in `lidar_odometry_gui.cpp` and `viewer.cpp` go); `settings/*.toml` `[version_info]` say 0.1.0 (decision 4); `tests/toml_config_repository_test.cpp` expects the build's version. Verify: both presets build; `ctest` passes except the golden TOML tests (they change in 1.2); `grep -rn "HDMAPPING_VERSION\|Version.hpp\|HDMapping_" src CMakeLists.txt` finds nothing; the GUI title is "dMapper v 0.1" (`MainWindowTitle`). Commit.
-- [ ] 1.2 Regenerate the golden TOML files (`LO_UPDATE_GOLDEN=1`, decision 4) and check their diff is only the version lines. Verify: `ctest` passes in both presets. Commit.
+- [x] 1.2 Regenerate the golden TOML files (`LO_UPDATE_GOLDEN=1`, decision 4) and check their diff is only the version lines. Verify: `ctest` passes in both presets. Commit.
 
 ## 2. Tools
 
