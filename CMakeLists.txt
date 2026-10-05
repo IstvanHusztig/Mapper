@@ -210,7 +210,9 @@ target_include_directories(core PRIVATE
     ${FREEGLUT_INCLUDE_DIR}
     ${EXTERNAL_LIBRARIES_DIRECTORY}/observation_equations/codes
     ${EXTERNAL_LIBRARIES_DIRECTORY}/manif/include
-    ${EXTERNAL_LIBRARIES_DIRECTORY}/portable-file-dialogs)
+    ${EXTERNAL_LIBRARIES_DIRECTORY}/portable-file-dialogs
+    # the headers dMapper took over (retire-core); core goes in a later commit of that change
+    src/domain)
 
 # ---- layers (docs/ARCHITECTURE.md): each library gets only the include directories its layer may use, so a file that
 # includes something its layer must not see doesn't compile ----
@@ -261,6 +263,7 @@ add_library(lo_infrastructure STATIC
 target_include_directories(lo_infrastructure
   PUBLIC src/infrastructure
   PRIVATE ${EXTERNAL_LIBRARIES_DIRECTORY}/json/include
+          ${EXTERNAL_LIBRARIES_DIRECTORY}/csv-parser
           ${LASZIP_INCLUDE_DIR}/LASzip/include
           ${EXTERNAL_LIBRARIES_DIRECTORY}/imgui
           ${EXTERNAL_LIBRARIES_DIRECTORY}/imgui/backends
