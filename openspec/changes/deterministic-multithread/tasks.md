@@ -49,7 +49,9 @@ Close the GUI before building. Never run two jobs on the same input folder at on
 - [x] 3.1 Run the full 44 in the background with the new default, `log_stage_timing` on through a scratchpad copy of the settings. Verify: IDENTICAL with `tools/baseline/44.manifest.json` apart from the params TOML, or within `--tolerance 1e-6` of `raw data/44_baseline`. Report the profile against `stage-timing`: odometry 1578.5 s, whole run 1990 s, NDT loops 737 s. If neither holds, pause.
 
   Result: 1467 s run. 34 of 35 files are IDENTICAL with the manifest; the params TOML differs, because it records `log_stage_timing = true`. Odometry 1578.5 → 1059.6 s (−33 %), whole run 1990 → 1467 s (−26 %). NDT loops 736.7 → 180.3 s (indoor 6.05 → 1.74 ms, outdoor 4.63 → 0.88 ms per iteration, 4.1× together). The dense-matrix setup (4.09 ms, 26.6 %) is now the largest phase. Loop closure 53 s, consistency 321 s and save 20 s are unchanged.
-- [ ] 3.2 GUI check by the user: load `44_short` in the GUI with `settings/lidar-vertical.toml`. Its `lio_result_<n>` must be IDENTICAL with the manifest. The user reports whether the window stays responsive during the run, and its time. No CLI job may run at the same time.
+- [x] 3.2 GUI check by the user: load `44_short` in the GUI with `settings/lidar-vertical.toml`. Its `lio_result_<n>` must be IDENTICAL with the manifest. The user reports whether the window stays responsive during the run, and its time. No CLI job may run at the same time.
+
+  Result (2026-10-05): `44_short/lio_result_15` is IDENTICAL with the manifest (11 files). The user reports about 2 minutes and a responsive window during the run.
 - [x] 3.3 Docs:
   - `docs/PERFORMANCE.md`: a new fix entry (problem, fix, measured gain on `44_short` and 44, how it was checked) and its summary row; the `useMultithread` row of "Settings that trade speed" (default `true`, no cost to reproducibility); the analysis section's planned order (this step done).
   - `docs/index.html`: the `useMultithread` row and the "Results differ between runs" troubleshooting row.
