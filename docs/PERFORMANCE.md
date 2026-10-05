@@ -3,8 +3,8 @@
 This page lists the changes that made dMapper faster or kept it from becoming slower: what was slow, what changed, what it gained, and how the result was checked. It also lists the settings that trade speed for accuracy or reproducibility, and the open performance findings.
 
 Times are for the reference recordings in `raw data/`, with the Release build and `settings/lidar-vertical.toml`:
-- `44` is the full recording, 690 windows, about 30 min;
-- `44_short` is its first 30 s, 70 windows, about 3.5 min.
+- `44` is the full recording, 690 windows, about 25 min (30 min before multithreading);
+- `44_short` is its first 30 s, 70 windows, about 2.5 min (3.5 min before).
 
 ## Summary
 
@@ -16,6 +16,7 @@ Times are for the reference recordings in `raw data/`, with the Release build an
 | [GUI frame-rate cap](#4-gui-frame-rate-cap) | 2026-10-02 | GUI | `44_short` in the GUI: 510–570 s → 195 s (CLI 197 s) | GUI = CLI again |
 | [Remaining-time estimate from the odometry start](#5-remaining-time-estimate) | 2026-10-01 | GUI | a realistic estimate (no speed gain) | – |
 | [Place only the next window](#6-place-only-the-next-window) | 2026-10-03 | window loop | 237,705 → 689 window placements on 44: 6.7 s → 0.02 s (about 0.4 % of the run) | last bits, within 1e-6 |
+| [Deterministic multithreading](#7-deterministic-multithreading) | 2026-10-05 | window optimizer | 44: odometry 1578 → 1060 s (−33 %), whole run 1990 → 1467 s (−26 %) | bit-identical |
 
 ## 1. Sparse band of the normal matrix
 
@@ -93,12 +94,36 @@ Because the old cost grows with the square of the number of windows, it would ha
 
 OpenSpec change `chain-next-window-only`. The full explanation, with diagrams and numbers, is in [`window-chaining.html`](window-chaining.html).
 
+## 7. Deterministic multithreading
+
+**Problem.** The NDT point loops of `optimize_lidar_odometry` took 47 % of the odometry and ran on one of the machine's 16 cores. `useMultithread = true` ran them in parallel, but the results changed from run to run. Each point added its terms into its own trajectory node's block under a per-node lock, so the points of a node arrived in thread order, and floating-point sums depend on order. Because of that the setting was off.
+
+**Fix.** The points are grouped by node, keeping their order (a counting sort per call), and the nodes run in parallel (`std::execution::par`). Each node's points are added in their original order, with no lock. A point writes only its own node's block, so every block receives exactly the additions of the serial loop, in the same order. The results are therefore the same bits with or without threads, and `useMultithread` is now `true` by default. The serial path is the same code with a sequential loop over the nodes. The old lock inside `par_unseq` was formally undefined behaviour, and it is gone.
+
+**Effect** (fast build, with `log_stage_timing`; before = the `stage-timing` profile):
+
+| | `44_short` before | `44_short` after | `44` before | `44` after |
+|---|---|---|---|---|
+| NDT indoor loop (with the grouping), per iteration | 6.27 ms | 1.76 ms | 6.05 ms | 1.74 ms |
+| NDT outdoor loop, per iteration | 5.06 ms | 0.85 ms | 4.63 ms | 0.88 ms |
+| odometry | 166.0 s | 108.8 s | 1578.5 s | 1059.6 s (−33 %) |
+| whole run | 200 s | 144 s | 1990 s | 1467 s (−26 %) |
+
+The two loops together run 4.1× faster. They are now 17 % of the odometry. The dense normal-matrix setup (4.1 ms per iteration, 27 %) is the largest phase, which is the next change, `banded-normal-matrix`.
+
+**Checks.**
+- Unit tests in `tests/scan_to_map_test.cpp`, on the synthetic room and corridor, with points in order and shuffled: multithreaded and single-threaded optimizations give exactly equal poses, bias and translation information, and two multithreaded runs are equal. Before the fix, all ten checks failed on every run.
+- `44_short`, precise and fast builds: IDENTICAL with the setting off and on.
+- The full 44 with the new default: IDENTICAL with the manifest; only the params TOML records the settings.
+
+OpenSpec change `deterministic-multithread`.
+
 ## Settings that trade speed
 
 | Setting | Default | Effect on speed | Cost |
 |---|---|---|---|
 | `convergence_delta_threshold` | `1e-12` (all `nr_iter` iterations run) | `1e-2` is 3–4× faster | 0.5–1.5 % more occupied 3 cm cells on recordings 42/43, i.e. a slightly less sharp map |
-| `useMultithread` | `false` | `true` is about 40 % faster per window | the parallel float sum makes results differ from run to run (cause and planned fix: [Analysis](#analysis-2026-10-05-and-planned-fixes)) |
+| `useMultithread` | `true` | the odometry takes a third less time than with `false` (44: 1060 s against 1578 s) | none: results are the same bits ([fix 7](#7-deterministic-multithreading)); `false` runs on one core |
 | `real_time_threshold_seconds` | `10.0` | caps a window's time | when a window hits it, results depend on machine speed and load |
 | `nr_iter` | 100 | fewer iterations are faster | real windows settle after median 51, at most 91 iterations on 44 (see below) |
 
@@ -143,7 +168,7 @@ With `use_exact_ndt_bucket_statistics = true` (off by default, change `ndt-bucke
 
 A code review of the processing path; the measured profile that followed it is [below](#measured-profile-2026-10-05). A window has 360 nodes, i.e. 2166 unknowns, and runs 100 LM iterations of about 23 ms each.
 
-**Why `useMultithread` is not deterministic.** Only `optimize_lidar_odometry` (`src/domain/scan_to_map.cpp`) is affected. Each point adds its 6×6 / 6×1 terms into its own node's diagonal block under a per-node mutex; with `par_unseq` the points of one node arrive in thread order, so the sums differ in the last bits. (A mutex inside `par_unseq` is also formally undefined behaviour.) `optimize_sf2` and `optimize_rigid_sf` already compute per point in parallel and sum in order (`SumBlocks`), so they are deterministic.
+**Why `useMultithread` was not deterministic** (fixed since, see [fix 7](#7-deterministic-multithreading)). Only `optimize_lidar_odometry` (`src/domain/scan_to_map.cpp`) is affected. Each point adds its 6×6 / 6×1 terms into its own node's diagonal block under a per-node mutex; with `par_unseq` the points of one node arrive in thread order, so the sums differ in the last bits. (A mutex inside `par_unseq` is also formally undefined behaviour.) `optimize_sf2` and `optimize_rigid_sf` already compute per point in parallel and sum in order (`SumBlocks`), so they are deterministic.
 
 **Planned fix:** run the nodes in parallel and sum each node's points in their original order. That is exactly the serial order of additions per block, so the multithreaded result should be bit-identical with the serial one, and `useMultithread` could then default to `true`.
 
@@ -198,7 +223,7 @@ The debug setting `log_stage_timing` (`[lidar_odometry_debug_info]`, off by defa
 - **I/O is negligible in the odometry:** loading points takes 0.7 s and the map update 4.4 s on 44. `io-and-copies` therefore goes last. The save takes 22 s, and its `session_chunk` round trip is part of that.
 
 **Planned order**, updated from the profile; each is its own change, bit-identical with the precise build:
-1. `deterministic-multithread`;
+1. `deterministic-multithread` (done, [fix 7](#7-deterministic-multithreading));
 2. `banded-normal-matrix` (with the Cholesky reuse);
 3. `ndt-lookup-cache` (it shortens the NDT loops, and its gain after multithreading is to be measured);
 4. a consistency analysis;

@@ -228,21 +228,23 @@ Steps 8–11 were added on 2026-10-03. They cover the goals that steps 0–7 sti
 
 - **Parallelism is behind a port.** Domain and application code never include TBB; they use the
   `ParallelExecutor` port. The TBB adapter lives in infrastructure, and tests can use a serial,
-  deterministic executor. What remains: the `std::execution::par_unseq` loops in `scan_to_map`,
-  `robust_lidar_odometry` and `consistency` (standard library, only with `useMultithread`, which is
-  off because their accumulation isn't deterministic); moving them behind the port means reworking
-  that accumulation, a behaviour change of its own. Eigen, manif and observation_equations are allowed in the domain.
+  deterministic executor. What remains: the domain's parallel loops use `<execution>` from the standard
+  library directly (`scan_to_map` and `robust_lidar_odometry`, with `useMultithread`, on by default since
+  `deterministic-multithread`). They are deterministic: `scan_to_map` sums each trajectory node's point terms
+  in point order, with the nodes in parallel, and `robust_lidar_odometry` sums per-point blocks in index
+  order, so the results are the same bits with or without threads. `consistency` has its own flags and runs
+  serially. Eigen, manif and observation_equations are allowed in the domain.
 - **`core/` was wrapped and moved on touch** until step 11, which retired it (2026-10-05): what
   dMapper used lives in the layers, and new code doesn't take anything from HDMapping's `core` again.
 - **Test framework: doctest**, vendored under `3rdparty/` (single header, fast to compile).
 - **Baseline: `raw data/44`.** The validated scan (loops on every floor) with
   `settings/lidar-vertical.toml` is the golden reference.
-- **Short cut for intermediate checks.** `44_short` (the first 30 s of 44, about 3–4 min to
-  process) has its own manifest and checks every intermediate commit. The full 44 (about 30 min)
+- **Short cut for intermediate checks.** `44_short` (the first 30 s of 44, about 2.5 min to
+  process) has its own manifest and checks every intermediate commit. The full 44 (about 25 min)
   runs once at the end of each change, because only it exercises loop closure.
 - **Refactors must be bit-identical on `44_short`.** A pure refactor step must reproduce the
   `44_short` baseline exactly (trajectories, LAZ, results JSON apart from timing fields). This
-  relies on `useMultithread = false` keeping the run deterministic.
+  relies on the run being deterministic, which it is with `useMultithread` on or off.
 - **The full 44 may differ within 1e-6.** The Release build on this machine uses `/fp:fast` with
   whole-program optimization, so a change to unrelated code can change floating-point evaluation
   order and the last bits of the 30-minute run (seen in step 3: at most 1e-9 m). A refactor
