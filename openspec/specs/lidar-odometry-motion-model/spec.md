@@ -48,16 +48,24 @@ When gyro bias estimation is enabled, the system SHALL estimate a 3-axis gyro bi
 - **WHEN** gyro bias estimation, time-scaled sigma and tail re-propagation are all disabled
 - **THEN** the trajectory and map quality metrics are within the run-to-run spread of the pre-change code for the same input and parameters (the pre-change code is not reproducible run to run, so a byte comparison against it is not possible)
 
-### Requirement: Reproducible results
-With multithreading disabled, processing the same input with the same parameters twice SHALL produce byte-identical trajectory and point cloud outputs. Multithreading SHALL be disabled by default.
+### Requirement: Reproducible results with or without multithreading
+Processing the same input with the same parameters twice SHALL produce byte-identical trajectory and point cloud outputs, with multithreading enabled or disabled. A multithreaded run SHALL produce byte-identical trajectory and point cloud outputs to a single-threaded run of the same input and parameters. Multithreading SHALL be enabled by default.
 
 #### Scenario: Two single-threaded runs are identical
 - **WHEN** dataset 43 is processed twice with `useMultithread = false` and otherwise identical parameters
 - **THEN** `trajectory_lio_0.csv` and `scan_lio_0.laz` of both runs are byte-identical
 
-#### Scenario: Default is single-threaded
+#### Scenario: Two multithreaded runs are identical
+- **WHEN** a dataset is processed twice with `useMultithread = true` and otherwise identical parameters
+- **THEN** the trajectory and point cloud outputs of both runs are byte-identical
+
+#### Scenario: Multithreaded equals single-threaded
+- **WHEN** a dataset is processed once with `useMultithread = true` and once with `useMultithread = false`, with otherwise identical parameters and no window stopped by `real_time_threshold_seconds`
+- **THEN** the trajectory and point cloud outputs of both runs are byte-identical
+
+#### Scenario: Default is multithreaded
 - **WHEN** parameters are loaded from `settings/default_settings.toml` or `settings/lidar-vertical.toml`, or no TOML is given
-- **THEN** `useMultithread` is false
+- **THEN** `useMultithread` is true
 
 ### Requirement: Bias continuity across windows
 The bias estimate and its uncertainty SHALL be carried from each window to the next as a prior, and the uncertainty SHALL grow with elapsed time according to a configurable bias random-walk. The bias SHALL be limited to a configurable maximum magnitude per axis.
