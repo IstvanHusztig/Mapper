@@ -449,9 +449,7 @@ namespace
 
 // useMultithread must not change results (change deterministic-multithread): each node's point terms are summed in point
 // order whether the nodes run in parallel or one after the other
-// should_fail until the accumulation is per node (deterministic-multithread 1.2): today the points of a node are added
-// under a lock in thread order, so the sums change with the thread timing
-TEST_CASE("scan-to-map: multithreaded equals single-threaded, bit for bit" * doctest::should_fail())
+TEST_CASE("scan-to-map: multithreaded equals single-threaded, bit for bit")
 {
     for (const bool use_corridor : {false, true})
         for (const bool shuffled : {false, true})
@@ -467,9 +465,7 @@ TEST_CASE("scan-to-map: multithreaded equals single-threaded, bit for bit" * doc
             }
 }
 
-// should_fail until the accumulation is per node (deterministic-multithread 1.2): today the points of a node are added
-// under a lock in thread order, so the sums change with the thread timing
-TEST_CASE("scan-to-map: two multithreaded runs are identical, bit for bit" * doctest::should_fail())
+TEST_CASE("scan-to-map: two multithreaded runs are identical, bit for bit")
 {
     for (const bool use_corridor : {false, true})
     {

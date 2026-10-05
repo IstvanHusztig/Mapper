@@ -16,12 +16,19 @@ Close the GUI before building. Never run two jobs on the same input folder at on
   Expect the multithreaded cases to fail before 1.2; mark them `doctest::should_fail` with the cause, as the test rules say. Verify: build, `ctest`. Commit.
 
   Result: two cases in `tests/scan_to_map_test.cpp` (`run_window`, `identical`). Without the fix, all 10 checks failed in each of 3 runs, two multithreaded runs against each other included. Both cases are marked `should_fail`; Release build and `ctest` pass (the Debug build is checked with 1.2).
-- [ ] 1.2 In `optimize_lidar_odometry`, group the points by node in their original order and run the indoor, then the outdoor pass per node, with `std::execution::par` or sequentially (decisions 1–3). Remove the mutexes and `<mutex>`. Verify:
+- [x] 1.2 In `optimize_lidar_odometry`, group the points by node in their original order and run the indoor, then the outdoor pass per node, with `std::execution::par` or sequentially (decisions 1–3). Remove the mutexes and `<mutex>`. Verify:
   - the 1.1 tests pass, and their `should_fail` markers go;
   - the step checks with `useMultithread = false`;
   - precise and fast `44_short` with a scratchpad copy of `lidar-vertical.toml` with `useMultithread = true` (and `log_stage_timing = true`): IDENTICAL apart from the params TOML, and IDENTICAL with the `false` run of the same build.
 
   If precise isn't identical, pause. Report the speed-up of the NDT phases and of the odometry. Commit.
+
+  Result:
+  - The points are grouped by node with a counting sort (`node_begin`, `points_by_node`) and run through `for_each_node`, with `std::execution::par` or sequentially; the mutexes are gone.
+  - The equality tests pass in 5 of 5 runs, and their `should_fail` markers are removed.
+  - Step checks with the setting off: both presets and `ctest` pass, and precise and fast `44_short` are IDENTICAL (11 files).
+  - Setting on: precise and fast `44_short` differ from the manifests only in the params TOML, and they are IDENTICAL with the setting-off runs of the same build apart from it.
+  - Speed (fast `44_short`, against the `stage-timing` profile): NDT indoor 6.27 → 1.76 ms per iteration (3.6×, including the grouping), outdoor 5.06 → 0.85 ms (6×); odometry 166.0 → 108.8 s (−34 %); whole run 200 → 144 s (−28 %).
 - [ ] 1.3 `robust_lidar_odometry.cpp`: remove the stale `// ToDo fix for this case` and the unused `<mutex>` include. Verify: build (robust mode is off in `lidar-vertical.toml`, so it is only build-checked). Commit.
 
 ## 2. New default

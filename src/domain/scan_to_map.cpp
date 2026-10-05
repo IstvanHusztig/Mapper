@@ -8,7 +8,7 @@
 
 #include "angle_units.h"
 #include "normal_equations.h"
-#include <mutex>
+#include <numeric>
 
 void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window &window,
                              NDTBucketMapType &buckets_indoor, NDTBucketMapType &buckets_outdoor,
@@ -55,7 +55,6 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
     AtPBndt.setZero();
     Eigen::Vector3d b_indoor(scan_to_map.grid_indoor.resolution_X, scan_to_map.grid_indoor.resolution_Y, scan_to_map.grid_indoor.resolution_Z);
 
-    std::vector<std::mutex> mutexes(window.poses.size());
     // sum of n * n^T over the surface normals the points are matched to (per node): geometric constraint of the
     // translation, independent of the in-plane pull of the NDT cells
     std::vector<Eigen::Matrix3d> normal_information;
@@ -146,8 +145,7 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
             AtPB *= w;
         }
 
-        std::mutex &m = mutexes[intermediate_points_i.index_pose];
-        std::unique_lock lck(m);
+        // only this point's node writes this block (see for_each_node), so no lock is needed
         AtPAndt.block<6, 6>(c, c) += AtPA;
         AtPBndt.block<6, 1>(c, 0) -= AtPB;
         if (!normal_information.empty() && this_bucket.normal_vector.squaredNorm() > 0.5)
@@ -155,10 +153,39 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
     };
 
     PhaseTimer indoor_timer(phase(&ScanToMapTiming::ndt_indoor));
-    if (scan_to_map.multithread)
-        std::for_each(std::execution::par_unseq, std::begin(intermediate_points), std::end(intermediate_points), hessian_fun_indoor);
-    else
-        std::for_each(std::begin(intermediate_points), std::end(intermediate_points), hessian_fun_indoor);
+
+    // The point terms are summed per node, in point order: a point writes only its own node's block (and normal_information
+    // entry), so each node's points can run as one task, and the nodes in parallel. Every block then receives the same
+    // additions in the same order as a loop over the points in order, so the result doesn't depend on useMultithread.
+    // points_by_node lists the point indices of node k, in point order, at node_begin[k] .. node_begin[k + 1].
+    const int n_nodes = static_cast<int>(window.poses.size());
+    std::vector<int> node_begin(n_nodes + 1, 0);
+    for (const Point3Di &p : intermediate_points)
+        node_begin[p.index_pose + 1]++;
+    std::partial_sum(node_begin.begin(), node_begin.end(), node_begin.begin());
+    std::vector<int> points_by_node(intermediate_points.size());
+    {
+        std::vector<int> next = node_begin;
+        for (int i = 0; i < static_cast<int>(intermediate_points.size()); i++)
+            points_by_node[next[intermediate_points[i].index_pose]++] = i;
+    }
+    std::vector<int> nodes(n_nodes);
+    std::iota(nodes.begin(), nodes.end(), 0);
+
+    const auto for_each_node = [&](const auto &point_term)
+    {
+        const auto node_terms = [&](int k)
+        {
+            for (int j = node_begin[k]; j < node_begin[k + 1]; j++)
+                point_term(intermediate_points[points_by_node[j]]);
+        };
+        if (scan_to_map.multithread)
+            std::for_each(std::execution::par, nodes.begin(), nodes.end(), node_terms);
+        else
+            std::for_each(nodes.begin(), nodes.end(), node_terms);
+    };
+
+    for_each_node(hessian_fun_indoor);
     indoor_timer.stop();
 
     if (scan_to_map.use_hierarchical_rgd)
@@ -238,17 +265,12 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
                 AtPB *= planarity;
             }
 
-            std::mutex &m = mutexes[intermediate_points_i.index_pose];
-            std::unique_lock lck(m);
             AtPAndt.block<6, 6>(c, c) += AtPA;
             AtPBndt.block<6, 1>(c, 0) -= AtPB;
         };
 
         PhaseTimer outdoor_timer(phase(&ScanToMapTiming::ndt_outdoor));
-        if (scan_to_map.multithread)
-            std::for_each(std::execution::par_unseq, std::begin(intermediate_points), std::end(intermediate_points), hessian_fun_outdoor);
-        else
-            std::for_each(std::begin(intermediate_points), std::end(intermediate_points), hessian_fun_outdoor);
+        for_each_node(hessian_fun_outdoor);
     }
 
     PhaseTimer motion_terms_timer(phase(&ScanToMapTiming::motion_terms));
