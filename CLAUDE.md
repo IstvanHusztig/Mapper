@@ -8,6 +8,8 @@ dMapper started as a standalone extraction of the LiDAR odometry (step 1) applic
 
 There are no linters or CI. Unit tests use doctest (`3rdparty/doctest`), and refactors are checked against a golden baseline (see Testing). Mechanical renames in refactors are done with `tools/rename_identifiers.py` (code only, never comments or strings; `-m` for member accesses only; `--dry-run` first).
 
+**Keep tool output small:** Bash results cost context. Pipe command output through `head`, `tail` or `grep` to reduce its size (build and run logs go to a file, then only the relevant lines are shown), and avoid `cat` on large files — use Read with offset/limit instead.
+
 ## Build
 
 Requires CMake >= 4.0. `CMakePresets.json` defines exactly two configurations, `x64-Release` and `x64-Debug` (Ninja + cl, build trees `out/build/<preset>`); Visual Studio uses them via Open Folder. Do not add other build trees. From a shell, `vcvars64.bat` must be loaded first (cl/ninja on PATH):
