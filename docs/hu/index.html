@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mapper odometria útmutató</title>
+<style>
+  :root {
+    --bg: #fbfbfa; --panel: #ffffff; --text: #1d2126; --muted: #5b6470; --line: #e3e5e8;
+    --accent: #1f6fb2; --accent-soft: #e8f1fa; --code-bg: #f2f3f5; --warn: #9a5b00; --warn-soft: #fff4e0;
+    --ok: #20703c; --tag: #eef0f3;
+    --node: #ffffff; --node-line: #9aa6b4; --arrow: #7a8594;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15181c; --panel: #1c2026; --text: #e4e7eb; --muted: #9aa3ae; --line: #2c323a;
+      --accent: #6cb0ec; --accent-soft: #1d2d3d; --code-bg: #242a31; --warn: #f0b35a; --warn-soft: #3a2c16;
+      --ok: #6ccf8e; --tag: #262c34;
+      --node: #222830; --node-line: #56616e; --arrow: #8994a2;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15181c; --panel: #1c2026; --text: #e4e7eb; --muted: #9aa3ae; --line: #2c323a;
+    --accent: #6cb0ec; --accent-soft: #1d2d3d; --code-bg: #242a31; --warn: #f0b35a; --warn-soft: #3a2c16;
+    --ok: #6ccf8e; --tag: #262c34;
+    --node: #222830; --node-line: #56616e; --arrow: #8994a2;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); max-width: 1280px; margin: 0 auto; }
+  nav {
+    position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto;
+    padding: 28px 18px 28px 24px; border-right: 1px solid var(--line); font-size: 14px;
+  }
+  nav .brand { font-weight: 700; font-size: 16px; margin-bottom: 4px; }
+  nav .sub { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+  nav a { display: block; color: var(--muted); text-decoration: none; padding: 3px 0; }
+  nav a:hover { color: var(--accent); }
+  nav .group { margin-top: 14px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); opacity: .8; }
+  nav .indent { padding-left: 12px; }
+  main { padding: 36px 44px 80px; min-width: 0; }
+  h1 { font-size: 30px; line-height: 1.25; margin: 0 0 8px; }
+  h2 { font-size: 23px; margin: 52px 0 12px; padding-top: 8px; border-top: 1px solid var(--line); }
+  h3 { font-size: 18px; margin: 30px 0 8px; }
+  p, li { max-width: 78ch; }
+  .lead { color: var(--muted); font-size: 17px; margin-top: 0; }
+  code, pre { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13.5px; }
+  code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--code-bg); padding: 12px 14px; border-radius: 8px; overflow-x: auto; }
+  a { color: var(--accent); }
+  .note, .warn {
+    border-left: 3px solid var(--accent); background: var(--accent-soft);
+    padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 14px 0; max-width: 82ch;
+  }
+  .warn { border-left-color: var(--warn); background: var(--warn-soft); }
+  .note b, .warn b { display: block; margin-bottom: 2px; }
+  .steps { counter-reset: step; padding: 0; list-style: none; }
+  .step { position: relative; padding: 16px 18px 6px 58px; margin: 14px 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+  .step::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 16px; top: 16px; width: 28px; height: 28px; border-radius: 50%;
+    background: var(--accent); color: var(--panel); font-weight: 700; font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .step h3 { margin: 0 0 6px; }
+  .step .where { color: var(--muted); font-size: 13px; margin-top: -4px; }
+  .params { margin: 10px 0 8px; }
+  .params span { display: inline-block; background: var(--tag); border-radius: 4px; padding: 0 6px; margin: 2px 4px 2px 0; font: 12.5px ui-monospace, Consolas, monospace; }
+  .table-wrap { overflow-x: auto; margin: 10px 0 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+  th { font-size: 12.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: var(--code-bg); }
+  tr:last-child td { border-bottom: none; }
+  td:first-child { font-family: ui-monospace, Consolas, monospace; font-size: 13px; white-space: nowrap; }
+  td.val { font-family: ui-monospace, Consolas, monospace; font-size: 13px; white-space: nowrap; }
+  .badge { display: inline-block; font: 11px/1.6 system-ui, sans-serif; padding: 0 6px; border-radius: 9px; margin-left: 6px; vertical-align: 1px; white-space: nowrap; }
+  .b-gui { background: var(--warn-soft); color: var(--warn); }
+  .b-off { background: var(--tag); color: var(--muted); }
+  .b-key { background: var(--accent-soft); color: var(--accent); }
+  .diagram { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin: 16px 0; overflow-x: auto; }
+  .diagram svg { display: block; min-width: 760px; width: 100%; height: auto; }
+  .diagram text { fill: var(--text); font: 13px system-ui, sans-serif; }
+  .diagram .small { fill: var(--muted); font-size: 11.5px; }
+  .diagram .box { fill: var(--node); stroke: var(--node-line); stroke-width: 1.2; }
+  .diagram .box.hl { stroke: var(--accent); stroke-width: 1.8; }
+  .diagram .arr { stroke: var(--arrow); stroke-width: 1.5; fill: none; marker-end: url(#ah); }
+  .diagram .loop { stroke: var(--accent); stroke-width: 1.5; fill: none; stroke-dasharray: 5 4; marker-end: url(#ahb); }
+  #ah path { fill: var(--arrow); } #ahb path { fill: var(--accent); }
+  .theme-btn { float: right; background: var(--panel); color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; font-size: 13px; cursor: pointer; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    nav { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--line); padding: 18px 16px; }
+    main { padding: 24px 16px 60px; }
+    h1 { font-size: 25px; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+<nav>
+  <div class="brand">Mapper odometria</div>
+  <div class="sub">dMapper · Unitree L2 / dLidar</div>
+  <a href="../index.html" hreflang="en" lang="en">English version</a>
+  <a href="#overview">Áttekintés</a>
+  <a href="#inputs">Bemenetek és kimenetek</a>
+  <div class="group">Feldolgozási lánc</div>
+  <a href="#pipeline">Az ábra</a>
+  <a class="indent" href="#s-load">1 · Pontok betöltése</a>
+  <a class="indent" href="#s-imu">2 · IMU-orientáció</a>
+  <a class="indent" href="#s-windows">3 · Ablakok és pontpózok</a>
+  <a class="indent" href="#s-map">4 · Kezdeti térkép</a>
+  <a class="indent" href="#s-guess">5 · Kezdeti becslés ablakonként</a>
+  <a class="indent" href="#s-opt">6 · Optimalizálás</a>
+  <a class="indent" href="#s-handoff">7 · Átadás és bias</a>
+  <a class="indent" href="#s-update">8 · Térkép frissítése</a>
+  <a class="indent" href="#s-export">9 · Export</a>
+  <div class="group">Paraméterek</div>
+  <a href="#params">A táblázatok olvasása</a>
+  <a class="indent" href="#p-filter">filter_points</a>
+  <a class="indent" href="#p-control">lidar_odometry_control</a>
+  <a class="indent" href="#p-ndt">in_out_params_*</a>
+  <a class="indent" href="#p-mm">motion_model_uncertainty</a>
+  <a class="indent" href="#p-bias">gyro_bias_estimation</a>
+  <a class="indent" href="#p-origin">first_node_prior</a>
+  <a class="indent" href="#p-mmc">motion_model_correction</a>
+  <a class="indent" href="#p-ahrs">madgwick_filter</a>
+  <a class="indent" href="#p-ext">lidar_imu_extrinsics</a>
+  <a class="indent" href="#p-imu">imu_translation</a>
+  <a class="indent" href="#p-loop">loop_closure</a>
+  <a class="indent" href="#p-cons">consistency</a>
+  <a class="indent" href="#p-perf">performance</a>
+  <a class="indent" href="#p-robust">robust_lidar_odometry</a>
+  <a class="indent" href="#p-misc">debug, paths, misc, version</a>
+  <div class="group">Továbbiak</div>
+  <a href="#practice">Bevált gyakorlatok</a>
+  <a href="#tuning">Hangolási puska</a>
+  <a href="#fixes">Javítások és a térkép élessége</a>
+  <a href="#limits">Ismert korlátok</a>
+</nav>
+
+<main>
+<button class="theme-btn" id="themeBtn" type="button">Téma</button>
+<h1 id="overview">Mit csinál az odometria a beolvasott pontokkal</h1>
+<p class="lead">Referencia a <code>dMapper</code>-hez: hogyan jut el minden LiDAR-pont a felvevő LAZ-fájljából a végső térképig, és mit szabályoz a <code>settings/lidar-vertical.toml</code> minden egyes paramétere.</p>
+
+<p>A program egy <b>LiDAR-inerciális odometria</b>. Az IMU gyors, de elcsúszó (drift) becslést ad arról, hogyan fordult el az érzékelő. A LiDAR a környezetet látja, amely nem mozog. A program a felvételt kb. 0.4 s hosszú rövid ablakokra vágja. Minden ablak trajektóriáját addig igazítja, amíg a pontjai fedésbe nem kerülnek az összes korábbi ablakból épített térképpel, anélkül, hogy az IMU zajszintjénél jobban ellentmondana az IMU-nak. Minden pont megtartja a saját időbélyegét és saját pózt kap, így a letapogatás közbeni mozgás kompenzálva van (deskew).</p>
+
+<div class="note"><b>A cikkben szereplő értékek</b>A megadott értékek a <code>settings/lidar-vertical.toml</code> értékei, amelyeket a 42-es és 43-as adathalmazon hangoltunk (kézben tartott L2, kb. 893 Hz-es IMU, 64k pont/s, rövid barlangi séták), egy statikus felvételen, valamint a b1-en (egy épület három szintjén tett 4 perces séta, egyoldalú folyosóval, lépcsőházakkal és újra felkeresett szobákkal). A mögöttük álló mérések az <code>openspec/changes/archive/2026-09-30-gyro-bias-estimation/baseline.md</code> fájlban vannak.</div>
+
+<h2 id="inputs">Bemenetek és kimenetek</h2>
+<div class="table-wrap"><table>
+<tr><th>Fájl a bemeneti mappában</th><th>Tartalom</th><th>Kötelező</th></tr>
+<tr><td>lidar*.laz / *.las</td><td>Pontok x, y, z koordinátával (érzékelő-koordináta-rendszer, méter), intenzitással, <code>gps_time</code> (ns) és <code>user_data</code> = LiDAR-azonosító mezőkkel</td><td>igen</td></tr>
+<tr><td>imu*.csv</td><td><code>gyroX gyroY gyroZ</code> (rad/s), <code>accX accY accZ</code> (g), <code>imuId</code>, <code>timestamp</code> (ns, ugyanaz az óra, mint a pontoké), <code>timestampUnix</code>. A mappában <b>minden</b> <code>.csv</code> fájlt IMU-adatként olvas be a program. Az időbélyegeknek szigorúan növekvőnek és egyenletesnek kell lenniük; a löketszerű vagy lépcsős időbélyegű felvételek javíthatók a <code>tools/fix_imu_timestamps.py</code> szkripttel.</td><td>igen</td></tr>
+<tr><td>minden más</td><td>Figyelmen kívül marad (pl. <code>*.json</code>, <code>*.sn</code>). Csak egyetlen LiDAR támogatott; nincs LiDAR-onkénti kalibrációs fájl.</td><td>nem</td></tr>
+</table></div>
+<p>A futtatási parancs: <code>dMapper &lt;input_folder&gt; settings/lidar-vertical.toml &lt;output_folder&gt;</code>. A kimeneti mappába kerül a <code>scan_lio_N.laz</code> (a térkép), a <code>trajectory_lio_N.csv</code> (egy póz IMU-mintánként, 4×3-as mátrix a nyers IMU-szögekkel), a <code>session.mjs</code> a <code>session_poses.mrp</code>-vel (betölthető a HDMapping-ben), a felhasznált paraméterek (<code>dMapper_params_*.toml</code>) és a <code>dMapper_results_*.json</code> (trajektória hossza, rács adatai és az ablakonkénti giroszkóp-bias a <code>gyro_bias_per_window</code> mezőben).</p>
+
+<h2 id="pipeline">A feldolgozási lánc</h2>
+<div class="diagram" role="img" aria-label="Feldolgozási lánc: a LAZ-pontok és az IMU-minták betöltődnek, az IMU mintánként orientációt ad, a pontok pózokhoz kapcsolódnak és ablakokba csoportosulnak, minden ablakot az NDT-térképhez optimalizál a program, majd frissíti a térképet és indul a következő ablak; végül az összes pont exportálódik a saját pózával.">
+<svg viewBox="0 0 960 330" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="ahb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z"/></marker>
+  </defs>
+  <rect class="box" x="10" y="30" width="150" height="56" rx="8"/>
+  <text x="85" y="54" text-anchor="middle">LAZ-pontok</text><text class="small" x="85" y="72" text-anchor="middle">1 · betöltés &amp; szűrés</text>
+  <rect class="box" x="10" y="200" width="150" height="56" rx="8"/>
+  <text x="85" y="224" text-anchor="middle">IMU-minták</text><text class="small" x="85" y="242" text-anchor="middle">2 · AHRS-orientáció</text>
+  <rect class="box" x="210" y="112" width="170" height="64" rx="8"/>
+  <text x="295" y="138" text-anchor="middle">3 · Ablakok</text><text class="small" x="295" y="156" text-anchor="middle">pont → póz, 360 póz</text>
+  <rect class="box" x="210" y="10" width="170" height="56" rx="8"/>
+  <text x="295" y="34" text-anchor="middle">4 · Kezdeti térkép</text><text class="small" x="295" y="52" text-anchor="middle">első 60k pont → NDT</text>
+  <rect class="box" x="430" y="112" width="160" height="64" rx="8"/>
+  <text x="510" y="138" text-anchor="middle">5 · Kezdeti becslés</text><text class="small" x="510" y="156" text-anchor="middle">előző vég + IMU − bias</text>
+  <rect class="box hl" x="640" y="100" width="170" height="88" rx="8"/>
+  <text x="725" y="128" text-anchor="middle">6 · Ablak optimalizálása</text><text class="small" x="725" y="148" text-anchor="middle">NDT + IMU a priori</text><text class="small" x="725" y="165" text-anchor="middle">+ sebesség + bias</text>
+  <rect class="box" x="640" y="240" width="170" height="56" rx="8"/>
+  <text x="725" y="264" text-anchor="middle">7-8 · Átadás, térkép</text><text class="small" x="725" y="282" text-anchor="middle">farok, bias, NDT-frissítés</text>
+  <rect class="box" x="850" y="120" width="100" height="48" rx="8"/>
+  <text x="900" y="142" text-anchor="middle">9 · Export</text><text class="small" x="900" y="158" text-anchor="middle">LAZ + pózok</text>
+  <path class="arr" d="M160,58 C185,58 185,130 208,135"/>
+  <path class="arr" d="M160,228 C185,228 185,160 208,154"/>
+  <path class="arr" d="M160,50 C185,40 190,38 208,38"/>
+  <path class="arr" d="M380,144 L428,144"/>
+  <path class="arr" d="M590,144 L638,144"/>
+  <path class="arr" d="M380,38 C600,38 700,50 718,98"/>
+  <path class="arr" d="M725,188 L725,238"/>
+  <path class="loop" d="M640,268 C520,268 510,230 510,178"/>
+  <text class="small" x="540" y="290">következő ablak</text>
+  <path class="arr" d="M810,144 L848,144"/>
+</svg>
+</div>
+<p>Az 5–8. lépés minden ablakra megismétlődik (szaggatott nyíl). Az alábbi szakaszok egy pontot követnek végig mindegyiken.</p>
+
+<ol class="steps">
+<li class="step" id="s-load">
+<h3>A pontok betöltése és szűrése</h3>
+<div class="where">load_data / load_point_cloud · src/application/lidar_odometry.cpp, src/infrastructure/recording_folder_source.cpp</div>
+<p>Minden pontot az <b>érzékelő-koordináta-rendszerbeli</b> pozíciójával, intenzitásával és időbélyegével olvas be a program. Ezután:</p>
+<ul>
+<li>Minden pontot eltol a LiDAR→IMU <b>emelőkar</b> (lever arm) értékével (csak eltolás), így a pontok és az IMU közös origót használnak. A dLidar L2-adatai már az IMU tengelyeiben vannak (NWU: x előre, y balra, z felfelé).</li>
+<li>A 0 időbélyegű pontok el lesznek dobva.</li>
+<li>Eldobja azokat a pontokat, amelyeknek az érzékelő-koordináta-rendszerbeli <b>vízszintes</b> távolsága √(x²+y²) kisebb, mint a <code>filter_threshold_xy_inner</code> (a markolat, a kezed, a ház), vagy nagyobb, mint a <code>filter_threshold_xy_outer</code>.</li>
+<li>Az egyes fájlok pontjait idő szerint rendezi. Az IMU CSV-fájlokat beolvassa, összefűzi és idő szerint rendezi.</li>
+</ul>
+<div class="params"><span>filter_threshold_xy_inner</span><span>filter_threshold_xy_outer</span><span>lidar_imu_lever_arm_*</span></div>
+</li>
+
+<li class="step" id="s-imu">
+<h3>Orientáció minden IMU-mintához</h3>
+<div class="where">calculate_trajectory · src/application/lidar_odometry.cpp</div>
+<p>Egy Madgwick-típusú szűrő (Fusion AHRS, 6 tengelyes, magnetométer nélkül) integrálja a giroszkópot, és a gyorsulásmérő gravitációs irányával korrigálja a bólintást és a dőlést (roll, pitch). Az irányszögnek (yaw) nincs abszolút referenciája, ezért a giroszkóp-bias miatt elcsúszik. Ezt javítja ki később a LiDAR-optimalizálás és a bias-becslés. A gyorsulásmérő-korrekció ki van kapcsolva, amikor |a| kívül esik a 0.9–1.1 g tartományon (erős gyorsulások).</p>
+<p>Ha a <code>use_remove_imu_bias_from_first_stationary_scan</code> be van kapcsolva, az első 1000 minta medián giroszkópértékét biasként levonja a program, de csak akkor, ha az ottani teljes giroszkóp-variancia 5 (°/s)² alatt van. A kézben tartott felvételek általában megbuknak ezen az ellenőrzésen ("Excessive movement detected"), és nulla biasszal folytatódnak.</p>
+<p>Eredmény: egy <i>időbélyeg → forgatás</i> trajektória-leképezés, IMU-mintánként egy bejegyzéssel (kb. 1.1 ms távolságra egymástól). Ezek a <b>trajektória-csomópontok</b>. A pozíciójuk ebben a szakaszban még nulla.</p>
+<div class="params"><span>ahrs_gain</span><span>fusionConvention*</span><span>use_remove_imu_bias_from_first_stationary_scan</span></div>
+</li>
+
+<li class="step" id="s-windows">
+<h3>Ablakok és egy póz minden ponthoz</h3>
+<div class="where">compute_step_1 · src/application/lidar_odometry.cpp</div>
+<ul>
+<li>Az első <code>threshold_initial_points</code> pontot félreteszi a program a kezdeti térkép építéséhez (4. lépés). Az ezen pontok közül az utolsó időpontja előtti csomópontokat kihagyja.</li>
+<li>A megmaradó csomópontokat <b>ablakokra</b> vágja, mindegyik <code>threshold_nr_poses</code> egymást követő csomópontból áll (360 ≈ 0.4 s 893 Hz-en). A teljes ablaknál rövidebb maradékot eldobja.</li>
+<li>Az ablak időtartományába eső minden pontot a <b>közvetlenül az időbélyege előtti csomóponthoz</b> rendel (<code>index_pose</code>), de csak ha ez a csomópont legfeljebb 10 ms-mal korábbi. Különben a pont el lesz dobva. A legfeljebb 1000 pontot tartalmazó ablakok el lesznek dobva.</li>
+<li>Két másolat kerül a lemezre gyorsítótárba (<code>&lt;input&gt;/cache</code>): az összes pont (az exporthoz) és egy <b>voxelritkított</b> másolat, amely <code>decimation</code> élhosszú kockánként az első pontot tartja meg (az optimalizálás ezt használja).</li>
+</ul>
+<p>Innentől egy pontot mindig <i>pose(index_pose) × point</i> alakban használ a program. Egy csomópont pózának korrigálása pontosan azokat a pontokat mozgatja, amelyeket az az ~1 ms alatt rögzített a rendszer, és így kompenzálódik a letapogatás közbeni mozgás.</p>
+<div class="params"><span>threshold_initial_points</span><span>threshold_nr_poses</span><span>decimation</span></div>
+</li>
+
+<li class="step" id="s-map">
+<h3>A kezdeti térkép</h3>
+<div class="where">optimize_windows (start) · src/application/run_odometry.cpp</div>
+<p>A félretett kezdeti pontokat <b>csak az első pózzal</b> transzformálja a program (pontonkénti mozgáskompenzáció nélkül), és két <b>NDT-rácsba</b> szúrja be. A teret kockákra osztja (0.15 m-es "beltéri" és 0.4 m-es "kültéri" rács), és minden kocka eltárolja a benne lévő pontok átlagát és kovarianciáját, vagyis egy kis Gauss-eloszlást, amely a helyi felületet írja le. A 3 vagy több pontot tartalmazó kocka az érzékelő felé néző normálvektort is kap.</p>
+<p>Mivel ez a térkép nem mozgáskompenzált, ha lehet, az első egy-két másodpercben álljon egy helyben. Az első ablakot ehhez a térképhez illeszti a program, ezért az illesztési hibája nem befolyásolhatja a giroszkóp-bias becslését.</p>
+<div class="params"><span>in_out_params_indoor.resolution_*</span><span>in_out_params_outdoor.resolution_*</span><span>threshold_initial_points</span></div>
+</li>
+
+<li class="step" id="s-guess">
+<h3>Kezdeti becslés a következő ablakhoz</h3>
+<div class="where">optimize_windows · src/application/run_odometry.cpp</div>
+<ul>
+<li>Az ablak első csomópontját pontosan az előző ablak utolsó csomópontjára helyezi a program.</li>
+<li>A forgatások az IMU csomópontok közötti relatív forgatásait követik, <b>levonva az addig becsült giroszkóp-biast</b> (bias × Δt lépésenként).</li>
+<li>A pozíciók <b>állandó sebességet</b> követnek: az előző ablak utolsó 20 csomópontján mért sebességet (<code>use_motion_from_previous_step</code>). A gyorsulásmérőt nem integrálja a becslésbe; ahol a LiDAR-geometria egy irányban vak, ott az az optimalizálásba lép be (6. lépés).</li>
+</ul>
+<p>Ez a becslés <b>mozgásmodellként</b> is eltárolódik: ez az IMU "mérése", amelyhez az optimalizáló hasonlít.</p>
+<div class="params"><span>use_motion_from_previous_step</span><span>use_gyro_bias_estimation</span></div>
+</li>
+
+<li class="step" id="s-opt">
+<h3>Ablak optimalizálása</h3>
+<div class="where">optimize_lidar_odometry · src/domain/scan_to_map.cpp</div>
+<p>Az ismeretlenek az ablak minden csomópontjának 6 pózparamétere (x, y, z, ω, φ, κ), plusz 3 giroszkóp-bias érték: 6 × 360 + 3 = 2163 szám. Minden Levenberg–Marquardt-iteráció egyetlen legkisebb négyzetes rendszert épít ezekből a tagokból:</p>
+<ul>
+<li><b>Pont a térképhez (NDT, finom rács):</b> minden ritkított pontot, amelynek 3D-s távolsága a <code>min_distance_lidar</code> és a <code>max_distance_lidar</code> között van, a csomópontja pózával transzformál a program, és megkeresi a 0.15 m-es rácsban. A pont távolságát az adott kocka Gauss-eloszlásától, az inverz kovarianciával súlyozva, minimalizálja. Kihagyja azokat a pontokat, amelyek olyan kockába esnek, amelynek normálisa az érzékelőtől elfelé néz, vagy amelynek kovarianciája degenerált.</li>
+<li><b>Pont a térképhez (NDT, durva rács):</b> ugyanez a 0.4 m-es rácsra, a <code>min_distance_lidar_outdoor_grid</code> és a <code>max_distance_lidar</code> közé eső pontokra.</li>
+<li><b>IMU mozgásmodell:</b> az egymást követő csomópontok között a relatív póznak egyeznie kell a becsléssel. A transzlációt szorosan tartja (<code>*_x/y/z_1_sigma_m</code>). A forgatás tengelyenként eltérhet <code>max(k × ARW × √Δt, floor)</code> értékkel, vagyis nagyjából annyival, amennyit a giroszkóp az adott Δt alatt elcsúszhat (időskálázott forgatási a priori információ). A giroszkóp-bias itt lép be: az IMU-lépést −bias × Δt-vel korrigálja.</li>
+<li><b>Sebességfolytonosság:</b> a sebesség csak annyit változhat, amennyit az <code>acc_1_sigma_mps2</code> megenged, az előző ablakkal közös határon át is. Az előző ablak végsebességét az utolsó 20 csomópontján méri a program; ha ez gyorsabb a <code>max_prior_velocity_mps</code> értéknél, nem használja fel, és az ablak 0 m/s-ról indul ezen kapcsolat nélkül.</li>
+<li><b>Gyorsulásmérő (csak vak szakaszokon):</b> ha az előző ablak pontjai egy transzlációs irányt kötetlenül hagytak (folyosói visszafordulás, lépcsőház), a sebességfolytonossági tagot a mért gyorsulás váltja fel: a sebesség változásának az egymástól kb. 10 ms-ra lévő csomópontok között egyeznie kell az <i>R · f − g</i> értékkel, levonva egy gyorsulási eltolást, <i>e</i>-t. Az <i>e</i> 3 további ismeretlen, amely elnyeli a dőlési és a gyorsulásmérő-bias hibákat, ablakról ablakra öröklődik, mint a giroszkóp-bias, és a LiDAR-trajektóriából kalibrálódik, amíg a geometria jó. A transzlációs a priori információt ezekben az ablakokban <code>imu_degenerate_translation_sigma_m</code> értékre lazítja, a tag pedig az <code>imu_degenerate_max_duration_s</code> után kikapcsol. Lásd: <a href="#p-imu">[imu_translation]</a>.</li>
+<li><b>Rögzített kezdet:</b> a 0. csomópont az előző ablak végéhez van rögzítve (<code>fix_origin</code> szórások, 1e-6).</li>
+<li><b>Bias a priori információ:</b> a bias az előző ablak becslésének közelében marad, a bias véletlen bolyongása (random walk) által megnövelt bizonytalanságán belül.</li>
+</ul>
+<p>A rendszert ritka Cholesky-faktorizációval oldja meg a program. Legfeljebb <code>nr_iter</code> iteráció fut; a csillapítás <code>lm_factor_initial</code> értékről indul, és 10 iterációnként megszorzódik 10-zel (csak a pózismeretlenekre). Az ablak korán leáll, ha egy iteráció összes paraméterfrissítésének összege a <code>convergence_delta_threshold</code> alá esik (alapértelmezett 1e-12, ami gyakorlatilag soha nem teljesül, így az összes iteráció lefut), vagy ha hosszabb ideig fut, mint a <code>real_time_threshold_seconds</code>. A normálmátrixnak csak azt a sávját alakítja ritka formára minden iterációban, amely értéket tartalmazhat (szomszédos csomópontok és a bias-ismeretlenek).</p>
+<div class="params"><span>nr_iter</span><span>convergence_delta_threshold</span><span>lm_factor_initial</span><span>min_distance_lidar</span><span>max_distance_lidar</span><span>motion_model_uncertainty.*</span><span>gyro_arw_*</span><span>rotation_sigma_*</span></div>
+</li>
+
+<li class="step" id="s-handoff">
+<h3>Átadás és giroszkóp-bias</h3>
+<div class="where">optimize_windows · src/application/run_odometry.cpp</div>
+<p>Az ablak utolsó csomópontjának nincsenek pontjai, a közvetlenül előtte lévőknek pedig nagyon kevés. Szabadon hagyva néhány fokot elfordulhatnak, és a következő ablak ezt a hibát véglegesen örökölné, ami a falak elforgatott "szellem" másolataiként jelenik meg. Ezért az optimalizálás után az utolsó <code>handoff_tail_nodes</code> csomópontot <b>az utolsó jól kötött csomópontból újraszámolja</b> a program, a biasszal korrigált IMU-forgatás és az optimalizált sebesség felhasználásával. A következő ablak ebből az újraszámolt végből indul.</p>
+<p>Az ablak bias-becslése és bizonytalansága lesz a következő ablak a priori információja, és ki is íródnak a konzolra és a results JSON-ba.</p>
+<div class="params"><span>handoff_tail_nodes</span><span>gyro_bias_*</span></div>
+</li>
+
+<li class="step" id="s-update">
+<h3>Térkép frissítése</h3>
+<div class="where">optimize_windows · src/application/run_odometry.cpp</div>
+<p>Az ablak ritkított pontjait, amelyeket most már az optimalizált pózaikkal transzformált a program, hozzáadja mindkét NDT-rácshoz (a Gauss-eloszlások inkrementálisan frissülnek). A térkép így a teljes felvétellel együtt nő. Amint a megtett távolság meghaladja a <code>sliding_window_trajectory_length_threshold</code> értéket, a térképet a pontok legfrissebb feléből építi újra a program, <code>decimation</code> szerinti voxelritkítással, ami hosszú futásoknál korlátozza a memóriahasználatot. Az alapértelmezett 200 m-rel ez kézben tartott felvételeknél ritkán fordul elő.</p>
+<div class="params"><span>sliding_window_trajectory_length_threshold</span></div>
+</li>
+
+<li class="step" id="s-export">
+<h3>Export</h3>
+<div class="where">save_result · src/application/lidar_odometry.cpp</div>
+<p>Az összes <b>eredeti</b> pontot (nem a ritkítottakat) a saját optimalizált csomópontpózával transzformálja a program. Azokat a pontokat, amelyeknek az érzékelő-koordináta-rendszerbeli távolsága a <code>threshould_output_filter</code> alatt van, eltávolítja az exportból. Az ablakokat 51-es csoportokba (chunk) fogja össze, és minden csoportból egy <code>scan_lio_N.laz</code> lesz, a csoport első pózához viszonyítva kifejezve, ezt a pózt pedig a session-fájlok tárolják. A megmaradó ablakok egy utolsó, rövidebb csoportot alkotnak, amelyet akkor ír ki a program, ha több mint <code>min_counter_concatenated_trajectory_nodes</code> ablakot tartalmaz (alapértelmezés szerint 0, így mindig kiírja).</p>
+<p>Ha <code>export_merged_laz = true</code>, az összes csoportot ezen felül egyetlen <code>scan_lio_merged.laz</code> fájlba is kiírja világkoordinátákban.</p>
+<div class="params"><span>threshould_output_filter</span><span>min_counter_concatenated_trajectory_nodes</span><span>export_merged_laz</span></div>
+</li>
+</ol>
+
+<div class="note"><b>Hurokzárás (a 8. lépés után, a konzisztencia-menet előtt)</b>A <code>use_loop_closure = true</code> beállítással a futás (parancssorból és GUI-ból egyaránt) korrigálja az elkészült trajektóriát, amikor olyan helyre térsz vissza, amelyet már letapogattál (<code>src/application/loop_closure.cpp</code>):
+<ol>
+<li>Az ablakokat <b>szegmensekbe</b> csoportosítja <code>loop_closure_segment_windows</code> ablakonként (12 ≈ 5 s), mindegyiket a pontjaival együtt világkoordinátákban.</li>
+<li><b>Újralátogatási jelöltek</b>: minden szegmenshez a hozzá legközelebbi korábbi szegmenst keresi, amely legalább <code>loop_closure_min_time_gap_s</code> idővel régebbi, vízszintesen <code>loop_closure_search_radius_m</code>, függőlegesen <code>loop_closure_max_vertical_offset_m</code> távolságon belül (hogy a különböző szinteket ne tévessze össze).</li>
+<li><b>Regisztráció</b>: a későbbi szegmenst a korábbihoz és annak szomszédaihoz igazítja, először voxelátfedéses kereséssel a yaw (±10°) és az eltolás (±<code>loop_closure_max_correction_m</code>) mentén, majd pont–eloszlás finomítással. Csak akkor fogadja el, ha pontjainak legalább <code>loop_closure_min_fitness</code> hányada fedi a korábbi látogatást, az átfedés nem romlott, és a korrekció a keresési tartományon és 15°-on belül marad.</li>
+<li><b>Póz-gráf</b>: a szegmenspózokat optimalizálja az egymást követő szegmensek közötti odometriaélekkel és az elfogadott hurokélekkel, az első szegmens rögzítve.</li>
+<li>Az egyes szegmensek korrekcióját <b>minden trajektória-csomópontra interpolálja</b>, így a trajektória simán hajlik, nem ugrik.</li>
+</ol>
+A napló felsorolja az összes jelöltet az átfedésükkel a korrekció előtt és után, valamint a korrekcióval. A keresési tartománynál nagyobb hibákat (például egy 20°-os irányszöghibát) szándékosan elutasítja; ezek az odometriából erednek, és ott kell javítani őket.</div>
+
+<div class="warn"><b>Opcionális: konzisztencia-menet (a 8. és 9. lépés között)</b>A <code>use_consistency = true</code> beállítással a futás (parancssorból és GUI-ból egyaránt) az odometria és a hurokzárás után, az export előtt meghívja a <code>run_consistency</code>-t. Ez <b>az egész trajektóriát egyszerre</b> újraoptimalizálja <code>num_constistency_iter</code> alkalommal: minden csomópontot egy sima trajektória felé húz (relatívpóz-a priori információ az egymást követő csomópontok között), és <b>az összes</b> ablak pontjainak egyezniük kell egyetlen, a teljes felvételből épített NDT-térképpel. Ez eltávolíthatja az ablakok közötti maradék eltérést, például egy falét, amelyet az elején és a végén is látunk, de lassú, és ha a simasági a priori információ túl erős, el is moshatja a trajektóriát. Két változat (<code>use_mutliple_gaussian</code>):
+<ul>
+<li><b>Consistency</b> (false): egy Gauss-eloszlás beltéri rács-kockánként, forgatási simaság 0.1°, a fixen kódolt 1 m-nél közelebbi pontokat figyelmen kívül hagyja.</li>
+<li><b>Consistency2</b> (true): több Gauss-eloszlás kockánként, mindegyik egy 1M pontos időszegmensre (egy kockának legalább 5 pontra van szüksége a szegmensben), így az ugyanazon a helyen való különböző áthaladásokat egymással illeszti. Forgatási simaság 0.01°, a <code>consistency_min_distance</code>-nél közelebbi pontokat figyelmen kívül hagyja.</li>
+</ul>
+A mért hatásokat lásd: <a href="#fixes">Javítások és a térkép élessége</a>.</div>
+
+<h2 id="params">Paraméter-referencia</h2>
+<p>TOML-szekciónként egy táblázat, a legfontosabbtól haladva. Az értékek a <code>settings/lidar-vertical.toml</code> értékei. Címkék: <span class="badge b-key">kulcs</span> erősen befolyásolja az eredményt, <span class="badge b-gui">csak GUI</span> csak a GUI-t érinti, <span class="badge b-off">inaktív</span> beolvasódik, de a jelenlegi beállításokkal vagy kóddal nincs hatása. A hiányzó kulcsok a beépített alapértelmezett értékekre esnek vissza, és minden futás elmenti a felhasznált teljes készletet a <code>dMapper_params_*.toml</code> fájlba.</p>
+
+<h3 id="p-filter">[filter_points]</h3>
+<div class="table-wrap"><table>
+<tr><th>Paraméter</th><th>Érték</th><th>Jelentés</th></tr>
+<tr><td>filter_threshold_xy_inner <span class="badge b-key">kulcs</span></td><td class="val">0.35 m</td><td>Betöltéskor: eldobja az ennél kisebb <b>vízszintes</b> sugárra (√(x²+y²), érzékelő-koordináta-rendszer) eső pontokat. Eltávolítja a kezelő kezét és testét, valamint a házat. Az érzékelővel együtt mozgó, a kezelőn lévő pontok a megoldást a "nincs forgás" felé húzzák, ezért ennek le kell fednie őket.</td></tr>
+<tr><td>filter_threshold_xy_outer</td><td class="val">25.0 m</td><td>Betöltéskor: eldobja az ennél nagyobb vízszintes sugáron túli pontokat. Az L2 90 %-os reflexiónál 30 m-t, sötét kőzeten 15 m-t ér el.</td></tr>
+<tr><td>decimation <span class="badge b-key">kulcs</span></td><td class="val">0.03 m</td><td>Az optimalizálásban használt ablakmásolat voxelmérete (kockánként az első pontot tartja meg). Kisebb érték több pontot jelent, lassabb, de több kényszerrel. Az export mindig az összes pontot használja.</td></tr>
+<tr><td>threshould_output_filter</td><td class="val">0.4 m</td><td>Csak az exportnál: eldobja az érzékelőhöz ennél közelebbi (3D-s távolságú) pontokat.</td></tr>
+<tr><td>export_merged_laz</td><td class="val">true</td><td>Csak az exportnál: kiírja a <code>scan_lio_merged.laz</code> fájlt is, az összes csoporttal egy fájlban, világkoordinátákban, csoportonként folyamatosan írva (nincs extra memóriahasználat). A csoportfájlok és a session a korábbiak szerint íródnak ki. Ugyanazt az eredményt adja, mint a <code>tools/merge_chunks.sh</code>, CloudCompare nélkül.</td></tr>
+<tr><td>min_counter_concatenated_trajectory_nodes</td><td class="val">0</td><td>Csak az exportnál: az utolsó kimeneti csoportot csak akkor írja ki, ha ennél több ablakot tartalmaz (1 ablak ≈ 0.4 s). A 0 megtartja a felvétel végét. A régi 10-es érték csendben eldobott akár 4 s-ot a végéből.</td></tr>
+</table></div>
+
+<h3 id="p-control">[lidar_odometry_control]</h3>
+<div class="table-wrap"><table>
+<tr><th>Paraméter</th><th>Érték</th><th>Jelentés</th></tr>
+<tr><td>threshold_nr_poses <span class="badge b-key">kulcs</span></td><td class="val">360</td><td>Csomópontok (IMU-minták) száma ablakonként: 360 ≈ 0.4 s 893 Hz-en. A hosszabb ablakok több kontextust adnak, de lassabbak (a költség a négyzetével nő), és lassabban adaptálják a biast. 720-at is kipróbáltunk: kicsit élesebb, kb. 50 %-kal lassabb.</td></tr>
+<tr><td>threshold_initial_points</td><td class="val">60000</td><td>A kezdeti térképhez használt pontok (≈ 1 s L2-adat). Nem mozgáskompenzált, ezért ideális esetben álló helyzetben rögzített.</td></tr>
+<tr><td>nr_iter</td><td class="val">100</td><td>Levenberg–Marquardt-iterációk maximális száma ablakonként.</td></tr>
+<tr><td>convergence_delta_threshold</td><td class="val">1e-12</td><td>Az ablak leállítja az iterálást, amint egy lépés |frissítéseinek| összege ez alá az érték alá esik. Az alapérték az összes <code>nr_iter</code> iterációt lefuttatja. Az <code>1e-2</code> gyors üzemmód: a tesztfelvételeken 3&ndash;4&times; gyorsabb, 0.5% (42) és 1.5% (43) további foglalt 3 cm-es cellával, vagyis kicsit kevésbé éles. Nincs a fájlban, ezért az alapértelmezett érték érvényes.</td></tr>
+<tr><td>lm_factor_initial</td><td class="val">5.0</td><td>A kezdeti LM-csillapítás a pózismeretlenekre, 10 iterációnként ×10. A nagyobb érték kisebb, biztonságosabb lépéseket jelent.</td></tr>
+<tr><td>use_exact_ndt_bucket_statistics</td><td class="val">false</td><td>Hogyan épülnek fel az NDT-térkép cellái. false: a korábbi statisztika (a cella első pontja az átlaga, a normális az első 3 pontjából rögzítve). true: a cella összes pontjának átlaga, kovarianciája és normálisa, és nincs normális, ha a pontok egy egyenesen fekszenek. A true pontosabb szintetikus jeleneteken, de az <code>imu_degenerate_information_ratio = 0.3</code> értékkel a 44-es felvétel nagy részét degeneráltnak jelöli; lásd: <a href="degeneracy-information.html">Degeneráltsági információ</a>. A false melletti eredmények változatlanok.</td></tr>
+<tr><td>min_distance_lidar</td><td class="val">0.15 m</td><td>Az ennél (3D-ben) közelebbi pontokat nem használja a finom NDT-rács ellen. Holt zóna és önvisszaverődések.</td></tr>
+<tr><td>min_distance_lidar_outdoor_grid</td><td class="val">1.0 m</td><td>Az ennél közelebbi pontokat nem használja a durva rács ellen.</td></tr>
+<tr><td>max_distance_lidar</td><td class="val">25.0 m</td><td>Az ennél távolabbi pontokat nem használja az optimalizálásban (mindkét rács). A távoli pontok zajosabbak, de erősen kötik a forgatást.</td></tr>
+<tr><td>use_motion_from_previous_step</td><td class="val">true</td><td>Kezdeti pozícióbecslés az előző ablak sebességéből (állandó sebességű modell). Ha false, a pozíciók ott indulnak, ahová az IMU-lánc teszi őket, vagyis mozgás nélkül.</td></tr>
+<tr><td>sliding_window_trajectory_length_threshold</td><td class="val">200.0 m</td><td>Ennyi megtett távolság után a térképet a pontjai újabb feléből építi újra. Nagyon hosszú felvételeknél csökkentsd, hogy korlátozd a memóriahasználatot.</td></tr>
+</table></div>
+
+<h3 id="p-ndt">[in_out_params_indoor] és [in_out_params_outdoor]</h3>
+<div class="table-wrap"><table>
+<tr><th>Paraméter</th><th>Érték</th><th>Jelentés</th></tr>
+<tr><td>indoor resolution_X/Y/Z <span class="badge b-key">kulcs</span></td><td class="val">0.15 m</td><td>A finom NDT-rács kockamérete. A pontzaj (≤ 2 cm) néhányszorosának kell lennie, és elég kicsinek ahhoz, hogy szűk átjárókban is szétválassza a közeli felületeket. Túl kicsi érték esetén kockánként túl kevés pont jut.</td></tr>
+<tr><td>outdoor resolution_X/Y/Z</td><td class="val">0.4 m</td><td>A durva rács kockamérete, amely robusztus, nagy léptékű illesztést ad az 1 m-nél távolabbi pontokra.</td></tr>
+<tr><td>bounding_box_*, number_of_buckets*, bounding_box_extension <span class="badge b-off">inaktív</span></td><td class="val">0</td><td>A fájlformátumban hordozott rács-nyilvántartási mezők. Az odometria korlátlan kiterjedésű hash-elt rácsot használ, és sosem olvassa őket, ezért módosításuknak nincs hatása. Csak a <code>resolution_*</code> számít.</td></tr>
+</table></div>
+
+<h3 id="p-mm">[motion_model_uncertainty]</h3>
+<p>Mennyire térhet el minden csomópont az IMU-alapú becsléstől a szomszédjához képest. Kis szigma (szórás) = megbízunk az IMU-ban, nagy szigma = a LiDAR dönt.</p>
+<div class="table-wrap"><table>
+<tr><th>Paraméter</th><th>Érték</th><th>Jelentés</th></tr>
+<tr><td>use_time_scaled_rotation_sigma <span class="badge b-key">kulcs</span></td><td class="val">true</td><td>Lépésenkénti forgatási szigma = <code>max(k · ARW · √Δt, floor)</code>, tengelyenként. Azt követi, ahogyan egy giroszkóp ténylegesen elcsúszik: egy 0.1 ms-os lépés jóval kisebb szabadságot kap, mint egy 2 ms-os. Ha false, az alábbi állandó <code>*_om/fi/ka_1_sigma_deg</code> értékeket használja csomópontonként.</td></tr>
+<tr><td>gyro_arw_x / y / z_deg_sqrt_s</td><td class="val">0.028 / 0.042 / 0.057</td><td>Giroszkóp-szögbolyongás (angle random walk, zajsűrűség) °/√s-ban, egy 17 s-os statikus L2-felvételen mérve. A tengelyek az ω (roll), φ (pitch), κ (yaw) szögekre képződnek le.</td></tr>
+<tr><td>rotation_sigma_inflation_k <span class="badge b-key">kulcs</span></td><td class="val">4.0</td><td>Szorzó a tiszta giroszkópzajon, amely az időbélyeg-jittert, a rezgést és a modellhibát fedi le. Hangolva: a 12 látható jittert hagy, a 4 adja a legélesebb térképeket, a 2 és az 1 túlságosan megbízik az IMU-ban, és elmossa a falakat.</td></tr>
+<tr><td>rotation_sigma_floor_deg</td><td class="val">0.002°</td><td>A lépésenkénti forgatási szigma alsó korlátja, hogy a közel nulla Δt ne adjon végtelen súlyokat.</td></tr>
+<tr><td>rotation_sigma_inflation_k_turn <span class="badge b-off">inaktív</span></td><td class="val">0 (off)</td><td>A <code>turn_rate_threshold_deg_s</code>-nál gyorsabban, a függőleges körül forduló ablakokban ez váltja fel a <code>rotation_sigma_inflation_k</code>-t, vagyis szűk fordulókban jobban megbízik a giroszkópban. 1.0 / 30 °/s értékkel tesztelve: a b1-en a lépcsőházi irányszög 2°-on belül követte a giroszkópot és a szobák záródtak, de a 2. emeletre visszatéréskor megemelt padló jelent meg, a 42/43 pedig 1.6–1.9% élességet vesztett, ezért nincs a fájlban.</td></tr>
+<tr><td>turn_rate_threshold_deg_s</td><td class="val">30 °/s</td><td>A függőleges körüli (az IMU-ból számított) átlagos forgási sebesség, amely felett egy ablak fordulónak számít. Csak a <code>rotation_sigma_inflation_k_turn</code> &gt; 0 esetén használatos.</td></tr>
+<tr><td>lidar_odometry_motion_model_x/y/z_1_sigma_m</td><td class="val">1e-4 m</td><td>Az egymást követő csomópontok közötti <b>relatív transzlációnak</b> az állandó sebességű becsléstől megengedett eltérése. Nagyon szoros: a pozíció főként a sebesség a priori információján és az első csomóponton keresztül változik. A valódi fel-le járásmozgás kb. felét kisimítja (a 42-esen a gyorsulásmérőhöz képest mérve). Azokban az ablakokban, ahol a gyorsulásmérő-tag aktív, helyette az <code>imu_degenerate_translation_sigma_m</code> érvényes.</td></tr>
+<tr><td>lidar_odometry_motion_model_acc_1_sigma_mps2</td><td class="val">1.0 m/s²</td><td>Sebességfolytonossági a priori információ: milyen gyorsan változhat a sebesség, az ablakhatárokon át is (elkerüli az ablakonkénti sebességtöréseket). A 0 kikapcsolja.</td></tr>
+<tr><td>max_prior_velocity_mps</td><td class="val">5 m/s</td><td>Épelméjűségi korlát az előző ablak végsebességére, az utolsó 20 csomópontján (kb. 22 ms) mérve. Egy ennél gyorsabb sebességet nem használ a program a priori információként, és a konzol ezt jelzi: az ablak pozícióbecslése és IMU-integrálása ekkor 0 m/s-ról indul, és a sebességfolytonossági tagnak nincs kapcsolata az előző ablakkal. Az 5 m/s meghaladja a járási sebességet egy barlangban, tartalékkal a 22 ms-os mérés zajára. A beépített alapérték 10 m/s; a 0 vagy az alatti érték minden sebesség-a priori információt eldob.</td></tr>
+<tr><td>lidar_odometry_motion_model_om/fi/ka_1_sigma_deg <span class="badge b-off">inaktív</span></td><td class="val">0.1 / 0.1 / 0.15°</td><td>Állandó forgatási szigma csomópontonként, csak a <code>use_time_scaled_rotation_sigma = false</code> esetén használatos. Ezek az értékek okozták a szellemfalakat: minden ~1 ms-os csomópont elfordulhatott 0.15°-kal.</td></tr>
+</table></div>
+
+<h3 id="p-bias">[gyro_bias_estimation]</h3>
+<div class="table-wrap"><table>
+<tr><th>Paraméter</th><th>Érték</th><th>Jelentés</th></tr>
+<tr><td>use_gyro_bias_estimation <span class="badge b-key">kulcs</span></td><td class="val">true</td><td>3 tengelyes giroszkóp-bias becslése minden, az első utáni ablakban, mozgás közben, álló kezdet nélkül. Statikus felvételhez képest validálva (valódi z-bias −0.61 °/s; becsült −0.56 °/s a mozgó 43-as adathalmazon).</td></tr>
+<tr><td>gyro_bias_rw_deg_s_sqrt_s</td><td class="val">0.005</td><td>Bias véletlen bolyongás (random walk) °/s/√s-ban: mennyit változhat a bias az idő során. A nagyobb értékek gyorsabban követik a változásokat, de sokkal zajosabbak (a 0.5 kb. 10×-esen zajosabb volt ugyanazzal az átlaggal). A 0.05-tel a függőleges tengelyű bias-becslés ±0.4 °/s-ot ingadozott az ablakok között a háromszintes b1 felvételen; a 0.005 megtartja a jól kötött területeken megtanult biast, ami az újralátogatott szobák eltolását 2.9 m-ről 1.1 m-re csökkentette, a 42/43-on változás nélkül.</td></tr>
+<tr><td>gyro_bias_initial_sigma_deg_s</td><td class="val">10.0 °/s</td><td>A bias bizonytalansága az első becslés előtt (gyakorlatilag "ismeretlen").</td></tr>
+<tr><td>gyro_bias_max_deg_s</td><td class="val">20.0 °/s</td><td>Tengelyenkénti korlát. Elérése figyelmeztetést naplóz, ami általában azt jelenti, hogy az adott szakasz LiDAR-adata gyenge.</td></tr>
+<tr><td>handoff_tail_nodes <span class="badge b-key">kulcs</span></td><td class="val">30</td><td>Az ablakonkénti utolsó csomópontok száma (≈ 33 ms), amelyeket az IMU-ból számol újra a program, mielőtt a következő ablakot elindítanák. Megakadályozza az irányszög-ugrásokat az ablakhatárokon. A 0 kikapcsolja.</td></tr>
+</table></div>
+
+<h3 id="p-origin">[motion_model_first_node_prior_uncertainty]</h3>
+<div class="table-wrap"><table>
+<tr><th>Paraméter</th><th>Érték</th><th>Jelentés</th></tr>
+<tr><td>lidar_odometry_motion_model_fix_origin_x/y/z_1_sigma_m</td><td class="val">1e-6 m</td><td>Mennyire szigorúan tartja az ablak első csomópontját az előző ablak végén. 1e-6 = rögzített. Az ablakok egyetlen folytonos trajektóriát alkotnak.</td></tr>
+<tr><td>lidar_odometry_motion_model_fix_origin_om/fi/ka_1_sigma_deg</td><td class="val">1e-6°</td><td>Ugyanez az orientációra.</td></tr>
+</table></div>
+
+<h3 id="p-mmc">[motion_model_correction]</h3>
+<div class="table-wrap"><table>
+<tr><th>Paraméter</th><th>Érték</th><th>Jelentés</th></tr>
+<tr><td>motion_model_correction_om/fi/ka</td><td class="val">0.0°</td><td>Állandó forgatási eltolás (fokban), amelyet minden IMU-lépéshez hozzáad. Kézi, lépésenkénti bias-korrekció, amely az automatikus bias-becslés előtti időkből származik. Hagyd 0-n.</td></tr>
+</table></div>
+
+<h3 id="p-ahrs">[madgwick_filter]</h3>
+<div class="table-wrap"><table>
+<tr><th>Paraméter</th><th>Érték</th><th>Jelentés</th></tr>
+<tr><td>ahrs_gain</td><td class="val">0.05</td><td>Mennyire erősen húzza a gyorsulásmérő a bólintást és a dőlést a gravitáció felé. A magasabb érték gyorsabban korrigál, de a kéz gyorsulásai megdönthetik a becslést. Automatikusan 0-ra áll, amíg |a| kívül esik a 0.9–1.1 g tartományon.</td></tr>
+<tr><td>fusionConventionNwu / Enu / Ned</td><td class="val">NWU</td><td>Az IMU-adatok tengelykonvenciója. A dLidar az L2-t NWU-ban írja (x előre, y balra, z felfelé). Pontosan egynek kell true-nak lennie.</td></tr>
+<tr><td>use_remove_imu_bias_from_first_stationary_scan</td><td class="val">true</td><td>Levonja az első 1000 minta medián giroszkópértékét, de csak ha állónak tűnnek (variancia &lt; 5 (°/s)²). Kézben tartott adatoknál általában kimarad. Az online bias-becslés ezt lefedi.</td></tr>
+</table></div>
+
+<h3 id="p-ext">[lidar_imu_extrinsics]</h3>
+<div class="table-wrap"><table>
+<tr><th>Paraméter</th><th>Érték</th><th>Jelentés</th></tr>
+<tr><td>lidar_imu_lever_arm_x / y / z_m</td><td class="val">0.00667 / −0.014655 / 0.007698</td><td>Minden ponthoz hozzáadott eltolás, hogy az IMU origójában fejezze ki őket (az Unitree L2 adatlap értékei NWU-ra leképezve). Forgatást nem alkalmaz, mivel a dLidar már az IMU tengelyeiben szolgáltatja a pontokat.</td></tr>
+</table></div>
+
+<h3 id="p-imu">[imu_translation]</h3>
+<p>A gyorsulásmérő használata a transzlációhoz. A járás csak kb. 0.2 m/s² gyorsulást hoz létre, miközben egy 1°-os dőlési hiba már 0.17 m/s² gravitációt hagy benne, a pozíció pedig a kétszeres integrálja. Ezért a gyorsulásmérőt csak ott használja a program, ahol a LiDAR egy irányban vak, csak korlátozott ideig, és egy mellette becsült eltolással.</p>
+<div class="table-wrap"><table>
+<tr><th>Paraméter</th><th>Érték</th><th>Jelentés</th></tr>
+<tr><td>use_imu_acceleration_term <span class="badge b-key">kulcs</span></td><td class="val">true</td><td>A gyorsulásmérő mint a sebességváltozás lágy mérése az ablak-optimalizáláson belül (lásd 6. lépés). A kezdeti becslés állandó sebességű marad, így egy hibás gyorsulás nem szaladhat el.</td></tr>
+<tr><td>imu_acceleration_only_when_degenerate <span class="badge b-key">kulcs</span></td><td class="val">true</td><td>A tagot csak olyan ablak után aktiválja, amelynek geometriája egy transzlációs irányt kötetlenül hagyott. false = minden ablakban (a b1 megduplázódott szobáit is kijavította, de 1–2% élességbe került a 42/43-on).</td></tr>
+<tr><td>imu_degenerate_information_ratio</td><td class="val">0.3</td><td>Vakság-teszt: az ablak pontjaihoz illesztett felületi normálisokra vett Σ n·nᵀ legkisebb / legnagyobb sajátértéke. A szobák 0.36–0.86-ot mértek a b1-en, a folyosói visszafordulás és a lépcsőmászás 0.16–0.3-at. Maga az NDT-információ aránya nem működik: a kis Gauss-eloszlások a lapos falak mentén is rögzítik a pontokat. Elmagyarázva itt: <a href="degeneracy-information.html">Degeneráltsági információ</a>, a cellanormálisok egy ismert gyengeségével együtt.</td></tr>
+<tr><td>imu_degenerate_max_duration_s</td><td class="val">15 s</td><td>Ennyi idő után egy vak szakaszon belül a tag ismét kikapcsol; a gyorsulásmérő hibája az idővel nő.</td></tr>
+<tr><td>imu_degenerate_translation_sigma_m</td><td class="val">3e-4 m</td><td>Transzlációs a priori információ a csomópontok között, amíg a tag aktív (az 1e-4 helyett). Az 1e-4-gyel az a priori információ felülírja a gyorsulásmérőt; az 1e-3 a b1-en divergált.</td></tr>
+<tr><td>imu_acceleration_sigma_mps2</td><td class="val">0.5 m/s²</td><td>A mért gyorsulásra feltételezett pontosság.</td></tr>
+<tr><td>imu_acceleration_span_s</td><td class="val">0.01 s</td><td>A gyorsulásmérő-tag csomópont-hármasainak távolsága (kiegyenlíti az IMU-minták löketszerűségét).</td></tr>
+<tr><td>imu_acceleration_offset_initial_sigma_mps2</td><td class="val">0.1 m/s²</td><td>Az <i>e</i> eltolás a priori szigmája egy vak szakasz elején (a gravitációt közvetlenül előtte kalibrálta).</td></tr>
+<tr><td>imu_acceleration_offset_rw_mps2_sqrt_s</td><td class="val">0.05</td><td>Az <i>e</i> véletlen bolyongása: a priori szigmája ennyivel × √(ablak időtartama) nő.</td></tr>
+<tr><td>use_imu_translation_prediction <span class="badge b-off">inaktív</span></td><td class="val">false</td><td>Kísérleti: a gyorsulásmérőt magába a kezdeti becslésbe integrálja. A tesztfelvételeken divergált vagy elcsúszott, referenciaként megtartva.</td></tr>
+<tr><td>use_zero_velocity_detection, zero_velocity_acc_threshold_mps2, zero_velocity_gyro_threshold_deg_s <span class="badge b-off">inaktív</span></td><td class="val">false, 0.3, 3.0</td><td>Mozgás nélküli ablakot jósol, ha az eszköz nyugalomban van (50 ms-ra átlagolt gyorsulás a küszöb alatt, forgás a küszöb alatt). Egy statikus felvétel 39 ablakából 35-öt észlelt, és egyet sem járás közben; még nem volt olyan járásfelvétel, amelyen valódi megállás lett volna.</td></tr>
+</table></div>
+
+<h3 id="p-loop">[loop_closure]</h3>
+<p>Automatikus hurokzárás az odometria után, a <a href="#pipeline">feldolgozási lánc</a> 8. lépése utáni megjegyzésben leírva. A b1-en a visszalátogatott szobák eltolását 0.4–0.7 m-ről 0.1 m-re csökkentette; a 42 és a 43 nem tartalmaz újralátogatást, és változatlan marad.</p>
+<div class="table-wrap"><table>
+<tr><th>Paraméter</th><th>Érték</th><th>Jelentés</th></tr>
+<tr><td>use_loop_closure <span class="badge b-key">kulcs</span></td><td class="val">true</td><td>Hurokzárás futtatása az odometria után, a konzisztencia-menet és az export előtt (parancssor és GUI).</td></tr>
+<tr><td>loop_closure_segment_windows</td><td class="val">12</td><td>Ablakok száma szegmensenként (≈ 5 s). A szegmens egységként mozog a póz-gráfban; a korrekció a szegmensek között interpolálódik.</td></tr>
+<tr><td>loop_closure_min_time_gap_s</td><td class="val">30 s</td><td>Két látogatás közötti minimális idő, hogy újralátogatásnak számítson (a rövidebb időközök az odometria révén már konzisztensek).</td></tr>
+<tr><td>loop_closure_search_radius_m</td><td class="val">8 m</td><td>A két szegmens középpontja közötti maximális vízszintes távolság.</td></tr>
+<tr><td>loop_closure_max_vertical_offset_m</td><td class="val">1.5 m</td><td>Maximális függőleges távolság, hogy a különböző szinteken lévő szobákat ne párosítsa.</td></tr>
+<tr><td>loop_closure_max_correction_m</td><td class="val">6 m</td><td>A regisztráció keresési tartománya és az elfogadott korrekció felső határa (forgatási korlát 15°).</td></tr>
+<tr><td>loop_closure_min_fitness <span class="badge b-key">kulcs</span></td><td class="val">0.5</td><td>A későbbi szegmens pontjainak az a hányada, amelynek az igazítás után át kell fednie a korábbi látogatást (0.2 m-es voxelek). Alacsonyabb érték több hurkot fogad el, a hibásakat is.</td></tr>
+<tr><td>loop_closure_odometry_sigma_m / _deg</td><td class="val">0.1 m / 0.5°</td><td>Az egymást követő szegmensek közötti odometria bizonytalansága a póz-gráfban.</td></tr>
+<tr><td>loop_closure_edge_sigma_m / _deg</td><td class="val">0.05 m / 0.3°</td><td>Egy elfogadott hurok bizonytalansága. Kisebb, mint az odometriáé, így a hurok összehúzza a trajektóriát.</td></tr>
+</table></div>
+
+<h3 id="p-cons">[consistency]</h3>
+<p>Opcionális, az egész trajektóriára kiterjedő finomítás az odometria után, a <a href="#pipeline">feldolgozási lánc</a> 8. lépése utáni megjegyzésben leírva. A kulcsnevek megtartják az eredeti írásmódot (<code>constistency</code>, <code>mutliple</code>).</p>
+<div class="table-wrap"><table>
+<tr><th>Paraméter</th><th>Érték</th><th>Jelentés</th></tr>
+<tr><td>use_consistency</td><td class="val">true</td><td>A konzisztencia-menet futtatása az odometria és a hurokzárás után, az export előtt (parancssor és GUI).</td></tr>
+<tr><td>num_constistency_iter</td><td class="val">10</td><td>Menetek száma. Minden menet újraoptimalizálja az összes csomópontot és újraépíti a teljes felvétel NDT-térképét, ezért a futási idő lineárisan nő vele. A 0 még akkor is kikapcsolja a menetet, ha a <code>use_consistency</code> true.</td></tr>
+<tr><td>use_mutliple_gaussian</td><td class="val">false</td><td>false: <b>Consistency</b> (egy Gauss-eloszlás kockánként, simaság 0.1°, fixen kódolt 1 m minimális távolság). true: <b>Consistency2</b> (egy Gauss-eloszlás kockánként és 1M pontos időszegmensenként, simaság 0.01°).</td></tr>
+<tr><td>consistency_min_distance</td><td class="val">0.4 m</td><td>Csak a Consistency2-nél: az érzékelőhöz ennél közelebbi pontokat figyelmen kívül hagyja (kitakarja a kezelőt).</td></tr>
+</table></div>
+
+<h3 id="p-perf">[performance]</h3>
+<div class="table-wrap"><table>
+<tr><th>Paraméter</th><th>Érték</th><th>Jelentés</th></tr>
+<tr><td>real_time_threshold_seconds</td><td class="val">10.0 s</td><td>Falióra-idő korlát ablakonként. Ha egy ablak tovább tart, az iterációi korán leállnak, és az eredmények ekkor a gép sebességétől függnek. A tesztfelvételeken kb. 2 s ablakonként (b1: akár 9 s a mátrixgyorsítás előtt, így CPU-terhelés alatt az iterációk megszakadhattak).</td></tr>
+</table></div>
+
+<h3 id="p-robust">[robust_lidar_odometry] <span class="badge b-off">inaktív</span></h3>
+<p>Kísérleti előillesztés minden ablakra gömbi koordinátákban (távolság / polár / azimut kosarak) a fő optimalizálás előtt. Ki van kapcsolva (<code>use_robust_and_accurate_lidar_odometry = false</code>), és a giroszkóp-bias becslése automatikusan letiltódik, ha bekapcsolják.</p>
+<div class="table-wrap"><table>
+<tr><th>Paraméter</th><th>Érték</th><th>Jelentés</th></tr>
+<tr><td>use_robust_and_accurate_lidar_odometry</td><td class="val">false</td><td>Bekapcsolja az előillesztést.</td></tr>
+<tr><td>distance_bucket, polar_angle_deg, azimutal_angle_deg</td><td class="val">0.2 m, 10°, 10°</td><td>A gömbi rács kosárméretei.</td></tr>
+<tr><td>*_rigid_sf, max_distance_lidar_rigid_sf</td><td class="val">0.5 m, 10°, 10°, 25 m</td><td>Ugyanez a merev scan-frame szakaszra.</td></tr>
+<tr><td>rgd_sf_sigma_x/y/z_m, rgd_sf_sigma_om/fi/ka_deg</td><td class="val">0.001 m, 0.01°</td><td>A merev szakasz mozgás-a priori információi.</td></tr>
+<tr><td>robust_and_accurate_lidar_odometry_iterations, …_rigid_sf_iterations</td><td class="val">20, 30</td><td>Mindkét szakasz iterációinak száma.</td></tr>
+</table></div>
+
+<h3 id="p-misc">[lidar_odometry_debug_info], [paths], [misc], [version_info]</h3>
+<div class="table-wrap"><table>
+<tr><th>Paraméter</th><th>Érték</th><th>Jelentés</th></tr>
+<tr><td>save_calibration_validation</td><td class="val">false</td><td>Az első fájl első <code>calibration_validation_points</code> kalibrált pontját kiírja az előnézeti mappába, az extrinzikus paraméterek ellenőrzéséhez.</td></tr>
+<tr><td>calibration_validation_points</td><td class="val">1000000</td><td>Az ehhez az ellenőrzéshez használt pontok száma.</td></tr>
+<tr><td>log_iteration_convergence</td><td class="val">false</td><td>Ablakonként kiírja, hány iteráció után álltak be a pózok (0.1 mm / 0.001&deg; pontossággal), és mikor esett a <code>delta</code> először 1e-2 alá, az akkori pózhibával, a futás végén pedig összegzést. Nem változtatja az eredményeket. A <code>tools/convergence_summary.py</code> hisztogramokat készít az elmentett naplóból; a 44-es számok a <code>docs/PERFORMANCE.md</code> fájlban vannak.</td></tr>
+<tr><td>log_stage_timing</td><td class="val">false</td><td>Kiírja minden feldolgozási lépés falióra-idejét (<code>timing load_data … s</code>, majd calculate_trajectory, compute_step_1, odometry, loop_closure, consistency, save), az odometria végén pedig azt, hogy hol töltötte az idejét, az összes ablakra összegezve: minden Levenberg&ndash;Marquardt-iteráció fázisait (normálmátrix-felépítés, NDT-pontciklusok, mozgásmodell-tagok, összeállítás, megoldások, pózfrissítés) és az ablakciklusét (pontok betöltése, hozzáadás a térképhez, előnézet), részesedéssel, hívásszámmal és hívásonkénti ms-mal. Nem változtatja az eredményeket. A mért profil a <code>docs/PERFORMANCE.md</code> fájlban van.</td></tr>
+<tr><td>working_directory_preview, current_output_dir</td><td class="val">(paths)</td><td>A program írja: az előnézeti mappa (<code>&lt;input&gt;/preview</code>, amely az 1. ablak és az utána következő minden 100. ablak ideiglenes pontfelhőjét tartalmazza) és a kimeneti mappa. Minden futásnál újraszámolódik, ezért a tárolt érték nem számít.</td></tr>
+<tr><td>clear_color <span class="badge b-gui">csak GUI</span></td><td class="val">RGBA</td><td>A 3D-nézet háttérszíne.</td></tr>
+<tr><td>software_version, config_version, build_date</td><td class="val">0.1.0</td><td>Kompatibilitás-ellenőrzés betöltéskor: a fájl kompatibilisnek számít, ha a fő- és alverzió egyezik a programéval (0.1); különben figyelmeztetést ír ki a program. A futás mindig a program saját verzióját rögzíti, bármit mond is a fájl.</td></tr>
+</table></div>
+
+<h2 id="practice">Bevált gyakorlatok</h2>
+<p>A térkép minőségének nagy részéről a felvétel közben dől el. Az odometria csak azt tudja korrigálni, amit kétszer meg tud figyelni, ezért úgy tervezd meg a sétát, hogy az épület minden részét később újra lássa.</p>
+<h3>Felvétel</h3>
+<ul>
+<li><b>Járj körbe minden szinten.</b> Térj vissza egy már letapogatott helyre ugyanazon a szinten (egy szoba, egy folyosókereszteződés, a lépcsőpihenő) az első látogatás után legalább 30 s-cal, és haladj el néhány méteren belül attól, ahol korábban jártál. Minden ilyen újralátogatás lehetővé teszi, hogy a <a href="#p-loop">hurokzárás</a> beigazítsa az adott szintet. Az egyszer bejárt szint nem javítható: a b1-en az egyszer bejárt 1. emelet kb. 4.5°-kal elforgatva maradt, mert a lépcsőn le- és felfelé az irányszöghibák kioltották egymást, így egyetlen hurok sem tárta fel. A 44-es felvétel, amelyen minden szinten van hurok, jól igazítva jött ki.</li>
+<li><b>A hurkot a szinten zárd be, ne csak a lépcsőn át.</b> Egy másik szinten történő újralátogatást nem párosít a program (<code>loop_closure_max_vertical_offset_m</code> = 1.5 m), ezért minden szintnek saját újralátogatás kell.</li>
+<li><b>Állj meg röviden a jellegzetességekben gazdag helyeken</b> a hosszú, jellegtelen szakaszok előtt és után (egyoldalú folyosók, nyitott csarnokok), hogy az azokon átívelő távolság mindkét végén rögzítve legyen.</li>
+<li><b>Maradj egy pillanatig mozdulatlan az elején.</b> A kezdeti térkép nem mozgáskompenzált (lásd: <a href="#limits">Ismert korlátok</a>), és az első másodpercben tartsd magad a letapogató közeli mezején kívül.</li>
+<li><b>Egyenletesen menj a lépcsőn</b>, és minden pihenőnél nézz körül; a lépcsőházak az odometria leggyengébb pontjai.</li>
+</ul>
+<h3>Feldolgozás</h3>
+<ul>
+<li>Használd a Release buildet a <code>settings/lidar-vertical.toml</code> fájllal, parancssorból vagy a GUI-ban betöltve (Start → Load parameters); mindkettő ugyanazokat a lépéseket futtatja, a hurokzárást és a konzisztencia-menetet is beleértve, és ugyanazt az eredményt adja.</li>
+<li>A dLidar-felvételeknél először javítsd meg az IMU-időbélyegeket a <code>tools/fix_imu_timestamps.py</code> szkripttel.</li>
+<li>Ellenőrizd az eredményt szintenként: a különböző áthaladásokon látott falaknak egyetlen felületként kell fedniük egymást. Ha egy szoba kétszer jelenik meg, vagy egy szint el van forgatva, lásd a <a href="#tuning">hangolási puskát</a>.</li>
+</ul>
+
+<h2 id="tuning">Hangolási puska</h2>
+<div class="table-wrap"><table>
+<tr><th>Tünet</th><th>Valószínű ok</th><th>Mit változtass</th></tr>
+<tr><td style="font-family:inherit;white-space:normal">A falak több elforgatott másolatként jelennek meg</td><td>Ablakról ablakra átadott irányszöghiba</td><td>Hagyd bekapcsolva a <code>use_time_scaled_rotation_sigma</code>-t, és a <code>handoff_tail_nodes</code> legyen &gt; 0. Ellenőrizd, hogy az IMU-időbélyegek szigorúan növekvők-e.</td></tr>
+<tr><td style="font-family:inherit;white-space:normal">A falak vastagok vagy elmosódottak</td><td>Csomópontonkénti forgatási jitter</td><td>Csökkentsd a <code>rotation_sigma_inflation_k</code>-t (nem 2 alá), vagy ellenőrizd a <code>decimation</code>-t.</td></tr>
+<tr><td style="font-family:inherit;white-space:normal">A térkép lassan elforog a felvétel során</td><td>Giroszkóp-bias</td><td>Hagyd bekapcsolva a <code>use_gyro_bias_estimation</code>-t. Ellenőrizd a bias lefutását a results JSON-ban.</td></tr>
+<tr><td style="font-family:inherit;white-space:normal">Bias-korlát figyelmeztetések</td><td>Gyenge LiDAR-geometria, vagy a kezelőn lévő pontok</td><td>Növeld a <code>filter_threshold_xy_inner</code> / <code>min_distance_lidar</code> értékét, és ellenőrizd a felvétel első másodpercét.</td></tr>
+<tr><td style="font-family:inherit;white-space:normal">A falak kissé megkettőződnek az ablakok vagy áthaladások között</td><td>Maradék ablakok közötti eltolások</td><td>Győződj meg róla, hogy <code>use_consistency = true</code> (kb. 6–7%-kal élesebb a tesztfelvételeken, +20–30 s).</td></tr>
+<tr><td style="font-family:inherit;white-space:normal">A jellegtelen alagút elcsúszik</td><td>Túl kevés kényszer</td><td>Csökkentsd a <code>decimation</code>-t, növeld a <code>max_distance_lidar</code>-t, vagy próbáld a <code>threshold_nr_poses</code> = 720 értéket.</td></tr>
+<tr><td style="font-family:inherit;white-space:normal">Az eredmények futásonként eltérnek</td><td>Az időkorlát által megszakított ablakok</td><td>Ellenőrizd, hogy egyetlen ablak sem éri el a <code>real_time_threshold_seconds</code> korlátot (egy terhelt vagy lassú gépen valószínűbb); a többszálas feldolgozás nem változtatja az eredményeket.</td></tr>
+<tr><td style="font-family:inherit;white-space:normal">Egy újralátogatott szoba kétszer jelenik meg, eltolva</td><td>A távolság közben nem megfigyelhető (pl. egyoldalú folyosó)</td><td>Hagyd bekapcsolva a <code>use_loop_closure</code>-t. Felvétel közben állj meg röviden egy jellegzetességekben gazdag helyen a hosszú, jellegtelen szakaszok előtt és után.</td></tr>
+<tr><td style="font-family:inherit;white-space:normal">Egy szint vagy szoba megemelkedik, elfordul vagy messze eltér a lépcső után</td><td>Odometria-hiba egy lépcsőházban (a hurokzárás által elfogadott mértéken túl)</td><td>Javítsd meg az IMU-időbélyegeket (<code>tools/fix_imu_timestamps.py</code>); hagyd bekapcsolva az <code>imu_acceleration_only_when_degenerate</code>-t.</td></tr>
+<tr><td style="font-family:inherit;white-space:normal">A feldolgozás lassú</td><td>Mind a 100 iteráció lefut minden ablakban</td><td><code>convergence_delta_threshold = 1e-2</code> (3–4×-esen gyorsabb, kb. 1%-kal kevésbé éles).</td></tr>
+</table></div>
+<p>A <code>tools/eval_odometry.py</code> segítségével objektíven összehasonlíthatók a futások: jitter, az irányszög egyezése a giroszkóppal, ablakvégi tüskék és a térkép élessége (foglalt cellák egy magassági metszetben). Lásd: <code>tools/README.md</code>.</p>
+
+<h2 id="fixes">Javítások és a térkép élessége</h2>
+<p>A dokumentálás közben talált hibák, mi változott, és hogyan hat mindegyik az exportált térkép élességére. Az élesség a foglalt 3/5/10 cm-es cellák száma a −0.3 … 0.7 m-es magassági metszetben, a <code>tools/eval_odometry.py</code> szerint: <b>kevesebb cella vékonyabb falakat jelent</b>.</p>
+<div class="table-wrap"><table>
+<tr><th>Probléma</th><th>Javítás</th><th>Hatás a térkép élességére</th></tr>
+<tr><td style="font-family:inherit;white-space:normal"><b>A konzisztencia-menet parancssori módban soha nem futott le</b></td><td>Új <code>use_consistency</code> opció futtatja az odometria után (be van kapcsolva a <code>lidar-vertical.toml</code>-ban, ki van kapcsolva a beépített alapértékekben).</td><td>A legnagyobb mért nyereség: kb. 6–7%-kal kevesebb foglalt cella, lásd lentebb. A költség futásonként kb. 20–30 s.</td></tr>
+<tr><td style="font-family:inherit;white-space:normal"><b>A térkép újraépítése figyelmen kívül hagyta a <code>decimation</code>-t</b>: a <code>decimate()</code> eredménye el lett dobva, így az újraépített térkép az újabb fél minden pontját megtartotta</td><td>Mostantól a csökkentett felhő van használatban.</td><td>Nem mérhető (±0.5%, a futások közötti zajon belül), még 2 méterenkénti újraépítés mellett sem. Minden újraépítést kisebbé tesz, így a hosszú séták kevesebb memóriát használnak és gyorsabban futnak (42 2 méterenkénti újraépítéssel: 183 s → 145 s). Az alapértelmezett 200 m-rel a térkép a tesztfelvételeken sosem épül újra.</td></tr>
+<tr><td style="font-family:inherit;white-space:normal"><b>A felvétel vége el lett dobva</b>: az utolsó kimeneti csoportot nem írta ki a program, ha ≤ 10 ablakból állt (akár ~4 s)</td><td><code>min_counter_concatenated_trajectory_nodes</code> = 0.</td><td>Nincs. Csak a teljességet érinti: a séta utolsó másodpercei most benne vannak az exportban.</td></tr>
+<tr><td style="font-family:inherit;white-space:normal"><b><code>bounding_box_*</code>, <code>number_of_buckets*</code></b> beállításnak tűnnek</td><td>Használatlanként dokumentálva.</td><td>Nincs. A rács hash-elt és korlátlan.</td></tr>
+<tr><td style="font-family:inherit;white-space:normal"><b>Az optimalizáló minden iterációban egy sűrű 2166×2166-os mátrixot járt végig</b></td><td>Csak a kitöltött sávot (szomszédos csomópontok, bias- és eltolás-ismeretlenek) alakítja ritka formára.</td><td>Nincs, az eredmény bitazonos. Kb. 35%-kal kevesebb idő ablakonként (42: 132 s → 93 s).</td></tr>
+<tr><td style="font-family:inherit;white-space:normal"><b>Megkettőződött szobák egy jellegtelen folyosó után</b> (b1: 2.9–4.3 m eltolás)</td><td>Egyenletesebb giroszkóp-bias (rw 0.005), gyorsulásmérő-tag a vak szakaszokban, hurokzárás.</td><td>Az újralátogatott szobák 0.1 m-re vannak egymástól 2.9 m helyett; az első látogatás élessége változatlan.</td></tr>
+</table></div>
+
+<h3>A konzisztencia-menet, mérve</h3>
+<p>A 43-as és 42-es felvételek (kézben tartott barlangi séták, egyenként kb. 20 s) a <code>settings/lidar-vertical.toml</code> beállításaival, 10 iterációval. Az exportált pontok száma minden futásban azonos, így a kevesebb cella valóban vékonyabb felületeket jelent. A jitter a csomópontról csomópontra vett forgatási érdesség mediánja / p99-e fokban.</p>
+<div class="table-wrap"><table>
+<tr><th>Futás</th><th>43 cellák 3/5/10 cm</th><th>43 jitter</th><th>42 cellák 3/5/10 cm</th><th>42 jitter</th></tr>
+<tr><td>Csak odometria (alapértelmezett)</td><td class="val">15191 / 7290 / 2647</td><td class="val">0.022 / 0.09</td><td class="val">6628 / 3040 / 1080</td><td class="val">0.017 / 0.08</td></tr>
+<tr><td>+ Consistency</td><td class="val">14071 / 6808 / 2533 <b>(−7.4%)</b></td><td class="val">0.050 / 0.25</td><td class="val">6250 / 2926 / 1033 <b>(−5.7%)</b></td><td class="val">0.062 / 0.36</td></tr>
+<tr><td>+ Consistency2</td><td class="val">14046 / 6791 / 2530 <b>(−7.5%)</b></td><td class="val">0.028 / 0.11</td><td class="val">6579 / 3099 / 1110 (−0.7%)</td><td class="val">0.027 / 0.11</td></tr>
+</table></div>
+<p><b>Az eredmény értelmezése.</b> Mindkét változat minden ablakot a teljes felvétel egyetlen térképe felé húz, ami eltávolítja az ablakok között maradt kis eltolásokat. A Consistency mindkét felvételt élesíti, de gyengébb simasági a priori információja (0.1°) 2–4×-esére érdesíti a trajektóriát. Ez nem mossa el a térképet, mert minden csomópontot újra illeszt a pontokhoz, de a trajektória önmagában használva kevésbé sima. A Consistency2 a trajektóriát majdnem olyan simán tartja (0.01°-os a priori információ), és a 43-on egyezik a Consistency-vel. A 42-n alig segít, mert egy rövid séta ritkán látogatja meg ugyanazokat a kockákat egy másik 1M pontos szegmensben. Az irányszög egyezése a giroszkóppal minden futásban változatlan.</p>
+<p><b>Javaslat.</b> A <code>lidar-vertical.toml</code> bekapcsolja a <code>use_consistency</code>-t. Állítsd false-ra, ha a futási idő fontosabb a térkép minőségénél. A legélesebb térképhez használd a Consistency-t (az alapértelmezett változatot). A Consistency2-t hosszabb, hurkokat vagy újralátogatásokat tartalmazó sétáknál használd, vagy ha magát a trajektóriát használják tovább.</p>
+
+<h2 id="limits">Ismert korlátok</h2>
+<ul>
+<li><b>A kezdeti térkép nem mozgáskompenzált.</b> Az első ~60k pontot csak az első pózzal helyezi el a program.</li>
+<li><b>A dLidar IMU-időbélyegei.</b> A régebbi felvételek a mintákat löketekben bélyegzik (kb. 0.02 ms távolságra, majd több ms-os rések); az újabbak az indulás után egyenletesek, de az első ~2 s-ban még van egy pufferkiürítés, és az óra-korrekciók ugrásként érvényesülnek (0.77–0.9 ms-os lépések 1.2 ms helyett). A <code>tools/fix_imu_timestamps.py</code> mindkettőt offline javítja; a b1-en a javított időbélyegek elkerülték egy lépcsőházi odometria-hibát. Ezt a dLidar-ban kellene kijavítani.</li>
+<li><b>Lépcsőházak.</b> A b1-en az irányszög több beállítással is akár ~10°-ot csúszott a szintek között, és az 1. emeletről a 2.-ra visszatérés egyes futásokban 20–90°-kal hibázott, ami meghaladja azt, amit a hurokzárás elfogad. A javított időbélyegek a tesztekben elkerülték; ennek hangolásához több többszintes felvételre van szükség.</li>
+<li><b>NDT-cellanormálisok.</b> Alapértelmezés szerint egy térképcella normálisa az első 3 pontjából rögzített, az átlaga pedig az első pontja; egyiket sem frissíti később. Sok normális hibás (60 % egy szintetikus folyosón), ami zajossá teszi a degeneráltsági tesztet, és kb. 1 mm-be kerül a scan-to-map illesztésben. A <code>use_exact_ndt_bucket_statistics = true</code> kijavítja a statisztikát, de ki van kapcsolva: a 44-es felvételen az aktuális küszöbbel 95 helyett 439 ablakot jelölt degeneráltnak, és a térkép 5 %-kal kevésbé volt éles. Lásd: <a href="degeneracy-information.html">Degeneráltsági információ</a>.</li>
+<li><b>A hurokzárás</b> csak azokat az újralátogatásokat korrigálja, amelyeket regisztrálni tud (≥ 50% átfedés, ≤ 6 m, ≤ 15°).</li>
+<li><b>A hurokzárás egy helyes trajektóriát is megmozgat.</b> Az egységtesztek szintetikus kétkörös felvételén (<code>tests/loop_closure_test.cpp</code>) felezi a második kör driftjét, de egy már pontos trajektóriát akár 3 cm-rel és 0.1°-kal megmozgat: minden újralátogatás 1–3 cm maradékkal regisztrál, és a póz-gráf 5 cm-re bízza a hurokéleket. Csak a 6 m-en belüli pontokkal elfogadott egy hibás regisztrációt, és 1.5 m-rel megmozgatta a trajektóriát; az átfedési küszöb önmagában ezt nem fogja meg.</li>
+<li><b>A konzisztencia-menet is megmozgat egy helyes trajektóriát</b>, ugyanazon a szintetikus felvételen (<code>tests/consistency_test.cpp</code>): a Consistency akár 6 mm-rel (egyenletesen elosztva, az NDT-illesztés zaja), a Consistency2 akár 16 mm-rel és 0.5°-kal, többnyire ott, ahol a fordulási sebesség változik, mert a 0.01°-os forgatási simasága ellenáll a fordulási sebesség bármilyen változásának. Mindkettő eltávolítja az ablakok közötti eltolásokat.</li>
+</ul>
+</main>
+</div>
+<script>
+  (function () {
+    var root = document.documentElement, btn = document.getElementById('themeBtn');
+    function current() {
+      var t = root.getAttribute('data-theme');
+      if (t) return t;
+      return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    try { var saved = localStorage.getItem('mapper-docs-theme'); if (saved) root.setAttribute('data-theme', saved); } catch (e) {}
+    btn.addEventListener('click', function () {
+      var next = current() === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      try { localStorage.setItem('mapper-docs-theme', next); } catch (e) {}
+    });
+  })();
+</script>
+</body>
+</html>

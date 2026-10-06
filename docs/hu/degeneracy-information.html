@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Degeneráltsági információ</title>
+<style>
+  :root {
+    --bg: #fbfbfa; --panel: #ffffff; --text: #1d2126; --muted: #5b6470; --line: #e3e5e8;
+    --accent: #1f6fb2; --accent-soft: #e8f1fa; --code-bg: #f2f3f5; --warn: #9a5b00; --warn-soft: #fff4e0;
+    --ok: #20703c; --ok-soft: #e6f4ea; --bad: #b3261e; --bad-soft: #fbe9e7;
+    --node: #ffffff; --node-line: #9aa6b4; --arrow: #7a8594;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15181c; --panel: #1c2026; --text: #e4e7eb; --muted: #9aa3ae; --line: #2c323a;
+      --accent: #6cb0ec; --accent-soft: #1d2d3d; --code-bg: #242a31; --warn: #f0b35a; --warn-soft: #3a2c16;
+      --ok: #6ccf8e; --ok-soft: #1a3324; --bad: #f28b82; --bad-soft: #3a1f1d;
+      --node: #222830; --node-line: #56616e; --arrow: #8994a2;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15181c; --panel: #1c2026; --text: #e4e7eb; --muted: #9aa3ae; --line: #2c323a;
+    --accent: #6cb0ec; --accent-soft: #1d2d3d; --code-bg: #242a31; --warn: #f0b35a; --warn-soft: #3a2c16;
+    --ok: #6ccf8e; --ok-soft: #1a3324; --bad: #f28b82; --bad-soft: #3a1f1d;
+    --node: #222830; --node-line: #56616e; --arrow: #8994a2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 40px 16px 80px; }
+  h1 { font-size: 30px; line-height: 1.25; margin: 0 0 8px; }
+  h2 { font-size: 23px; margin: 48px 0 12px; padding-top: 8px; border-top: 1px solid var(--line); }
+  h3 { font-size: 18px; margin: 28px 0 8px; }
+  .lead { color: var(--muted); font-size: 17px; margin-top: 0; }
+  code, pre { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13.5px; }
+  code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--code-bg); padding: 12px 14px; border-radius: 8px; overflow-x: auto; line-height: 1.45; }
+  pre .del { color: var(--bad); }
+  pre .add { color: var(--ok); }
+  pre .cm { color: var(--muted); }
+  a { color: var(--accent); }
+  .note, .warn, .good {
+    border-left: 3px solid var(--accent); background: var(--accent-soft);
+    padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 16px 0;
+  }
+  .warn { border-left-color: var(--warn); background: var(--warn-soft); }
+  .good { border-left-color: var(--ok); background: var(--ok-soft); }
+  .note b, .warn b, .good b { display: block; margin-bottom: 2px; }
+  .table-wrap { overflow-x: auto; margin: 14px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 600; color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tldr { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 22px 0; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .card .big { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .card .lbl { color: var(--muted); font-size: 13.5px; }
+  figure { margin: 18px 0; }
+  figcaption { color: var(--muted); font-size: 13.5px; margin-top: 6px; }
+  svg { max-width: 100%; height: auto; display: block; }
+  svg text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: var(--text); }
+  svg .muted { fill: var(--muted); }
+  .meta { color: var(--muted); font-size: 13.5px; }
+</style>
+</head>
+<body>
+<main>
+<p style="text-align:right;font-size:13px;margin:0 0 8px"><a href="../degeneracy-information.html" hreflang="en" lang="en">English version</a></p>
+
+<h1>Degeneráltsági információ: amikor a LiDAR nem látja, merre mozdultál</h1>
+<p class="lead">Mi a „LiDAR-transzlációs információ”, hogyan használja a dMapper annak eldöntésére, mikor bízzon a gyorsulásmérőben,
+hogyan kell olvasni a naplósorát, és egy 2026 októberében talált ismert gyengeség. Az <code>optimize_lidar_odometry</code>
+(<code>src/domain/scan_to_map.cpp</code>) számítja ki, és az <code>update_acc_term_after_window</code> (<code>src/application/run_odometry.cpp</code>) használja.</p>
+
+<div class="note"><b>Egy mondatban</b>
+Minden felület, amelyhez az ablak pontjait illesztjük, a mozgást csak a felületen <em>keresztben</em>, a normálisa mentén rögzíti.
+Az összes illesztett normálisra összegzett <code>n·nᵀ</code> egy 3 × 3-as mátrixot ad, amelynek leggyengébb iránya az, amelyben a LiDAR
+nem látja a mozgást. Ha ez az irány sokkal gyengébb a legerősebbnél, az ablak <strong>degenerált</strong>.</div>
+
+<h2>1. Az alapötlet: a felület csak a normálisa menti mozgást köti meg</h2>
+<p>A scan-to-map optimalizálás addig mozgatja az egyes csomópontokat, amíg a pontjaik a térkép felületeire nem kerülnek. Egy falon lévő pont megmondja az
+optimalizálónak, milyen messze van az érzékelő a faltól (<em>attól</em>), de semmit sem arról, hogy a fal <em>mentén</em> hol van: az érzékelő fallal párhuzamos
+csúsztatása a pontot a falon hagyja. Így minden illesztett pont a transzlációt csak az általa érintett térképcella <code>n</code>
+felületi normálisa mentén korlátozza.</p>
+
+<figure>
+<svg viewBox="0 0 760 230" role="img" aria-label="Szoba és folyosó: a falak mely irányokat korlátozzák">
+  <defs><marker id="ah" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--accent)"/></marker></defs>
+  <text x="40" y="20" font-size="14" font-weight="600">Zárt szoba</text>
+  <rect x="40" y="35" width="280" height="160" fill="none" stroke="var(--text)" stroke-width="3"/>
+  <circle cx="180" cy="115" r="7" fill="var(--ok)"/>
+  <g stroke="var(--accent)" stroke-width="2.5" marker-end="url(#ah)">
+    <line x1="180" y1="115" x2="120" y2="115"/><line x1="180" y1="115" x2="240" y2="115"/>
+    <line x1="180" y1="115" x2="180" y2="65"/><line x1="180" y1="115" x2="180" y2="165"/>
+  </g>
+  <text x="40" y="218" font-size="13" class="muted">végfalak: x, oldalfalak: y; minden irány korlátozott</text>
+  <text x="400" y="20" font-size="14" font-weight="600">Hosszú folyosó (nincs végfal hatótávon belül)</text>
+  <line x1="390" y1="75" x2="740" y2="75" stroke="var(--text)" stroke-width="3"/>
+  <line x1="390" y1="155" x2="740" y2="155" stroke="var(--text)" stroke-width="3"/>
+  <circle cx="565" cy="115" r="7" fill="var(--warn)"/>
+  <g stroke="var(--accent)" stroke-width="2.5" marker-end="url(#ah)">
+    <line x1="565" y1="115" x2="565" y2="85"/><line x1="565" y1="115" x2="565" y2="145"/>
+  </g>
+  <line x1="500" y1="115" x2="630" y2="115" stroke="var(--bad)" stroke-width="2.5" stroke-dasharray="5 4"/>
+  <text x="640" y="120" font-size="13" fill="var(--bad)">x: szabad</text>
+  <text x="400" y="218" font-size="13" class="muted">a falak, padló, mennyezet y-t és z-t rögzítik; x-et semmi</text>
+</svg>
+<figcaption>Kék: a megfeleltetett felület által korlátozott irányok (a normálisa). A folyosóban egyetlen felület sem néz x mentén, így egy
+csomópont elcsúszhat a folyosó mentén anélkül, hogy bármelyik pont elmozdulna a felületéről.</figcaption>
+</figure>
+
+<h2>2. A mátrix</h2>
+<p>Egy ablakra az <code>optimize_lidar_odometry</code> összegzi mindazokat a pontokat, amelyek egy finom rácsú (0.15 m) cellához lettek
+illesztve, és a cellának érvényes normálisa van:</p>
+<pre>I = Σ n · nᵀ        (3 × 3, world frame; n = the cell's unit surface normal)</pre>
+<p>Minden tag csak a saját normálisa mentén ad erősséget. Az összeg megmondja, hogy az egyes irányok mennyire erősen korlátozottak, és a
+sajátérték-felbontása közvetlenül megadja a választ:</p>
+<div class="table-wrap"><table>
+  <tr><th>Sajátérték / sajátvektor</th><th>Jelentés</th></tr>
+  <tr><td>legnagyobb sajátérték</td><td>nagyjából hány pont köti meg a legjobban korlátozott irányt</td></tr>
+  <tr><td>legkisebb sajátérték <i>λ</i><sub>min</sub></td><td>nagyjából hány pont köti meg a legrosszabbul korlátozottat</td></tr>
+  <tr><td><i>λ</i><sub>min</sub> sajátvektora</td><td>a <b>leggyengébb irány</b>: ahol a LiDAR (majdnem) vak</td></tr>
+  <tr><td><b>arány</b> = <i>λ</i><sub>min</sub> / <i>λ</i><sub>max</sub></td><td>0 = az egyik irányban vak, 1 = mindenhol egyformán korlátozott</td></tr>
+</table></div>
+<p>Csak az egyes normálisok iránya számít, a távolság és az NDT-súly nem. Ez szándékos. Maga az NDT-információ
+(a kovarianciák inverzei) folyosón is erősnek látszik, mert a kis Gauss-eloszlások a pontokat egy sík fal
+<em>mentén</em> is a helyükön tartják, így az aránya nem fedi fel a vakságot.</p>
+
+<h2>3. Hogyan használja a dMapper</h2>
+<p>Járás közben csak körülbelül 0.2 m/s² gyorsulás keletkezik, miközben már egy 1°-os dőlési hiba is 0.17 m/s² gravitációt hagy a
+gyorsulásmérőben. A gyorsulásmérő tehát rossz pozícióérzékelő, és csak ott használjuk, ahol a LiDAR vak
+(<a href="index.html#p-imu"><code>[imu_translation]</code></a>):</p>
+<ol>
+  <li>Minden ablak után kiszámítjuk az információjának arányát. Az <code>imu_degenerate_information_ratio</code> (0.3) alatt
+  az ablakot <b>degeneráltnak</b> számítjuk.</li>
+  <li>A <em>következő</em> ablak ekkor bekapcsolja a gyorsulásmérő-tagot (a csomópontok közötti mért sebességváltozás), és a transzlációs
+  a priori információ szórását (prior) 1e-4 m-ről az <code>imu_degenerate_translation_sigma_m</code> értékére (3e-4 m) lazítja, hogy a
+  gyorsulásmérő valóban el tudja mozdítani a csomópontokat a vak irány mentén.</li>
+  <li>Egy degenerált szakaszban eltöltött <code>imu_degenerate_max_duration_s</code> (15 s) után a tag ismét kikapcsol,
+  mert a gyorsulásmérő hibája az idővel nő.</li>
+  <li>A degenerált szakaszokon kívül a gravitációs vektort és a gyorsulás-eltolást a LiDAR-trajektóriából kalibráljuk,
+  így készen állnak a következő vak szakaszra.</li>
+</ol>
+<p>Ehhez <code>use_imu_acceleration_term = true</code> és <code>imu_acceleration_only_when_degenerate = true</code> szükséges;
+mindkettő be van kapcsolva a <code>settings/lidar-vertical.toml</code> fájlban.</p>
+
+<h3>Mért értékek</h3>
+<div class="table-wrap"><table>
+  <tr><th>Hol</th><th class="num">Arány</th></tr>
+  <tr><td>Szobák (b1 felvétel)</td><td class="num">0.36–0.86</td></tr>
+  <tr><td>Folyosói visszafordulás, lépcsőmászás (b1)</td><td class="num">0.16–0.30</td></tr>
+  <tr><td>Szintetikus zárt szoba (egységteszt)</td><td class="num">0.48 (sajátértékek 677, 740, 1419)</td></tr>
+</table></div>
+
+<h2>4. A napló olvasása</h2>
+<p>Bekapcsolt kapuzással minden ablak egy sort ír ki:</p>
+<pre>lidar translation information window 123: ratio 0.2140 weakest direction 0.98 0.17 0.02 | accelerometer term active</pre>
+<ul>
+  <li><b>ratio</b> 0.3 alatt: ez az ablak degenerált, így a gyorsulásmérő-tag a következő ablakban aktív lesz.</li>
+  <li><b>weakest direction</b>: az az egységvektor (világ x, y, z), amelyet a LiDAR rosszul lát; itt majdnem x, azaz egy x irányú
+  folyosó mentén. A függőleges leggyengébb irány (0 0 1) jellemzően lépcsőházat jelent, vagy olyan teret, ahol a padló és a mennyezet
+  nincs látótérben.</li>
+  <li><b>| accelerometer term active</b>: a tag <em>ebben az ablakban</em> aktív volt (az előző ablak döntött róla).</li>
+</ul>
+<p>A végén a konzol kiírja, hány ablak használta a tagot: <code>accelerometer term: active in N of M windows</code>.</p>
+
+<h2>5. Ismert gyengeség: a cellák normálisai (felfedezve 2026-10-04)</h2>
+<div class="warn"><b>Az információ csak annyira jó, mint a térkép normálisai, és sok közülük rossz</b>
+A szintetikus scan-to-map teszt (<code>tests/scan_to_map_test.cpp</code>, <code>scan-to-map-test</code> változtatás) egy ablakot
+egy 30 m-es folyosóba helyezett. Az információ a folyosó mentén lett a <em>legerősebb</em> (925 az x mentén, 155 keresztben), az
+igazság ellentéte.</div>
+<p>Az ok a térképcellák építési módjában van (<code>update_rgd</code>, <code>src/domain/ndt_map.cpp</code>):</p>
+<ul>
+  <li>Egy cella normálisát <b>egyszer</b> számítjuk, amikor a harmadik pontja megérkezik, abból a 3 pontból és a kezdeti izotróp
+  3 cm-es kovarianciából, és <b>soha nem frissítjük</b>. Ha az első 3 pont nagyjából egy egyenesen fekszik, a normális bárhová mutathat abban
+  a síkban, amelyet az egyenes szabadon hagy. Ez gyakori, mert a pontok letapogatási sorrendben, a letapogatási gyűrűk mentén érkeznek.</li>
+  <li>A későbbi pontok csak akkor frissítik a kovarianciát, ha átmennek a nézőpont-teszten <em>az adott normálissal szemben</em>, így egy rossz
+  normális a kovarianciát is rosszul becsült állapotban hagyja.</li>
+  <li>A cella átlaga az első pontja, és azt sem frissítjük soha.</li>
+</ul>
+<div class="table-wrap"><table>
+  <tr><th>Folyosótérkép, a pontok beszúrása</th><th class="num">Azok a cellák, amelyek normálisa több mint 30°-kal tér el a valódi felülettől</th><th class="num">Információ a folyosó mentén / keresztben</th></tr>
+  <tr><td>rácsrendben (vonalak mentén)</td><td class="num">60 % (15,193 a 25,370-ből)</td><td class="num">925 / 155</td></tr>
+  <tr><td>véletlen sorrendben</td><td class="num">12 % (3,120 a 25,370-ből)</td><td class="num">175 / 1046</td></tr>
+</table></div>
+<p>Valós adatokon az arány ezért zajos. A degenerált szakaszokat a b1-en így is észleltük (0.16–0.30, szemben a szobákban mért 0.36-tal és
+többel), de a rossz normálisok csökkentik ezt a különbséget, és a jelentett leggyengébb irány pontatlan lehet. Ugyanezek a rossz normálisok
+a scan-to-map optimalizálás nézőpont-ellenőrzését is arra késztetik, hogy kihagyjon jó cellákat.</p>
+<p><b>Állapot (2026-10-04): van javítás, de ki van kapcsolva.</b> Az <code>ndt-bucket-statistics</code> változtatás pontos cellastatisztikát
+adott hozzá a <code>use_exact_ndt_bucket_statistics</code> beállítás mögé (<code>[lidar_odometry_control]</code>, alapértelmezett
+<code>false</code>):</p>
+<ul>
+  <li>az átlag és a kovariancia a cella összes pontjának futó statisztikája, a 3 cm-es kovarianciával mint egy pontot érő a priori információval (prior);</li>
+  <li>a normálist minden térképfrissítés végén újraszámítjuk a kovarianciából;</li>
+  <li>az a cella, amelynek két legkisebb szórása 3×-nál kisebb mértékben tér el, nem kap normálist. A pontjai egy egyenesen vagy egy keresztmetszeten fekszenek, így nincs definiált felület.</li>
+</ul>
+<div class="table-wrap"><table>
+  <tr><th></th><th class="num">Korábbi statisztika (alapértelmezett)</th><th class="num">Pontos statisztika</th></tr>
+  <tr><td>Szintetikus folyosó: információ mentén / keresztben</td><td class="num">925 / 155</td><td class="num">1.7 / 987</td></tr>
+  <tr><td>Szintetikus szoba, tökéletes kezdeti becslés: pozícióhiba</td><td class="num">1.5 mm</td><td class="num">0.37 mm</td></tr>
+  <tr><td>44-es felvétel: 0.3-nál kisebb arányú ablakok</td><td class="num">95 a 690-ből</td><td class="num">439 a 690-ből</td></tr>
+  <tr><td>44-es felvétel: medián arány</td><td class="num">0.48</td><td class="num">0.23</td></tr>
+  <tr><td>44-es felvétel: foglalt 3 cm-es cellák (az első ~51 ablak)</td><td class="num">24,044</td><td class="num">25,309 (+5.3 %)</td></tr>
+</table></div>
+<p>Helyes normálisokkal a valós adatokon az arányok sokkal alacsonyabbak, és a hibás normálisokon hangolt 0.3-as küszöb a 44-es felvétel
+nagy részét degeneráltnak jelöli, és 411 ablakban kapcsolja be a gyorsulásmérő-tagot. A térkép kevésbé lett éles, de ez az új statisztikát
+a sokkal gyakoribb gyorsulásmérő-taggal keveri össze. A kapcsoló egyelőre kikapcsolva marad (a 2026-10-04-i döntés). A következő lépés egy olyan futás
+lenne, amelyben az <code>imu_degenerate_information_ratio</code> értékét addig csökkentjük, amíg nagyjából annyi ablak számít
+degeneráltnak, mint korábban (nagyjából 0.1–0.15). A tesztcsomag már a pontos statisztikán fut, így a folyosóteszt
+normál, sikeres teszt.</p>
+
+<h2>6. Hol található</h2>
+<ul>
+  <li>Kiszámítás: <code>optimize_lidar_odometry</code> a <code>src/domain/scan_to_map.cpp</code> fájlban (<code>lidar_translation_information</code>).</li>
+  <li>Használat: <code>prepare_acc_term</code> és <code>update_acc_term_after_window</code> a <code>src/application/run_odometry.cpp</code> fájlban.</li>
+  <li>Beállítások: <a href="index.html#p-imu"><code>[imu_translation]</code></a> a fődokumentációban.</li>
+  <li>Tesztek: <code>tests/scan_to_map_test.cpp</code> (szoba és folyosó) és <code>tests/ndt_map_test.cpp</code> (a cellastatisztika).</li>
+</ul>
+
+</main>
+</body>
+</html>

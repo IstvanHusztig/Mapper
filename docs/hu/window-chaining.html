@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ablakláncolási javítás</title>
+<style>
+  :root {
+    --bg: #fbfbfa; --panel: #ffffff; --text: #1d2126; --muted: #5b6470; --line: #e3e5e8;
+    --accent: #1f6fb2; --accent-soft: #e8f1fa; --code-bg: #f2f3f5; --warn: #9a5b00; --warn-soft: #fff4e0;
+    --ok: #20703c; --ok-soft: #e6f4ea; --bad: #b3261e; --bad-soft: #fbe9e7;
+    --node: #ffffff; --node-line: #9aa6b4; --arrow: #7a8594;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15181c; --panel: #1c2026; --text: #e4e7eb; --muted: #9aa3ae; --line: #2c323a;
+      --accent: #6cb0ec; --accent-soft: #1d2d3d; --code-bg: #242a31; --warn: #f0b35a; --warn-soft: #3a2c16;
+      --ok: #6ccf8e; --ok-soft: #1a3324; --bad: #f28b82; --bad-soft: #3a1f1d;
+      --node: #222830; --node-line: #56616e; --arrow: #8994a2;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15181c; --panel: #1c2026; --text: #e4e7eb; --muted: #9aa3ae; --line: #2c323a;
+    --accent: #6cb0ec; --accent-soft: #1d2d3d; --code-bg: #242a31; --warn: #f0b35a; --warn-soft: #3a2c16;
+    --ok: #6ccf8e; --ok-soft: #1a3324; --bad: #f28b82; --bad-soft: #3a1f1d;
+    --node: #222830; --node-line: #56616e; --arrow: #8994a2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 40px 16px 80px; }
+  h1 { font-size: 30px; line-height: 1.25; margin: 0 0 8px; }
+  h2 { font-size: 23px; margin: 48px 0 12px; padding-top: 8px; border-top: 1px solid var(--line); }
+  h3 { font-size: 18px; margin: 28px 0 8px; }
+  .lead { color: var(--muted); font-size: 17px; margin-top: 0; }
+  code, pre { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13.5px; }
+  code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--code-bg); padding: 12px 14px; border-radius: 8px; overflow-x: auto; line-height: 1.45; }
+  pre .del { color: var(--bad); }
+  pre .add { color: var(--ok); }
+  pre .cm { color: var(--muted); }
+  a { color: var(--accent); }
+  .note, .warn, .good {
+    border-left: 3px solid var(--accent); background: var(--accent-soft);
+    padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 16px 0;
+  }
+  .warn { border-left-color: var(--warn); background: var(--warn-soft); }
+  .good { border-left-color: var(--ok); background: var(--ok-soft); }
+  .note b, .warn b, .good b { display: block; margin-bottom: 2px; }
+  .table-wrap { overflow-x: auto; margin: 14px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 600; color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tldr { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 22px 0; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .card .big { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .card .lbl { color: var(--muted); font-size: 13.5px; }
+  figure { margin: 18px 0; }
+  figcaption { color: var(--muted); font-size: 13.5px; margin-top: 6px; }
+  svg { max-width: 100%; height: auto; display: block; }
+  svg text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: var(--text); }
+  svg .muted { fill: var(--muted); }
+  .meta { color: var(--muted); font-size: 13.5px; }
+</style>
+</head>
+<body>
+<main>
+<p style="text-align:right;font-size:13px;margin:0 0 8px"><a href="../window-chaining.html" hreflang="en" lang="en">English version</a></p>
+
+<h1>Ablakláncolás: mi volt a hiba, és mit változtatott a javítás</h1>
+<p class="lead">A <code>chain-next-window-only</code> változtatás, 2026. október. Minden ablak után az odometria-ciklus az
+<em>összes</em> későbbi ablakot újra elhelyezte, pedig mindig csak a következőt olvassa ki bármi is. Ez az oldal bemutatja a régi kódot,
+miért volt felesleges ez a munka, mi váltotta fel, és mit nyertünk vele, mérésekkel.</p>
+
+<div class="tldr">
+  <div class="card"><div class="big">237,705 → 689</div><div class="lbl">ablak-elhelyezés a <code>44</code> felvételen (690 ablak)</div></div>
+  <div class="card"><div class="big">O(n²) → O(n)</div><div class="lbl">az elhelyezés költsége a felvétel hosszának függvényében</div></div>
+  <div class="card"><div class="big">6.7 s → 0.02 s</div><div class="lbl">az elhelyezési munka ideje a <code>44</code> felvételen (benchmark)</div></div>
+  <div class="card"><div class="big">&lt; 1 %</div><div class="lbl">egy teljes 44-es futásból: a futási időben nem látszik</div></div>
+</div>
+
+<div class="note"><b>Egy mondatban</b>
+A régi ciklus helyes volt, de nagyjából 345-ször több elhelyezési munkát végzett a szükségesnél, és ez a munka az ablakok
+számának négyzetével nőtt; a javítás minden elhelyezést egyszer végez el. A mai felvételeken a megtakarítás körülbelül 7 másodperc, mert
+az idő szinte egészét a scan-to-map optimalizálás viszi el; sokkal hosszabb felvételeknél a régi ciklus valódi költséggé vált volna.</div>
+
+<h2>1. Háttér: az ablakok és az ablak elhelyezése</h2>
+
+<p>Egy futás a felvételt <strong>ablakokra</strong> vágja (lásd <code>docs/PIPELINE.md</code>). Minden ablak egy rövid
+trajektória: pózok listája (<code>Window::poses</code>), néhány milliszekundumonként egy csomópont. A <code>raw data/44</code> felvételen
+<strong>690 ablak van, egyenként 360 csomóponttal</strong> (összesen 248,400 csomópont).</p>
+
+<p>Az odometria előtt minden ablak pózai csak az IMU-ból származnak, és az ablakok nem csatlakoznak egymáshoz: mindegyik valahol
+a saját helyén kezdődik. Az <code>optimize_windows</code> ablakciklus (<code>src/application/run_odometry.cpp</code>) sorban dolgozza fel az ablakokat, és
+minden ablaknak ott kell kezdődnie, ahol az előtte lévő véget ért. Azt a műveletet, amely egy ablakot úgy mozgat el, hogy az alakját megtartva egy adott pózból
+induljon, az ablak <strong>elhelyezésének</strong> (placing) nevezzük:</p>
+
+<pre><span class="cm">// src/domain/window_steps.cpp</span>
+void place_window_after(Window &amp;window, const Eigen::Affine3d &amp;start)
+{
+    Eigen::Affine3d m_last = start;
+    auto tmp = window.poses;                         <span class="cm">// copy of all 360 poses</span>
+    window.poses[0] = m_last;
+    for (int k = 1; k &lt; tmp.size(); k++)
+    {
+        Eigen::Affine3d m_update = tmp[k - 1].inverse() * tmp[k];   <span class="cm">// relative pose k-1 → k</span>
+        m_last = m_last * m_update;
+        window.poses[k] = m_last;
+    }
+}</pre>
+
+<p>Egy elhelyezés csomópontonként egy inverzet és két 4×4-es mátrixszorzatot jelent, plusz az ablak pózvektorának másolását
+(360 × 128 bájt ≈ 46 KB).</p>
+
+<h2>2. A régi kód</h2>
+
+<p>Minden <code>i</code> ablak végén, az optimalizálása után, a ciklus minden későbbi ablakot újra elhelyezett:</p>
+
+<pre><span class="cm">// every later window continues from the new end of this one</span>
+for (int j = i + 1; j &lt; windows.size(); j++)
+    place_window_after(windows[j], windows[j - 1].poses[windows[j - 1].poses.size() - 1]);</pre>
+
+<figure>
+<svg viewBox="0 0 760 250" role="img" aria-label="Régi ciklus: minden ablak után az összes későbbi ablak újra el van helyezve">
+  <defs>
+    <marker id="ah" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--arrow)"/></marker>
+  </defs>
+  <text x="10" y="22" font-size="13" class="muted">ablak →</text>
+  <g font-size="13">
+    <text x="128" y="22">0</text><text x="208" y="22">1</text><text x="288" y="22">2</text><text x="368" y="22">3</text>
+    <text x="448" y="22">4</text><text x="528" y="22">5</text><text x="608" y="22">…</text><text x="680" y="22">689</text>
+  </g>
+  <!-- rows: after window i -->
+  <g font-size="13">
+    <text x="10" y="58">0. ablak után</text>
+    <text x="10" y="98">1. ablak után</text>
+    <text x="10" y="138">2. ablak után</text>
+    <text x="10" y="178">3. ablak után</text>
+    <text x="10" y="218">…</text>
+  </g>
+  <g>
+    <!-- done cells -->
+    <rect x="115" y="42" width="40" height="22" rx="4" fill="var(--ok-soft)" stroke="var(--ok)"/>
+    <rect x="115" y="82" width="40" height="22" rx="4" fill="var(--ok-soft)" stroke="var(--ok)"/>
+    <rect x="195" y="82" width="40" height="22" rx="4" fill="var(--ok-soft)" stroke="var(--ok)"/>
+    <rect x="115" y="122" width="40" height="22" rx="4" fill="var(--ok-soft)" stroke="var(--ok)"/>
+    <rect x="195" y="122" width="40" height="22" rx="4" fill="var(--ok-soft)" stroke="var(--ok)"/>
+    <rect x="275" y="122" width="40" height="22" rx="4" fill="var(--ok-soft)" stroke="var(--ok)"/>
+    <rect x="115" y="162" width="40" height="22" rx="4" fill="var(--ok-soft)" stroke="var(--ok)"/>
+    <rect x="195" y="162" width="40" height="22" rx="4" fill="var(--ok-soft)" stroke="var(--ok)"/>
+    <rect x="275" y="162" width="40" height="22" rx="4" fill="var(--ok-soft)" stroke="var(--ok)"/>
+    <rect x="355" y="162" width="40" height="22" rx="4" fill="var(--ok-soft)" stroke="var(--ok)"/>
+  </g>
+  <g fill="var(--accent-soft)" stroke="var(--accent)">
+    <!-- needed placement: the next window -->
+    <rect x="195" y="42" width="40" height="22" rx="4"/>
+    <rect x="275" y="82" width="40" height="22" rx="4"/>
+    <rect x="355" y="122" width="40" height="22" rx="4"/>
+    <rect x="435" y="162" width="40" height="22" rx="4"/>
+  </g>
+  <g fill="var(--bad-soft)" stroke="var(--bad)" stroke-dasharray="3 2">
+    <!-- wasted placements -->
+    <rect x="275" y="42" width="40" height="22" rx="4"/><rect x="355" y="42" width="40" height="22" rx="4"/><rect x="435" y="42" width="40" height="22" rx="4"/><rect x="515" y="42" width="40" height="22" rx="4"/><rect x="665" y="42" width="40" height="22" rx="4"/>
+    <rect x="355" y="82" width="40" height="22" rx="4"/><rect x="435" y="82" width="40" height="22" rx="4"/><rect x="515" y="82" width="40" height="22" rx="4"/><rect x="665" y="82" width="40" height="22" rx="4"/>
+    <rect x="435" y="122" width="40" height="22" rx="4"/><rect x="515" y="122" width="40" height="22" rx="4"/><rect x="665" y="122" width="40" height="22" rx="4"/>
+    <rect x="515" y="162" width="40" height="22" rx="4"/><rect x="665" y="162" width="40" height="22" rx="4"/>
+  </g>
+  <g font-size="16" class="muted"><text x="606" y="58">…</text><text x="606" y="98">…</text><text x="606" y="138">…</text><text x="606" y="178">…</text></g>
+  <g font-size="12.5">
+    <rect x="115" y="232" width="14" height="12" rx="3" fill="var(--ok-soft)" stroke="var(--ok)"/><text x="135" y="243">már optimalizált</text>
+    <rect x="270" y="232" width="14" height="12" rx="3" fill="var(--accent-soft)" stroke="var(--accent)"/><text x="290" y="243">szükséges: a következő ablak</text>
+    <rect x="460" y="232" width="14" height="12" rx="3" fill="var(--bad-soft)" stroke="var(--bad)" stroke-dasharray="3 2"/><text x="480" y="243">felesleges: később úgyis újra elhelyezve</text>
+  </g>
+</svg>
+<figcaption>Régi ciklus. Minden sor egy iteráció; a zöld cellák utáni minden színes cella az adott ablak teljes elhelyezése.
+Soronként csak a kék cellát olvassa ki valaha bármi.</figcaption>
+</figure>
+
+<p>A 0. ablak után az 1–689. ablakot helyezte el (689 elhelyezés), az 1. ablak után a 2–689. ablakot (688), és így tovább. Összesen:</p>
+
+<div class="table-wrap"><table>
+  <tr><th>Mennyiség</th><th class="num">Képlet</th><th class="num">A 44-en (n = 690, m = 360)</th></tr>
+  <tr><td>Ablak-elhelyezések</td><td class="num">n(n−1)/2</td><td class="num">237,705</td></tr>
+  <tr><td>Csomópont-frissítések (egyenként inverz + 2 szorzat)</td><td class="num">m · n(n−1)/2</td><td class="num">≈ 85.6 millió</td></tr>
+  <tr><td>Lemásolt pózadat (a <code>tmp</code> vektor)</td><td class="num">46 KB · n(n−1)/2</td><td class="num">≈ 11 GB</td></tr>
+  <tr><td>Szükséges elhelyezések</td><td class="num">n − 1</td><td class="num">689</td></tr>
+</table></div>
+
+<h2>3. Mi volt vele a baj</h2>
+
+<p>Az eredmények <strong>helyesek</strong> voltak: minden ablak a megfelelő helyről indulva lett feldolgozva. Az odavezető úttal
+három gond volt.</p>
+
+<h3>3.1 A munka szinte egészét kidobták</h3>
+<p>A <code>j</code> ablak elhelyezése csak akkor számít, ha valami kiolvassa a <code>j</code> ablak abszolút pózait, mielőtt a következő
+elhelyezés felülírja azokat. A ciklus minden lépését végigvéve:</p>
+
+<div class="table-wrap"><table>
+  <tr><th>Lépés (mielőtt az <code>i</code> ablak optimalizálása megtörténik)</th><th>Mit olvas</th></tr>
+  <tr><td><code>estimate_previous_velocity</code></td><td>az <code>i − 1</code> ablak végét (már végleges), és csak az <em>időbélyegeket</em> az <code>i</code> ablakból</td></tr>
+  <tr><td><code>predict_window_poses</code></td><td>magát az <code>i</code> ablakot helyezi el az <code>i − 1</code> végéből, csak a <em>relatív</em> pózait használva</td></tr>
+  <tr><td><code>apply_gyro_bias_prior</code>, <code>is_turn_window</code>, gyorsulásmérő-tag</td><td>az <code>i</code> ablakot olyan állapotában, amilyen abban a pillanatban</td></tr>
+  <tr><td>Optimalizálás, térképfrissítés, naplók</td><td>csak az <code>i</code> ablakot</td></tr>
+  <tr><td>A GUI élő előnézete</td><td>csak a már késznek jelentett ablakokat</td></tr>
+</table></div>
+
+<p>Semmi sem olvassa a <code>j &gt; i + 1</code> ablakot a saját sora előtt, és addigra már újra el lett helyezve a
+<code>j − 1</code> ablak után. Vagyis a 0. ablak utáni 689 elhelyezésből csak az 1. ablaké lett valaha felhasználva; a másik 688-at
+felülírták, mielőtt bárki ránézett volna. Ez 237,705-ből 237,016 felesleges elhelyezés, nagyjából 99.7 %.</p>
+
+<h3>3.2 A költség a felvétel hosszának négyzetével nőtt</h3>
+<p>A pazarlás nem állandó szorzó. Az elhelyezések száma n(n−1)/2, így egy kétszer hosszabb felvételnél négyszer annyi
+elhelyezési munka van, miközben a ciklus minden más része (az optimalizálás, a térképfrissítés) csak megduplázódik:</p>
+
+<div class="table-wrap"><table>
+  <tr><th>Felvétel</th><th class="num">Ablakok</th><th class="num">Régi elhelyezések</th><th class="num">Régi elhelyezési idő (becslés)</th><th class="num">Új elhelyezési idő (becslés)</th></tr>
+  <tr><td><code>44</code> (ma)</td><td class="num">690</td><td class="num">237,705</td><td class="num">6.7 s (a 27 perc 0.4 %-a)</td><td class="num">0.02 s</td></tr>
+  <tr><td>3×-os hosszúság</td><td class="num">2,000</td><td class="num">≈ 2.0 millió</td><td class="num">≈ 56 s (a 80 perc 1.2 %-a)</td><td class="num">0.05 s</td></tr>
+  <tr><td>7×-es hosszúság</td><td class="num">5,000</td><td class="num">≈ 12.5 millió</td><td class="num">≈ 6 perc (a 3.3 óra 3 %-a)</td><td class="num">0.13 s</td></tr>
+  <tr><td>29×-es hosszúság</td><td class="num">20,000</td><td class="num">≈ 200 millió</td><td class="num">≈ 94 perc (a 13 óra 12 %-a)</td><td class="num">0.5 s</td></tr>
+</table></div>
+<p class="meta">Az 5. szakasz benchmarkjából skálázott idők (régi ∝ n², új ∝ n), 360 csomópontos ablakokra. Egy teljes futás
+ablakonként körülbelül 2.4 s, így a 44 körülbelül 27 percig tart.</p>
+
+<h3>3.3 Értelmetlen kerekítési hibát is hozzáadott</h3>
+<p>Minden elhelyezés a saját relatív pózaiból építi újra az ablakot, a <code>tmp[k − 1].inverse() * tmp[k]</code> kifejezéssel. Ez elméletben
+pontos, de lebegőpontos számolásnál minden újraépítés egy kicsit kerekít. A <code>j</code> ablak <code>j</code>-szer lett újraépítve, így a
+689. ablak a feldolgozása előtt 689 újraépítésen ment át, és mindegyik egy kis kerekítési zajt adott hozzá. A benchmark azt méri, mennyire tér el az
+ismételt elhelyezés az egyetlentől: legfeljebb 1.75e-8 (méterben a transzlációkra) 689 újraépítés után a szintetikus ablakokon. Parányi, de értelem nélküli zaj, és ettől az eredmények
+attól függtek, hány ablak előzte meg az adott ablakot.</p>
+
+<h2>4. A javítás</h2>
+
+<p>Minden ablak után csak a következő ablakot helyezzük el:</p>
+
+<pre><span class="del">-            // every later window continues from the new end of this one</span>
+<span class="del">-            for (int j = i + 1; j &lt; windows.size(); j++)</span>
+<span class="del">-                place_window_after(windows[j], windows[j - 1].poses[windows[j - 1].poses.size() - 1]);</span>
+<span class="add">+            // the next window continues from the new end of this one; the windows after it are placed in their own turn,</span>
+<span class="add">+            // since no step reads a window's placement before the window before it is done</span>
+<span class="add">+            if (i + 1 &lt; windows.size())</span>
+<span class="add">+                place_window_after(windows[i + 1], windows[i].poses[windows[i].poses.size() - 1]);</span></pre>
+
+<p>Minden ablak továbbra is az előd optimalizált vége után kerül elhelyezésre, mielőtt feldolgoznák. Ez akkor számít, ha a kezdeti
+becslés nem helyezi el magától: <code>use_motion_from_previous_step = false</code> esetén, és az 1. ablaknál, ha a sebesség-a priori információ
+ki van kapcsolva. A ciklus egyszerű törlése valódi viselkedésváltozás lett volna, ezért nem ezt tettük.</p>
+
+<h3>4.1 Az egyetlen hely, ahol a későbbi ablakok számítottak: a sikertelen futás</h3>
+<p>Ha a NaN-ellenőrzés az <code>i</code> ablaknál leállít egy futást, az <code>optimize_windows</code> <code>false</code> értéket ad vissza, de a futás
+utófeldolgozása és mentése ettől még megtörténik. A régi kóddal az <code>i</code> utáni ablakok véletlenül a korábbi elhelyezésekből voltak láncolva,
+így a mentett trajektóriában nem volt ugrás. A teljes ciklus nélkül az IMU-only pozíciójukon lennének. Ezért a
+hibaág most egyszer elhelyezi az összes hátralévő ablakot:</p>
+
+<pre>if (!add_window_distance(windows[i], poses_before_optimization, carry, ts_failure, logger))
+{
+<span class="add">    // the run stops here but is still saved: the remaining windows continue from this one's restored end</span>
+<span class="add">    place_windows_after(windows, i + 1);</span>
+    return false;
+}</pre>
+
+<p>A <code>place_windows_after(windows, first)</code> egy új segédfüggvény a <code>src/domain/window_steps.cpp</code> fájlban. Sorban elhelyezi a
+<code>windows[first]</code>, <code>windows[first + 1]</code>, … ablakokat, mindegyiket az elődje vége után: n − first elhelyezés,
+egyszer. Van egységtesztje (<code>tests/window_steps_test.cpp</code>), amely ellenőrzi a láncolást, a megtartott relatív pózokat, hogy a
+korábbi ablakok nem mozdulnak, és hogy egyetlen hívás 1e-9-en belül megegyezik a régi ismételt elhelyezéssel.</p>
+
+<h2>5. Mennyivel gyorsabb</h2>
+
+<h3>5.1 Csak az elhelyezési munka (benchmark)</h3>
+<p>Egy kis benchmark (<code>bench_chain.cpp</code>, ugyanazokkal az <code>/O2 /fp:fast</code> kapcsolókkal fordítva, mint a Release
+build) mindkét ciklust lefuttatja 690 szintetikus, 360 csomópontos ablakon, a 44 méretében, a
+<code>place_window_after</code> egy másolatát használva:</p>
+
+<div class="table-wrap"><table>
+  <tr><th>Ciklus</th><th class="num">Elhelyezések</th><th class="num">Idő</th></tr>
+  <tr><td>Régi: minden ablak után az összes későbbi ablak</td><td class="num">237,705</td><td class="num">6.5–6.8 s (3 futás)</td></tr>
+  <tr><td>Új: csak a következő ablak</td><td class="num">689</td><td class="num">0.018 s</td></tr>
+  <tr><td><b>Megtakarítás</b></td><td></td><td class="num"><b>≈ 6.7 s (nagyjából 370-szer kevesebb)</b></td></tr>
+</table></div>
+
+<h3>5.2 A teljes futás</h3>
+<div class="table-wrap"><table>
+  <tr><th>Futás (gyors Release build)</th><th class="num">Odometria ideje, master</th><th class="num">Odometria ideje, a javítással</th></tr>
+  <tr><td><code>44_short</code> (70 ablak)</td><td class="num">ma 165 s (155–218 s a korábbi futásokban)</td><td class="num">163 s, 164 s</td></tr>
+  <tr><td><code>44</code> (690 ablak)</td><td class="num">1651 s (korábban: 1508–1858 s)</td><td class="num">1567 s</td></tr>
+</table></div>
+
+<div class="warn"><b>Miért változik alig a teljes futás</b>
+Az odometria ablakonként körülbelül 2.4 s-ot tölt a scan-to-map optimalizálásban (legfeljebb 100 Levenberg–Marquardt-iteráció
+több tízezer ponton). Az elhelyezési munka a teljes futás alatt körülbelül 6.7 s volt, szemben a kb. 1,650 s-mal. Ugyanazon kód futási ideje
+több mint 10 %-kal ingadozik (a gép egyéb terhelése, turbó órajelek), ami sokkal több a megtakarításnál. A javítás tehát valódi,
+de egyetlen futási időben sem látszik a 44-en: a javítással a teljes futás 84 s-mal rövidebb volt, mint a master ugyanazon napi futása,
+de ebből csak körülbelül 7 s származik a javításból; a többi futásról futásra változó ingadozás.</div>
+
+<div class="good"><b>Hol számít a javítás</b>
+<ul style="margin:4px 0 0; padding-left: 20px">
+  <li><b>Hosszabb felvételek:</b> a régi költség n²-tel nő, így egy 5,000 ablakos futás körülbelül 3 %-át, egy 20,000 ablakos futás
+  12 %-át tette volna ki (lásd a táblázatot a 3.2 szakaszban), és onnantól még többet.</li>
+  <li><b>Nincs értelmetlen kerekítés:</b> minden ablak egyszer épül újra, nem a korábbi ablakok számának megfelelő alkalommal.</li>
+  <li><b>Áttekinthetőbb ciklus:</b> a kód most azt mondja ki, amire szüksége van, a következő ablak kezdetét, és a sikertelen futást
+  explicit módon kezeli, nem véletlenül.</li>
+</ul></div>
+
+<h2>6. Hatás az eredményekre</h2>
+<p>Az eredmények csak az utolsó számjegyeikben változnak, mert a <code>j</code> ablak most egy újraépítésen megy át
+<code>j</code> helyett, és az optimalizáló parányian eltérő pózokról indul:</p>
+
+<div class="table-wrap"><table>
+  <tr><th>Ellenőrzés</th><th>Mihez képest</th><th class="num">Legnagyobb eltérés</th></tr>
+  <tr><td><code>44_short</code>, precíz build (<code>/fp:fast</code> nélkül)</td><td>precíz referencia a masterből</td><td class="num">trajektóriák 1e-10, results JSON 1.8e-12</td></tr>
+  <tr><td><code>44_short</code>, normál build</td><td><code>raw data/44_short_baseline</code></td><td class="num">trajektóriák 1e-11, results JSON 3.9e-12</td></tr>
+  <tr><td><code>44</code>, normál build</td><td><code>raw data/44_baseline</code></td><td class="num">trajektóriák 1e-9, results JSON 5.2e-13</td></tr>
+</table></div>
+<p>Mind messze az 1e-6 tűrésen belül van, amelyet a refaktorálások használnak (1e-6 m egy milliméter ezredrésze). Mivel a számok
+tényleg megváltoznak, a változtatás saját commitban új alapeseteket (baseline) ír a <code>44_short</code> és a <code>44</code> felvételhez.</p>
+
+<h2>7. Hol található</h2>
+<ul>
+  <li>OpenSpec-változtatás: <code>openspec/changes/chain-next-window-only/</code> (javaslat, terv, feladatok; a befejezés után
+  az <code>openspec/changes/archive/</code> alá archiválva).</li>
+  <li>Kód: <code>src/application/run_odometry.cpp</code> (<code>optimize_windows</code>), <code>src/domain/window_steps.{h,cpp}</code>
+  (<code>place_window_after</code>, <code>place_windows_after</code>), <code>tests/window_steps_test.cpp</code>.</li>
+  <li>Commitok: <code>9053ab1</code> (segédfüggvény és tesztek), <code>7a99a94</code> (csak a következő ablak),
+  <code>dfed690</code> (hibaág).</li>
+  <li>A többi teljesítményjavítás: <code>docs/PERFORMANCE.md</code>.</li>
+</ul>
+
+</main>
+</body>
+</html>
