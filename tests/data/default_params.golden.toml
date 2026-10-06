@@ -164,7 +164,6 @@ working_directory_preview = ''
 
 [performance]
 real_time_threshold_seconds = 10.0
-useMultithread = true
 
 [robust_lidar_odometry]
 azimutal_angle_deg = 10.0
