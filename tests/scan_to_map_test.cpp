@@ -101,7 +101,6 @@ namespace
         OdometryConfig c;
         c.in_out_params_indoor.resolution_X = c.in_out_params_indoor.resolution_Y = c.in_out_params_indoor.resolution_Z = 0.15;
         c.in_out_params_outdoor.resolution_X = c.in_out_params_outdoor.resolution_Y = c.in_out_params_outdoor.resolution_Z = 0.4;
-        c.useMultithread = false;
         c.min_distance_lidar = 0.15;
         c.max_distance_lidar = 25.0;
         c.min_distance_lidar_outdoor_grid = 1.0;
@@ -403,7 +402,7 @@ TEST_CASE("scan-to-map: the translation information shows a degenerate corridor"
 
 namespace
 {
-    // one window optimization with useMultithread on or off: the room or corridor, the drifting guess of a 0.5 deg/s gyro bias
+    // one window optimization with the multithreaded or the sequential node loop: the room or corridor, the drifting guess of a 0.5 deg/s gyro bias
     // with bias estimation on, the points in scene order (grouped by node) or shuffled (as decimate leaves them, ordered by
     // cell, not by node)
     struct MultithreadRun
@@ -418,8 +417,8 @@ namespace
     {
         OdometryConfig c = test_config();
         c.use_gyro_bias_estimation = true;
-        c.useMultithread = multithread;
-        const Options o = options_from(c);
+        Options o = options_from(c);
+        o.scan_to_map.multithread = multithread;
         Maps maps = build_maps(s, o.scan_to_map);
         const std::vector<Eigen::Affine3d> truth = true_poses();
         std::vector<Point3Di> points = observe(s, truth);
@@ -447,7 +446,7 @@ namespace
     }
 }
 
-// useMultithread must not change results (change deterministic-multithread): each node's point terms are summed in point
+// multithreading must not change results (change deterministic-multithread): each node's point terms are summed in point
 // order whether the nodes run in parallel or one after the other
 TEST_CASE("scan-to-map: multithreaded equals single-threaded, bit for bit")
 {

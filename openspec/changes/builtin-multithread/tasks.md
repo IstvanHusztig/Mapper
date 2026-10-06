@@ -1,0 +1,6 @@
+# Tasks
+
+- [x] 1.1 Remove `useMultithread` from `OdometryConfig`, the TOML table (`POINTERS`, `[performance]`) and both settings files. `ScanToMapOptions::multithread` defaults to `true` and isn't set from the config. The robust functions get `true`. Tests: `optimizer_options_test` drops the flag, and `scan_to_map_test` sets `o.scan_to_map.multithread` directly. Regenerate the golden TOML files in their own commit. Verify: Release builds and `ctest` passes; precise and fast `44_short` differ from the manifests only in the params TOML (the line is gone); update its hash in the 44 and 44_short manifests and the precise reference. Commit.
+- [x] 1.2 Docs: `docs/index.html` (remove the setting's row), `docs/PERFORMANCE.md` (settings table, fix 7 note), `docs/ARCHITECTURE.md` (parallelism decision). Commit.
+
+  Result (1.1): Release build and `ctest` pass. Precise and fast `44_short` differed only in the params TOML (the line is gone); hash `fdf6688b` -> `e91d04a1` in the 44 and 44_short manifests and the precise reference; both then IDENTICAL (11 files). Older TOML files with the key load fine: loading reads only the keys in `CATEGORIES`. The Debug build was not run, to save time; the change touches no Debug-only code.

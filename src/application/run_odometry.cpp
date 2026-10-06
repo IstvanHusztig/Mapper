@@ -284,7 +284,7 @@ namespace
         double wka = 1.0 / (angle_sigma_rad * angle_sigma_rad);
 
         for (int iter = 0; iter < params.robust_and_accurate_lidar_odometry_iterations; iter++)
-            optimize_sf2(points_local, points_local_sf, tr, trmm, rgd_params_sc, params.useMultithread, wx, wy, wz, wom, wfi, wka);
+            optimize_sf2(points_local, points_local_sf, tr, trmm, rgd_params_sc, true, wx, wy, wz, wom, wfi, wka);
 
         for (auto &t : tr)
             t.translation() += firstm.translation();
@@ -304,7 +304,7 @@ namespace
                           params.azimutal_angle_deg_rigid_sf,
                           params.robust_and_accurate_lidar_odometry_rigid_sf_iterations,
                           params.max_distance_lidar_rigid_sf,
-                          params.useMultithread,
+                          true,
                           params.rgd_sf_sigma_x_m,
                           params.rgd_sf_sigma_y_m,
                           params.rgd_sf_sigma_z_m,

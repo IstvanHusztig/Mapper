@@ -156,7 +156,7 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
 
     // The point terms are summed per node, in point order: a point writes only its own node's block (and normal_information
     // entry), so each node's points can run as one task, and the nodes in parallel. Every block then receives the same
-    // additions in the same order as a loop over the points in order, so the result doesn't depend on useMultithread.
+    // additions in the same order as a loop over the points in order, so the result is the same with or without threads.
     // points_by_node lists the point indices of node k, in point order, at node_begin[k] .. node_begin[k + 1].
     const int n_nodes = static_cast<int>(window.poses.size());
     std::vector<int> node_begin(n_nodes + 1, 0);

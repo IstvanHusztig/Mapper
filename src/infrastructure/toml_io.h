@@ -26,7 +26,6 @@ public:
         {"config_version", &OdometryConfig::config_version},
         {"build_date", &OdometryConfig::build_date},
         
-        {"useMultithread", &OdometryConfig::useMultithread},
         {"real_time_threshold_seconds", &OdometryConfig::real_time_threshold_seconds},
         {"filter_threshold_xy_inner", &OdometryConfig::filter_threshold_xy_inner},
         {"filter_threshold_xy_outer", &OdometryConfig::filter_threshold_xy_outer},
@@ -143,7 +142,7 @@ public:
 
     std::map<std::string, std::vector<std::string>> CATEGORIES = {
         {"version_info", {"software_version", "config_version", "build_date"}},
-        {"performance", {"useMultithread", "real_time_threshold_seconds"}},
+        {"performance", {"real_time_threshold_seconds"}},
         {"filter_points", {"filter_threshold_xy_inner", "filter_threshold_xy_outer", "decimation", "threshould_output_filter", "min_counter_concatenated_trajectory_nodes", "export_merged_laz"}},
         {"madgwick_filter", {"fusionConventionNwu", "fusionConventionEnu", "fusionConventionNed", "ahrs_gain", "use_remove_imu_bias_from_first_stationary_scan"}},
         {"lidar_odometry_control", {"use_motion_from_previous_step", "nr_iter", "convergence_delta_threshold", "sliding_window_trajectory_length_threshold", "max_distance_lidar", "threshold_initial_points", "threshold_nr_poses", "min_distance_lidar", "min_distance_lidar_outdoor_grid", "lm_factor_initial", "use_exact_ndt_bucket_statistics"}},

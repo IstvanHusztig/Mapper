@@ -13,7 +13,7 @@ struct ScanToMapOptions
 {
     NdtGridParameters grid_indoor;
     NdtGridParameters grid_outdoor;
-    bool multithread = false;
+    bool multithread = true; // always on (results are the same bits either way); not a setting, the tests compare both
     double min_distance = 0.0;              // points closer than this are not used [m]
     double min_distance_outdoor_grid = 0.0; // the same for the outdoor (coarse) grid [m]
     double max_distance = 0.0;              // points farther than this are not used [m]

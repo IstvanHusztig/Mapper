@@ -20,7 +20,6 @@ struct OdometryConfig
     std::string build_date = __DATE__;
     
     //performance
-    bool useMultithread = true; // NDT point terms of the trajectory nodes in parallel; results are the same bits as with false
     double real_time_threshold_seconds = 10.0; // for realtime use: threshold_nr_poses * 0.005, where 0.005 is related with IMU frequency
 
     //filter points

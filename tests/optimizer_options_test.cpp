@@ -9,7 +9,6 @@ TEST_CASE("get_scan_to_map_options copies each setting to its member")
     OdometryConfig config;
     config.in_out_params_indoor.resolution_X = 0.11;
     config.in_out_params_outdoor.resolution_X = 0.22;
-    config.useMultithread = true;
     config.min_distance_lidar = 1.1;
     config.min_distance_lidar_outdoor_grid = 2.2;
     config.max_distance_lidar = 3.3;
@@ -21,7 +20,6 @@ TEST_CASE("get_scan_to_map_options copies each setting to its member")
     const ScanToMapOptions o = get_scan_to_map_options(config);
     CHECK(o.grid_indoor.resolution_X == 0.11);
     CHECK(o.grid_outdoor.resolution_X == 0.22);
-    CHECK(o.multithread == true);
     CHECK(o.min_distance == 1.1);
     CHECK(o.min_distance_outdoor_grid == 2.2);
     CHECK(o.max_distance == 3.3);
@@ -31,13 +29,11 @@ TEST_CASE("get_scan_to_map_options copies each setting to its member")
     CHECK(o.use_view_point_and_normal_vectors == false);
 
     // the opposite flag values, so no flag can be hard-coded
-    config.useMultithread = false;
     config.ablation_study_use_planarity = false;
     config.ablation_study_use_norm = true;
     config.ablation_study_use_hierarchical_rgd = false;
     config.ablation_study_use_view_point_and_normal_vectors = true;
     const ScanToMapOptions p = get_scan_to_map_options(config);
-    CHECK(p.multithread == false);
     CHECK(p.use_planarity == false);
     CHECK(p.use_norm == true);
     CHECK(p.use_hierarchical_rgd == false);

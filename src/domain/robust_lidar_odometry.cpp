@@ -436,7 +436,7 @@ void optimize_rigid_sf(
 
         std::vector<Blocks> blocks(indexes.size());
 
-        // per-point blocks in parallel, summed in index order by SumBlocks: the result doesn't depend on useMultithread
+        // per-point blocks in parallel, summed in index order by SumBlocks: the result doesn't depend on the threads
         if (useMultithread)
             std::transform(std::execution::par_unseq, std::begin(indexes), std::end(indexes), std::begin(blocks), hessian_fun);
         else

@@ -7,7 +7,6 @@ ScanToMapOptions get_scan_to_map_options(const OdometryConfig &config)
     ScanToMapOptions o;
     o.grid_indoor = config.in_out_params_indoor;
     o.grid_outdoor = config.in_out_params_outdoor;
-    o.multithread = config.useMultithread;
     o.min_distance = config.min_distance_lidar;
     o.min_distance_outdoor_grid = config.min_distance_lidar_outdoor_grid;
     o.max_distance = config.max_distance_lidar;
