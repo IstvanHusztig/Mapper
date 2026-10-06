@@ -98,7 +98,7 @@ OpenSpec change `chain-next-window-only`. The full explanation, with diagrams an
 
 **Problem.** The NDT point loops of `optimize_lidar_odometry` took 47 % of the odometry and ran on one of the machine's 16 cores. `useMultithread = true` ran them in parallel, but the results changed from run to run. Each point added its terms into its own trajectory node's block under a per-node lock, so the points of a node arrived in thread order, and floating-point sums depend on order. Because of that the setting was off.
 
-**Fix.** The points are grouped by node, keeping their order (a counting sort per call), and the nodes run in parallel (`std::execution::par`). Each node's points are added in their original order, with no lock. A point writes only its own node's block, so every block receives exactly the additions of the serial loop, in the same order. The results are therefore the same bits with or without threads, and `useMultithread` is now `true` by default. The serial path is the same code with a sequential loop over the nodes. The old lock inside `par_unseq` was formally undefined behaviour, and it is gone.
+**Fix.** The points are grouped by node, keeping their order (a counting sort per call), and the nodes run in parallel (`std::execution::par`). Each node's points are added in their original order, with no lock. A point writes only its own node's block, so every block receives exactly the additions of the serial loop, in the same order. The results are therefore the same bits with or without threads. `useMultithread` was first made `true` by default, then removed as a setting (change `builtin-multithread`, 2026-10-06): the parallel loop is always on. The serial path is the same code with a sequential loop over the nodes. The old lock inside `par_unseq` was formally undefined behaviour, and it is gone.
 
 **Effect** (fast build, with `log_stage_timing`; before = the `stage-timing` profile):
 
@@ -123,7 +123,6 @@ OpenSpec change `deterministic-multithread`.
 | Setting | Default | Effect on speed | Cost |
 |---|---|---|---|
 | `convergence_delta_threshold` | `1e-12` (all `nr_iter` iterations run) | `1e-2` is 3–4× faster | 0.5–1.5 % more occupied 3 cm cells on recordings 42/43, i.e. a slightly less sharp map |
-| `useMultithread` | `true` | the odometry takes a third less time than with `false` (44: 1060 s against 1578 s) | none: results are the same bits ([fix 7](#7-deterministic-multithreading)); `false` runs on one core |
 | `real_time_threshold_seconds` | `10.0` | caps a window's time | when a window hits it, results depend on machine speed and load |
 | `nr_iter` | 100 | fewer iterations are faster | real windows settle after median 51, at most 91 iterations on 44 (see below) |
 

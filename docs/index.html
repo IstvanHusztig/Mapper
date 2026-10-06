@@ -446,7 +446,6 @@ See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 <h3 id="p-perf">[performance]</h3>
 <div class="table-wrap"><table>
 <tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr>
-<tr><td>useMultithread</td><td class="val">true</td><td>Computes the NDT point terms of a window's trajectory nodes in parallel. Each node's points are still summed in their original order, so the results are byte-identical with <code>false</code> and from run to run. On <code>44_short</code> it cuts the odometry by about a third (see <code>docs/PERFORMANCE.md</code>). <code>false</code> runs on one core.</td></tr>
 <tr><td>real_time_threshold_seconds</td><td class="val">10.0 s</td><td>Wall-clock limit per window. If a window takes longer, its iterations stop early, and results then depend on machine speed. About 2 s per window on the test recordings (b1: up to 9 s before the matrix speed-up, so iterations could be cut under CPU load).</td></tr>
 </table></div>
 
