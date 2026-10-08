@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 
 #include "angle_units.h"
+#include "consistency.h"
 #include "lidar_odometry.h"
 #include "memory_point_store.h"
 #include "synthetic_recording.h"
@@ -110,6 +111,58 @@ namespace
         CHECK(after.largest.position <= 0.005);
         CHECK(after.largest.rotation <= 0.1 * deg);
     }
+}
+
+namespace
+{
+    // three passes of Consistency with the points split into chunks of chunk_points (the shipped value is 1M), sharing the
+    // ConsistencyData between the passes as run_consistency does
+    void run_in_chunks(Recording &r, size_t chunk_points)
+    {
+        MemoryPointStore store;
+        for (size_t w = 0; w < r.points.size(); w++)
+            store.save(PointSet::WindowIntermediate, w, r.points[w]);
+        NullLogger logger;
+        const OdometryConfig config = consistency_config(false);
+        ConsistencyData data;
+        data.chunk_points = chunk_points;
+        for (int pass = 0; pass < config.num_constistency_iter; pass++)
+        {
+            for (Window &window : r.windows)
+                window.motion_model_poses = window.poses;
+            Consistency(r.windows, config, store, logger, nullptr, &data);
+        }
+    }
+}
+
+// The chunks are computed in parallel and merged in chunk order, so the result must not depend on the thread timing:
+// two runs give the same bits. Several chunks still reduce the seams (each chunk has its own NDT map).
+TEST_CASE("consistency: Consistency with several chunks is repeatable and reduces the seams")
+{
+    Recording a = loop_recording(2);
+    size_t total_points = 0;
+    for (const auto &w : a.points)
+        total_points += w.size();
+    const size_t chunk_points = total_points / 5 + 1;
+    REQUIRE(chunk_points > 10000); // smaller chunks are skipped, as in the shipped code
+    add_window_offsets(a, 0.03, 0.2 * deg);
+    Recording b = a;
+    const Measured before = measure(a);
+
+    run_in_chunks(a, chunk_points);
+    run_in_chunks(b, chunk_points);
+    const auto poses_a = all_poses(a.windows), poses_b = all_poses(b.windows);
+    REQUIRE(poses_a.size() == poses_b.size());
+    bool same = true;
+    for (size_t i = 0; i < poses_a.size(); i++)
+        same = same && poses_a[i].matrix() == poses_b[i].matrix();
+    CHECK(same);
+
+    const Measured after = measure(a);
+    MESSAGE("Consistency in 5 chunks: mean error ", before.mean.position * 1000.0, " mm -> ", after.mean.position * 1000.0, " mm");
+    // each chunk has a map of a fifth of the points, so fewer seams are matched than with one map (27.9 -> 22.6 mm here,
+    // against 27.9 -> 19.5 mm with a single chunk)
+    CHECK(after.mean.position <= 0.9 * before.mean.position);
 }
 
 // Measured 2026-10-04 (Release, 3 passes): mean error 27.9 mm / 0.207 deg -> 19.5 mm / 0.147 deg, 3 cm voxels

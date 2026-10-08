@@ -29,11 +29,12 @@ struct ScanToMapTiming
 struct ConsistencyTiming
 {
     PhaseTime pass;            // one whole pass
-    PhaseTime load_points;     // reading every window's points from the point store into one vector
+    PhaseTime load_points;     // reading every window's points and finding their nodes (first pass only)
     PhaseTime smoothness;      // the smoothness and fix-origin terms
-    PhaseTime chunk_prepare;   // per chunk of 1M points: node lookup and the local and global copies
-    PhaseTime update_rgd;      // per chunk: the NDT map
-    PhaseTime point_loop;      // per chunk: the point terms
+    PhaseTime chunk_stage;     // all chunks, in parallel (wall-clock)
+    PhaseTime chunk_prepare;   // per chunk: the global points (thread seconds, summed over the chunks)
+    PhaseTime update_rgd;      // per chunk: the NDT map (thread seconds)
+    PhaseTime point_loop;      // per chunk: the point terms (thread seconds)
     PhaseTime assemble;        // the sparse normal equations from the banded matrix
     PhaseTime solve;           // the Cholesky solve
     PhaseTime apply;           // applying the solution to the trajectory

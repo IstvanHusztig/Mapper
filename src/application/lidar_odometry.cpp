@@ -415,6 +415,7 @@ void run_consistency(std::vector<Window> &windows, const OdometryConfig &params,
     // log_stage_timing: the phases of Consistency, summed over the passes (the second variant has no timers)
     ConsistencyTiming timing;
     ConsistencyTiming *timing_target = params.log_stage_timing && !params.use_mutliple_gaussian ? &timing : nullptr;
+    ConsistencyData data; // the points and the analysis, kept from pass to pass (freed when the run ends)
     for (int i = 0; i < params.num_constistency_iter; i++)
     {
         log_info(logger) << "Iteration " << i + 1 << " of " << params.num_constistency_iter;
@@ -424,7 +425,7 @@ void run_consistency(std::vector<Window> &windows, const OdometryConfig &params,
         }
         if (!params.use_mutliple_gaussian)
         {
-            Consistency(windows, params, point_store, logger, timing_target);
+            Consistency(windows, params, point_store, logger, timing_target, &data);
         }
         else
         {
@@ -443,14 +444,14 @@ void run_consistency(std::vector<Window> &windows, const OdometryConfig &params,
         log_info(logger) << "timing consistency " << params.num_constistency_iter << " passes, " << std::fixed << std::setprecision(1) << timing.pass.seconds << " s:";
         line("load_points", timing.load_points);
         line("smoothness", timing.smoothness);
-        line("chunk_prepare", timing.chunk_prepare);
-        line("update_rgd", timing.update_rgd);
-        line("point_loop", timing.point_loop);
+        line("chunk_stage", timing.chunk_stage);
+        log_info(logger) << "timing consistency   of which, in thread seconds: chunk_prepare " << std::fixed << std::setprecision(1) << timing.chunk_prepare.seconds
+                         << ", update_rgd " << timing.update_rgd.seconds << ", point_loop " << timing.point_loop.seconds;
         line("assemble", timing.assemble);
         line("solve", timing.solve);
         line("apply", timing.apply);
-        const double named = timing.load_points.seconds + timing.smoothness.seconds + timing.chunk_prepare.seconds + timing.update_rgd.seconds +
-                             timing.point_loop.seconds + timing.assemble.seconds + timing.solve.seconds + timing.apply.seconds;
+        const double named = timing.load_points.seconds + timing.smoothness.seconds + timing.chunk_stage.seconds +
+                             timing.assemble.seconds + timing.solve.seconds + timing.apply.seconds;
         line("other", PhaseTime{timing.pass.seconds - named, 0});
     }
 }
