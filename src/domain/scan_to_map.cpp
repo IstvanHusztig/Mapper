@@ -79,7 +79,7 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
         normal_information.assign(window.poses.size(), Eigen::Matrix3d::Zero());
     setup_timer.stop();
 
-    const auto hessian_fun_indoor = [&](const Point3Di &intermediate_points_i)
+    const auto hessian_fun_indoor = [&](const Point3Di &intermediate_points_i, const TaitBryanPose &pose_s)
     {
         if (intermediate_points_i.point.norm() < scan_to_map.min_distance || intermediate_points_i.point.norm() > scan_to_map.max_distance)
             return;
@@ -94,14 +94,11 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
 
         auto &this_bucket = bucket_it->second;
 
-        const Eigen::Matrix3d &infm = this_bucket.cov.inverse();
-        const double threshold = 100000.0;
-
-        if ((infm.array() > threshold).any())
+        Eigen::Matrix3d inverse_scratch;
+        const Eigen::Matrix3d *inverse = ndt_cell_inverse(this_bucket, inverse_scratch);
+        if (inverse == nullptr)
             return;
-
-        if ((infm.array() < -threshold).any())
-            return;
+        const Eigen::Matrix3d &infm = *inverse;
 
         if (scan_to_map.use_view_point_and_normal_vectors)
         {
@@ -112,9 +109,7 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
                 return;
         }
 
-        const Eigen::Affine3d &m_pose = window.poses[intermediate_points_i.index_pose];
         const Eigen::Vector3d &p_s = intermediate_points_i.point;
-        const TaitBryanPose pose_s = pose_tait_bryan_from_affine_matrix(m_pose);
 
         Eigen::Matrix<double, 6, 6, Eigen::RowMajor> AtPA;
         point_to_point_source_to_target_tait_bryan_wc_AtPA_simplified(
@@ -193,8 +188,12 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
     {
         const auto node_terms = [&](int k)
         {
+            if (node_begin[k] == node_begin[k + 1])
+                return;
+            // the node's pose in Tait-Bryan form, once for all its points
+            const TaitBryanPose pose_s = pose_tait_bryan_from_affine_matrix(window.poses[k]);
             for (int j = node_begin[k]; j < node_begin[k + 1]; j++)
-                point_term(intermediate_points[points_by_node[j]]);
+                point_term(intermediate_points[points_by_node[j]], pose_s);
         };
         if (scan_to_map.multithread)
             std::for_each(std::execution::par, nodes.begin(), nodes.end(), node_terms);
@@ -209,7 +208,7 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
     {
         Eigen::Vector3d b_outdoor(scan_to_map.grid_outdoor.resolution_X, scan_to_map.grid_outdoor.resolution_Y, scan_to_map.grid_outdoor.resolution_Z);
 
-        const auto hessian_fun_outdoor = [&](const Point3Di &intermediate_points_i)
+        const auto hessian_fun_outdoor = [&](const Point3Di &intermediate_points_i, const TaitBryanPose &pose_s)
         {
             if (intermediate_points_i.point.norm() < scan_to_map.min_distance_outdoor_grid ||
                 intermediate_points_i.point.norm() > scan_to_map.max_distance)
@@ -225,14 +224,11 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
 
             auto &this_bucket = bucket_it->second;
 
-            const Eigen::Matrix3d &infm = this_bucket.cov.inverse();
-            const double threshold = 100000.0;
-
-            if ((infm.array() > threshold).any())
+            Eigen::Matrix3d inverse_scratch;
+            const Eigen::Matrix3d *inverse = ndt_cell_inverse(this_bucket, inverse_scratch);
+            if (inverse == nullptr)
                 return;
-
-            if ((infm.array() < -threshold).any())
-                return;
+            const Eigen::Matrix3d &infm = *inverse;
 
             if (scan_to_map.use_view_point_and_normal_vectors)
             {
@@ -243,9 +239,7 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
                     return;
             }
 
-            const Eigen::Affine3d &m_pose = window.poses[intermediate_points_i.index_pose];
             const Eigen::Vector3d &p_s = intermediate_points_i.point;
-            const TaitBryanPose pose_s = pose_tait_bryan_from_affine_matrix(m_pose);
 
             Eigen::Matrix<double, 6, 6, Eigen::RowMajor> AtPA;
             point_to_point_source_to_target_tait_bryan_wc_AtPA_simplified(

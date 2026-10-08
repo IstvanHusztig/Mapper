@@ -59,10 +59,12 @@ static void update_rgd_legacy(const NdtGridParameters &rgd_params, NDTBucketMapT
                               std::vector<Point3Di> &points_global, Eigen::Vector3d viewport)
 {
     Eigen::Vector3d b(rgd_params.resolution_X, rgd_params.resolution_Y, rgd_params.resolution_Z);
+    std::vector<uint64_t> changed; // the cells whose covariance may have changed, refreshed once at the end
 
     for (int i = 0; i < points_global.size(); i++)
     {
         auto index_of_bucket = ndt_cell_index(points_global[i].point, b);
+        changed.push_back(index_of_bucket);
 
         auto bucket_it = buckets.find(index_of_bucket);
 
@@ -128,6 +130,11 @@ static void update_rgd_legacy(const NdtGridParameters &rgd_params, NDTBucketMapT
             buckets.emplace(index_of_bucket, bucket_to_add);
         }
     }
+
+    std::sort(changed.begin(), changed.end());
+    changed.erase(std::unique(changed.begin(), changed.end()), changed.end());
+    for (const auto index : changed)
+        refresh_cell_inverse(buckets.at(index));
 }
 
 void update_rgd(const NdtGridParameters &rgd_params, NDTBucketMapType &buckets,
@@ -143,6 +150,7 @@ void update_rgd(const NdtGridParameters &rgd_params, NDTBucketMapType &buckets,
     // as a prior worth one point; the normals of the cells this call changed are recomputed once, after all points
     const Eigen::Vector3d b(rgd_params.resolution_X, rgd_params.resolution_Y, rgd_params.resolution_Z);
     std::vector<uint64_t> touched;
+    std::vector<uint64_t> inserted;
     constexpr double ambiguous_normal_ratio = 3.0;
 
     for (const auto &p : points_global)
@@ -160,6 +168,7 @@ void update_rgd(const NdtGridParameters &rgd_params, NDTBucketMapType &buckets,
             bucket_to_add.index_end = 0;
             bucket_to_add.normal_vector = Eigen::Vector3d::Zero(); // no normal below 3 points
             buckets.emplace(index_of_bucket, bucket_to_add);
+            inserted.push_back(index_of_bucket);
             continue;
         }
 
@@ -198,6 +207,13 @@ void update_rgd(const NdtGridParameters &rgd_params, NDTBucketMapType &buckets,
             nv *= -1.0;
         bucket.normal_vector = nv;
     }
+
+    // the cells this call added or changed get their inverse covariance (a cell only changes its cov through the loop above)
+    touched.insert(touched.end(), inserted.begin(), inserted.end());
+    std::sort(touched.begin(), touched.end());
+    touched.erase(std::unique(touched.begin(), touched.end()), touched.end());
+    for (const auto index : touched)
+        refresh_cell_inverse(buckets.at(index));
 }
 
 void update_rgd_spherical_coordinates(const NdtGridParameters &rgd_params, NDTBucketMapType &buckets,

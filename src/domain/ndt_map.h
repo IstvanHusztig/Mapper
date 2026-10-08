@@ -13,6 +13,32 @@
 using NDTBucketMapType = std::unordered_map<uint64_t, NdtBucket>;
 using NDTBucketMapType2 = std::unordered_map<uint64_t, NdtBucket2>;
 
+// The inverse covariance of a cell as the point loops use it, and whether the cell may be used at all (an entry of the
+// inverse beyond +-100000 means a nearly flat cell and the cell is skipped). update_rgd stores both in the cell once, so
+// the loops don't invert the same 3x3 matrix for every point in every iteration; a cell that wasn't through update_rgd
+// is inverted on the spot, with the same expression, so the values are the same either way.
+inline bool ndt_inverse_usable(const Eigen::Matrix3d &infm)
+{
+    const double threshold = 100000.0;
+    return !((infm.array() > threshold).any() || (infm.array() < -threshold).any());
+}
+
+inline void refresh_cell_inverse(NdtBucket &bucket)
+{
+    bucket.cov_inverse = bucket.cov.inverse();
+    bucket.inverse_usable = ndt_inverse_usable(bucket.cov_inverse);
+    bucket.inverse_computed = true;
+}
+
+// nullptr if the cell must be skipped; otherwise the inverse (the cell's own or `scratch`)
+inline const Eigen::Matrix3d *ndt_cell_inverse(const NdtBucket &bucket, Eigen::Matrix3d &scratch)
+{
+    if (bucket.inverse_computed)
+        return bucket.inverse_usable ? &bucket.cov_inverse : nullptr;
+    scratch = bucket.cov.inverse();
+    return ndt_inverse_usable(scratch) ? &scratch : nullptr;
+}
+
 unsigned long long int ndt_cell_key(const int16_t x, const int16_t y, const int16_t z);
 unsigned long long int ndt_cell_index(const Eigen::Vector3d p, const Eigen::Vector3d b);
 

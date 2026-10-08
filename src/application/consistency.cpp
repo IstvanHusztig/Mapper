@@ -217,6 +217,8 @@ void Consistency(std::vector<Window> &windows, const OdometryConfig &params, Poi
         rgd_timer.stop();
 
         PhaseTimer loop_timer(&out.timing.point_loop);
+        int pose_node = -1;
+        TaitBryanPose pose_s{};
         for (size_t index = begin; index < end; index++)
         {
             const Point3Di &intermediate_points_i = data.points[index];
@@ -233,18 +235,19 @@ void Consistency(std::vector<Window> &windows, const OdometryConfig &params, Poi
 
             auto &this_bucket = bucket_it->second;
 
-            const Eigen::Matrix3d &infm = this_bucket.cov.inverse();
-            const double threshold = 100000.0;
-
-            if ((infm.array() > threshold).any())
+            Eigen::Matrix3d inverse_scratch;
+            const Eigen::Matrix3d *inverse = ndt_cell_inverse(this_bucket, inverse_scratch);
+            if (inverse == nullptr)
                 continue;
+            const Eigen::Matrix3d &infm = *inverse;
 
-            if ((infm.array() < -threshold).any())
-                continue;
-
-            const Eigen::Affine3d &m_pose = trajectory[intermediate_points_i.index_pose];
             const Eigen::Vector3d &p_s = intermediate_points_i.point;
-            const TaitBryanPose pose_s = pose_tait_bryan_from_affine_matrix(m_pose);
+            // the points come in runs of one node: convert its pose once per run
+            if (intermediate_points_i.index_pose != pose_node)
+            {
+                pose_node = intermediate_points_i.index_pose;
+                pose_s = pose_tait_bryan_from_affine_matrix(trajectory[pose_node]);
+            }
             double delta_x;
             double delta_y;
             double delta_z;

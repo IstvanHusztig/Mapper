@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <map>
 #include <numbers>
 #include <random>
@@ -237,4 +238,58 @@ TEST_CASE("update_rgd exact: the far side of a thin wall doesn't enter the near 
     CHECK(after.mean == before.mean);
     CHECK(after.cov == before.cov);
     CHECK(after.normal_vector == before.normal_vector);
+}
+
+TEST_CASE("update_rgd: every cell carries the inverse of its covariance, refreshed when a later call changes the cell")
+{
+    for (const bool exact : {true, false})
+    {
+        std::mt19937 rng(11);
+        std::uniform_real_distribution<double> xy(0.1, 3.9);
+        std::uniform_real_distribution<double> z(0.95, 1.05); // nearly flat cells: some inverses are huge and unusable
+        const auto make_points = [&](int n)
+        {
+            std::vector<Point3Di> points;
+            for (int i = 0; i < n; i++)
+                points.push_back(make_point(Eigen::Vector3d(xy(rng), xy(rng), z(rng))));
+            return points;
+        };
+        const auto check_all = [&](const NDTBucketMapType &buckets)
+        {
+            size_t usable = 0, skipped = 0;
+            for (const auto &entry : buckets)
+            {
+                const NdtBucket &cell = entry.second;
+                REQUIRE(cell.inverse_computed);
+                const Eigen::Matrix3d expected = cell.cov.inverse();
+                CHECK(std::memcmp(cell.cov_inverse.data(), expected.data(), 9 * sizeof(double)) == 0);
+                const bool expected_usable = !((expected.array() > 100000.0).any() || (expected.array() < -100000.0).any());
+                CHECK(cell.inverse_usable == expected_usable);
+                Eigen::Matrix3d scratch;
+                const Eigen::Matrix3d *inverse = ndt_cell_inverse(cell, scratch);
+                CHECK((inverse != nullptr) == expected_usable);
+                (expected_usable ? usable : skipped)++;
+            }
+            CHECK(usable > 0);
+        };
+
+        NDTBucketMapType buckets;
+        auto first = make_points(4000);
+        update_rgd(grid(0.5), buckets, first, Eigen::Vector3d(2.0, 2.0, 5.0), exact);
+        check_all(buckets);
+
+        // a later call changes some cells and adds others: all of them agree with their covariance again
+        auto second = make_points(4000);
+        update_rgd(grid(0.5), buckets, second, Eigen::Vector3d(2.0, 2.0, 5.0), exact);
+        check_all(buckets);
+
+        // a cell that never went through update_rgd is inverted on the spot, with the same result
+        NdtBucket plain;
+        plain.cov = Eigen::Matrix3d::Identity() * 0.03 * 0.03;
+        Eigen::Matrix3d scratch;
+        const Eigen::Matrix3d *inverse = ndt_cell_inverse(plain, scratch);
+        REQUIRE(inverse != nullptr);
+        const Eigen::Matrix3d expected = plain.cov.inverse();
+        CHECK(std::memcmp(inverse->data(), expected.data(), 9 * sizeof(double)) == 0);
+    }
 }

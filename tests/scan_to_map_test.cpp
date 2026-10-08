@@ -414,13 +414,21 @@ namespace
         double delta = 0.0;
     };
 
-    MultithreadRun run_window(const Scene &s, bool multithread, bool shuffled, int iterations, ScanToMapWorkspace *workspace = nullptr)
+    MultithreadRun run_window(const Scene &s, bool multithread, bool shuffled, int iterations, ScanToMapWorkspace *workspace = nullptr,
+                              bool cached_inverse = true)
     {
         OdometryConfig c = test_config();
         c.use_gyro_bias_estimation = true;
         Options o = options_from(c);
         o.scan_to_map.multithread = multithread;
         Maps maps = build_maps(s, o.scan_to_map);
+        if (!cached_inverse) // the loops then invert every cell on the spot, as before the cache
+        {
+            for (auto &cell : maps.indoor)
+                cell.second.inverse_computed = false;
+            for (auto &cell : maps.outdoor)
+                cell.second.inverse_computed = false;
+        }
         const std::vector<Eigen::Affine3d> truth = true_poses();
         std::vector<Point3Di> points = observe(s, truth);
         if (shuffled)
@@ -494,4 +502,19 @@ TEST_CASE("scan-to-map: reusing the Cholesky analyses changes nothing, bit for b
         CHECK(workspace.covariance.calls() == 30);
         CHECK(workspace.covariance.analyses() <= 3);
     }
+}
+
+// the inverse covariance stored in the cells (change ndt-lookup-cache) is the one the loops would compute on the spot
+TEST_CASE("scan-to-map: stored cell inverses equal inverting on the spot, bit for bit")
+{
+    for (const bool use_corridor : {false, true})
+        for (const int iterations : {1, 30})
+        {
+            CAPTURE(use_corridor);
+            CAPTURE(iterations);
+            const Scene s = use_corridor ? corridor() : room();
+            const MultithreadRun cached = run_window(s, true, false, iterations, nullptr, true);
+            const MultithreadRun on_the_spot = run_window(s, true, false, iterations, nullptr, false);
+            CHECK(identical(cached, on_the_spot));
+        }
 }

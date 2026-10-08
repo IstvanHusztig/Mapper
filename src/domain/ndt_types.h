@@ -34,6 +34,11 @@ struct NdtBucket
 	Eigen::Vector3d mean;
 	Eigen::Matrix3d cov;
 	Eigen::Vector3d normal_vector;
+	// the inverse of cov and whether the cell may be used (see ndt_cell_inverse in ndt_map.h); filled by update_rgd,
+	// valid only while cov is unchanged
+	Eigen::Matrix3d cov_inverse = Eigen::Matrix3d::Zero();
+	bool inverse_computed = false;
+	bool inverse_usable = false;
 };
 
 struct NdtBucketCoef
