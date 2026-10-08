@@ -38,8 +38,6 @@ target_compile_definitions(lidar_odometry_tests PRIVATE LO_REPO_DIR="${REPOSITOR
 
 if (MSVC)
   target_compile_options(lidar_odometry_tests PRIVATE /bigobj)
-  # the bit-for-bit comparison of BandedNormalMatrix with a dense matrix must not be reordered by /fp:fast
-  set_source_files_properties(normal_equations_test.cpp PROPERTIES COMPILE_OPTIONS /fp:precise)
 endif()
 
 # the runtime DLLs (TBB) next to the test executable, as for dMapper
