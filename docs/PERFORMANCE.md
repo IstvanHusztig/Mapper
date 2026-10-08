@@ -17,6 +17,7 @@ Times are for the reference recordings in `raw data/`, with the Release build an
 | [Remaining-time estimate from the odometry start](#5-remaining-time-estimate) | 2026-10-01 | GUI | a realistic estimate (no speed gain) | – |
 | [Place only the next window](#6-place-only-the-next-window) | 2026-10-03 | window loop | 237,705 → 689 window placements on 44: 6.7 s → 0.02 s (about 0.4 % of the run) | last bits, within 1e-6 |
 | [Deterministic multithreading](#7-deterministic-multithreading) | 2026-10-05 | window optimizer | 44: odometry 1578 → 1060 s (−33 %), whole run 1990 → 1467 s (−26 %) | bit-identical |
+| [Banded normal matrix](#8-banded-normal-matrix) | 2026-10-08 | window optimizer | 44: odometry 1060 → 689 s (−35 %), whole run 1467 → 1137 s (−22 %) | bit-identical on `44_short`; full 44 within 1e-9 |
 
 ## 1. Sparse band of the normal matrix
 
@@ -117,6 +118,35 @@ The two loops together run 4.1× faster. They are now 17 % of the odometry. The 
 - The full 44 with the new default: IDENTICAL with the manifest; only the params TOML records the settings.
 
 OpenSpec change `deterministic-multithread`.
+
+## 8. Banded normal matrix
+
+**Problem.** After fix 7, 46 % of the odometry went on one dense matrix. Each Levenberg–Marquardt iteration allocated and zeroed the window's 2166×2166 normal matrix (37 MB for 360 nodes), filled a narrow band of it, copied that band into a sparse matrix, and freed it again, 100 times per window. Per iteration on 44: 4.09 ms for the setup, about 1.7 ms for the rest (mostly freeing it), 1.30 ms for the copy.
+
+**Fix.** `BandedNormalMatrix` (`src/domain/normal_equations.{h,cpp}`) stores only the band: 17 parameters on each side of the diagonal (more in the few windows where the accelerometer term is active, from the span of its terms), plus the rows and columns of the extra unknowns (gyro bias, acceleration offset). Every element receives exactly the additions, in the same order, that the dense element got, so the sums are the same bits. Its conversion to a sparse matrix gives the same entries and the same pattern as the old band copy, so the Cholesky ordering is unchanged. The band is computed before anything is added, since it depends only on the timestamps. The fix-origin term is added to the band directly instead of through three small sparse products.
+
+**Effect** (fast build, `log_stage_timing`; before = fix 7):
+
+| | `44_short` before | `44_short` after | `44` before | `44` after |
+|---|---|---|---|---|
+| setup, per iteration | 4.08 ms | 0.12 ms | 4.09 ms | 0.17 ms |
+| rest of the iteration (freeing), total | 12.7 s | 0.8 s | 118.2 s | 3.7 s |
+| assembly, per iteration | 1.30 ms | 1.00 ms | 1.30 ms | 1.11 ms |
+| odometry | 108.8 s | 72.2 s | 1059.6 s | 688.7 s (−35 %) |
+| whole run | 144 s | 107 s | 1467 s | 1137 s (−22 %) |
+
+**Checks.**
+- `tests/normal_equations_test.cpp` compares the type with a dense matrix and the old band copy, bit for bit and pattern included (random blocks, edges, couplings with 0, 3 and 6 extra unknowns, bands of 17 and 113, cancelling additions, writes outside the band). That test file is compiled with `/fp:precise`: with `/fp:fast` the compiler reordered the test's own dense reference sum and the comparison failed by 1e-12 on 5 % of the elements, although both sides equal a plain sequential sum in isolation.
+- `44_short`, precise and fast builds: IDENTICAL with the precise reference and the manifest.
+- Full 44, fast build: within 1e-9 of the baseline (trajectories; results JSON 8e-14), not bit-identical. This is the `/fp:fast` effect on the long run when the shape of a function changes; the 44 baselines were refreshed from this run.
+
+OpenSpec change `banded-normal-matrix`.
+
+### Cholesky symbolic reuse: measured, not possible without changing results
+
+The two sparse Cholesky solves are now 44 % of the odometry. On `44_short`, `analyzePattern` (the fill-reducing ordering and the elimination tree) is 21.6 s of the 72.1 s (30 %), the numeric `factorize` only 6.7 s, so reusing the analysis looked like the biggest remaining saving. It does not work bit-identically: the analysis depends only on the sparsity pattern, but the pattern differs on **every** call. The number of stored entries wobbles by about ±100 of 33,000 between iterations, with about 930 of 2160 columns differing by a few entries: entries that are exactly zero in one iteration and tiny but non-zero in the next (6,900 analyses in 6,900 covariance solves, 7,000 in 7,000 damped solves). A cache guarded by a pattern comparison, which is the only way to keep the result the same bits, never hits. The code was written, tested and removed again.
+
+A fixed superset pattern (every entry of the band kept as an explicit value, zeros included) would allow the reuse, but it changes the elimination order, so the solves round differently: a numerical change, not a refactor. It would be its own change, judged with `eval_odometry.py` and a full 44, with an estimated saving of up to 30 % of the odometry.
 
 ## Settings that trade speed
 
@@ -223,12 +253,12 @@ The debug setting `log_stage_timing` (`[lidar_odometry_debug_info]`, off by defa
 
 **Planned order**, updated from the profile; each is its own change, bit-identical with the precise build:
 1. `deterministic-multithread` (done, [fix 7](#7-deterministic-multithreading));
-2. `banded-normal-matrix` (with the Cholesky reuse);
+2. `banded-normal-matrix` (done, [fix 8](#8-banded-normal-matrix); the Cholesky reuse turned out to change results, see there);
 3. `ndt-lookup-cache` (it shortens the NDT loops, and its gain after multithreading is to be measured);
 4. a consistency analysis;
 5. `io-and-copies`.
 
-Result-changing levers come later, each judged with `eval_odometry.py`: a convergence stop rule, and per-pose blocks in `Consistency`.
+Result-changing levers come later, each judged with `eval_odometry.py`: a fixed-pattern Cholesky analysis (up to 30 % of the odometry, see fix 8), a convergence stop rule, and per-pose blocks in `Consistency`.
 
 ## Open findings
 
