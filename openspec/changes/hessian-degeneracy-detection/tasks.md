@@ -45,8 +45,17 @@ Close the GUI before building. Never run two jobs on the same input folder at on
     - shifted by (1000, -500, 20) m: the same p.
   - A clearly constrained direction is set to exactly 1 above 1 − 1e-6 (z > 4.75); the room showed 1 − 1e-10.
   - **Checks:** `ctest` passes; `44_short` identical data.
-- [ ] 1.3 Full 44 with the diagnostics (precise build). Report p along the blind passage at t = 123 to 126 s (windows 303 to 311), at the two-solution place around t = 74 s, and in the first room, and compare with today's ratio. Choose `degenerate_snr_factor` (start at the paper's 10) and the constants from this, without fitting to single windows. Record the choice here.
+- [x] 1.3 Full 44 with the diagnostics (precise build). Report p along the blind passage at t = 123 to 126 s (windows 303 to 311), at the two-solution place around t = 74 s, and in the first room, and compare with today's ratio. Choose `degenerate_snr_factor` (start at the paper's 10) and the constants from this, without fitting to single windows. Record the choice here.
 
+
+  Result: full 44, precise build, `log_window_diagnostics` on (results unchanged); p per direction, s = 10, σp = 0.02 m.
+  - **First room** (windows 1 to 11, ratio 0.31 to 0.47): all translation and rotation p = 1, except window 1's rotation at 0.98.
+  - **Area around t = 74 s** (windows 178 to 191): translation along x at 0.65 to 0.88 in four windows, otherwise 1.
+  - **Blind passage:** translation along x (direction 0.95 to 0.99 x) at **0.45, 0.018, 0.019 in windows 304 to 306**. From window 307 it is back to 1, with information 300 to 470, while the ratio stays 0.27 to 0.34. The transition is steep (window 306 at information 255 gives 0.02, window 307 at 357 gives 1): soft in form, nearly a switch in practice.
+  - **Rotation:** one axis per window often below 1 (windows 298 to 302: 0.37 to 0.75).
+  - **Over the whole run:** translation p < 0.5 in 110 of 690 windows (< 0.99 in 178); rotation p < 0.5 in 139 (< 0.99 in 328). The ratio projection shipped today acts in 16 windows (ratio < 0.2; none below 0.1).
+
+  Choice for task 2: s = 10 and σp = 0.02 m as derived, not fitted to windows. Task 3 also judges s = 5, which flags fewer directions. The frequent rotation flags are the main risk: the gyro and the motion model then decide those rotations.
 ## 2. Attenuation
 
 - [ ] 2.1 Scale the NDT node blocks by p per direction, translation and rotation (design, decision 3), behind `degenerate_snr_detection` and `degenerate_snr_factor`.
