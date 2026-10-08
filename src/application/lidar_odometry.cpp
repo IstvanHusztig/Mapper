@@ -446,12 +446,11 @@ void run_consistency(std::vector<Window> &windows, const OdometryConfig &params,
         line("chunk_prepare", timing.chunk_prepare);
         line("update_rgd", timing.update_rgd);
         line("point_loop", timing.point_loop);
-        line("sparse_build", timing.sparse_build);
-        line("sparse_products", timing.sparse_products);
+        line("assemble", timing.assemble);
         line("solve", timing.solve);
         line("apply", timing.apply);
         const double named = timing.load_points.seconds + timing.smoothness.seconds + timing.chunk_prepare.seconds + timing.update_rgd.seconds +
-                             timing.point_loop.seconds + timing.sparse_build.seconds + timing.sparse_products.seconds + timing.solve.seconds + timing.apply.seconds;
+                             timing.point_loop.seconds + timing.assemble.seconds + timing.solve.seconds + timing.apply.seconds;
         line("other", PhaseTime{timing.pass.seconds - named, 0});
     }
 }

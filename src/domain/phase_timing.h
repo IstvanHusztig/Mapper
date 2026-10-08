@@ -30,12 +30,11 @@ struct ConsistencyTiming
 {
     PhaseTime pass;            // one whole pass
     PhaseTime load_points;     // reading every window's points from the point store into one vector
-    PhaseTime smoothness;      // the smoothness and fix-origin terms: triplets, sparse matrices and products
+    PhaseTime smoothness;      // the smoothness and fix-origin terms
     PhaseTime chunk_prepare;   // per chunk of 1M points: node lookup and the local and global copies
     PhaseTime update_rgd;      // per chunk: the NDT map
-    PhaseTime point_loop;      // per chunk: the loop over the points (triplets)
-    PhaseTime sparse_build;    // per chunk: the sparse matrices from the triplets
-    PhaseTime sparse_products; // per chunk: the sparse products and the sum into the normal equations
+    PhaseTime point_loop;      // per chunk: the point terms
+    PhaseTime assemble;        // the sparse normal equations from the banded matrix
     PhaseTime solve;           // the Cholesky solve
     PhaseTime apply;           // applying the solution to the trajectory
 };
