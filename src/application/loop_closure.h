@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Eigen/Dense>
 #include <vector>
 #include "input_ports.h"
 #include "odometry_config.h"
@@ -15,3 +16,22 @@
 //  5. the correction is interpolated onto every trajectory node of every window.
 // Returns the number of accepted loop edges.
 int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params, PointStore &point_store, Logger &logger);
+
+// Step 4 on its own, for tests: the segment poses, the accepted loop edges, and the check of the result.
+struct LoopClosureEdge
+{
+    int i = 0;                                                // earlier segment
+    int j = 0;                                                // later segment
+    Eigen::Affine3d correction = Eigen::Affine3d::Identity(); // world transform moving segment j onto i
+    double fitness = 0.0;
+};
+
+// Levenberg-Marquardt on the segment poses: odometry edges between consecutive segments, loop edges, first pose fixed.
+// A step is kept only if the weighted squared error falls (a plain Gauss-Newton step first, damping only when it fails).
+std::vector<Eigen::Affine3d> optimize_loop_pose_graph(const std::vector<Eigen::Affine3d> &initial, const std::vector<LoopClosureEdge> &loops,
+                                                      const OdometryConfig &params);
+
+// The optimized poses may be applied: all finite, and no segment moved further than loop_closure_max_correction_m plus
+// the largest accepted loop correction (a pose graph that ran away). max_shift_m receives the largest segment correction.
+bool loop_pose_graph_plausible(const std::vector<Eigen::Affine3d> &initial, const std::vector<Eigen::Affine3d> &optimized,
+                               const std::vector<LoopClosureEdge> &loops, const OdometryConfig &params, double &max_shift_m);

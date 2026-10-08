@@ -193,14 +193,6 @@ namespace
         return T;
     }
 
-    struct LoopEdge
-    {
-        int i = 0;                                       // earlier segment
-        int j = 0;                                       // later segment
-        Eigen::Affine3d correction = Eigen::Affine3d::Identity(); // world transform moving segment j onto i
-        double fitness = 0.0;
-    };
-
     void add_relative_pose_edge(std::vector<Eigen::Triplet<double>> &A, Eigen::VectorXd &b, const std::vector<TaitBryanPose> &poses,
                                 int from, int to, const Eigen::Matrix<double, 6, 1> &measurement, double w_t, double w_r)
     {
@@ -223,6 +215,21 @@ namespace
         }
     }
 
+    // weighted squared error of one relative-pose edge
+    double relative_pose_edge_cost(const std::vector<TaitBryanPose> &poses, int from, int to, const Eigen::Matrix<double, 6, 1> &measurement,
+                                   double w_t, double w_r)
+    {
+        const TaitBryanPose &p1 = poses[from];
+        const TaitBryanPose &p2 = poses[to];
+        Eigen::Matrix<double, 6, 1> delta;
+        relative_pose_obs_eq_tait_bryan_wc_case1_simplified_1(delta, p1.px, p1.py, p1.pz, p1.om, p1.fi, p1.ka, p2.px, p2.py, p2.pz, p2.om, p2.fi, p2.ka,
+                                                              measurement(0), measurement(1), measurement(2), measurement(3), measurement(4), measurement(5));
+        // the angle residuals wrapped into (-pi, pi]: a pose at yaw +-180 deg must not count as 360 deg off
+        for (int r = 3; r < 6; r++)
+            delta(r) = std::remainder(delta(r), 2.0 * M_PI);
+        return w_t * delta.head<3>().squaredNorm() + w_r * delta.tail<3>().squaredNorm();
+    }
+
     Eigen::Matrix<double, 6, 1> relative_measurement(const Eigen::Affine3d &a, const Eigen::Affine3d &b)
     {
         const TaitBryanPose p1 = pose_tait_bryan_from_affine_matrix(a);
@@ -230,63 +237,6 @@ namespace
         Eigen::Matrix<double, 6, 1> m;
         relative_pose_tait_bryan_wc_case1_simplified_1(m, p1.px, p1.py, p1.pz, p1.om, p1.fi, p1.ka, p2.px, p2.py, p2.pz, p2.om, p2.fi, p2.ka);
         return m;
-    }
-
-    // Gauss-Newton on the segment poses: odometry edges between consecutive segments, loop edges, first pose fixed
-    std::vector<Eigen::Affine3d> optimize_pose_graph(const std::vector<Eigen::Affine3d> &initial, const std::vector<LoopEdge> &loops,
-                                                     const OdometryConfig &params)
-    {
-        const int n = static_cast<int>(initial.size());
-        std::vector<Eigen::Matrix<double, 6, 1>> odo(n > 0 ? n - 1 : 0);
-        for (int k = 0; k + 1 < n; k++)
-            odo[k] = relative_measurement(initial[k], initial[k + 1]);
-        std::vector<Eigen::Matrix<double, 6, 1>> loop_meas;
-        for (const auto &e : loops)
-            loop_meas.push_back(relative_measurement(initial[e.i], e.correction * initial[e.j]));
-
-        const double w_odo_t = 1.0 / std::pow(params.loop_closure_odometry_sigma_m, 2);
-        const double w_odo_r = 1.0 / std::pow(params.loop_closure_odometry_sigma_deg * DEG, 2);
-        const double w_loop_t = 1.0 / std::pow(params.loop_closure_edge_sigma_m, 2);
-        const double w_loop_r = 1.0 / std::pow(params.loop_closure_edge_sigma_deg * DEG, 2);
-
-        std::vector<TaitBryanPose> poses;
-        for (const auto &p : initial)
-            poses.push_back(pose_tait_bryan_from_affine_matrix(p));
-
-        for (int iter = 0; iter < 30; iter++)
-        {
-            std::vector<Eigen::Triplet<double>> A;
-            Eigen::VectorXd b = Eigen::VectorXd::Zero(6 * n);
-            for (int k = 0; k + 1 < n; k++)
-                add_relative_pose_edge(A, b, poses, k, k + 1, odo[k], w_odo_t, w_odo_r);
-            for (size_t e = 0; e < loops.size(); e++)
-                add_relative_pose_edge(A, b, poses, loops[e].i, loops[e].j, loop_meas[e], w_loop_t, w_loop_r);
-            for (int r = 0; r < 6; r++)
-                A.emplace_back(r, r, 1e12); // first segment pose fixed
-            Eigen::SparseMatrix<double> AtPA(6 * n, 6 * n);
-            AtPA.setFromTriplets(A.begin(), A.end());
-            Eigen::SimplicialCholesky<Eigen::SparseMatrix<double>> solver(AtPA);
-            if (solver.info() != Eigen::Success)
-                break;
-            const Eigen::VectorXd dx = solver.solve(b);
-            if (solver.info() != Eigen::Success || !dx.allFinite())
-                break;
-            for (int k = 0; k < n; k++)
-            {
-                poses[k].px += dx(6 * k + 0);
-                poses[k].py += dx(6 * k + 1);
-                poses[k].pz += dx(6 * k + 2);
-                poses[k].om += dx(6 * k + 3);
-                poses[k].fi += dx(6 * k + 4);
-                poses[k].ka += dx(6 * k + 5);
-            }
-            if (dx.norm() < 1e-8)
-                break;
-        }
-        std::vector<Eigen::Affine3d> result;
-        for (const auto &p : poses)
-            result.push_back(affine_matrix_from_pose_tait_bryan(p));
-        return result;
     }
 
     Eigen::Affine3d interpolate(const Eigen::Affine3d &a, const Eigen::Affine3d &b, double f)
@@ -299,6 +249,114 @@ namespace
         return r;
     }
 } // namespace
+
+std::vector<Eigen::Affine3d> optimize_loop_pose_graph(const std::vector<Eigen::Affine3d> &initial, const std::vector<LoopClosureEdge> &loops,
+                                                      const OdometryConfig &params)
+{
+    const int n = static_cast<int>(initial.size());
+    std::vector<Eigen::Matrix<double, 6, 1>> odo(n > 0 ? n - 1 : 0);
+    for (int k = 0; k + 1 < n; k++)
+        odo[k] = relative_measurement(initial[k], initial[k + 1]);
+    std::vector<Eigen::Matrix<double, 6, 1>> loop_meas;
+    for (const auto &e : loops)
+        loop_meas.push_back(relative_measurement(initial[e.i], e.correction * initial[e.j]));
+
+    const double w_odo_t = 1.0 / std::pow(params.loop_closure_odometry_sigma_m, 2);
+    const double w_odo_r = 1.0 / std::pow(params.loop_closure_odometry_sigma_deg * DEG, 2);
+    const double w_loop_t = 1.0 / std::pow(params.loop_closure_edge_sigma_m, 2);
+    const double w_loop_r = 1.0 / std::pow(params.loop_closure_edge_sigma_deg * DEG, 2);
+
+    std::vector<TaitBryanPose> poses;
+    for (const auto &p : initial)
+        poses.push_back(pose_tait_bryan_from_affine_matrix(p));
+
+    const auto cost_of = [&](const std::vector<TaitBryanPose> &ps)
+    {
+        double c = 0.0;
+        for (int k = 0; k + 1 < n; k++)
+            c += relative_pose_edge_cost(ps, k, k + 1, odo[k], w_odo_t, w_odo_r);
+        for (size_t e = 0; e < loops.size(); e++)
+            c += relative_pose_edge_cost(ps, loops[e].i, loops[e].j, loop_meas[e], w_loop_t, w_loop_r);
+        return c;
+    };
+
+    double cost = cost_of(poses);
+    double lambda = 0.0; // 0: plain Gauss-Newton; raised only when a step fails to lower the cost
+    int iter = 0;
+    for (int attempt = 0; attempt < 60 && iter < 30; attempt++)
+    {
+        std::vector<Eigen::Triplet<double>> A;
+        Eigen::VectorXd b = Eigen::VectorXd::Zero(6 * n);
+        for (int k = 0; k + 1 < n; k++)
+            add_relative_pose_edge(A, b, poses, k, k + 1, odo[k], w_odo_t, w_odo_r);
+        for (size_t e = 0; e < loops.size(); e++)
+            add_relative_pose_edge(A, b, poses, loops[e].i, loops[e].j, loop_meas[e], w_loop_t, w_loop_r);
+        for (int r = 0; r < 6; r++)
+            A.emplace_back(r, r, 1e12); // first segment pose fixed
+        Eigen::SparseMatrix<double> AtPA(6 * n, 6 * n);
+        AtPA.setFromTriplets(A.begin(), A.end());
+        if (lambda > 0.0)
+            for (int r = 0; r < 6 * n; r++)
+                AtPA.coeffRef(r, r) *= 1.0 + lambda;
+        Eigen::SimplicialCholesky<Eigen::SparseMatrix<double>> solver(AtPA);
+        if (solver.info() != Eigen::Success)
+            break;
+        const Eigen::VectorXd dx = solver.solve(b);
+        if (solver.info() != Eigen::Success || !dx.allFinite())
+            break;
+        std::vector<TaitBryanPose> trial = poses;
+        for (int k = 0; k < n; k++)
+        {
+            trial[k].px += dx(6 * k + 0);
+            trial[k].py += dx(6 * k + 1);
+            trial[k].pz += dx(6 * k + 2);
+            trial[k].om += dx(6 * k + 3);
+            trial[k].fi += dx(6 * k + 4);
+            trial[k].ka += dx(6 * k + 5);
+        }
+        const double trial_cost = cost_of(trial);
+        // a step that doesn't raise the cost beyond rounding is kept; otherwise damp and try again from the same poses
+        if (std::isfinite(trial_cost) && trial_cost <= cost * (1.0 + 1e-9) + 1e-12)
+        {
+            poses = trial;
+            cost = trial_cost;
+            lambda = lambda > 0.0 ? lambda * 0.1 : 0.0;
+            if (lambda < 1e-9)
+                lambda = 0.0;
+            iter++;
+            if (dx.norm() < 1e-8)
+                break;
+        }
+        else
+        {
+            lambda = lambda > 0.0 ? lambda * 10.0 : 1e-3;
+            if (lambda > 1e6)
+                break;
+        }
+    }
+    std::vector<Eigen::Affine3d> result;
+    for (const auto &p : poses)
+        result.push_back(affine_matrix_from_pose_tait_bryan(p));
+    return result;
+}
+
+bool loop_pose_graph_plausible(const std::vector<Eigen::Affine3d> &initial, const std::vector<Eigen::Affine3d> &optimized,
+                               const std::vector<LoopClosureEdge> &loops, const OdometryConfig &params, double &max_shift_m)
+{
+    max_shift_m = 0.0;
+    double largest_edge = 0.0;
+    for (const auto &e : loops)
+        largest_edge = std::max(largest_edge, e.correction.translation().norm());
+    bool finite = optimized.size() == initial.size();
+    for (size_t k = 0; finite && k < optimized.size(); k++)
+    {
+        const Eigen::Affine3d c = optimized[k] * initial[k].inverse();
+        finite = c.matrix().allFinite();
+        if (finite)
+            max_shift_m = std::max(max_shift_m, c.translation().norm());
+    }
+    return finite && max_shift_m <= params.loop_closure_max_correction_m + largest_edge;
+}
 
 int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params, PointStore &point_store, Logger &logger)
 {
@@ -346,7 +404,7 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
     }
 
     // 2.+3. revisit candidates and their registration
-    std::vector<LoopEdge> loops;
+    std::vector<LoopClosureEdge> loops;
     for (int j = 0; j < static_cast<int>(segments.size()); j++)
     {
         int best_i = -1;
@@ -392,7 +450,7 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
                          << std::setprecision(1) << angle << " deg" << (accepted ? " ACCEPTED" : " rejected");
         if (accepted)
         {
-            LoopEdge e;
+            LoopClosureEdge e;
             e.i = best_i;
             e.j = j;
             e.correction = T;
@@ -411,7 +469,14 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
     std::vector<Eigen::Affine3d> initial;
     for (const auto &s : segments)
         initial.push_back(s.pose);
-    std::vector<Eigen::Affine3d> optimized = optimize_pose_graph(initial, loops, params);
+    std::vector<Eigen::Affine3d> optimized = optimize_loop_pose_graph(initial, loops, params);
+    double max_shift = 0.0;
+    if (!loop_pose_graph_plausible(initial, optimized, loops, params, max_shift))
+    {
+        log_warning(logger) << "loop closure: the pose graph result is implausible (largest segment correction " << std::fixed << std::setprecision(2)
+                            << max_shift << " m), discarded; trajectory unchanged";
+        return 0;
+    }
 
     // 5. interpolate the per-segment correction onto every node
     std::vector<Eigen::Affine3d> correction(segments.size());
@@ -435,9 +500,6 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
             windows[w].motion_model_poses = tr;
         }
     }
-    double max_shift = 0.0;
-    for (const auto &c : correction)
-        max_shift = std::max(max_shift, c.translation().norm());
     log_info(logger) << "loop closure: " << loops.size() << " loop(s) accepted, largest segment correction " << std::fixed << std::setprecision(2)
                      << max_shift << " m";
     return static_cast<int>(loops.size());

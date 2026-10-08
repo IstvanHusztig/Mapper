@@ -6,6 +6,7 @@
 #include "synthetic_recording.h"
 
 #include <chrono>
+#include <limits>
 
 // run_loop_closure on the loop recording (two laps around a block, see synthetic_recording.h) against its true
 // trajectory. The options are those of settings/lidar-vertical.toml, except the segment length and the time gap,
@@ -148,4 +149,71 @@ TEST_CASE("loop closure: no revisit leaves the trajectory untouched" * doctest::
     MESSAGE("no revisit: ", result.loops, " loops accepted; poses unchanged ", unchanged, "; ", result.ms, " ms");
     CHECK(result.loops == 0);
     CHECK(unchanged);
+}
+
+// the pose graph of step 4 and the check of its result, on hand-made segment poses (fast, not skipped)
+namespace
+{
+    Eigen::Affine3d segment_pose(double x, double y, double yaw_deg)
+    {
+        Eigen::Affine3d p = Eigen::Affine3d::Identity();
+        p.translation() = Eigen::Vector3d(x, y, 0.0);
+        p.linear() = Eigen::AngleAxisd(yaw_deg * DEG_TO_RAD, Eigen::Vector3d::UnitZ()).toRotationMatrix();
+        return p;
+    }
+}
+
+TEST_CASE("loop closure pose graph: a loop edge removes the drift and the result is plausible")
+{
+    OdometryConfig c = loop_closure_config();
+    // a square of 8 segments; the odometry drifts 5 cm sideways per segment
+    std::vector<Eigen::Affine3d> truth, initial;
+    for (int k = 0; k < 8; k++)
+    {
+        const double x = k < 4 ? k * 2.0 : (7 - k) * 2.0;
+        const double y = k < 4 ? 0.0 : 3.0;
+        truth.push_back(segment_pose(x, y, k < 4 ? 0.0 : 180.0));
+        initial.push_back(segment_pose(x, y + 0.05 * k, k < 4 ? 0.0 : 180.0));
+    }
+    // the revisit of segment 0 by segment 7 measured exactly: the correction moving 7 onto its true place relative to 0
+    LoopClosureEdge e;
+    e.i = 0;
+    e.j = 7;
+    e.correction = (initial[0] * truth[0].inverse() * truth[7]) * initial[7].inverse();
+    const std::vector<LoopClosureEdge> loops{e};
+
+    const std::vector<Eigen::Affine3d> optimized = optimize_loop_pose_graph(initial, loops, c);
+    REQUIRE(optimized.size() == initial.size());
+    const double before = (initial[7].translation() - truth[7].translation()).norm();
+    const double after = (optimized[7].translation() - truth[7].translation()).norm();
+    CHECK(after < 0.2 * before);
+    double max_shift = 0.0;
+    CHECK(loop_pose_graph_plausible(initial, optimized, loops, c, max_shift));
+    CHECK(max_shift < 0.5);
+}
+
+TEST_CASE("loop closure pose graph: a result that ran away or is not finite is refused")
+{
+    OdometryConfig c = loop_closure_config();
+    c.loop_closure_max_correction_m = 6.0;
+    const std::vector<Eigen::Affine3d> initial{segment_pose(0, 0, 0), segment_pose(2, 0, 0), segment_pose(4, 0, 0)};
+    LoopClosureEdge e;
+    e.i = 0;
+    e.j = 2;
+    e.correction = segment_pose(0.5, 0, 0); // 0.5 m
+    const std::vector<LoopClosureEdge> loops{e};
+    double max_shift = 0.0;
+
+    std::vector<Eigen::Affine3d> moved = initial;
+    moved[2].translation().x() += 1.0;
+    CHECK(loop_pose_graph_plausible(initial, moved, loops, c, max_shift));
+    CHECK(max_shift == doctest::Approx(1.0));
+
+    std::vector<Eigen::Affine3d> ran_away = initial;
+    ran_away[2].translation().x() += 2.2e6; // as seen on the 44 with exact statistics and the accelerometer term off
+    CHECK_FALSE(loop_pose_graph_plausible(initial, ran_away, loops, c, max_shift));
+
+    std::vector<Eigen::Affine3d> broken = initial;
+    broken[1].translation().y() = std::numeric_limits<double>::quiet_NaN();
+    CHECK_FALSE(loop_pose_graph_plausible(initial, broken, loops, c, max_shift));
 }
