@@ -330,7 +330,8 @@ namespace
     WindowOptimization run_lm_iterations(std::vector<Point3Di> &intermediate_points, Window &window, OdometryState &state,
                                          const OdometryRunSetup &setup, AccTerm &acc_term, const MotionModelRotationOptions &window_rotation_options,
                                          const VelocityPrior &velocity_prior, Eigen::Vector3d &acc_offset, Eigen::Matrix3d &lidar_translation_information,
-                                         const OdometryConfig &params, bool debugMsg, Logger &logger, ScanToMapTiming *timing)
+                                         const OdometryConfig &params, bool debugMsg, Logger &logger, ScanToMapTiming *timing,
+                                         ScanToMapWorkspace &workspace)
     {
         double delta = 100000.0;
         double lm_factor = params.lm_factor_initial;
@@ -351,7 +352,7 @@ namespace
             optimize_lidar_odometry(intermediate_points, window, state.buckets_indoor, state.buckets_outdoor,
                                     setup.scan_to_map, acc_term.motion_model, window_rotation_options, acc_term.options,
                                     velocity_prior, lm_factor, delta, acc_offset, acc_term.offset_cov, logger,
-                                    setup.acc_gated ? &lidar_translation_information : nullptr, timing);
+                                    setup.acc_gated ? &lidar_translation_information : nullptr, timing, &workspace);
             if (params.log_iteration_convergence)
             {
                 poses_after.push_back(window.poses);
@@ -617,10 +618,17 @@ namespace
         log_phase_time(logger, "other", PhaseTime{total_s - named, 0}, total_s);
     }
 
+    // log_stage_timing: how often the Cholesky analyses had to be repeated
+    void log_solver_analyses(const ScanToMapWorkspace &workspace, Logger &logger)
+    {
+        log_info(logger) << "timing   cholesky analyses: covariance " << workspace.covariance.analyses() << " in " << workspace.covariance.calls()
+                         << " solves, damped " << workspace.damped.analyses() << " in " << workspace.damped.calls() << " solves";
+    }
+
     // after the last window: the motion-model poses follow the result, the trajectory length and the summary
     void finish_run(std::vector<Window> &windows, const std::chrono::time_point<std::chrono::system_clock> &start,
                     const OdometryRunSetup &setup, const WindowLoopCarry &carry, OdometryState &state,
-                    const OdometryConfig &params, Logger &logger)
+                    const OdometryConfig &params, const ScanToMapWorkspace &workspace, Logger &logger)
     {
         for (int i = 0; i < windows.size(); i++)
             windows[i].motion_model_poses = windows[i].poses;
@@ -648,7 +656,10 @@ namespace
         if (params.log_iteration_convergence && !carry.convergence.empty())
             log_convergence_summary(carry.convergence, logger);
         if (params.log_stage_timing)
+        {
             log_odometry_timing(carry.timing, std::chrono::duration<double>(std::chrono::steady_clock::now() - carry.timing.start).count(), windows.size(), logger);
+            log_solver_analyses(workspace, logger);
+        }
     }
 } // namespace
 
@@ -664,6 +675,7 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
 
         OdometryRunSetup setup = prepare_run(windows, params, logger);
         WindowLoopCarry carry = start_carry(setup, windows);
+        ScanToMapWorkspace workspace; // the Cholesky analyses, kept from window to window
 
         // log_stage_timing: the timers get a target only when the setting is on
         const auto timed = [&params](PhaseTime &t) { return params.log_stage_timing ? &t : nullptr; };
@@ -745,7 +757,7 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
             PhaseTimer lm_timer(timed(carry.timing.lm_iterations));
             const WindowOptimization optimization = run_lm_iterations(intermediate_points, windows[i], state, setup, acc_term, window_rotation_options,
                                                                       velocity_prior, acc_offset, lidar_translation_information, params, debugMsg, logger,
-                                                                      params.log_stage_timing ? &carry.timing.lm : nullptr);
+                                                                      params.log_stage_timing ? &carry.timing.lm : nullptr, workspace);
             lm_timer.stop();
 
             const std::chrono::duration<double> window_seconds = std::chrono::system_clock::now() - window_start;
@@ -797,7 +809,7 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
             }
         }
 
-        finish_run(windows, start, setup, carry, state, params, logger);
+        finish_run(windows, start, setup, carry, state, params, workspace, logger);
     }
 
     return true;

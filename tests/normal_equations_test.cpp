@@ -8,10 +8,12 @@
 
 namespace
 {
-    // The dense reference of BandedNormalMatrix::to_sparse (the band-only copy the optimizer used before BandedNormalMatrix).
+    // The dense reference of BandedNormalMatrix::to_sparse (the band-only copy the optimizer used before BandedNormalMatrix),
+    // taking the elements that were written (written != 0) instead of the nonzero ones.
     // Pose part: only parameters up to max_offset apart; columns and rows from n_pose_params on (the extra unknowns,
     // such as the gyro bias) are copied completely.
-    Eigen::SparseMatrix<double> pose_band_to_sparse(const Eigen::MatrixXd &m, int n_pose_params, int max_offset = 17)
+    Eigen::SparseMatrix<double> pose_band_to_sparse(const Eigen::MatrixXd &m, const Eigen::MatrixXi &written, int n_pose_params,
+                                                    int max_offset = 17)
     {
         const int n = static_cast<int>(m.rows());
         std::vector<Eigen::Triplet<double>> triplets;
@@ -22,11 +24,11 @@ namespace
             const int row_begin = extra_col ? 0 : std::max(0, col - max_offset);
             const int row_end = extra_col ? n : std::min(n_pose_params, col + max_offset + 1);
             for (int row = row_begin; row < row_end; row++)
-                if (m(row, col) != 0.0)
+                if (written(row, col) != 0)
                     triplets.emplace_back(row, col, m(row, col));
             if (!extra_col)
                 for (int row = n_pose_params; row < n; row++)
-                    if (m(row, col) != 0.0)
+                    if (written(row, col) != 0)
                         triplets.emplace_back(row, col, m(row, col));
         }
         Eigen::SparseMatrix<double> s(n, n);
@@ -46,7 +48,8 @@ TEST_CASE("pose_band_to_sparse keeps the pose band and the extra rows and column
             if (r >= n_pose || c >= n_pose || std::abs(r - c) <= max_offset)
                 m(r, c) = r * 100.0 + c + 1.0;
 
-    const Eigen::SparseMatrix<double> s = pose_band_to_sparse(m, n_pose, max_offset);
+    const Eigen::MatrixXi nonzero = (m.array() != 0.0).cast<int>();
+    const Eigen::SparseMatrix<double> s = pose_band_to_sparse(m, nonzero, n_pose, max_offset);
     CHECK(Eigen::MatrixXd(s) == m);
     CHECK(s.nonZeros() == Eigen::SparseMatrix<double>(m.sparseView()).nonZeros());
 
@@ -54,7 +57,9 @@ TEST_CASE("pose_band_to_sparse keeps the pose band and the extra rows and column
     Eigen::MatrixXd outside = m;
     outside(0, 10) = 5.0;
     outside(10, 0) = 5.0;
-    CHECK(Eigen::MatrixXd(pose_band_to_sparse(outside, n_pose, max_offset)) == m);
+    Eigen::MatrixXi outside_written = nonzero;
+    outside_written(0, 10) = outside_written(10, 0) = 1;
+    CHECK(Eigen::MatrixXd(pose_band_to_sparse(outside, outside_written, n_pose, max_offset)) == m);
 }
 
 TEST_CASE("SumBlocks adds each block at its offset and subtracts its right-hand side")
@@ -88,17 +93,20 @@ namespace
     struct DenseAndBand
     {
         Eigen::MatrixXd dense;
+        Eigen::MatrixXi written;
         BandedNormalMatrix band;
         int n_pose;
 
         DenseAndBand(int n_pose_params, int n_extra, int half_width)
-            : dense(Eigen::MatrixXd::Zero(n_pose_params + n_extra, n_pose_params + n_extra)), band(n_pose_params, n_extra, half_width), n_pose(n_pose_params)
+            : dense(Eigen::MatrixXd::Zero(n_pose_params + n_extra, n_pose_params + n_extra)),
+              written(Eigen::MatrixXi::Zero(n_pose_params + n_extra, n_pose_params + n_extra)), band(n_pose_params, n_extra, half_width), n_pose(n_pose_params)
         {
         }
 
         void add(int r, int c, double v)
         {
             dense(r, c) += v;
+            written(r, c) = 1;
             band.add(r, c, v);
         }
     };
@@ -106,7 +114,7 @@ namespace
     // the banded matrix as a sparse matrix is the dense one's band conversion: same pattern, same bits
     void check_same_as_dense(const DenseAndBand &x, int half_width)
     {
-        const Eigen::SparseMatrix<double> reference = pose_band_to_sparse(x.dense, x.n_pose, half_width);
+        const Eigen::SparseMatrix<double> reference = pose_band_to_sparse(x.dense, x.written, x.n_pose, half_width);
         const Eigen::SparseMatrix<double> s = x.band.to_sparse();
         REQUIRE(s.isCompressed());
         REQUIRE(reference.isCompressed());
@@ -151,7 +159,10 @@ TEST_CASE("BandedNormalMatrix: the sums are those of the dense matrix, bit for b
                             block(r, c) = value(rng);
                     for (int r = 0; r < 6; r++)
                         for (int c = 0; c < 6; c++)
+                        {
                             x.dense(k * 6 + r, k * 6 + c) += block(r, c);
+                            x.written(k * 6 + r, k * 6 + c) = 1;
+                        }
                     x.band.add_diagonal_block6(k * 6, block);
                 }
                 // edges between neighbouring nodes, all four 6x6 blocks (the motion model)
@@ -198,9 +209,9 @@ TEST_CASE("BandedNormalMatrix: the sums are those of the dense matrix, bit for b
         }
 }
 
-// Pristine elements, so the result is an exact zero however the compiler orders the two additions (with /fp:fast it may
-// fold an adjacent +v, -v pair on a non-zero element in one matrix and not in the other).
-TEST_CASE("BandedNormalMatrix: an element that cancels to exactly zero is not stored")
+// A sum that cancels to exactly zero stays in the pattern as an explicit zero: the pattern depends on what was written, not
+// on the values, so it cannot change from one iteration to the next because an entry happens to be exactly zero
+TEST_CASE("BandedNormalMatrix: an element that cancels to exactly zero stays in the pattern")
 {
     DenseAndBand x(60, 3, 17);
     x.add(7, 9, 123.456);
@@ -209,9 +220,19 @@ TEST_CASE("BandedNormalMatrix: an element that cancels to exactly zero is not st
     x.add(60, 4, -5.0);
     x.add(8, 62, 0.25);
     x.add(8, 62, -0.25);
-    x.add(20, 21, 1.5); // one that stays
-    CHECK(x.band.to_sparse().nonZeros() == 1);
+    x.add(20, 21, 1.5); // one that does not cancel
+    const Eigen::SparseMatrix<double> sparse = x.band.to_sparse();
+    CHECK(sparse.nonZeros() == 4);
+    CHECK(sparse.coeff(7, 9) == 0.0);
     check_same_as_dense(x, 17);
+
+    // an element that was never written is not in the pattern, even next to written ones
+    CHECK(sparse.coeff(7, 10) == 0.0);
+    bool pattern_has_unwritten = false;
+    for (int k = 0; k < sparse.outerSize(); k++)
+        for (Eigen::SparseMatrix<double>::InnerIterator it(sparse, k); it; ++it)
+            pattern_has_unwritten = pattern_has_unwritten || x.written(it.row(), it.col()) == 0;
+    CHECK(!pattern_has_unwritten);
 }
 
 TEST_CASE("BandedNormalMatrix: a pose-pose write outside the band is dropped and counted, like the dense band conversion")
@@ -240,4 +261,87 @@ TEST_CASE("BandedNormalMatrix: a band wider than the matrix covers all of it")
             x.add(r, c, r * 100.0 + c + 1.0);
     CHECK(x.band.dropped_writes() == 0);
     check_same_as_dense(x, 100);
+}
+
+TEST_CASE("BandedNormalMatrix: a diagonal block puts all 36 elements in the pattern, zeros included")
+{
+    BandedNormalMatrix m(30, 0, 17);
+    Eigen::Matrix<double, 6, 6, Eigen::RowMajor> block = Eigen::Matrix<double, 6, 6, Eigen::RowMajor>::Zero();
+    block(0, 0) = 1.0;
+    m.add_diagonal_block6(12, block);
+    CHECK(m.to_sparse().nonZeros() == 36);
+}
+
+namespace
+{
+    // a symmetric positive definite banded matrix (both triangles stored), values from the seed
+    Eigen::SparseMatrix<double> spd_band(int n, int band, unsigned seed, bool extra_entry = false)
+    {
+        std::mt19937 rng(seed);
+        std::uniform_real_distribution<double> value(-1.0, 1.0);
+        std::vector<Eigen::Triplet<double>> t;
+        for (int i = 0; i < n; i++)
+        {
+            t.emplace_back(i, i, 4.0 * band + 1.0 + value(rng));
+            for (int d = 1; d <= band && i + d < n; d++)
+            {
+                const double v = value(rng);
+                t.emplace_back(i, i + d, v);
+                t.emplace_back(i + d, i, v);
+            }
+        }
+        if (extra_entry)
+        {
+            t.emplace_back(0, n - 1, 0.5);
+            t.emplace_back(n - 1, 0, 0.5);
+        }
+        Eigen::SparseMatrix<double> a(n, n);
+        a.setFromTriplets(t.begin(), t.end());
+        return a;
+    }
+
+    Eigen::VectorXd solve_with(PatternCachedCholesky &chol, const Eigen::SparseMatrix<double> &a, const Eigen::VectorXd &b)
+    {
+        chol.compute(a);
+        REQUIRE(chol.solver().info() == Eigen::Success);
+        return chol.solver().solve(b);
+    }
+}
+
+TEST_CASE("PatternCachedCholesky: the analysis is kept for the same pattern and redone for another, results unchanged")
+{
+    const int n = 300;
+    const Eigen::VectorXd b = Eigen::VectorXd::LinSpaced(n, -1.0, 1.0);
+    PatternCachedCholesky cached;
+
+    // five matrices with one pattern and different values: one analysis; each result equals that of a fresh object
+    for (unsigned seed = 1; seed <= 5; seed++)
+    {
+        const Eigen::SparseMatrix<double> a = spd_band(n, 7, seed);
+        const Eigen::VectorXd x = solve_with(cached, a, b);
+        PatternCachedCholesky fresh;
+        const Eigen::VectorXd y = solve_with(fresh, a, b);
+        CHECK(x == y);
+        CHECK((a * x - b).norm() < 1e-9 * b.norm());
+    }
+    CHECK(cached.calls() == 5);
+    CHECK(cached.analyses() == 1);
+
+    // a different pattern (one more entry): analysed again, then kept again
+    for (unsigned seed = 6; seed <= 8; seed++)
+    {
+        const Eigen::SparseMatrix<double> a = spd_band(n, 7, seed, true);
+        const Eigen::VectorXd x = solve_with(cached, a, b);
+        PatternCachedCholesky fresh;
+        CHECK(x == solve_with(fresh, a, b));
+    }
+    CHECK(cached.calls() == 8);
+    CHECK(cached.analyses() == 2);
+
+    // a different size: analysed again
+    const Eigen::VectorXd b2 = Eigen::VectorXd::Ones(n + 10);
+    const Eigen::SparseMatrix<double> a2 = spd_band(n + 10, 7, 9);
+    PatternCachedCholesky fresh2;
+    CHECK(solve_with(cached, a2, b2) == solve_with(fresh2, a2, b2));
+    CHECK(cached.analyses() == 3);
 }

@@ -18,8 +18,10 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
                              const MotionModelTranslationImuOptions &translation_imu_options,
                              const VelocityPrior &velocity_prior, double lm_factor, double &delta,
                              Eigen::Vector3d &acc_offset, Eigen::Matrix3d &acc_offset_cov, Logger &logger,
-                             Eigen::Matrix3d *lidar_translation_information, ScanToMapTiming *timing)
+                             Eigen::Matrix3d *lidar_translation_information, ScanToMapTiming *timing, ScanToMapWorkspace *workspace)
 {
+    ScanToMapWorkspace local_workspace; // without a caller's workspace every call analyses its own patterns
+    ScanToMapWorkspace &cache = workspace ? *workspace : local_workspace;
     const auto phase = [timing](PhaseTime ScanToMapTiming::*p) { return timing ? &(timing->*p) : nullptr; };
     PhaseTimer setup_timer(phase(&ScanToMapTiming::setup));
 
@@ -642,7 +644,8 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
     {
         // marginal covariance of the extra unknowns (gyro bias, acceleration offset):
         // their block of the inverse of the undamped normal matrix
-        Eigen::SimplicialCholesky<Eigen::SparseMatrix<double>> solver_cov(AtPA);
+        cache.covariance.compute(AtPA);
+        const PatternCachedCholesky::Solver &solver_cov = cache.covariance.solver();
         if (solver_cov.info() == Eigen::Success)
         {
             Eigen::MatrixXd unit = Eigen::MatrixXd::Zero(n_params, n_extra);
@@ -678,9 +681,8 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
     AtPA_I *= lm_factor;
     AtPA += (AtPA_I);
 
-    Eigen::SimplicialCholesky<Eigen::SparseMatrix<double>>
-        solver(AtPA);
-    Eigen::SparseMatrix<double> x = solver.solve(AtPB);
+    cache.damped.compute(AtPA);
+    Eigen::SparseMatrix<double> x = cache.damped.solver().solve(AtPB);
     std::vector<double> h_x;
     for (int k = 0; k < x.outerSize(); ++k)
         for (Eigen::SparseMatrix<double>::InnerIterator it(x, k); it; ++it)

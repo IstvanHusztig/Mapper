@@ -161,7 +161,8 @@ namespace
     // after iterations 10, 20, ...; after_iteration (optional) sees the window after each iteration; returns the last delta
     double run_iterations(std::vector<Point3Di> &points, Window &window, Maps &maps, const Options &o, double lm_factor_initial,
                           int iterations, Logger &logger, Eigen::Matrix3d *translation_information = nullptr,
-                          const std::function<void(const IterationResult &, const Window &)> &after_iteration = {})
+                          const std::function<void(const IterationResult &, const Window &)> &after_iteration = {},
+                          ScanToMapWorkspace *workspace = nullptr)
     {
         double lm_factor = lm_factor_initial;
         double delta = 0.0;
@@ -172,7 +173,7 @@ namespace
             delta = 100000.0;
             optimize_lidar_odometry(points, window, maps.indoor, maps.outdoor, o.scan_to_map, o.motion_model, o.rotation,
                                     o.translation_imu, o.velocity_prior, lm_factor, delta, acc_offset, acc_offset_cov, logger,
-                                    translation_information);
+                                    translation_information, nullptr, workspace);
             if (after_iteration)
                 after_iteration({iter, delta}, window);
             if (iter % 10 == 0 && iter > 0)
@@ -413,7 +414,7 @@ namespace
         double delta = 0.0;
     };
 
-    MultithreadRun run_window(const Scene &s, bool multithread, bool shuffled, int iterations)
+    MultithreadRun run_window(const Scene &s, bool multithread, bool shuffled, int iterations, ScanToMapWorkspace *workspace = nullptr)
     {
         OdometryConfig c = test_config();
         c.use_gyro_bias_estimation = true;
@@ -428,7 +429,7 @@ namespace
         NullLogger logger;
         MultithreadRun r;
         r.translation_information = Eigen::Matrix3d::Zero();
-        r.delta = run_iterations(points, w, maps, o, 5.0, iterations, logger, &r.translation_information);
+        r.delta = run_iterations(points, w, maps, o, 5.0, iterations, logger, &r.translation_information, {}, workspace);
         r.poses = w.poses;
         r.bias = w.gyro_bias.mean;
         return r;
@@ -473,5 +474,24 @@ TEST_CASE("scan-to-map: two multithreaded runs are identical, bit for bit")
         const MultithreadRun first = run_window(s, true, true, 30);
         const MultithreadRun second = run_window(s, true, true, 30);
         CHECK(identical(first, second));
+    }
+}
+
+// Keeping the Cholesky analyses between iterations (change fixed-pattern-precise-fp) must not change a result, and must
+// save analyses: the pattern of a window's normal matrix is the same from one iteration to the next
+TEST_CASE("scan-to-map: reusing the Cholesky analyses changes nothing, bit for bit")
+{
+    for (const bool use_corridor : {false, true})
+    {
+        CAPTURE(use_corridor);
+        const Scene s = use_corridor ? corridor() : room();
+        const MultithreadRun without = run_window(s, true, false, 30);
+        ScanToMapWorkspace workspace;
+        const MultithreadRun with = run_window(s, true, false, 30, &workspace);
+        CHECK(identical(without, with));
+        CHECK(workspace.damped.calls() == 30);
+        CHECK(workspace.damped.analyses() <= 3);
+        CHECK(workspace.covariance.calls() == 30);
+        CHECK(workspace.covariance.analyses() <= 3);
     }
 }
