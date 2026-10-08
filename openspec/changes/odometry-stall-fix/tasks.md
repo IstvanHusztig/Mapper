@@ -26,6 +26,19 @@ Close the GUI before building. Never run two jobs on the same input folder at on
 
   Plan for task 3 (changed from the proposal): the decision to use the accelerometer term must not hang on one noisy ratio of the previous window. Candidates in this order: (a) enter below a higher ratio and leave only above a clearly higher one, with the ratio smoothed over the last windows (hysteresis); (b) after the window, if its own ratio says degenerate and the term was off, repeat the window with the term on (costs time only in degenerate windows). Judged by: the two builds agree over the whole 44 (`trajectory_seams.py`), no ghost wall, metrics not worse.
 
+  **Experiments for task 3 (2026-10-08, not committed code, settings only; both builds each).** A cut `raw data/44_deg` (`cut_recording` 95 s for 50 s) reproduces the mechanism: with the shipped settings the two builds end 6.30 m apart (at a corner the fast build stops for 8 windows while the precise one walks on along the blind direction, accelerometer term on in both). Largest difference between the builds and the loop-closure result:
+
+  | Settings | cut `44_deg`: fast vs precise | full 44: fast vs precise | full 44 against `lio_result_2` | loop closure (fast / precise): largest segment correction |
+  |---|---|---|---|---|
+  | shipped (previous statistics, ratio 0.3) | 6.30 m | 1.03 m (ghost wall) | fast 0.000 m, precise 1.03 m | 0.78 / 0.51 m |
+  | exact statistics, ratio 0.10 | 0.13 m | – | – | – |
+  | exact statistics, ratio 0.12 | 0.11 m | 2.82 m | fast 3.42 m, precise 4.35 m | 4.34 / 4.72 m |
+  | exact statistics, ratio 0.15 | 0.049 m | 7.97 m | fast 8.00 m, precise 0.50 m | 12.51 / 0.96 m |
+  | previous statistics, accelerometer term off | 0.34 m | – | – | – |
+  | exact statistics, accelerometer term off | 0.14 m | – | fast 3.58 m, precise diverged | 4.84 m / **2,207,108 m** |
+
+  Findings: exact statistics make the short cut stable (all exact variants agree on its route, 93.7 to 94.4 m), but on the full 44 they don't: the accelerometer term is then active in 166 to 192 windows instead of a few dozen, and stretches driven by the accelerometer drift by metres; without the term the blind stretches are free. **Exact statistics alone are not the fix.** A second, separate defect: `run_loop_closure` accepts loops without a plausibility check on the correction (one run accepted a segment correction of 2.2e6 m and wrecked the trajectory).
+
 ## 3. Fix
 
 - [ ] 3.1 Implement the smallest fix the diagnosis supports (candidates in the proposal), with its setting(s) in `TomlIO`, the shipped settings and `docs`. Tests on synthetic windows: a corridor-like window whose weak direction carries a motion that the LiDAR cannot see must not stall (position error along the corridor within a given bound), and well-constrained windows give the same result as before to the printed precision. If the specified motion-model behaviour changes, add the delta spec. Verify: `ctest`; report the window diagnostics of windows 575 to 590 with the fix. Commit.
