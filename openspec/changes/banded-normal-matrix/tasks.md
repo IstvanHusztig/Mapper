@@ -35,7 +35,9 @@ Close the GUI before building. Never run two jobs on the same input folder at on
 
 ## 3. Cholesky symbolic reuse (only if the measurement says so)
 
-- [ ] 3.1 Measure the share of `analyzePattern` in the two solves on `44_short` (design decision 7). If the saving is below about 5 % of the odometry, mark 3.2 skipped with the numbers and stop. Commit the note.
+- [x] 3.1 Measure the share of `analyzePattern` in the two solves on `44_short` (design decision 7). If the saving is below about 5 % of the odometry, mark 3.2 skipped with the numbers and stop. Commit the note.
+
+  Result (2026-10-08, a throwaway instrumented build, not committed; `44_short`, odometry 72.1 s): `analyzePattern` 11.04 s in the 6,900 covariance solves and 10.57 s in the 7,000 damped solves, together 21.6 s = 30 % of the odometry. `factorize` takes 3.36 s + 3.33 s, and the solve of the damped system 1.04 s. So the symbolic analysis is three times the numeric work; the saving from reusing it is up to about 30 % of the odometry, far above the 5 % bar. 3.2 goes ahead. Both matrices very likely share one pattern (every diagonal is present), but each solver keeps and checks its own pattern.
 - [ ] 3.2 `ScanToMapWorkspace` with the two solvers and the stored patterns, created per window in `run_lm_iterations`, passed to `optimize_lidar_odometry` (default `nullptr` for the tests), re-analysing when the pattern differs. Verify: the step checks with Debug; precise and fast `44_short`; a unit test that a changed pattern triggers re-analysis and gives the same result as a fresh solver. Then the full 44 as in 2.2. Commit.
 
 ## 4. Docs
