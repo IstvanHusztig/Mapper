@@ -13,11 +13,19 @@ Close the GUI before building. Never run two jobs on the same input folder at on
 
 ## 1. Derive and measure (results unchanged)
 
-- [ ] 1.1 Derive, for dMapper's point-to-distribution NDT term, the information that noise alone adds to a direction (λ_noise).
+- [x] 1.1 Derive, for dMapper's point-to-distribution NDT term, the information that noise alone adds to a direction (λ_noise).
   - Base it on Hatleskog & Alexis 2025 (arXiv:2410.10784; their code is at github.com/ntnu-arl/drpm).
   - Noise sources: the point noise from the sensor data sheet, and the uncertainty of the cell's mean and covariance from its point count and spread.
   - Write the derivation and the chosen constants into `design.md`.
   - If it doesn't carry over soundly to NDT, decide for the X-ICP count test (design, decision 2) and write down why.
+
+  Result: derived. See `design.md`, section "Derivation (task 1.1)".
+  - NDT is decomposed into point-to-plane terms; only the normal term of planar cells is used, with unit weights.
+  - Rigid window motion about the window's mean node position; noise as in the paper, Eqs. 7, 8 and 34, with the cell's point count and in-plane spreads.
+  - Translation and rotation are separated by Schur complements, and the test is the paper's Eq. 20.
+  - Computed once per window, in the first iteration (as LIO-SAM decides degeneracy), and held.
+  - Constants: σp = `degenerate_point_sigma_m` 0.02 m (Livox Mid-360 class, to be confirmed for the user's sensor), s = 10.
+  - The count test is not needed. The point-sigma setting is a fifth key next to the four of the delta spec; the spec is amended.
 - [ ] 1.2 Compute the window's rigid-motion information and its translation and rotation Schur complements, and the per-direction p (design, decisions 1 and 2), as a separate, tested helper.
   - Tests: synthetic room, nothing degenerate; synthetic corridor, translation along the axis degenerate; a round synthetic tunnel, rotation about the axis degenerate; noise added to the corridor's cells doesn't make the axis look constrained; invariance under moving the world origin.
   - Log per window behind `log_window_diagnostics`: the three translation and three rotation p values with their directions, next to today's ratio.

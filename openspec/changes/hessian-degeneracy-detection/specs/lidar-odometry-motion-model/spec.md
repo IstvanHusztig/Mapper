@@ -6,10 +6,10 @@ The scan-to-map optimization SHALL decide, per window, which directions of the w
 - **Geometric ratio** (`degenerate_projection_ratio`, `degenerate_projection_ratio_full`, in the `[imu_translation]` section): this detector looks only at translation. It decomposes the sum of n·nᵀ over the matched surface normals.
   - Along a direction whose share (eigenvalue / largest eigenvalue) is below `degenerate_projection_ratio`, the NDT terms SHALL carry no translation information.
   - Between that value and `degenerate_projection_ratio_full`, the information SHALL be scaled linearly.
-- **Signal-to-noise test** (`degenerate_snr_detection`, `degenerate_snr_factor`, in the same section): this detector looks at both translation and rotation.
+- **Signal-to-noise test** (`degenerate_snr_detection`, `degenerate_snr_factor`, `degenerate_point_sigma_m`, in the same section): this detector looks at both translation and rotation.
   - It forms the information that the summed NDT node terms give to a rigid motion of the whole window about the window's mean node position.
   - It separates translation from rotation by Schur complements and decomposes each.
-  - Each eigen-direction's NDT information SHALL be scaled by the probability that its information exceeds `degenerate_snr_factor` times the information that noise alone would produce.
+  - Each eigen-direction's NDT information SHALL be scaled by the probability that its information exceeds `degenerate_snr_factor` times the information that noise alone would produce. The noise model takes the LiDAR's point noise `degenerate_point_sigma_m` and each cell's point count and spread.
 
 Rotations SHALL be scaled only by the signal-to-noise test. All other terms SHALL be unchanged. Built-in defaults:
 - `degenerate_projection_ratio` and `degenerate_projection_ratio_full`: 0.0;
@@ -35,5 +35,5 @@ With both detectors off the NDT terms SHALL be exactly as before either existed.
 - **THEN** the translation along the corridor is still scaled down
 
 #### Scenario: Off by default
-- **WHEN** a parameters TOML without the four keys is loaded
+- **WHEN** a parameters TOML without the five keys is loaded
 - **THEN** both detectors are off and the odometry gives the same results as before either detector existed
