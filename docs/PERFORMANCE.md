@@ -3,8 +3,8 @@
 This page lists the changes that made dMapper faster or kept it from becoming slower: what was slow, what changed, what it gained, and how the result was checked. It also lists the settings that trade speed for accuracy or reproducibility, and the open performance findings.
 
 Times are for the reference recordings in `raw data/`, with the Release build and `settings/lidar-vertical.toml`:
-- `44` is the full recording, 690 windows, about 25 min (30 min before multithreading);
-- `44_short` is its first 30 s, 70 windows, about 2.5 min (3.5 min before).
+- `44` is the full recording, 690 windows, about 15 min (30 min before the performance fixes);
+- `44_short` is its first 30 s, 70 windows, about 1.5 min (3.5 min before).
 
 ## Summary
 
@@ -18,6 +18,8 @@ Times are for the reference recordings in `raw data/`, with the Release build an
 | [Place only the next window](#6-place-only-the-next-window) | 2026-10-03 | window loop | 237,705 → 689 window placements on 44: 6.7 s → 0.02 s (about 0.4 % of the run) | last bits, within 1e-6 |
 | [Deterministic multithreading](#7-deterministic-multithreading) | 2026-10-05 | window optimizer | 44: odometry 1578 → 1060 s (−33 %), whole run 1990 → 1467 s (−26 %) | bit-identical |
 | [Banded normal matrix](#8-banded-normal-matrix) | 2026-10-08 | window optimizer | 44: odometry 1060 → 689 s (−35 %), whole run 1467 → 1137 s (−22 %) | bit-identical on `44_short`; full 44 within 1e-9 |
+| [Fixed Cholesky pattern](#9-fixed-cholesky-pattern) | 2026-10-08 | window optimizer | 44: odometry 689 → 510 s (−26 %), whole run about 1090 → 908 s | within 1e-10 |
+| [One floating-point mode (`/fp:precise`)](#10-one-floating-point-mode) | 2026-10-08 | build | no speed cost measured | results change by cm–dm over the 44 (new baselines) |
 
 ## 1. Sparse band of the normal matrix
 
@@ -44,18 +46,10 @@ Commit `9b822c4`.
 ## 3. Release optimization flags
 
 `-DHD_CPU_OPTIMIZATION=AUTO|INTEL|AMD|ARM|GENERIC` in `CMakeLists.txt` sets the Release flags:
-- every MSVC Release build uses `/O2 /GL` with `/LTCG` (whole-program optimization);
-- `AMD` (what `AUTO` picks on this machine) adds `/Oi /Ot /Oy /fp:fast`.
+- every MSVC Release build uses `/O2 /GL /fp:precise` with `/LTCG` (whole-program optimization);
+- `AMD` (what `AUTO` picks on this machine) adds `/Oi /Ot /Oy`.
 
-`/fp:fast` lets the compiler reorder and fuse floating-point operations. That makes the code faster, but its last bits depend on how the code is shaped. A refactor that is exact can move the 44 results by about 1e-9 m.
-
-This is why refactors are checked:
-- with a **precise build** (`GENERIC`, no `/fp:fast`) that must stay bit-identical;
-- with the normal build within `--tolerance 1e-6`.
-
-The two builds differ from each other by millimetres over a run, so their results are never compared with each other. See `tools/README.md` and the Decisions in `docs/ARCHITECTURE.md`.
-
-The speed gain of `/fp:fast` over `GENERIC` has not been measured.
+Until 2026-10-08 the `AMD` build also used `/fp:fast`; see [fix 10](#10-one-floating-point-mode) for why it is gone.
 
 ## 4. GUI frame-rate cap
 
@@ -142,11 +136,41 @@ OpenSpec change `deterministic-multithread`.
 
 OpenSpec change `banded-normal-matrix`.
 
-### Cholesky symbolic reuse: measured, not possible without changing results
+### Cholesky symbolic reuse: measured, not possible bit-identically
 
-The two sparse Cholesky solves are now 44 % of the odometry. On `44_short`, `analyzePattern` (the fill-reducing ordering and the elimination tree) is 21.6 s of the 72.1 s (30 %), the numeric `factorize` only 6.7 s, so reusing the analysis looked like the biggest remaining saving. It does not work bit-identically: the analysis depends only on the sparsity pattern, but the pattern differs on **every** call. The number of stored entries wobbles by about ±100 of 33,000 between iterations, with about 930 of 2160 columns differing by a few entries: entries that are exactly zero in one iteration and tiny but non-zero in the next (6,900 analyses in 6,900 covariance solves, 7,000 in 7,000 damped solves). A cache guarded by a pattern comparison, which is the only way to keep the result the same bits, never hits. The code was written, tested and removed again.
+The two sparse Cholesky solves were 44 % of the odometry, and on `44_short` `analyzePattern` (the fill-reducing ordering and the elimination tree) was 21.6 s of the 72.1 s (30 %), the numeric `factorize` only 6.7 s. Reusing the analysis does not work while the result must stay the same bits: the analysis depends only on the sparsity pattern, but the pattern differed on every call. The number of stored entries wobbled by about ±100 of 33,000 between iterations, with about 930 of 2160 columns differing by a few entries (entries that are exactly zero in one iteration and tiny in the next; 6,900 analyses in 6,900 covariance solves, 7,000 in 7,000 damped solves). A cache guarded by a pattern comparison never hit. Fix 9 solves it with a fixed pattern, which is a numerical change.
 
-A fixed superset pattern (every entry of the band kept as an explicit value, zeros included) would allow the reuse, but it changes the elimination order, so the solves round differently: a numerical change, not a refactor. It would be its own change, judged with `eval_odometry.py` and a full 44, with an estimated saving of up to 30 % of the odometry.
+## 9. Fixed Cholesky pattern
+
+**Problem.** See the end of fix 8: the symbolic analysis of the two Cholesky solves was 30 % of the odometry, and could not be reused because the sparsity pattern changed on every call (exactly-zero entries came and went).
+
+**Fix.** `BandedNormalMatrix` records which elements were written, and `to_sparse()` emits exactly those, explicit zeros included. The pattern then depends on which terms were added and not on whether a sum happens to be exactly zero, so it is the same from one iteration to the next. A `PatternCachedCholesky` keeps the symbolic analysis while the pattern compares equal (and redoes it when it differs, so a changed pattern can never give a wrong result), and a `ScanToMapWorkspace` with the two solvers (covariance of the extra unknowns, damped solve) lives for one run. With `log_stage_timing` the summary prints the analysis counts: on the full 44, 57 + 58 analyses in 68,900 + 69,000 solves (on `44_short` 6 + 7 in 6,900 + 7,000).
+
+The explicit zeros change the fill-reducing ordering, so the solves round differently: this is a numerical change, not a refactor. It is small: on `44_short` the trajectories moved by at most 1e-10 (JSON 4e-12), and the experiment on the full 44 (fast build, against the fast baseline) by at most 1e-10 with the `eval_odometry.py` metrics unchanged to the printed precision.
+
+**Effect** (`44_short`, `/fp:precise`): covariance solve 2.30 → 0.67 ms and damped solve 2.78 → 1.18 ms per iteration; odometry 68.8 → 52.8 s (−23 %), processing time 101.5 → 86.2 s. Full 44: odometry 510 s (689 s before), processing time 888 s.
+
+**Checks.** `tests/normal_equations_test.cpp`: written zeros stay in the pattern, a diagonal block writes all 36 elements, the cache keeps the analysis for one pattern and redoes it for another pattern or size and always equals a fresh object bit for bit. `tests/scan_to_map_test.cpp`: an optimizer window with a workspace equals one without, bit for bit, with at most 3 analyses in 30 iterations.
+
+OpenSpec change `fixed-pattern-precise-fp`.
+
+## 10. One floating-point mode
+
+**Problem.** The `AMD` Release build (what `AUTO` chose here) used `/fp:fast`. It was meant to be faster, but its gain was never measured, and it made results depend on how the compiler happened to order sums: an exact refactor could move the long run by about 1e-9, so exact refactors were checked with a second "precise" build against a second reference, the full 44 had a `--tolerance 1e-6` rule, and a unit test's own reference sum was reordered into failing.
+
+**Measured.** Fast and precise builds ran `44_short` in 107/105 s, 147/147 s, 205/202 s, 211/214 s in the step checks of 2026-10-05 to 08, and with the final change (below) the precise build is the same speed. So `/fp:fast` bought 0–2 %, within run-to-run noise.
+
+**Fix.** `/fp:fast` is gone from `CMakeLists.txt`; MSVC Release uses `/O2 /GL /fp:precise` everywhere, `/Oi /Ot /Oy` stay. The `/fp:precise` workaround for the `BandedNormalMatrix` test is gone. `44_short` built this way is bit-identical with the old precise reference, so the switch changes nothing but the compiler mode.
+
+**What it costs: new numbers.** Precise and fast results are not the same, and the difference is larger than the earlier "millimetres over a run":
+- `44_short`: the two baselines differ by up to 2 cm in position;
+- the full 44: the calculated route is 215.46 m long against 216.06 m, and some per-window gyro-bias estimates differ by up to 0.19 °/s.
+
+The quality metrics of `tools/eval_odometry.py` are equal or slightly better with precise (jitter 0.068/0.37 → 0.069/0.37 °, window yaw difference 1.37 → 1.33 °, spikes above 3 °: 6 → 4, final yaw −126.4 → −126.0 ° against the gyro's −136.9 → −136.8 °). With no ground truth neither mode can be called closer to the truth; the point of the switch is that the result no longer depends on compiler reordering. The old fast baselines are kept as `raw data/44_baseline_2026-10-08b` and `raw data/44_short_baseline_2026-10-08b`.
+
+**Consequences.** One build and one set of baselines: a refactor of numeric code is checked on `44_short`, and the full 44 once per change, bit for bit against the manifests; the tolerance rule and the precise-build procedure are gone.
+
+OpenSpec change `fixed-pattern-precise-fp`.
 
 ## Settings that trade speed
 
@@ -251,14 +275,14 @@ The debug setting `log_stage_timing` (`[lidar_odometry_debug_info]`, off by defa
 - **Consistency is 16 % of the whole run**, more than the review assumed. It is serial, rereads every window file in each of its passes, and builds a large sparse triple product. It deserves its own analysis.
 - **I/O is negligible in the odometry:** loading points takes 0.7 s and the map update 4.4 s on 44. `io-and-copies` therefore goes last. The save takes 22 s, and its `session_chunk` round trip is part of that.
 
-**Planned order**, updated from the profile; each is its own change, bit-identical with the precise build:
+**Planned order**, updated from the profile; each is its own change, bit-identical against the manifests:
 1. `deterministic-multithread` (done, [fix 7](#7-deterministic-multithreading));
-2. `banded-normal-matrix` (done, [fix 8](#8-banded-normal-matrix); the Cholesky reuse turned out to change results, see there);
+2. `banded-normal-matrix` (done, [fix 8](#8-banded-normal-matrix)), and the fixed Cholesky pattern (done, [fix 9](#9-fixed-cholesky-pattern));
 3. `ndt-lookup-cache` (it shortens the NDT loops, and its gain after multithreading is to be measured);
 4. a consistency analysis;
 5. `io-and-copies`.
 
-Result-changing levers come later, each judged with `eval_odometry.py`: a fixed-pattern Cholesky analysis (up to 30 % of the odometry, see fix 8), a convergence stop rule, and per-pose blocks in `Consistency`.
+Result-changing levers come later, each judged with `eval_odometry.py`: a convergence stop rule, and per-pose blocks in `Consistency`.
 
 ## Open findings
 

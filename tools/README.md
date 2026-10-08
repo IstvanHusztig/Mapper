@@ -81,12 +81,12 @@ The default output is `<result_folder>/scan_lio_merged.laz`. Set `CLOUDCOMPARE` 
 
 ## Regression baseline (compare_baseline.py, cut_recording)
 
-Refactors must reproduce `44_short` bit for bit, and the full 44 within a tolerance of 1e-6 (see `docs/ARCHITECTURE.md`). Two reference datasets live next to the raw data, outside git:
+Refactors must reproduce `44_short` and the full 44 bit for bit (see `docs/ARCHITECTURE.md`). Two reference datasets live next to the raw data, outside git:
 
 | dataset | what | run time (Release) | manifest |
 |---|---|---|---|
-| `raw data/44_short` | first 30 s of 44, made with `cut_recording` | about 2.5 min | `tools/baseline/44_short.manifest.json` |
-| `raw data/44` | the full recording (loops on every floor) | about 25 min | `tools/baseline/44.manifest.json` |
+| `raw data/44_short` | first 30 s of 44, made with `cut_recording` | about 1.5 min | `tools/baseline/44_short.manifest.json` |
+| `raw data/44` | the full recording (loops on every floor) | about 15 min | `tools/baseline/44.manifest.json` |
 
 Workflow: check **every intermediate commit on `44_short`**, and run the **full 44 once at the end of each change** (only the full recording exercises loop closure). Always run with the Release build and `settings/lidar-vertical.toml`, into a new output folder outside the input folder. Never run two jobs on the same input folder at the same time: they share its `cache/`. A stale `cache/` from an older build is harmless (every run rewrites it).
 
@@ -95,32 +95,17 @@ out/build/x64-Release/bin/dMapper.exe "<raw data>/44_short" settings/lidar-verti
 python tools/compare_baseline.py "<raw data>/44_short_check" tools/baseline/44_short.manifest.json
 ```
 
-The 44 reference was refreshed on 2026-10-03 from the output of the `domain-types` code (step 5a). Every 44 run since step 3 had differed from the 2026-10-01 reference by the same `/fp:fast` last-bit pattern, at most 1e-9 m. The old reference is kept as `raw data/44_baseline_2026-10-01`.
+The baselines were last refreshed on 2026-10-08 by `fixed-pattern-precise-fp`, which changed the compiler's floating-point mode to `/fp:precise` and the Cholesky pattern. Its results differ from the previous (`/fp:fast`) ones by up to 2 cm on `44_short` and about 0.6 m in the route length of the full 44 (see `docs/PERFORMANCE.md`, fixes 9 and 10). The previous references are kept as `raw data/44_baseline_2026-10-08b` and `raw data/44_short_baseline_2026-10-08b`; older ones carry earlier dates.
 
-Both references were refreshed again on 2026-10-03 by `chain-next-window-only`, which deliberately changes the last bits: the window loop places only the next window instead of all later ones (`docs/window-chaining.html`). Its results were within `--tolerance 1e-6` of the old references (44 at most 1e-9, 44_short at most 1e-11), and the manifests and the folders `raw data/44_baseline` and `raw data/44_short_baseline` now hold its output. The previous references are kept as `raw data/44_baseline_2026-10-03b` and `raw data/44_short_baseline_2026-10-03b`.
-
-The full 44 is checked against the manifest first. If that reports differences, check it again with `--tolerance 1e-6` against the baseline output folder `raw data/44_baseline`, which must be kept for this:
+The folders `raw data/44_baseline` and `raw data/44_short_baseline` hold the output the manifests were written from. Keep them: a change that deliberately alters numbers compares its output with them to measure the effect, with `--tolerance`, before it writes new baselines:
 
 ```
 python tools/compare_baseline.py --tolerance 1e-6 "<raw data>/44_check" "<raw data>/44_baseline"
 ```
 
-Why the tolerance: the Release build with `HD_CPU_OPTIMIZATION=AUTO` on an AMD CPU uses `/fp:fast` with whole-program optimization. The compiler may then evaluate floating-point expressions in a different order when unrelated code changes, which changes the last bits of a long run. In step 3 (`logger-progress-ports`), changing only console output moved the 44 trajectories by at most 1e-9, while `44_short` stayed identical.
+To set new baselines after such a change: rename the two folders with a date suffix, move the new output folders in their place, and write the manifests from them with `compare_baseline.py --write-manifest <out> <manifest> --dataset <44|44_short> --params settings/lidar-vertical.toml`.
 
-### Precise build for exact refactor checks
-
-A refactor that reshapes numeric code can change the last bits of the normal (`/fp:fast`) build although it is exact (see `docs/ARCHITECTURE.md`, Decisions). Such a change is checked with a second Release build without `/fp:fast`, built outside the repo's `out/` tree (it is not a preset):
-
-```
-cmake -S . -B <scratch>/bp -G Ninja -DCMAKE_BUILD_TYPE=Release -DHD_CPU_OPTIMIZATION=GENERIC -DCMAKE_C_COMPILER=cl.exe -DCMAKE_CXX_COMPILER=cl.exe
-cmake --build <scratch>/bp --target dMapper
-```
-
-1. Build master this way, run it on `44_short`, and write a manifest of its output: `compare_baseline.py --write-manifest <out> <scratch>/44_short_precise.manifest.json --dataset 44_short --params settings/lidar-vertical.toml --cpu-optimization GENERIC`.
-2. On every commit of the change, rebuild `<scratch>/bp`, run `44_short` again and compare with that manifest: it must be IDENTICAL.
-3. The normal build's `44_short` must then be within `--tolerance 1e-6` of `raw data/44_short_baseline`.
-
-The precise and the normal build differ from each other by millimetres over a run, so never compare one with the other's reference. In `window-loop-steps` (2026-10-03) every commit was precise-identical, while the normal build moved by at most 1e-11.
+There is one build and one floating-point mode (`/fp:precise`), so an exact refactor is bit-identical on both datasets; no second "precise" build is needed.
 
 ### compare_baseline.py
 

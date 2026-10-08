@@ -245,18 +245,13 @@ Steps 8–11 were added on 2026-10-03. They cover the goals that steps 0–7 sti
 - **Refactors must be bit-identical on `44_short`.** A pure refactor step must reproduce the
   `44_short` baseline exactly (trajectories, LAZ, results JSON apart from timing fields). This
   relies on the run being deterministic, which it is, threads included.
-- **The full 44 may differ within 1e-6.** The Release build on this machine uses `/fp:fast` with
-  whole-program optimization, so a change to unrelated code can change floating-point evaluation
-  order and the last bits of the 30-minute run (seen in step 3: at most 1e-9 m). A refactor
-  passes on 44 if every text output is within `--tolerance 1e-6` of the baseline folder (decided
-  2026-10-02). A change that deliberately alters numerical behaviour sets a new baseline in its
-  own commit.
-- **Exactness of a numeric refactor is checked with a precise build** (decided 2026-10-03, in step 6b).
-  Under `/fp:fast` the compiler decides per function whether to reassociate or fuse floating-point
-  operations, so moving locals into a struct already changed `44_short` by 1e-11. A Release build
-  without `/fp:fast` (`HD_CPU_OPTIMIZATION=GENERIC`) may not do that: an exact refactor stays
-  bit-identical there. Such a change checks every commit bit for bit with the precise build against
-  a precise reference from master, and the normal build within `--tolerance 1e-6`.
+- **One floating-point mode, exact refactors are bit-identical** (decided 2026-10-08,
+  `fixed-pattern-precise-fp`). MSVC Release builds use `/fp:precise`; `/fp:fast` gained 0-2 % and made
+  the long run depend on how the compiler ordered sums, which needed a second "precise" build, a second
+  reference and a tolerance rule (decided 2026-10-02 and 2026-10-03, now gone). An exact refactor
+  reproduces `44_short` and the full 44 bit for bit against the two manifests. A change that
+  deliberately alters numerical behaviour sets new baselines in its own commit, after its effect is
+  measured (`tools/compare_baseline.py --tolerance`, `tools/eval_odometry.py`).
 - **Domain names in code.** Use cases are `SplitIntoWindows`, `RunOdometry`, `CloseLoops` and so
   on. "Step 1" and "Step 2" remain only as GUI labels and in the user docs.
 
