@@ -67,6 +67,18 @@ Research (2026-10-08, `research.md` in this folder): the literature agrees that 
 
   The two cell statistics give two families of routes on the cut (about 102 m against about 94 m); the route includes the jitter, so it can't tell which is right. On the full 44 the loop closure had to correct 0.5 to 0.8 m with the previous statistics and 4 to 12 m with every exact-statistics variant tried, so the previous statistics drift less on this recording. Next: the full 44 with v4, v1 and v5 (= v4 + plane 0.3), both builds.
 
+  Full 44, both builds (shipped settings: 1.03 m between the builds, fast = `lio_result_2`; loop closure 0.78 / 0.51 m):
+
+  | Variant | fast vs precise | against `lio_result_2` (fast / precise) | loop closure (fast / precise) | accelerometer windows |
+  |---|---|---|---|---|
+  | v4: projection 0.1 / 0.2 | **0.31 m** | 0.32 / 0.36 m, nowhere above 50 cm | 0.88 / 0.80 m | 88 / 94 |
+  | v1: plane 0.3 | 8.82 m | 0.57 / 8.84 m | 0.29 / 1.55 m | 90 / 89 |
+  | v5: projection 0.1 / 0.2 + plane 0.3 | 7.73 m | 7.72 / 0.96 m | 4.70 / 0.01 m | 30 / 102 |
+  | v6: v4 + continuous accelerometer weight (0.3 to 0.5, median of 5) + offset frozen along the blind direction | 4.39 m | 4.01 / 5.10 m | 4.59 / 0.90 m | 301 / 243 |
+  | v8: projection 0.2 / 0.4 | 1.16 m | 4.22 / 3.18 m | 0.57 / 0.53 m | 47 / 56 |
+
+  Findings: the projection at 0.1 / 0.2 is the only change that helps (1.03 m to 0.31 m between the builds, close to the clean result everywhere); the plane regularization at 0.3 m destabilizes the run on its own and combined; a continuous accelerometer weight up to 0.5 switches the term on in a third of the windows and drifts by metres (the accelerometer is a poor position sensor on this recording, as `docs/degeneracy-information.html` says); a wider projection (0.2 / 0.4) is worse. Several variants (exact statistics 0.12, exact without the accelerometer term, v6, v8) land 3 to 4 m from `lio_result_2` around t = 74 s, position (6.4, -5.9), and agree with each other there: a second place with two families of solutions, where `lio_result_2` is not necessarily the right one. Without ground truth the cloud itself must decide (user's visual check).
+
 - [ ] 3.4 The accelerometer term by a continuous weight instead of the on/off gate (weight from the information ratio, smoothed over the last windows), and the acceleration offset not updated along a blind direction; measured like 3.2.
 - [ ] 3.5 Tuning on the data and the choice for the shipped settings, both builds each, reported variant by variant (builds agree, against `lio_result_2`, loop-closure corrections, metrics, map sharpness). If the specified motion-model behaviour changes, add the delta spec. Commit.
 
