@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <sstream>
 
 namespace
 {
@@ -400,6 +401,32 @@ namespace
             msg << "< " << std::setprecision(1) << std::scientific << params.convergence_delta_threshold;
     }
 
+    // log_window_diagnostics: what one window did, to see a window that stalls or leaps. All displacements are first node to last
+    // node in the world frame: the guess before the iterations (prediction), the result, and what the previous window's final
+    // velocity would give over the same time. time_s counts from the first window's first node.
+    void log_window_diagnostics(int i, const std::vector<Window> &windows, const std::vector<Eigen::Affine3d> &guess, const WindowOptimization &optimization,
+                                const PreviousVelocity &previous, const AccTerm &acc_term, const Eigen::Matrix3d &lidar_translation_information,
+                                const OdometryConfig &params, Logger &logger)
+    {
+        if (!params.log_window_diagnostics)
+            return;
+        const Window &window = windows[i];
+        const double time_s = window.timestamps.front().first - windows[0].timestamps.front().first;
+        const double dt = window.timestamps.back().first - window.timestamps.front().first;
+        const Eigen::Vector3d guess_move = guess.back().translation() - guess.front().translation();
+        const Eigen::Vector3d result_move = window.poses.back().translation() - window.poses.front().translation();
+        const Eigen::Vector3d velocity_move = previous.velocity * dt;
+        const Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eig(lidar_translation_information);
+        const double ratio = eig.eigenvalues().maxCoeff() > 0.0 ? eig.eigenvalues().minCoeff() / eig.eigenvalues().maxCoeff() : 0.0;
+        const auto v = [](const Eigen::Vector3d &x) { std::ostringstream o; o << std::fixed << std::setprecision(3) << x.x() << " " << x.y() << " " << x.z(); return o.str(); };
+        log_info(logger) << "window diagnostics " << i + 1 << ": t " << std::fixed << std::setprecision(2) << time_s << " s, dt " << dt << " s, iterations "
+                         << optimization.last_iteration + 1 << ", delta " << std::scientific << std::setprecision(2) << optimization.delta
+                         << std::fixed << ", start " << v(window.poses.front().translation()) << ", guess move " << v(guess_move)
+                         << ", result move " << v(result_move) << ", previous-velocity move " << (previous.use ? v(velocity_move) : std::string("none"))
+                         << ", result-guess " << v(result_move - guess_move) << ", info ratio " << std::setprecision(3) << ratio << ", weak " << v(eig.eigenvectors().col(0))
+                         << ", acc term " << (acc_term.options.enabled ? "on" : "off");
+    }
+
     // log_iteration_convergence: after how many iterations the window's poses settled, and where fast mode would have stopped
     void log_iteration_convergence(int i, const OdometryConfig &params, const WindowOptimization &optimization, WindowLoopCarry &carry, Logger &logger)
     {
@@ -763,6 +790,7 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
             const std::chrono::duration<double> window_seconds = std::chrono::system_clock::now() - window_start;
             log_window_result(i, windows.size(), optimization, carry.acc_distance, window_seconds.count(), params, logger);
             log_iteration_convergence(i, params, optimization, carry, logger);
+            log_window_diagnostics(i, windows, poses_before_optimization, optimization, previous, acc_term, lidar_translation_information, params, logger);
 
             update_gyro_bias_after_window(windows[i], i, setup, carry, params, logger);
             update_acc_term_after_window(windows[i], i, acc_term, lidar_translation_information, acc_offset, setup, carry, params, logger);

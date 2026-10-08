@@ -65,6 +65,9 @@ struct OdometryConfig
     bool log_iteration_convergence = false;
     // diagnostics only: log the wall-clock time of each pipeline step and of the odometry's phases (results unchanged)
     bool log_stage_timing = false;
+    // diagnostics only: one line per window with its time, iterations, displacement against the guess and the previous
+    // velocity, and the state of the accelerometer term (results unchanged)
+    bool log_window_diagnostics = false;
     int calibration_validation_points = 1000000;
 
     //consistency
