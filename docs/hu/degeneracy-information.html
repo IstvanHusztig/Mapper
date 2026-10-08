@@ -212,6 +212,21 @@ lenne, amelyben az <code>imu_degenerate_information_ratio</code> értékét addi
 degeneráltnak, mint korábban (nagyjából 0.1–0.15). A tesztcsomag már a pontos statisztikán fut, így a folyosóteszt
 normál, sikeres teszt.</p>
 
+<h2>5b. A 2026-10-08-i szellemfal és a degenerációt figyelembe vevő NDT-tagok</h2>
+<p>A 44-es felvételen a <code>/fp:precise</code> build megkettőzött falat rajzolt az első szobába (<code>odometry-stall-fix</code> változás). A fal
+korábban keletkezett, t ≈ 123–126 s-nál, egy a tengelye mentén vak járatban: a gyorsulásmérő-kapcsoló az előző ablak 0,3 alatti arányából
+dönt, és ugyanez a szakasz az egyik buildben 0,19, a másikban 0,38 arányt adott. A tag nélkül a precise build 70 cm-rel lemaradt a járat
+mentén, mert az NDT-térkép ott tartja a pontokat, ahová a korábbi szkennelések tették (a kis Gauss-eloszlások a sík fal menti elcsúszást is
+akadályozzák: a fent leírt hamis merevség), és a 70 cm visszaugrott, amikor az út újra belépett az első szobába.</p>
+<p>A javítás az erre bevett módszer (solution remapping, Zhang, Kaess, Singh 2016, lágy átmenettel): abban az irányban, amelynek részesedése
+Σ n·nᵀ-ből a <code>degenerate_projection_ratio</code> (0,1) alatt van, az NDT-tagok nem hordoznak transzlációs információt, így ott egyedül a
+mozgásmodell helyezi el az ablakot; a <code>degenerate_projection_ratio_full</code> (0,2) értékig az információt lineárisan skálázzuk. A teljes 44-en
+a fast és a precise build így legfeljebb 0,31 m-rel tér el egymástól 1,03 m helyett, mindkettő 0,36 m-en belül marad a tiszta eredménytől, és a
+szellemfal mindkettőből eltűnt (szemrevételezés). Ugyanezen a felvételen kipróbálva és elvetve: a pontos cellastatisztika 0,10–0,15-re csökkentett
+küszöbbel (4–12 m-es hurokzárási korrekciók), a 0,5-ig terjedő folytonos gyorsulásmérő-súly (a tag az ablakok harmadában futott és métereket
+sodródott), valamint a síkbeli irányban 0,3 m-re regularizált sík cellák (kevésbé stabil). A mögötte álló szakirodalmi áttekintés:
+<code>openspec/changes/archive/*odometry-stall-fix/research.md</code>.</p>
+
 <h2>6. Hol található</h2>
 <ul>
   <li>Kiszámítás: <code>optimize_lidar_odometry</code> a <code>src/domain/scan_to_map.cpp</code> fájlban (<code>lidar_translation_information</code>).</li>

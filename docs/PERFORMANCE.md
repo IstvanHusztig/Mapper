@@ -164,6 +164,8 @@ OpenSpec change `fixed-pattern-precise-fp`.
 
 **Fix.** `/fp:fast` is gone from `CMakeLists.txt`; MSVC Release uses `/O2 /GL /fp:precise` everywhere, `/Oi /Ot /Oy` stay. The `/fp:precise` workaround for the `BandedNormalMatrix` test is gone. `44_short` built this way is bit-identical with the old precise reference, so the switch changes nothing but the compiler mode.
 
+**Correction (2026-10-08, change `odometry-stall-fix`).** The size of the change was understated here: compared pose by pose (`tools/trajectory_seams.py`), the two builds differ by up to 1.03 m on the full 44, and the precise build drew a ghost wall. The cause was not the compiler mode but a fragile on/off gate of the accelerometer term in a blind passage, which the last bits tipped; it is fixed by the degeneracy-aware NDT terms (see `docs/degeneracy-information.html`), after which the two builds differ by at most 0.31 m and neither has the ghost wall. A change that alters numbers is now also compared pose by pose, and against a `/fp:fast` build of the same code when it touches the odometry.
+
 **What it costs: new numbers.** Precise and fast results are not the same, and the difference is larger than the earlier "millimetres over a run":
 - `44_short`: the two baselines differ by up to 2 cm in position;
 - the full 44: the calculated route is 215.46 m long against 216.06 m, and some per-window gyro-bias estimates differ by up to 0.19 °/s.

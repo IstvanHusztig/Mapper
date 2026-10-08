@@ -212,6 +212,21 @@ but that mixes the new statistics with the much more frequent accelerometer term
 windows count as degenerate as before (roughly 0.1–0.15). The test suite already runs on the exact statistics, so the corridor
 test is a normal passing test.</p>
 
+<h2>5b. The ghost wall of 2026-10-08 and the degeneracy-aware NDT terms</h2>
+<p>On recording 44 the <code>/fp:precise</code> build drew a doubled wall in the first room (change <code>odometry-stall-fix</code>). The
+wall was made earlier, at t ≈ 123–126 s, in a passage blind along its axis: the accelerometer gate decides by the previous window's
+ratio below 0.3, and the same stretch gave 0.19 in one build and 0.38 in the other. Without the term the precise build fell 70 cm
+behind along the passage, because the NDT map holds the points where earlier scans put them (the small Gaussians constrain sliding
+along a flat wall, the false stiffness described above), and the 70 cm snapped back when the path re-entered the first room.</p>
+<p>The fix is the established one for this (solution remapping, Zhang, Kaess, Singh 2016, with a soft ramp): along a direction whose
+share of Σ n·nᵀ is below <code>degenerate_projection_ratio</code> (0.1) the NDT terms carry no translation information, so the motion
+model alone places the window there; up to <code>degenerate_projection_ratio_full</code> (0.2) the information is scaled linearly. On the full
+44 the fast and precise builds then differ by at most 0.31 m instead of 1.03 m, both stay within 0.36 m of the clean result, and the
+ghost wall is gone in both (visual check). Tried and rejected on the same recording: the exact cell statistics with the threshold
+lowered to 0.10–0.15 (loop closure corrections of 4–12 m), a continuous accelerometer weight up to 0.5 (the term ran in a third of the
+windows and drifted by metres), and planar cells regularized to 0.3 m in the plane (less stable). The literature survey behind this
+is in <code>openspec/changes/archive/*odometry-stall-fix/research.md</code>.</p>
+
 <h2>6. Where to find it</h2>
 <ul>
   <li>Computed: <code>optimize_lidar_odometry</code> in <code>src/domain/scan_to_map.cpp</code> (<code>lidar_translation_information</code>).</li>
