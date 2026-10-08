@@ -24,5 +24,9 @@ Close the GUI before building. Never run two jobs on the same input folder at on
 
 ## 4. Full run and docs
 
-- [ ] 4.1 Full 44 in the background with the shipped settings and `log_stage_timing` on a scratchpad copy of the settings, from a copy of the binaries. Verify: IDENTICAL with `tools/baseline/44.manifest.json`; report odometry and whole-run times. Commit.
-- [ ] 4.2 Docs: `docs/PERFORMANCE.md` (fix entry with the table and the checks, the plan), `docs/performance.html` and `docs/hu/performance.html`, run times in `CLAUDE.md` and `tools/README.md` if they change. Verify: the numbers match the 1.1, 2.1, 3.1 and 4.1 reports. Commit, archive, push.
+- [x] 4.1 Full 44 in the background with the shipped settings and `log_stage_timing` on a scratchpad copy of the settings, from a copy of the binaries. Verify: IDENTICAL with `tools/baseline/44.manifest.json`; report odometry and whole-run times. Commit.
+
+  Result: full 44 from the copied binaries with `log_stage_timing` on: differs from `tools/baseline/44.manifest.json` only in the parameter file (the timing setting), every data file identical. Odometry 516.7 → 490.5 s, processing time 627.6 → 600.6 s, wall-clock 622 s; NDT loops 1.613 ms (indoor) and 0.810 ms (outdoor) per iteration; consistency 45.0 s (unchanged). No new baselines.
+- [x] 4.2 Docs: `docs/PERFORMANCE.md` (fix entry with the table and the checks, the plan), `docs/performance.html` and `docs/hu/performance.html`, run times in `CLAUDE.md` and `tools/README.md` if they change. Verify: the numbers match the 1.1, 2.1, 3.1 and 4.1 reports. Commit, archive, push.
+
+  Result: `docs/PERFORMANCE.md` fix 12, both performance pages (cards, a sixth chart bar, step table, "what is left"), full-44 run time in `CLAUDE.md` and `tools/README.md` (11 → 10 min).

@@ -3,7 +3,7 @@
 This page lists the changes that made dMapper faster or kept it from becoming slower: what was slow, what changed, what it gained, and how the result was checked. It also lists the settings that trade speed for accuracy or reproducibility, and the open performance findings.
 
 Times are for the reference recordings in `raw data/`, with the Release build and `settings/lidar-vertical.toml`:
-- `44` is the full recording, 690 windows, about 11 min (30 min before the performance fixes);
+- `44` is the full recording, 690 windows, about 10 min (30 min before the performance fixes);
 - `44_short` is its first 30 s, 70 windows, about 1.5 min (3.5 min before).
 
 ## Summary
@@ -21,6 +21,7 @@ Times are for the reference recordings in `raw data/`, with the Release build an
 | [Fixed Cholesky pattern](#9-fixed-cholesky-pattern) | 2026-10-08 | window optimizer | 44: odometry 689 → 510 s (−26 %), whole run about 1090 → 908 s | within 1e-10 |
 | [One floating-point mode (`/fp:precise`)](#10-one-floating-point-mode) | 2026-10-08 | build | no speed cost measured | results change by cm–dm over the 44 (new baselines) |
 | [Faster consistency](#11-faster-consistency) | 2026-10-08 | consistency | 44: consistency (10 passes) 363.6 → 44.7 s (−88 %), processing time 888 → 628 s | within 1e-10 (new baselines) |
+| [Stored NDT cell inverses](#12-stored-ndt-cell-inverses) | 2026-10-08 | window optimizer, consistency | 44: odometry 517 → 490 s (−5 %), processing time 628 → 601 s | bit-identical |
 
 ## 1. Sparse band of the normal matrix
 
@@ -188,6 +189,20 @@ OpenSpec change `fixed-pattern-precise-fp`.
 
 OpenSpec change `consistency-speedup`.
 
+## 12. Stored NDT cell inverses
+
+**Problem.** In each of the 69,000 Levenberg–Marquardt iterations of the full 44, every point that hit an NDT cell inverted that cell's 3×3 covariance again (`cov.inverse()` and the two threshold tests), and converted its node's pose to Tait-Bryan form (trigonometry), although both depend only on the cell or the node. A micro-benchmark (serial, 600,000 points against the synthetic room and corridor maps) split the work of one point into: transform 5 %, cell index + `find` 11 %, inverse + thresholds 19 %, pose conversion 12 %, the two generated terms 53 %.
+
+**Fix.** `NdtBucket` stores `cov_inverse` and whether the cell is usable; `update_rgd` refreshes the cells it added or changed once, at its end (`refresh_cell_inverse`), and the loops read them through `ndt_cell_inverse` (a cell that never went through `update_rgd` is inverted on the spot with the same expression). The node's pose is converted once per node instead of once per point, in both NDT loops and in `Consistency`. The values are computed by the same expressions, so the results are the same bits.
+
+**Effect** (`44_short`, 7000 calls each): indoor loop 1.905 → 1.694 ms (−11 %), outdoor loop 0.957 → 0.836 ms (−13 %), odometry 51.9 → 49.8 s. Full 44: indoor 1.613 ms and outdoor 0.810 ms per iteration, odometry 516.7 → 490.5 s, processing time 628 → 601 s (wall-clock 622 s). The gain is smaller than the serial benchmark promised, because the loops already run on 16 threads and are partly memory-bound.
+
+**Not done.** A flat lookup table instead of `unordered_map::find` (task 3.1 of the change): `find` was about 11 % of the serial loop work, so about 4 % of the odometry at best, for a changed container read by several threads.
+
+**Checks.** `tests/ndt_map_test.cpp`: after one and after two `update_rgd` calls (both statistics modes) every cell's stored inverse equals `cov.inverse()` bit for bit and the usable flag matches the thresholds. `tests/scan_to_map_test.cpp`: an optimizer run with the stored inverses equals one inverting on the spot, bit for bit. `ctest` passes; `44_short` IDENTICAL with its manifest; the full 44 differs from its manifest only in the parameter file (the timing setting of the run).
+
+OpenSpec change `ndt-lookup-cache`.
+
 ## Settings that trade speed
 
 | Setting | Default | Effect on speed | Cost |
@@ -294,7 +309,7 @@ The debug setting `log_stage_timing` (`[lidar_odometry_debug_info]`, off by defa
 **Planned order**, updated from the profile; each is its own change, bit-identical against the manifests:
 1. `deterministic-multithread` (done, [fix 7](#7-deterministic-multithreading));
 2. `banded-normal-matrix` (done, [fix 8](#8-banded-normal-matrix)), and the fixed Cholesky pattern (done, [fix 9](#9-fixed-cholesky-pattern));
-3. `ndt-lookup-cache` (it shortens the NDT loops, and its gain after multithreading is to be measured);
+3. `ndt-lookup-cache` (done, [fix 12](#12-stored-ndt-cell-inverses); the flat lookup table was measured as not worth it);
 4. the consistency analysis (done, [fix 11](#11-faster-consistency));
 5. `io-and-copies`.
 
