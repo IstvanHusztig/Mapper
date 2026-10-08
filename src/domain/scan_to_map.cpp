@@ -8,6 +8,7 @@
 
 #include "angle_units.h"
 #include "normal_equations.h"
+#include <algorithm>
 #include <cassert>
 #include <numeric>
 
@@ -75,8 +76,18 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
     // sum of n * n^T over the surface normals the points are matched to (per node): geometric constraint of the
     // translation, independent of the in-plane pull of the NDT cells
     std::vector<Eigen::Matrix3d> normal_information;
-    if (lidar_translation_information)
+    // degeneracy-aware NDT terms: the point terms are first summed per node and enter the normal matrix only after their
+    // translation part is projected away from the directions the geometry does not constrain (see the end of the NDT loops)
+    const bool project_degenerate = scan_to_map.degenerate_projection_ratio_full > 0.0;
+    if (lidar_translation_information || project_degenerate)
         normal_information.assign(window.poses.size(), Eigen::Matrix3d::Zero());
+    std::vector<Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> ndt_blocks;
+    std::vector<Eigen::Matrix<double, 6, 1>> ndt_rhs;
+    if (project_degenerate)
+    {
+        ndt_blocks.assign(window.poses.size(), Eigen::Matrix<double, 6, 6, Eigen::RowMajor>::Zero());
+        ndt_rhs.assign(window.poses.size(), Eigen::Matrix<double, 6, 1>::Zero());
+    }
     setup_timer.stop();
 
     const auto hessian_fun_indoor = [&](const Point3Di &intermediate_points_i, const TaitBryanPose &pose_s)
@@ -158,8 +169,16 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
         }
 
         // only this point's node writes this block (see for_each_node), so no lock is needed
-        AtPAndt.add_diagonal_block6(c, AtPA);
-        AtPBndt.block<6, 1>(c, 0) -= AtPB;
+        if (project_degenerate)
+        {
+            ndt_blocks[intermediate_points_i.index_pose] += AtPA;
+            ndt_rhs[intermediate_points_i.index_pose] -= AtPB;
+        }
+        else
+        {
+            AtPAndt.add_diagonal_block6(c, AtPA);
+            AtPBndt.block<6, 1>(c, 0) -= AtPB;
+        }
         if (!normal_information.empty() && this_bucket.normal_vector.squaredNorm() > 0.5)
             normal_information[intermediate_points_i.index_pose] += this_bucket.normal_vector * this_bucket.normal_vector.transpose();
     };
@@ -276,8 +295,16 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
                 AtPB *= planarity;
             }
 
-            AtPAndt.add_diagonal_block6(c, AtPA);
-            AtPBndt.block<6, 1>(c, 0) -= AtPB;
+            if (project_degenerate)
+            {
+                ndt_blocks[intermediate_points_i.index_pose] += AtPA;
+                ndt_rhs[intermediate_points_i.index_pose] -= AtPB;
+            }
+            else
+            {
+                AtPAndt.add_diagonal_block6(c, AtPA);
+                AtPBndt.block<6, 1>(c, 0) -= AtPB;
+            }
         };
 
         PhaseTimer outdoor_timer(phase(&ScanToMapTiming::ndt_outdoor));
@@ -285,6 +312,47 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
     }
 
     PhaseTimer motion_terms_timer(phase(&ScanToMapTiming::motion_terms));
+
+    // degeneracy-aware NDT terms: the window's geometric information sum(n * n^T) tells which translation directions the
+    // matched surfaces constrain; along a direction with a small share (eigenvalue / largest) the NDT terms are scaled
+    // down to nothing (scale s from 0 below degenerate_projection_ratio to 1 at degenerate_projection_ratio_full), so the
+    // motion model alone places the window there. With M = diag(P, I), P = sum(s_k * v_k * v_k^T), a node's block B and
+    // right-hand side g become M B M and M g. Nothing is multiplied when every direction keeps s = 1.
+    if (project_degenerate)
+    {
+        Eigen::Matrix3d info = Eigen::Matrix3d::Zero();
+        for (const auto &ni : normal_information)
+            info += ni;
+        const Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eig(info);
+        const double largest = eig.eigenvalues().maxCoeff();
+        const double r0 = scan_to_map.degenerate_projection_ratio;
+        const double r1 = scan_to_map.degenerate_projection_ratio_full;
+        Eigen::Matrix3d P = Eigen::Matrix3d::Zero();
+        bool all_kept = true;
+        for (int k = 0; k < 3; k++)
+        {
+            const double ratio = largest > 0.0 ? eig.eigenvalues()(k) / largest : 0.0;
+            const double s = r1 > r0 ? std::clamp((ratio - r0) / (r1 - r0), 0.0, 1.0) : (ratio < r0 ? 0.0 : 1.0);
+            all_kept = all_kept && s == 1.0;
+            P += s * eig.eigenvectors().col(k) * eig.eigenvectors().col(k).transpose();
+        }
+        Eigen::Matrix<double, 6, 6> M = Eigen::Matrix<double, 6, 6>::Identity();
+        M.topLeftCorner<3, 3>() = P;
+        for (int k = 0; k < n_nodes; k++)
+        {
+            if (all_kept)
+            {
+                AtPAndt.add_diagonal_block6(k * 6, ndt_blocks[k]);
+                AtPBndt.block<6, 1>(k * 6, 0) += ndt_rhs[k];
+            }
+            else
+            {
+                const Eigen::Matrix<double, 6, 6, Eigen::RowMajor> projected = M * ndt_blocks[k] * M;
+                AtPAndt.add_diagonal_block6(k * 6, projected);
+                AtPBndt.block<6, 1>(k * 6, 0) += M * ndt_rhs[k];
+            }
+        }
+    }
 
     // geometric translation constraint of this window (world frame, summed over the nodes)
     if (lidar_translation_information)

@@ -14,6 +14,8 @@ ScanToMapOptions get_scan_to_map_options(const OdometryConfig &config)
     o.use_norm = config.ablation_study_use_norm;
     o.use_hierarchical_rgd = config.ablation_study_use_hierarchical_rgd;
     o.use_view_point_and_normal_vectors = config.ablation_study_use_view_point_and_normal_vectors;
+    o.degenerate_projection_ratio = config.degenerate_projection_ratio;
+    o.degenerate_projection_ratio_full = config.degenerate_projection_ratio_full;
     return o;
 }
 

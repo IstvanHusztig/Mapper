@@ -22,6 +22,9 @@ struct ScanToMapOptions
     bool use_norm = false;
     bool use_hierarchical_rgd = false;
     bool use_view_point_and_normal_vectors = false;
+    // degeneracy-aware NDT terms (see OdometryConfig::degenerate_projection_ratio); ratio_full = 0: off
+    double degenerate_projection_ratio = 0.0;
+    double degenerate_projection_ratio_full = 0.0;
 };
 
 // motion model of a window: correction of the IMU frame and the sigmas of the consecutive-node and fix-origin priors

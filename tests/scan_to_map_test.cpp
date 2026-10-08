@@ -518,3 +518,71 @@ TEST_CASE("scan-to-map: stored cell inverses equal inverting on the spot, bit fo
             CHECK(identical(cached, on_the_spot));
         }
 }
+
+namespace
+{
+    // one window of the corridor or room with the degeneracy-aware NDT terms: the guess (also the motion model) is the truth
+    // moved by a shift growing linearly from 0 at the first node (held by the fix-origin prior) to `shift` at the last; 30 iterations
+    std::vector<Eigen::Affine3d> run_projected(const Scene &s, const Eigen::Vector3d &shift, double ratio, double ratio_full, bool multithread)
+    {
+        OdometryConfig c = test_config();
+        c.use_gyro_bias_estimation = false;
+        Options o = options_from(c);
+        o.scan_to_map.multithread = multithread;
+        o.scan_to_map.degenerate_projection_ratio = ratio;
+        o.scan_to_map.degenerate_projection_ratio_full = ratio_full;
+        Maps maps = build_maps(s, o.scan_to_map);
+        const std::vector<Eigen::Affine3d> truth = true_poses();
+        std::vector<Point3Di> points = observe(s, truth);
+        std::vector<Eigen::Affine3d> guess = truth;
+        for (size_t k = 0; k < guess.size(); k++)
+            guess[k].translation() += shift * (double(k) / double(guess.size() - 1));
+        Window w = make_window(guess);
+        NullLogger logger;
+        run_iterations(points, w, maps, o, 5.0, 30, logger);
+        return w.poses;
+    }
+}
+
+// change odometry-stall-fix: along a direction the geometry doesn't constrain, the NDT terms carry no translation information,
+// so the window stays where the motion model puts it, while the constrained directions are still corrected
+TEST_CASE("scan-to-map: degeneracy-aware NDT terms leave the blind direction to the motion model")
+{
+    const Eigen::Vector3d shift(0.05, 0.03, 0.0); // at the last node 5 cm along the corridor (x), 3 cm across (y)
+    const std::vector<Eigen::Affine3d> truth = true_poses();
+    const std::vector<Eigen::Affine3d> projected = run_projected(corridor(), shift, 0.1, 0.2, true);
+    const std::vector<Eigen::Affine3d> plain = run_projected(corridor(), shift, 0.0, 0.0, true);
+    // largest change along the axis (against the guess) and largest error across it (against the truth)
+    const auto measure = [&](const std::vector<Eigen::Affine3d> &poses, double &along, double &across)
+    {
+        along = across = 0.0;
+        for (size_t k = 0; k < truth.size(); k++)
+        {
+            const Eigen::Vector3d d = poses[k].translation() - truth[k].translation();
+            along = std::max(along, std::abs(d.x() - shift.x() * (double(k) / double(truth.size() - 1))));
+            across = std::max(across, std::abs(d.y()));
+        }
+    };
+    double along = 0.0, across = 0.0, plain_along = 0.0, plain_across = 0.0;
+    measure(projected, along, across);
+    measure(plain, plain_along, plain_across);
+    MESSAGE("corridor: change along the axis ", along * 1000.0, " mm with projection, ", plain_along * 1000.0, " mm without; error across ",
+            across * 1000.0, " mm with, ", plain_across * 1000.0, " mm without (30 mm before)");
+    CHECK(along < 0.002);                   // the shift along the axis is kept (only the motion model acts there)
+    CHECK(across < 0.25 * 0.03);            // across the axis the LiDAR still corrects most of the 30 mm (the rest is the
+    CHECK(across <= plain_across + 0.001);  // motion model's pull towards the guess, the same as without the projection)
+
+    // multithreaded equals single-threaded
+    const std::vector<Eigen::Affine3d> single = run_projected(corridor(), shift, 0.1, 0.2, false);
+    for (size_t k = 0; k < truth.size(); k++)
+        CHECK(projected[k].matrix() == single[k].matrix());
+}
+
+TEST_CASE("scan-to-map: degeneracy-aware NDT terms change nothing in a closed room")
+{
+    const Eigen::Vector3d shift(0.02, -0.02, 0.01);
+    const std::vector<Eigen::Affine3d> off = run_projected(room(), shift, 0.0, 0.0, true);
+    const std::vector<Eigen::Affine3d> on = run_projected(room(), shift, 0.1, 0.2, true); // the room's ratio is about 0.48
+    for (size_t k = 0; k < off.size(); k++)
+        CHECK(off[k].matrix() == on[k].matrix());
+}

@@ -472,10 +472,10 @@ namespace
         for (int i = 0; i < pp.size(); i++)
             pp[i].point = state.m_g * pp[i].point;
 
-        update_rgd(params.in_out_params_indoor, state.buckets_indoor, pp, state.m_g.translation(), params.use_exact_ndt_bucket_statistics);
+        update_rgd(params.in_out_params_indoor, state.buckets_indoor, pp, state.m_g.translation(), params.use_exact_ndt_bucket_statistics, params.ndt_plane_in_plane_sigma_m);
 
         if (params.ablation_study_use_hierarchical_rgd){
-            update_rgd(params.in_out_params_outdoor, state.buckets_outdoor, pp, state.m_g.translation(), params.use_exact_ndt_bucket_statistics);
+            update_rgd(params.in_out_params_outdoor, state.buckets_outdoor, pp, state.m_g.translation(), params.use_exact_ndt_bucket_statistics, params.ndt_plane_in_plane_sigma_m);
         }
     }
 
@@ -549,10 +549,10 @@ namespace
                 carry.points_global = decimate(carry.points_global, params.decimation, params.decimation, params.decimation);
             }
 
-            update_rgd(params.in_out_params_indoor, state.buckets_indoor, carry.points_global, window.poses[0].translation(), params.use_exact_ndt_bucket_statistics);
+            update_rgd(params.in_out_params_indoor, state.buckets_indoor, carry.points_global, window.poses[0].translation(), params.use_exact_ndt_bucket_statistics, params.ndt_plane_in_plane_sigma_m);
             if (params.ablation_study_use_hierarchical_rgd)
             {
-                update_rgd(params.in_out_params_outdoor, state.buckets_outdoor, carry.points_global, window.poses[0].translation(), params.use_exact_ndt_bucket_statistics);
+                update_rgd(params.in_out_params_outdoor, state.buckets_outdoor, carry.points_global, window.poses[0].translation(), params.use_exact_ndt_bucket_statistics, params.ndt_plane_in_plane_sigma_m);
             }
         }
         else
@@ -564,10 +564,10 @@ namespace
                 pp.point = window.poses[intermediate_points[j].index_pose] * pp.point;
                 pg.push_back(pp);
             }
-            update_rgd(params.in_out_params_indoor, state.buckets_indoor, pg, window.poses[0].translation(), params.use_exact_ndt_bucket_statistics);
+            update_rgd(params.in_out_params_indoor, state.buckets_indoor, pg, window.poses[0].translation(), params.use_exact_ndt_bucket_statistics, params.ndt_plane_in_plane_sigma_m);
             if (params.ablation_study_use_hierarchical_rgd)
             {
-                update_rgd(params.in_out_params_outdoor, state.buckets_outdoor, pg, window.poses[0].translation(), params.use_exact_ndt_bucket_statistics);
+                update_rgd(params.in_out_params_outdoor, state.buckets_outdoor, pg, window.poses[0].translation(), params.use_exact_ndt_bucket_statistics, params.ndt_plane_in_plane_sigma_m);
             }
         }
     }

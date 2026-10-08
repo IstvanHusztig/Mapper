@@ -53,6 +53,11 @@ struct OdometryConfig
     // NDT map cells: true = mean, covariance and normal of all of a cell's points; false = the previous statistics
     // (first point as mean, normal fixed from the first 3 points)
     bool use_exact_ndt_bucket_statistics = false;
+    // planar NDT cells constrain mainly along their normal (Generalized-ICP style): when a cell of the odometry map is planar
+    // (its smallest spread below a third of the next one), its inverse covariance is formed with the in-plane variances
+    // raised to at least ndt_plane_in_plane_sigma_m^2, so the cell no longer holds points in place along its surface
+    // (false stiffness along a passage); 0 = off (the cell's own covariance)
+    double ndt_plane_in_plane_sigma_m = 0.0;
 
     //lidar-imu extrinsics (applied to raw points)
     double lidar_imu_lever_arm_x_m = 0.00667;
@@ -161,6 +166,13 @@ struct OdometryConfig
     double imu_degenerate_information_ratio = 0.05;
     double imu_degenerate_max_duration_s = 15.0;
     double imu_degenerate_translation_sigma_m = 3e-4; // lidar_odometry_motion_model_x/y/z_1_sigma_m while the term is active
+    // degeneracy-aware scan-to-map (solution remapping): along a direction whose share of the window's geometric
+    // information (eigenvalue / largest eigenvalue of sum(n * n^T) over the matched surface normals) is below
+    // degenerate_projection_ratio, the NDT terms carry no translation information, so the motion model (prediction,
+    // velocity continuity, accelerometer) decides there and the map can't drag the pose along a blind passage; between
+    // it and degenerate_projection_ratio_full the NDT information is scaled linearly. degenerate_projection_ratio_full = 0: off
+    double degenerate_projection_ratio = 0.0;
+    double degenerate_projection_ratio_full = 0.0;
 
     // motion_model first trajectory node prior uncertainty
     double lidar_odometry_motion_model_fix_origin_x_1_sigma_m = 0.000001;

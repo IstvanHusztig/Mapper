@@ -293,3 +293,28 @@ TEST_CASE("update_rgd: every cell carries the inverse of its covariance, refresh
         CHECK(std::memcmp(inverse->data(), expected.data(), 9 * sizeof(double)) == 0);
     }
 }
+
+TEST_CASE("refresh_cell_inverse: a planar cell constrains along its normal, in the plane at most 1 / sigma^2; other cells unchanged")
+{
+    // a cell on a wall facing z: 5 mm across, 4 cm in the plane (a filled 0.15 m cell)
+    NdtBucket wall;
+    wall.cov = Eigen::Vector3d(0.04 * 0.04, 0.04 * 0.04, 0.005 * 0.005).asDiagonal();
+    NdtBucket off = wall;
+    refresh_cell_inverse(off);
+    const Eigen::Matrix3d plain = wall.cov.inverse();
+    CHECK(std::memcmp(off.cov_inverse.data(), plain.data(), 9 * sizeof(double)) == 0);
+
+    refresh_cell_inverse(wall, 0.5);
+    const Eigen::Vector3d nz = Eigen::Vector3d::UnitZ();
+    CHECK(nz.dot(wall.cov_inverse * nz) == doctest::Approx(1.0 / (0.005 * 0.005)).epsilon(1e-9));
+    for (const Eigen::Vector3d &d : {Eigen::Vector3d(Eigen::Vector3d::UnitX()), Eigen::Vector3d(Eigen::Vector3d::UnitY()), Eigen::Vector3d(1, 1, 0).normalized()})
+        CHECK(d.dot(wall.cov_inverse * d) == doctest::Approx(1.0 / (0.5 * 0.5)).epsilon(1e-9));
+    CHECK(wall.inverse_usable);
+
+    // a cell spread in every direction (not planar) keeps its own inverse, bit for bit
+    NdtBucket blob;
+    blob.cov = Eigen::Vector3d(0.010, 0.012, 0.011).asDiagonal();
+    refresh_cell_inverse(blob, 0.5);
+    const Eigen::Matrix3d blob_plain = blob.cov.inverse();
+    CHECK(std::memcmp(blob.cov_inverse.data(), blob_plain.data(), 9 * sizeof(double)) == 0);
+}

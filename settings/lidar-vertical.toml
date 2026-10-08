@@ -51,6 +51,8 @@ loop_closure_edge_sigma_m = 0.05
 loop_closure_edge_sigma_deg = 0.3
 
 [imu_translation]
+degenerate_projection_ratio = 0.0
+degenerate_projection_ratio_full = 0.0
 # accelerometer as a soft measurement of the change of velocity, only where the LiDAR geometry does not
 # constrain the translation (corridor turnaround, stairwell), for at most 15 s per stretch; tested on b1/42/43
 use_imu_acceleration_term = true
@@ -101,6 +103,7 @@ resolution_Z = 0.4
 max_distance_lidar = 25.0
 min_distance_lidar = 0.15
 min_distance_lidar_outdoor_grid = 1.0
+ndt_plane_in_plane_sigma_m = 0.0
 nr_iter = 100
 lm_factor_initial = 5.0
 sliding_window_trajectory_length_threshold = 200.0
