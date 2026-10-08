@@ -56,6 +56,17 @@ Research (2026-10-08, `research.md` in this folder): the literature agrees that 
 - [ ] 3.3 Degeneracy-aware NDT terms (code written, off by default: `degenerate_projection_ratio`, `degenerate_projection_ratio_full`): the NDT node terms are summed per node and their translation part projected away from directions with a small share of the window's geometric information, with a linear ramp. Kept as an option to measure after 3.2; tests: in the synthetic corridor a guess shifted along the axis keeps its shift while across the axis it is corrected, the closed room is unchanged, multithreaded equals single-threaded. Golden TOML files in their own commit.
 
   Code (committed, off by default): `degenerate_projection_ratio`, `degenerate_projection_ratio_full` (`[imu_translation]`); tests: in the synthetic corridor (shift growing to 5 cm along and 3 cm across at the last node) the change along the axis is 0.013 mm with the projection against 0.26 mm without, the error across falls from 30 mm to 5.8 mm in both (the rest is the motion model's pull towards the guess), multithreaded equals single-threaded bit for bit; the closed room is bit-identical with and without. Golden TOML files regenerated in their own commit; `ctest` passes; `44_short` identical data with both settings off. Measurements: below.
+  Measurements on the cut `44_deg` (both builds; the shipped settings give 6.30 m between the builds):
+
+  | Variant | fast vs precise | route fast / precise | accelerometer windows fast / precise |
+  |---|---|---|---|
+  | v1: previous statistics, `ndt_plane_in_plane_sigma_m` 0.3 | 0.54 m | 101.9 / 104.1 m | 15 / 18 |
+  | v2: exact statistics, plane 0.3, gate 0.12 | 0.68 m | 94.7 / 93.8 m | 27 / 24 |
+  | v3: exact statistics, plane 0.3, projection 0.1 / 0.2, gate 0.12 | 3.01 m | 93.3 / 90.1 m | 59 / 55 |
+  | v4: previous statistics, projection 0.1 / 0.2 | 0.21 m | 102.6 / 102.3 m | 16 / 17 |
+
+  The two cell statistics give two families of routes on the cut (about 102 m against about 94 m); the route includes the jitter, so it can't tell which is right. On the full 44 the loop closure had to correct 0.5 to 0.8 m with the previous statistics and 4 to 12 m with every exact-statistics variant tried, so the previous statistics drift less on this recording. Next: the full 44 with v4, v1 and v5 (= v4 + plane 0.3), both builds.
+
 - [ ] 3.4 The accelerometer term by a continuous weight instead of the on/off gate (weight from the information ratio, smoothed over the last windows), and the acceleration offset not updated along a blind direction; measured like 3.2.
 - [ ] 3.5 Tuning on the data and the choice for the shipped settings, both builds each, reported variant by variant (builds agree, against `lio_result_2`, loop-closure corrections, metrics, map sharpness). If the specified motion-model behaviour changes, add the delta spec. Commit.
 
