@@ -82,6 +82,19 @@ Close the GUI before building. Never run two jobs on the same input folder at on
 
   The target is the builds within a few centimetres, at least clearly below today's 0.31 m. Pick the shipped settings by that. The user checks the cloud for ghost walls (first room, t ≈ 74 s area). If no variant beats today's projection, keep the projection shipped and record why. Commit.
 
+
+  **Paused by the user on 2026-10-09 ("it doesn't help"); this task is not done.** Measured so far (full 44):
+  - **Shipped settings, precise build:** identical data to `tools/baseline/44.manifest.json` (only the parameter file differs, by the new keys), so the ratio projection is unchanged by this change's code.
+  - **SNR test at s = 10** (ratio off), both builds:
+    - the builds differ by 7.45 m (shipped projection: 0.31 m);
+    - against `44_baseline`, 9.60 m for fast and 6.78 m for precise;
+    - loop closure accepted 3 / 8 loops, with corrections of 6.40 / 5.19 m;
+    - route 605 / 639 m (about 550 m shipped);
+    - processing time 714 / 672 s (shipped 587 s, so 15 to 20 % slower, over the 5 % budget).
+  - **What improved is rotation consistency:** window yaw difference 0.91 to 1.00 (1.38 shipped), spikes above 3 deg 1 (5), final yaw about 6 deg from the gyro (10.5 deg). Scaling down translation and rotation in about a fifth of the windows lets the motion model drift by metres.
+  - The s = 5 pair was stopped before it was compared.
+  - **Outcome for now:** the shipped settings stay as they are (ratio projection 0.1 / 0.2). The detector, the attenuation and the diagnostics stay in the code, off by default, and tested.
+  - **Possible resumption:** use the test for rotation only and keep the ratio projection for translation; measure the cost first.
 ## 4. Baselines and docs
 
 - [ ] 4.1 If the shipped settings change: new baselines (old folders renamed with a date suffix, both manifests rewritten from the final code).
