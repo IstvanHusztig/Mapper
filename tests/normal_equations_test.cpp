@@ -2,6 +2,10 @@
 
 #include "normal_equations.h"
 
+#include <algorithm>
+#include <cmath>
+#include <random>
+
 TEST_CASE("pose_band_to_sparse keeps the pose band and the extra rows and columns")
 {
     const int n_pose = 12;
@@ -47,4 +51,156 @@ TEST_CASE("SumBlocks adds each block at its offset and subtracts its right-hand 
     }
     CHECK(AtPA(0, 6) == 0.0);
     CHECK(AtPA(6, 0) == 0.0);
+}
+
+namespace
+{
+    // the same additions to a dense matrix and to the banded one, in the same order
+    struct DenseAndBand
+    {
+        Eigen::MatrixXd dense;
+        BandedNormalMatrix band;
+        int n_pose;
+
+        DenseAndBand(int n_pose_params, int n_extra, int half_width)
+            : dense(Eigen::MatrixXd::Zero(n_pose_params + n_extra, n_pose_params + n_extra)), band(n_pose_params, n_extra, half_width), n_pose(n_pose_params)
+        {
+        }
+
+        void add(int r, int c, double v)
+        {
+            dense(r, c) += v;
+            band.add(r, c, v);
+        }
+    };
+
+    // the banded matrix as a sparse matrix is the dense one's band conversion: same pattern, same bits
+    void check_same_as_dense(const DenseAndBand &x, int half_width)
+    {
+        const Eigen::SparseMatrix<double> reference = pose_band_to_sparse(x.dense, x.n_pose, half_width);
+        const Eigen::SparseMatrix<double> s = x.band.to_sparse();
+        REQUIRE(s.isCompressed());
+        REQUIRE(reference.isCompressed());
+        REQUIRE(s.nonZeros() == reference.nonZeros());
+        bool same_pattern = true, same_values = true;
+        for (int k = 0; k <= s.outerSize(); k++)
+            same_pattern = same_pattern && s.outerIndexPtr()[k] == reference.outerIndexPtr()[k];
+        for (int k = 0; k < s.nonZeros(); k++)
+        {
+            same_pattern = same_pattern && s.innerIndexPtr()[k] == reference.innerIndexPtr()[k];
+            same_values = same_values && s.valuePtr()[k] == reference.valuePtr()[k];
+        }
+        CHECK(same_pattern);
+        CHECK(same_values);
+    }
+}
+
+TEST_CASE("BandedNormalMatrix: the sums are those of the dense matrix, bit for bit")
+{
+    for (const int n_extra : {0, 3, 6})
+        for (const int half_width : {17, 113})
+        {
+            CAPTURE(n_extra);
+            CAPTURE(half_width);
+            const int n_nodes = 40;
+            const int n_pose = n_nodes * 6;
+            DenseAndBand x(n_pose, n_extra, half_width);
+            std::mt19937 rng(5);
+            std::uniform_real_distribution<double> value(-1e3, 1e3);
+            std::uniform_int_distribution<int> any_node(0, n_nodes - 1);
+            std::uniform_int_distribution<int> any_extra(0, std::max(0, n_extra - 1));
+
+            for (int round = 0; round < 3; round++)
+            {
+                // diagonal 6x6 blocks, several additions per block (the NDT point terms)
+                for (int i = 0; i < 400; i++)
+                {
+                    const int k = any_node(rng);
+                    Eigen::Matrix<double, 6, 6, Eigen::RowMajor> block;
+                    for (int r = 0; r < 6; r++)
+                        for (int c = 0; c < 6; c++)
+                            block(r, c) = value(rng);
+                    for (int r = 0; r < 6; r++)
+                        for (int c = 0; c < 6; c++)
+                            x.dense(k * 6 + r, k * 6 + c) += block(r, c);
+                    x.band.add_diagonal_block6(k * 6, block);
+                }
+                // edges between neighbouring nodes, all four 6x6 blocks (the motion model)
+                for (int k = 1; k < n_nodes; k++)
+                    for (int r = 0; r < 6; r++)
+                        for (int c = 0; c < 6; c++)
+                        {
+                            x.add((k - 1) * 6 + r, (k - 1) * 6 + c, value(rng));
+                            x.add((k - 1) * 6 + r, k * 6 + c, value(rng));
+                            x.add(k * 6 + r, (k - 1) * 6 + c, value(rng));
+                            x.add(k * 6 + r, k * 6 + c, value(rng));
+                        }
+                // couplings with the extra unknowns, both triangles, and their own blocks
+                for (int j = 0; j < n_extra; j++)
+                {
+                    for (int i = 0; i < 100; i++)
+                    {
+                        const int row = any_node(rng) * 6 + (i % 6);
+                        const double v = value(rng);
+                        x.add(row, n_pose + j, v);
+                        x.add(n_pose + j, row, v);
+                    }
+                    for (int k = 0; k < n_extra; k++)
+                        x.add(n_pose + j, n_pose + k, value(rng));
+                }
+                // terms between nodes up to the band apart (the accelerometer term), within the band
+                for (int i = 0; i < 300; i++)
+                {
+                    const int a = any_node(rng) * 6 + (i % 3);
+                    const int b = std::clamp(a + (i % 2 ? 1 : -1) * (i % (half_width + 1)), 0, n_pose - 1);
+                    x.add(a, b, value(rng));
+                }
+            }
+            // cancelling additions leave an exact zero, which the sparse copy must drop like the dense one's does
+            x.add(7, 9, 123.456);
+            x.add(7, 9, -123.456);
+            if (n_extra > 0)
+            {
+                x.add(n_pose, 4, 5.0);
+                x.add(n_pose, 4, -5.0);
+            }
+            CHECK(x.band.dropped_writes() == 0);
+            check_same_as_dense(x, half_width);
+
+            // reads give the dense values
+            bool reads_equal = true;
+            for (int r = 0; r < x.band.size(); r += 7)
+                for (int c = 0; c < x.band.size(); c += 5)
+                    if (std::abs(r - c) <= half_width || r >= n_pose || c >= n_pose)
+                        reads_equal = reads_equal && x.band(r, c) == x.dense(r, c);
+            CHECK(reads_equal);
+        }
+}
+
+TEST_CASE("BandedNormalMatrix: a pose-pose write outside the band is dropped and counted, like the dense band conversion")
+{
+    const int half_width = 17;
+    DenseAndBand x(60, 3, half_width);
+    x.add(0, 10, 1.0);
+    x.add(10, 0, 1.0);
+    x.add(30, 30 + half_width, 2.0);       // the last element inside the band
+    x.add(30 + half_width, 30, 2.0);
+    x.add(0, 40, 5.0);                     // outside
+    x.add(40, 0, 5.0);                     // outside
+    x.add(0, 60, 7.0);                     // a pose row with an extra column is never outside
+    x.add(60, 59, 7.0);
+    CHECK(x.band.dropped_writes() == 2);
+    check_same_as_dense(x, half_width);
+    CHECK(x.band(0, 40) == 0.0);
+}
+
+TEST_CASE("BandedNormalMatrix: a band wider than the matrix covers all of it")
+{
+    DenseAndBand x(12, 3, 100);
+    CHECK(x.band.band() == 11);
+    for (int r = 0; r < 15; r++)
+        for (int c = 0; c < 15; c++)
+            x.add(r, c, r * 100.0 + c + 1.0);
+    CHECK(x.band.dropped_writes() == 0);
+    check_same_as_dense(x, 100);
 }

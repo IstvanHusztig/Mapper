@@ -10,7 +10,13 @@ Close the GUI before building. Never run two jobs on the same input folder at on
 
 ## 1. The type
 
-- [ ] 1.1 Add `BandedNormalMatrix` to `src/domain/normal_equations.{h,cpp}` (design decisions 1, 2, 4) with `add`, `add_block6`, a read accessor and `to_sparse()`. Move `pose_band_to_sparse` into `tests/normal_equations_test.cpp` as the dense reference. Tests: for random additions in a fixed order (diagonal blocks, edges, bias coupling in both triangles, offset coupling, a term wider than 17, an out-of-band write that the reference drops), `to_sparse()` equals `pose_band_to_sparse(dense)` entry for entry and bit for bit, with the same pattern. Verify: Release build, `ctest`. Commit.
+- [x] 1.1 Add `BandedNormalMatrix` to `src/domain/normal_equations.{h,cpp}` (design decisions 1, 2, 4) with `add`, `add_block6`, a read accessor and `to_sparse()`. Move `pose_band_to_sparse` into `tests/normal_equations_test.cpp` as the dense reference. Tests: for random additions in a fixed order (diagonal blocks, edges, bias coupling in both triangles, offset coupling, a term wider than 17, an out-of-band write that the reference drops), `to_sparse()` equals `pose_band_to_sparse(dense)` entry for entry and bit for bit, with the same pattern. Verify: Release build, `ctest`. Commit.
+
+  Result: `BandedNormalMatrix` in `normal_equations.{h,cpp}`, three test cases (56 checks) that compare it with the dense matrix and `pose_band_to_sparse` bit for bit, pattern included: random diagonal blocks, edges, both-triangle couplings with 0, 3 and 6 extra unknowns, bands of 17 and 113, cancelling additions that leave an exact zero, and a band wider than the matrix. Release build and `ctest` pass.
+
+  Two deviations from the text above, both small:
+  - A write outside the band is dropped and counted (`dropped_writes()`) instead of asserting inside the type, so a unit test can check the dropping. The assert is placed at the call site in 2.1, where the band is chosen.
+  - `pose_band_to_sparse` stays in the domain for now, because `optimize_lidar_odometry` still calls it; it moves to the test in 2.1, so every commit builds.
 
 ## 2. Use it
 
