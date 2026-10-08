@@ -6,6 +6,35 @@
 #include <cmath>
 #include <random>
 
+namespace
+{
+    // The dense reference of BandedNormalMatrix::to_sparse (the band-only copy the optimizer used before BandedNormalMatrix).
+    // Pose part: only parameters up to max_offset apart; columns and rows from n_pose_params on (the extra unknowns,
+    // such as the gyro bias) are copied completely.
+    Eigen::SparseMatrix<double> pose_band_to_sparse(const Eigen::MatrixXd &m, int n_pose_params, int max_offset = 17)
+    {
+        const int n = static_cast<int>(m.rows());
+        std::vector<Eigen::Triplet<double>> triplets;
+        triplets.reserve(static_cast<size_t>(n_pose_params) * (2 * max_offset + 1) + static_cast<size_t>(n - n_pose_params) * n * 2);
+        for (int col = 0; col < n; col++)
+        {
+            const bool extra_col = col >= n_pose_params;
+            const int row_begin = extra_col ? 0 : std::max(0, col - max_offset);
+            const int row_end = extra_col ? n : std::min(n_pose_params, col + max_offset + 1);
+            for (int row = row_begin; row < row_end; row++)
+                if (m(row, col) != 0.0)
+                    triplets.emplace_back(row, col, m(row, col));
+            if (!extra_col)
+                for (int row = n_pose_params; row < n; row++)
+                    if (m(row, col) != 0.0)
+                        triplets.emplace_back(row, col, m(row, col));
+        }
+        Eigen::SparseMatrix<double> s(n, n);
+        s.setFromTriplets(triplets.begin(), triplets.end());
+        return s;
+    }
+}
+
 TEST_CASE("pose_band_to_sparse keeps the pose band and the extra rows and columns")
 {
     const int n_pose = 12;
@@ -156,14 +185,6 @@ TEST_CASE("BandedNormalMatrix: the sums are those of the dense matrix, bit for b
                     x.add(a, b, value(rng));
                 }
             }
-            // cancelling additions leave an exact zero, which the sparse copy must drop like the dense one's does
-            x.add(7, 9, 123.456);
-            x.add(7, 9, -123.456);
-            if (n_extra > 0)
-            {
-                x.add(n_pose, 4, 5.0);
-                x.add(n_pose, 4, -5.0);
-            }
             CHECK(x.band.dropped_writes() == 0);
             check_same_as_dense(x, half_width);
 
@@ -175,6 +196,22 @@ TEST_CASE("BandedNormalMatrix: the sums are those of the dense matrix, bit for b
                         reads_equal = reads_equal && x.band(r, c) == x.dense(r, c);
             CHECK(reads_equal);
         }
+}
+
+// Pristine elements, so the result is an exact zero however the compiler orders the two additions (with /fp:fast it may
+// fold an adjacent +v, -v pair on a non-zero element in one matrix and not in the other).
+TEST_CASE("BandedNormalMatrix: an element that cancels to exactly zero is not stored")
+{
+    DenseAndBand x(60, 3, 17);
+    x.add(7, 9, 123.456);
+    x.add(7, 9, -123.456);
+    x.add(60, 4, 5.0);
+    x.add(60, 4, -5.0);
+    x.add(8, 62, 0.25);
+    x.add(8, 62, -0.25);
+    x.add(20, 21, 1.5); // one that stays
+    CHECK(x.band.to_sparse().nonZeros() == 1);
+    check_same_as_dense(x, 17);
 }
 
 TEST_CASE("BandedNormalMatrix: a pose-pose write outside the band is dropped and counted, like the dense band conversion")

@@ -8,6 +8,7 @@
 
 #include "angle_units.h"
 #include "normal_equations.h"
+#include <cassert>
 #include <numeric>
 
 void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window &window,
@@ -45,12 +46,26 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
     double w_motion_model_y = 1.0 / (motion_model.y_sigma_m * motion_model.y_sigma_m);
     double w_motion_model_z = 1.0 / (motion_model.z_sigma_m * motion_model.z_sigma_m);
 
-    std::vector<Eigen::Triplet<double>> tripletListA;
-    std::vector<Eigen::Triplet<double>> tripletListP;
-    std::vector<Eigen::Triplet<double>> tripletListB;
+    // The accelerometer term's anchors (nodes about span_s apart) and the band of the normal matrix: the pose-pose coupling
+    // reaches 17 parameters (two nodes) without the term, and (last - first node) * 6 + 5 for its widest term. Both depend
+    // only on the timestamps, so the band is known before anything is added.
+    std::vector<int> anchors;
+    int pose_band_offset = 17;
+    if (acc_term)
+    {
+        const int n = static_cast<int>(window.poses.size());
+        anchors.push_back(0);
+        for (int k = 1; k < n; k++)
+            if (window.timestamps[k].first - window.timestamps[anchors.back()].first >= translation_imu_options.span_s)
+                anchors.push_back(k);
+        for (size_t j = 1; j + 1 < anchors.size(); j++)
+            pose_band_offset = std::max(pose_band_offset, (anchors[j + 1] - anchors[j - 1]) * 6 + 5);
+        if (velocity_prior.use && anchors.size() > 1)
+            pose_band_offset = std::max(pose_band_offset, anchors[1] * 6 + 5);
+    }
 
-    Eigen::MatrixXd AtPAndt(n_params, n_params);
-    AtPAndt.setZero();
+    // the normal matrix, stored by band (only the band is ever used)
+    BandedNormalMatrix AtPAndt(n_pose_params, n_params - n_pose_params, pose_band_offset);
     Eigen::MatrixXd AtPBndt(n_params, 1);
     AtPBndt.setZero();
     Eigen::Vector3d b_indoor(scan_to_map.grid_indoor.resolution_X, scan_to_map.grid_indoor.resolution_Y, scan_to_map.grid_indoor.resolution_Z);
@@ -146,7 +161,7 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
         }
 
         // only this point's node writes this block (see for_each_node), so no lock is needed
-        AtPAndt.block<6, 6>(c, c) += AtPA;
+        AtPAndt.add_diagonal_block6(c, AtPA);
         AtPBndt.block<6, 1>(c, 0) -= AtPB;
         if (!normal_information.empty() && this_bucket.normal_vector.squaredNorm() > 0.5)
             normal_information[intermediate_points_i.index_pose] += this_bucket.normal_vector * this_bucket.normal_vector.transpose();
@@ -265,7 +280,7 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
                 AtPB *= planarity;
             }
 
-            AtPAndt.block<6, 6>(c, c) += AtPA;
+            AtPAndt.add_diagonal_block6(c, AtPA);
             AtPBndt.block<6, 1>(c, 0) -= AtPB;
         };
 
@@ -403,10 +418,10 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
         {
             for (int col = 0; col < 6; col++)
             {
-                AtPAndt(ic_1 + row, ic_1 + col) += AtPAodo(row, col);
-                AtPAndt(ic_1 + row, ic_2 + col) += AtPAodo(row, col + 6);
-                AtPAndt(ic_2 + row, ic_1 + col) += AtPAodo(row + 6, col);
-                AtPAndt(ic_2 + row, ic_2 + col) += AtPAodo(row + 6, col + 6);
+                AtPAndt.add(ic_1 + row, ic_1 + col, AtPAodo(row, col));
+                AtPAndt.add(ic_1 + row, ic_2 + col, AtPAodo(row, col + 6));
+                AtPAndt.add(ic_2 + row, ic_1 + col, AtPAodo(row + 6, col));
+                AtPAndt.add(ic_2 + row, ic_2 + col, AtPAodo(row + 6, col + 6));
             }
         }
 
@@ -442,12 +457,12 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
                 {
                     const double v1 = J(3 + r, col) * w_rot(r) * (-dt_i);
                     const double v2 = J(3 + r, col + 6) * w_rot(r) * (-dt_i);
-                    AtPAndt(ic_1 + col, ib + r) += v1;
-                    AtPAndt(ib + r, ic_1 + col) += v1;
-                    AtPAndt(ic_2 + col, ib + r) += v2;
-                    AtPAndt(ib + r, ic_2 + col) += v2;
+                    AtPAndt.add(ic_1 + col, ib + r, v1);
+                    AtPAndt.add(ib + r, ic_1 + col, v1);
+                    AtPAndt.add(ic_2 + col, ib + r, v2);
+                    AtPAndt.add(ib + r, ic_2 + col, v2);
                 }
-                AtPAndt(ib + r, ib + r) += dt_i * dt_i * w_rot(r);
+                AtPAndt.add(ib + r, ib + r, dt_i * dt_i * w_rot(r));
                 AtPBndt(ib + r, 0) -= (-dt_i) * w_rot(r) * delta_odo(3 + r, 0);
             }
         }
@@ -458,7 +473,9 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
         // bias prior carried over from the previous window
         const Eigen::Matrix3d prior_inf = rotation_options.bias_prior_cov.inverse();
         const Eigen::Vector3d prior_delta = rotation_options.bias_prior_mean - window.gyro_bias.mean;
-        AtPAndt.block<3, 3>(ib, ib) += prior_inf;
+        for (int r = 0; r < 3; r++)
+            for (int c = 0; c < 3; c++)
+                AtPAndt.add(ib + r, ib + c, prior_inf(r, c));
         AtPBndt.block<3, 1>(ib, 0) += prior_inf * prior_delta;
     }
 
@@ -486,7 +503,7 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
                 for (int a = 0; a < 3; a++)
                 {
                     for (int b = 0; b < 3; b++)
-                        AtPAndt(nodes[a] * 6 + k, nodes[b] * 6 + k) += w * c[a] * c[b];
+                        AtPAndt.add(nodes[a] * 6 + k, nodes[b] * 6 + k, w * c[a] * c[b]);
                     AtPBndt(nodes[a] * 6 + k, 0) -= w * c[a] * r(k);
                 }
             }
@@ -509,7 +526,7 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
                 for (int a = 0; a < 2; a++)
                 {
                     for (int b = 0; b < 2; b++)
-                        AtPAndt(nodes[a] * 6 + k, nodes[b] * 6 + k) += w * c[a] * c[b];
+                        AtPAndt.add(nodes[a] * 6 + k, nodes[b] * 6 + k, w * c[a] * c[b]);
                     AtPBndt(nodes[a] * 6 + k, 0) -= w * c[a] * r(k);
                 }
             }
@@ -519,7 +536,6 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
     // accelerometer as a soft measurement of the change of world-frame velocity between node anchors ~span_s apart:
     // residual = sum(c_j * p_j) - (mean acceleration - e) * tau, with mean acceleration = mean(R f - g) * to_mps2
     // (the node rotations are taken as fixed here) and e the acceleration offset of this window
-    int pose_band_offset = 17;
     if (acc_term)
     {
         const auto &acc = *translation_imu_options.acc;
@@ -560,21 +576,16 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
                 {
                     const int ra = nodes[ja] * 6 + k;
                     for (size_t jb = 0; jb < nodes.size(); jb++)
-                        AtPAndt(ra, nodes[jb] * 6 + k) += w * c[ja] * c[jb];
-                    AtPAndt(ra, io + k) += w * c[ja] * tau;
-                    AtPAndt(io + k, ra) += w * c[ja] * tau;
+                        AtPAndt.add(ra, nodes[jb] * 6 + k, w * c[ja] * c[jb]);
+                    AtPAndt.add(ra, io + k, w * c[ja] * tau);
+                    AtPAndt.add(io + k, ra, w * c[ja] * tau);
                     AtPBndt(ra, 0) -= w * c[ja] * r(k);
                 }
-                AtPAndt(io + k, io + k) += w * tau * tau;
+                AtPAndt.add(io + k, io + k, w * tau * tau);
                 AtPBndt(io + k, 0) -= w * tau * r(k);
             }
-            pose_band_offset = std::max(pose_band_offset, (nodes.back() - nodes.front()) * 6 + 5);
+            assert((nodes.back() - nodes.front()) * 6 + 5 <= pose_band_offset); // the band computed at the top covers every term
         };
-
-        std::vector<int> anchors{0};
-        for (int k = 1; k < n; k++)
-            if (window.timestamps[k].first - window.timestamps[anchors.back()].first >= translation_imu_options.span_s)
-                anchors.push_back(k);
 
         for (size_t j = 1; j + 1 < anchors.size(); j++)
         {
@@ -600,59 +611,28 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
 
         // offset prior carried over from the previous window
         const Eigen::Matrix3d prior_inf = translation_imu_options.offset_prior_cov.inverse();
-        AtPAndt.block<3, 3>(io, io) += prior_inf;
+        for (int r = 0; r < 3; r++)
+            for (int c = 0; c < 3; c++)
+                AtPAndt.add(io + r, io + c, prior_inf(r, c));
         AtPBndt.block<3, 1>(io, 0) += prior_inf * (translation_imu_options.offset_prior_mean - acc_offset);
     }
 
     motion_terms_timer.stop();
     PhaseTimer assembly_timer(phase(&ScanToMapTiming::assembly));
 
-    int ic = 0;
-    int ir = tripletListB.size();
-    tripletListA.emplace_back(ir, ic * 6 + 0, 1);
-    tripletListA.emplace_back(ir + 1, ic * 6 + 1, 1);
-    tripletListA.emplace_back(ir + 2, ic * 6 + 2, 1);
-    tripletListA.emplace_back(ir + 3, ic * 6 + 3, 1);
-    tripletListA.emplace_back(ir + 4, ic * 6 + 4, 1);
-    tripletListA.emplace_back(ir + 5, ic * 6 + 5, 1);
+    // fix the origin: weight 1 / sigma^2 on the first node's six parameters (its right-hand side is zero)
+    const double fix_origin_weights[6] = {1.0 / (motion_model.fix_origin_x_sigma_m * motion_model.fix_origin_x_sigma_m),
+                                          1.0 / (motion_model.fix_origin_y_sigma_m * motion_model.fix_origin_y_sigma_m),
+                                          1.0 / (motion_model.fix_origin_z_sigma_m * motion_model.fix_origin_z_sigma_m),
+                                          1.0 / (motion_model.fix_origin_om_sigma_deg * motion_model.fix_origin_om_sigma_deg),
+                                          1.0 / (motion_model.fix_origin_fi_sigma_deg * motion_model.fix_origin_fi_sigma_deg),
+                                          1.0 / (motion_model.fix_origin_ka_sigma_deg * motion_model.fix_origin_ka_sigma_deg)};
+    for (int k = 0; k < 6; k++)
+        AtPAndt.add(k, k, fix_origin_weights[k]);
 
-    tripletListP.emplace_back(ir, ir, 1.0 / (motion_model.fix_origin_x_sigma_m * motion_model.fix_origin_x_sigma_m));
-    tripletListP.emplace_back(ir + 1, ir + 1, 1.0 / (motion_model.fix_origin_y_sigma_m * motion_model.fix_origin_y_sigma_m));
-    tripletListP.emplace_back(ir + 2, ir + 2, 1.0 / (motion_model.fix_origin_z_sigma_m * motion_model.fix_origin_z_sigma_m));
-    tripletListP.emplace_back(ir + 3, ir + 3, 1.0 / (motion_model.fix_origin_om_sigma_deg * motion_model.fix_origin_om_sigma_deg));
-    tripletListP.emplace_back(ir + 4, ir + 4, 1.0 / (motion_model.fix_origin_fi_sigma_deg * motion_model.fix_origin_fi_sigma_deg));
-    tripletListP.emplace_back(ir + 5, ir + 5, 1.0 / (motion_model.fix_origin_ka_sigma_deg * motion_model.fix_origin_ka_sigma_deg));
-
-    tripletListB.emplace_back(ir, 0, 0);
-    tripletListB.emplace_back(ir + 1, 0, 0);
-    tripletListB.emplace_back(ir + 2, 0, 0);
-    tripletListB.emplace_back(ir + 3, 0, 0);
-    tripletListB.emplace_back(ir + 4, 0, 0);
-    tripletListB.emplace_back(ir + 5, 0, 0);
-
-    Eigen::SparseMatrix<double> matA(tripletListB.size(), n_params);
-    Eigen::SparseMatrix<double> matP(tripletListB.size(), tripletListB.size());
-    Eigen::SparseMatrix<double> matB(tripletListB.size(), 1);
-
-    matA.setFromTriplets(tripletListA.begin(), tripletListA.end());
-    matP.setFromTriplets(tripletListP.begin(), tripletListP.end());
-    matB.setFromTriplets(tripletListB.begin(), tripletListB.end());
-
-    Eigen::SparseMatrix<double> AtPA(n_params, n_params);
-    Eigen::SparseMatrix<double> AtPB(n_params, 1);
-
-    {
-        Eigen::SparseMatrix<double> AtP = matA.transpose() * matP;
-        AtPA = (AtP)*matA;
-        AtPB = (AtP)*matB;
-    }
-
-    tripletListA.clear();
-    tripletListP.clear();
-    tripletListB.clear();
-
-    AtPA += pose_band_to_sparse(AtPAndt, n_pose_params, pose_band_offset);
-    AtPB += AtPBndt.sparseView();
+    assert(AtPAndt.dropped_writes() == 0); // a write outside the band would mean the band was chosen too narrow
+    Eigen::SparseMatrix<double> AtPA = AtPAndt.to_sparse();
+    Eigen::SparseMatrix<double> AtPB = AtPBndt.sparseView();
 
     assembly_timer.stop();
     PhaseTimer covariance_timer(phase(&ScanToMapTiming::covariance_solve));

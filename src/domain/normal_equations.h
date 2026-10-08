@@ -17,9 +17,6 @@ struct Blocks
 // adds each block to AtPAndt at (c, c) and subtracts its right-hand side from AtPBndt at c
 void SumBlocks(const std::vector<Blocks> &blocks, Eigen::MatrixXd &AtPAndt, Eigen::MatrixXd &AtPBndt);
 
-// sparse copy of the band of a normal matrix (see normal_equations.cpp)
-Eigen::SparseMatrix<double> pose_band_to_sparse(const Eigen::MatrixXd &m, int n_pose_params, int max_offset = 17);
-
 // The normal matrix of a window, stored by band instead of densely. Unknowns: n_pose_params pose parameters, then n_extra
 // extra ones (gyro bias, acceleration offset). The pose-pose part couples parameters up to `band` apart; the rows and
 // columns of the extra unknowns are stored completely, both triangles separately (callers add to both). Each element
@@ -40,7 +37,7 @@ public:
     void add_diagonal_block6(int c, const Eigen::Matrix<double, 6, 6, Eigen::RowMajor> &block);
     double operator()(int row, int col) const; // 0.0 for a pose-pose element outside the band
 
-    // the nonzero elements as a sparse matrix; equal to pose_band_to_sparse of the dense matrix with the same additions
+    // the nonzero elements as a sparse matrix; the same entries a dense matrix with the same additions would give through a band-only copy
     Eigen::SparseMatrix<double> to_sparse() const;
 
 private:
