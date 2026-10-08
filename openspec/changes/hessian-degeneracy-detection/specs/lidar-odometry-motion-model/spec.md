@@ -14,7 +14,8 @@ The scan-to-map optimization SHALL decide, per window, which directions of the w
 Rotations SHALL be scaled only by the signal-to-noise test. All other terms SHALL be unchanged. Built-in defaults:
 - `degenerate_projection_ratio` and `degenerate_projection_ratio_full`: 0.0;
 - `degenerate_snr_detection`: false;
-- `degenerate_snr_factor`: 10.
+- `degenerate_snr_factor`: 10;
+- `degenerate_point_sigma_m`: 0.02 m.
 
 With both detectors off the NDT terms SHALL be exactly as before either existed. If a parameters TOML switches both detectors on, the signal-to-noise test SHALL be used and a warning SHALL be logged. The result SHALL NOT depend on the number of threads.
 
