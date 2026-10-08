@@ -73,6 +73,8 @@ namespace
 
     OdometryRunSetup prepare_run(const std::vector<Window> &windows, const OdometryConfig &params, Logger &logger)
     {
+        if (params.degenerate_snr_detection && params.degenerate_projection_ratio_full > 0.0)
+            log_warning(logger) << "degenerate_snr_detection and degenerate_projection_ratio_full are both set: the noise-aware test is used, the ratio is ignored";
         OdometryRunSetup s;
         s.rotation_options = get_motion_model_rotation_options(params);
         s.scan_to_map = get_scan_to_map_options(params);

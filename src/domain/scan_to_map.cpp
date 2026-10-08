@@ -78,7 +78,8 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
     std::vector<Eigen::Matrix3d> normal_information;
     // degeneracy-aware NDT terms: the point terms are first summed per node and enter the normal matrix only after their
     // translation part is projected away from the directions the geometry does not constrain (see the end of the NDT loops)
-    const bool project_degenerate = scan_to_map.degenerate_projection_ratio_full > 0.0;
+    // the noise-aware test takes precedence over the ratio (only one of them scales the terms)
+    const bool project_degenerate = scan_to_map.snr_detection || scan_to_map.degenerate_projection_ratio_full > 0.0;
     if (lidar_translation_information || project_degenerate)
         normal_information.assign(window.poses.size(), Eigen::Matrix3d::Zero());
     // noise-aware degeneracy test: the matched points on planar cells, per node in point order, once per window
@@ -328,6 +329,7 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
     PhaseTimer motion_terms_timer(phase(&ScanToMapTiming::motion_terms));
 
     // the noise-aware degeneracy test of this window (about the window's mean node position), held in the workspace
+    DegeneracyVerdict window_degeneracy;
     if (need_degeneracy)
     {
         std::vector<PlaneObservation> observations;
@@ -337,51 +339,101 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
         for (const auto &pose : window.poses)
             centre += pose.translation();
         centre /= double(window.poses.size());
-        const DegeneracyVerdict verdict = detect_degeneracy(observations, centre, scan_to_map.point_sigma_m, scan_to_map.snr_factor);
+        window_degeneracy = detect_degeneracy(observations, centre, scan_to_map.point_sigma_m, scan_to_map.snr_factor);
         if (workspace)
         {
-            workspace->degeneracy = verdict;
+            workspace->degeneracy = window_degeneracy;
             workspace->degeneracy_pending = false;
         }
     }
+    else if (workspace)
+        window_degeneracy = workspace->degeneracy; // computed in this window's first call
 
-    // degeneracy-aware NDT terms: the window's geometric information sum(n * n^T) tells which translation directions the
-    // matched surfaces constrain; along a direction with a small share (eigenvalue / largest) the NDT terms are scaled
-    // down to nothing (scale s from 0 below degenerate_projection_ratio to 1 at degenerate_projection_ratio_full), so the
-    // motion model alone places the window there. With M = diag(P, I), P = sum(s_k * v_k * v_k^T), a node's block B and
-    // right-hand side g become M B M and M g. Nothing is multiplied when every direction keeps s = 1.
+    // degeneracy-aware NDT terms. Each direction of the window's motion gets a scale s in [0, 1]:
+    //  - noise-aware test (snr_detection): s = p of each translation and rotation eigen-direction of the window's rigid
+    //    motion (change hessian-degeneracy-detection);
+    //  - otherwise the ratio of the geometric information sum(n * n^T), translation only: s from 0 below
+    //    degenerate_projection_ratio to 1 at degenerate_projection_ratio_full.
+    // With P_t = sum(s_k * u_k * u_k^T) for translation and P_r likewise for a world rotation vector, node k's block B and
+    // right-hand side g become M^T B M and M^T g, M = diag(P_t, E_k^-1 P_r E_k), E_k mapping the node's Tait-Bryan
+    // increments to a world rotation vector. Nothing is multiplied when every s is 1.
     if (project_degenerate)
     {
-        Eigen::Matrix3d info = Eigen::Matrix3d::Zero();
-        for (const auto &ni : normal_information)
-            info += ni;
-        const Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eig(info);
-        const double largest = eig.eigenvalues().maxCoeff();
-        const double r0 = scan_to_map.degenerate_projection_ratio;
-        const double r1 = scan_to_map.degenerate_projection_ratio_full;
-        Eigen::Matrix3d P = Eigen::Matrix3d::Zero();
-        bool all_kept = true;
-        for (int k = 0; k < 3; k++)
+        Eigen::Matrix3d P_t = Eigen::Matrix3d::Identity();
+        Eigen::Matrix3d P_r = Eigen::Matrix3d::Identity();
+        bool translation_kept = true, rotation_kept = true;
+        if (scan_to_map.snr_detection)
         {
-            const double ratio = largest > 0.0 ? eig.eigenvalues()(k) / largest : 0.0;
-            const double s = r1 > r0 ? std::clamp((ratio - r0) / (r1 - r0), 0.0, 1.0) : (ratio < r0 ? 0.0 : 1.0);
-            all_kept = all_kept && s == 1.0;
-            P += s * eig.eigenvectors().col(k) * eig.eigenvectors().col(k).transpose();
+            if (window_degeneracy.valid) // too few planar observations: nothing is scaled
+            {
+                P_t.setZero();
+                P_r.setZero();
+                for (int k = 0; k < 3; k++)
+                {
+                    const double st = window_degeneracy.translation_p(k), sr = window_degeneracy.rotation_p(k);
+                    translation_kept = translation_kept && st == 1.0;
+                    rotation_kept = rotation_kept && sr == 1.0;
+                    P_t += st * window_degeneracy.translation_directions.col(k) * window_degeneracy.translation_directions.col(k).transpose();
+                    P_r += sr * window_degeneracy.rotation_directions.col(k) * window_degeneracy.rotation_directions.col(k).transpose();
+                }
+            }
         }
-        Eigen::Matrix<double, 6, 6> M = Eigen::Matrix<double, 6, 6>::Identity();
-        M.topLeftCorner<3, 3>() = P;
+        else
+        {
+            Eigen::Matrix3d info = Eigen::Matrix3d::Zero();
+            for (const auto &ni : normal_information)
+                info += ni;
+            const Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eig(info);
+            const double largest = eig.eigenvalues().maxCoeff();
+            const double r0 = scan_to_map.degenerate_projection_ratio;
+            const double r1 = scan_to_map.degenerate_projection_ratio_full;
+            P_t.setZero();
+            for (int k = 0; k < 3; k++)
+            {
+                const double ratio = largest > 0.0 ? eig.eigenvalues()(k) / largest : 0.0;
+                const double s = r1 > r0 ? std::clamp((ratio - r0) / (r1 - r0), 0.0, 1.0) : (ratio < r0 ? 0.0 : 1.0);
+                translation_kept = translation_kept && s == 1.0;
+                P_t += s * eig.eigenvectors().col(k) * eig.eigenvectors().col(k).transpose();
+            }
+        }
         for (int k = 0; k < n_nodes; k++)
         {
-            if (all_kept)
+            if (translation_kept && rotation_kept)
             {
                 AtPAndt.add_diagonal_block6(k * 6, ndt_blocks[k]);
                 AtPBndt.block<6, 1>(k * 6, 0) += ndt_rhs[k];
+                continue;
             }
-            else
+            Eigen::Matrix<double, 6, 6> M = Eigen::Matrix<double, 6, 6>::Identity();
+            M.topLeftCorner<3, 3>() = P_t;
+            if (!rotation_kept)
             {
+                // E: Tait-Bryan increments of node k -> world rotation vector, by finite differences at the node's attitude
+                const TaitBryanPose tb = pose_tait_bryan_from_affine_matrix(window.poses[k]);
+                const Eigen::Matrix3d R0 = window.poses[k].linear();
+                constexpr double h = 1e-7;
+                Eigen::Matrix3d E;
+                for (int a = 0; a < 3; a++)
+                {
+                    TaitBryanPose t = tb;
+                    (a == 0 ? t.om : a == 1 ? t.fi : t.ka) += h;
+                    const Eigen::AngleAxisd d(affine_matrix_from_pose_tait_bryan(t).linear() * R0.transpose());
+                    E.col(a) = d.angle() * d.axis() / h;
+                }
+                M.bottomRightCorner<3, 3>() = E.inverse() * P_r * E;
+            }
+            if (rotation_kept)
+            {
+                // M is symmetric here: the same expressions as the ratio projection has always used (bit-identical results)
                 const Eigen::Matrix<double, 6, 6, Eigen::RowMajor> projected = M * ndt_blocks[k] * M;
                 AtPAndt.add_diagonal_block6(k * 6, projected);
                 AtPBndt.block<6, 1>(k * 6, 0) += M * ndt_rhs[k];
+            }
+            else
+            {
+                const Eigen::Matrix<double, 6, 6, Eigen::RowMajor> projected = M.transpose() * ndt_blocks[k] * M;
+                AtPAndt.add_diagonal_block6(k * 6, projected);
+                AtPBndt.block<6, 1>(k * 6, 0) += M.transpose() * ndt_rhs[k];
             }
         }
     }

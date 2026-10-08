@@ -8,6 +8,7 @@
 #include <chrono>
 #include <cmath>
 #include <functional>
+#include <numbers>
 #include <random>
 
 // optimize_lidar_odometry on synthetic scenes with a known true trajectory: a closed box room (and an open corridor),
@@ -35,8 +36,9 @@ namespace
     {
         std::vector<Point3Di> points = sample_scene(s);
         Maps maps;
-        update_rgd(options.grid_indoor, maps.indoor, points, s.centre, true);
-        update_rgd(options.grid_outdoor, maps.outdoor, points, s.centre, true);
+        const bool frames = options.snr_detection || options.snr_diagnostics; // the degeneracy test needs the cells' frames
+        update_rgd(options.grid_indoor, maps.indoor, points, s.centre, true, 0.0, frames);
+        update_rgd(options.grid_outdoor, maps.outdoor, points, s.centre, true, 0.0, frames);
         return maps;
     }
 
@@ -523,7 +525,8 @@ namespace
 {
     // one window of the corridor or room with the degeneracy-aware NDT terms: the guess (also the motion model) is the truth
     // moved by a shift growing linearly from 0 at the first node (held by the fix-origin prior) to `shift` at the last; 30 iterations
-    std::vector<Eigen::Affine3d> run_projected(const Scene &s, const Eigen::Vector3d &shift, double ratio, double ratio_full, bool multithread)
+    std::vector<Eigen::Affine3d> run_projected(const Scene &s, const Eigen::Vector3d &shift, double ratio, double ratio_full, bool multithread,
+                                               bool snr = false)
     {
         OdometryConfig c = test_config();
         c.use_gyro_bias_estimation = false;
@@ -531,6 +534,8 @@ namespace
         o.scan_to_map.multithread = multithread;
         o.scan_to_map.degenerate_projection_ratio = ratio;
         o.scan_to_map.degenerate_projection_ratio_full = ratio_full;
+        o.scan_to_map.snr_detection = snr;
+        o.scan_to_map.point_sigma_m = 0.005; // the synthetic scenes' jitter, not the real sensor's 2 cm
         Maps maps = build_maps(s, o.scan_to_map);
         const std::vector<Eigen::Affine3d> truth = true_poses();
         std::vector<Point3Di> points = observe(s, truth);
@@ -539,7 +544,11 @@ namespace
             guess[k].translation() += shift * (double(k) / double(guess.size() - 1));
         Window w = make_window(guess);
         NullLogger logger;
-        run_iterations(points, w, maps, o, 5.0, 30, logger);
+        ScanToMapWorkspace workspace; // holds the window's degeneracy verdict from the first call, as in the app
+        run_iterations(points, w, maps, o, 5.0, 30, logger, nullptr, {}, &workspace);
+        if (snr)
+            MESSAGE("degeneracy verdict: translation p ", workspace.degeneracy.translation_p.transpose(), " rotation p ",
+                    workspace.degeneracy.rotation_p.transpose());
         return w.poses;
     }
 }
@@ -585,4 +594,116 @@ TEST_CASE("scan-to-map: degeneracy-aware NDT terms change nothing in a closed ro
     const std::vector<Eigen::Affine3d> on = run_projected(room(), shift, 0.1, 0.2, true); // the room's ratio is about 0.48
     for (size_t k = 0; k < off.size(); k++)
         CHECK(off[k].matrix() == on[k].matrix());
+}
+
+// change hessian-degeneracy-detection: the noise-aware test scales the NDT information instead of the ratio
+TEST_CASE("scan-to-map: the noise-aware degeneracy test leaves the corridor's axis to the motion model")
+{
+    const Eigen::Vector3d shift(0.05, 0.03, 0.0);
+    const std::vector<Eigen::Affine3d> truth = true_poses();
+    const std::vector<Eigen::Affine3d> snr = run_projected(corridor(), shift, 0.0, 0.0, true, true);
+    double along = 0.0, across = 0.0;
+    for (size_t k = 0; k < truth.size(); k++)
+    {
+        const Eigen::Vector3d d = snr[k].translation() - truth[k].translation();
+        along = std::max(along, std::abs(d.x() - shift.x() * (double(k) / double(truth.size() - 1))));
+        across = std::max(across, std::abs(d.y()));
+    }
+    MESSAGE("corridor with the noise-aware test: change along the axis ", along * 1000.0, " mm, error across ", across * 1000.0, " mm");
+    CHECK(along < 0.002);
+    CHECK(across < 0.25 * 0.03);
+    const std::vector<Eigen::Affine3d> single = run_projected(corridor(), shift, 0.0, 0.0, false, true);
+    for (size_t k = 0; k < truth.size(); k++)
+        CHECK(snr[k].matrix() == single[k].matrix());
+}
+
+TEST_CASE("scan-to-map: the noise-aware degeneracy test changes nothing in a closed room")
+{
+    const Eigen::Vector3d shift(0.02, -0.02, 0.01);
+    const std::vector<Eigen::Affine3d> off = run_projected(room(), shift, 0.0, 0.0, true, false);
+    const std::vector<Eigen::Affine3d> on = run_projected(room(), shift, 0.0, 0.0, true, true);
+    for (size_t k = 0; k < off.size(); k++)
+        CHECK(off[k].matrix() == on[k].matrix());
+}
+
+namespace
+{
+    // a straight round tunnel along x (radius 2 m, x in [-15, 15] m): its NDT maps and one window moving through it
+    // whose guess is rolled about the tunnel's axis by up to 0.5 deg at the last node
+    struct TunnelRun
+    {
+        double roll_change_deg = 0.0; // largest change of the roll against the guess
+        double across_error_m = 0.0;  // largest position error across the axis
+    };
+
+    Eigen::Vector3d tunnel_point(std::mt19937 &rng)
+    {
+        std::uniform_real_distribution<double> u(0.0, 1.0);
+        const double x = -15.0 + 30.0 * u(rng), a = 2.0 * std::numbers::pi * u(rng);
+        return Eigen::Vector3d(x, 2.0 * std::cos(a), 2.0 * std::sin(a));
+    }
+
+    TunnelRun run_tunnel(bool snr)
+    {
+        OdometryConfig c = test_config();
+        c.use_gyro_bias_estimation = false;
+        Options o = options_from(c);
+        o.scan_to_map.snr_detection = snr;
+        o.scan_to_map.point_sigma_m = 0.005; // exact synthetic points: the smallest noise the model is given in these tests
+        std::mt19937 rng(21);
+        std::vector<Point3Di> map_points;
+        for (int i = 0; i < 200000; i++)
+        {
+            Point3Di p{};
+            p.point = tunnel_point(rng);
+            map_points.push_back(p);
+        }
+        Maps maps;
+        update_rgd(o.scan_to_map.grid_indoor, maps.indoor, map_points, Eigen::Vector3d::Zero(), true, 0.0, snr);
+        update_rgd(o.scan_to_map.grid_outdoor, maps.outdoor, map_points, Eigen::Vector3d::Zero(), true, 0.0, snr);
+
+        // nodes along the axis at 1 m/s, no rotation
+        std::vector<Eigen::Affine3d> truth;
+        for (int k = 0; k < n_nodes; k++)
+            truth.push_back(pose(Eigen::Vector3d(-1.0 + k * node_dt, 0.0, 0.0), 0.0));
+        std::vector<Point3Di> points;
+        for (int k = 0; k < n_nodes; k++)
+            for (int j = 0; j < points_per_node; j++)
+            {
+                Point3Di p{};
+                p.point = truth[k].inverse() * tunnel_point(rng);
+                p.timestamp = k * node_dt;
+                p.index_pose = k;
+                p.index_point = static_cast<int>(points.size());
+                points.push_back(p);
+            }
+        std::vector<Eigen::Affine3d> guess = truth;
+        for (int k = 0; k < n_nodes; k++)
+            guess[k].linear() = Eigen::AngleAxisd(0.5 * deg * k / double(n_nodes - 1), Eigen::Vector3d::UnitX()).toRotationMatrix() * truth[k].linear();
+        Window w = make_window(guess);
+        NullLogger logger;
+        ScanToMapWorkspace workspace;
+        run_iterations(points, w, maps, o, 5.0, 30, logger, nullptr, {}, &workspace);
+        if (snr)
+            MESSAGE("tunnel verdict: translation p ", workspace.degeneracy.translation_p.transpose(), " rotation p ", workspace.degeneracy.rotation_p.transpose(),
+                    " rotation dir of the smallest p ", workspace.degeneracy.rotation_directions.col(0).transpose());
+        TunnelRun r;
+        for (int k = 0; k < n_nodes; k++)
+        {
+            const Eigen::AngleAxisd change(w.poses[k].linear() * guess[k].linear().transpose());
+            r.roll_change_deg = std::max(r.roll_change_deg, std::abs(change.angle() * change.axis().x()) / deg);
+            r.across_error_m = std::max(r.across_error_m, (w.poses[k].translation() - truth[k].translation()).tail<2>().norm());
+        }
+        return r;
+    }
+}
+
+TEST_CASE("scan-to-map: in a round tunnel the noise-aware test leaves the roll about the axis to the motion model")
+{
+    const TunnelRun off = run_tunnel(false);
+    const TunnelRun on = run_tunnel(true);
+    MESSAGE("round tunnel: roll change against the guess ", off.roll_change_deg, " deg without the test, ", on.roll_change_deg,
+            " deg with it; error across the axis ", off.across_error_m * 1000.0, " / ", on.across_error_m * 1000.0, " mm");
+    CHECK(on.roll_change_deg < 0.01);     // the roll stays where the motion model puts it
+    CHECK(on.across_error_m < 0.005);     // across the axis the LiDAR still holds the window
 }

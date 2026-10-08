@@ -58,12 +58,21 @@ Close the GUI before building. Never run two jobs on the same input folder at on
   Choice for task 2: s = 10 and σp = 0.02 m as derived, not fitted to windows. Task 3 also judges s = 5, which flags fewer directions. The frequent rotation flags are the main risk: the gyro and the motion model then decide those rotations.
 ## 2. Attenuation
 
-- [ ] 2.1 Scale the NDT node blocks by p per direction, translation and rotation (design, decision 3), behind `degenerate_snr_detection` and `degenerate_snr_factor`.
+- [x] 2.1 Scale the NDT node blocks by p per direction, translation and rotation (design, decision 3), behind `degenerate_snr_detection` and `degenerate_snr_factor`.
   - If both detectors are on, use the signal-to-noise test and log a warning.
   - Settings in `TomlIO` and the shipped TOMLs, off; golden TOML files regenerated in their own commit.
   - Tests: the scenarios of the delta spec (corridor, room bit-identical, tunnel rotation, noise, off by default), and multithreaded equals single-threaded.
   - Verify: `ctest`; `44_short` IDENTICAL with it off. Commit.
 
+
+  Result:
+  - **Implementation:** with `degenerate_snr_detection` the node blocks are buffered like the ratio projection's. Each node's block becomes Mᵀ B M, with M = diag(P_t, E⁻¹ P_r E), the p values of the window's verdict, and E taken numerically per node.
+  - **Precedence:** the ratio path is unchanged and uses the same expressions as before when only translation is scaled. Both settings on gives a warning per run, and the noise-aware test is used.
+  - **Optimizer tests** (σp = 0.005 m there, the synthetic scenes' jitter: with 2 cm on exact points the sparse synthetic room looked degenerate, p down to 4e-30):
+    - corridor: x p ≈ 1e-138, the change along the axis 0.012 mm, the error across 5.8 mm, multithreaded equals single-threaded;
+    - room: all p = 1, bit-identical with the test on or off;
+    - round tunnel: translation along the axis and rotation about it p ≈ 1e-240 and 1e-141. The roll changes by 2.5e-5 deg against the guess (0.086 deg without the test, the false in-plane stiffness), and the error across the axis is 0.23 mm (0.22 mm without).
+  - **Checks:** `ctest` passes; `44_short` identical data with the test off.
 ## 3. Judge on the data
 
 - [ ] 3.1 Full 44, both builds, with the signal-to-noise test on and the ratio projection off. Variants are the noise constant and s around the derived values, each reported with:
