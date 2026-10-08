@@ -16,6 +16,10 @@ ScanToMapOptions get_scan_to_map_options(const OdometryConfig &config)
     o.use_view_point_and_normal_vectors = config.ablation_study_use_view_point_and_normal_vectors;
     o.degenerate_projection_ratio = config.degenerate_projection_ratio;
     o.degenerate_projection_ratio_full = config.degenerate_projection_ratio_full;
+    o.snr_detection = config.degenerate_snr_detection;
+    o.snr_diagnostics = config.log_window_diagnostics;
+    o.snr_factor = config.degenerate_snr_factor;
+    o.point_sigma_m = config.degenerate_point_sigma_m;
     return o;
 }
 

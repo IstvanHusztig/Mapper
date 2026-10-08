@@ -81,6 +81,11 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
     const bool project_degenerate = scan_to_map.degenerate_projection_ratio_full > 0.0;
     if (lidar_translation_information || project_degenerate)
         normal_information.assign(window.poses.size(), Eigen::Matrix3d::Zero());
+    // noise-aware degeneracy test: the matched points on planar cells, per node in point order, once per window
+    const bool need_degeneracy = (scan_to_map.snr_detection || scan_to_map.snr_diagnostics) && (workspace == nullptr || workspace->degeneracy_pending);
+    std::vector<std::vector<PlaneObservation>> node_observations;
+    if (need_degeneracy)
+        node_observations.resize(window.poses.size());
     std::vector<Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> ndt_blocks;
     std::vector<Eigen::Matrix<double, 6, 1>> ndt_rhs;
     if (project_degenerate)
@@ -181,6 +186,15 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
         }
         if (!normal_information.empty() && this_bucket.normal_vector.squaredNorm() > 0.5)
             normal_information[intermediate_points_i.index_pose] += this_bucket.normal_vector * this_bucket.normal_vector.transpose();
+        if (need_degeneracy && this_bucket.frame_valid && is_planar_cell(this_bucket.frame_spreads, double(this_bucket.number_of_points)))
+        {
+            PlaneObservation o;
+            o.point = point_global;
+            o.normal = this_bucket.frame_vectors.col(0);
+            o.normal_cov = normal_rotation_covariance(this_bucket.frame_spreads, this_bucket.frame_vectors, double(this_bucket.number_of_points),
+                                                      scan_to_map.point_sigma_m);
+            node_observations[intermediate_points_i.index_pose].push_back(o);
+        }
     };
 
     PhaseTimer indoor_timer(phase(&ScanToMapTiming::ndt_indoor));
@@ -312,6 +326,24 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
     }
 
     PhaseTimer motion_terms_timer(phase(&ScanToMapTiming::motion_terms));
+
+    // the noise-aware degeneracy test of this window (about the window's mean node position), held in the workspace
+    if (need_degeneracy)
+    {
+        std::vector<PlaneObservation> observations;
+        for (const auto &node : node_observations)
+            observations.insert(observations.end(), node.begin(), node.end());
+        Eigen::Vector3d centre = Eigen::Vector3d::Zero();
+        for (const auto &pose : window.poses)
+            centre += pose.translation();
+        centre /= double(window.poses.size());
+        const DegeneracyVerdict verdict = detect_degeneracy(observations, centre, scan_to_map.point_sigma_m, scan_to_map.snr_factor);
+        if (workspace)
+        {
+            workspace->degeneracy = verdict;
+            workspace->degeneracy_pending = false;
+        }
+    }
 
     // degeneracy-aware NDT terms: the window's geometric information sum(n * n^T) tells which translation directions the
     // matched surfaces constrain; along a direction with a small share (eigenvalue / largest) the NDT terms are scaled

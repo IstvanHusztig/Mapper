@@ -53,6 +53,9 @@ loop_closure_edge_sigma_deg = 0.3
 [imu_translation]
 degenerate_projection_ratio = 0.1
 degenerate_projection_ratio_full = 0.2
+degenerate_point_sigma_m = 0.02
+degenerate_snr_detection = false
+degenerate_snr_factor = 10.0
 # accelerometer as a soft measurement of the change of velocity, only where the LiDAR geometry does not
 # constrain the translation (corridor turnaround, stairwell), for at most 15 s per stretch; tested on b1/42/43
 imu_acceleration_offset_freeze_blind = false

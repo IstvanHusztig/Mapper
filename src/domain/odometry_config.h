@@ -183,6 +183,13 @@ struct OdometryConfig
     // it and degenerate_projection_ratio_full the NDT information is scaled linearly. degenerate_projection_ratio_full = 0: off
     double degenerate_projection_ratio = 0.0;
     double degenerate_projection_ratio_full = 0.0;
+    // noise-aware degeneracy test (change hessian-degeneracy-detection; Hatleskog & Alexis 2025): per window, the information
+    // the planar cells' normals give to the window's rigid motion, translation and rotation separately, and per direction the
+    // probability that it exceeds degenerate_snr_factor times what noise alone gives (point noise degenerate_point_sigma_m and
+    // the cells' point counts and spreads); the NDT information is scaled by that probability. Takes precedence over the ratio.
+    bool degenerate_snr_detection = false;
+    double degenerate_snr_factor = 10.0;
+    double degenerate_point_sigma_m = 0.02;
 
     // motion_model first trajectory node prior uncertainty
     double lidar_odometry_motion_model_fix_origin_x_1_sigma_m = 0.000001;

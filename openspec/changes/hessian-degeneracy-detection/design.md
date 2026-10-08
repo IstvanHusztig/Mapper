@@ -94,7 +94,7 @@ so B_i = [[0, [n]×], [−[n]×, [p − c]× [n]×]] acting on (ε, η), and Σ_
 - σ² = Σ_i [ 2 (u6ᵀ Σ_i u6)² + 4 (u6ᵀ Σ_i u6)(u6ᵀ v_i)² ];
 - the signal a = u6ᵀ Ĥ u6 − μ (the paper's H ≈ Ĥ − Σ̂);
 - p = P(a ≥ s·ξ), ξ ~ N(μ, σ²), so p = Φ((a / s − μ) / σ).
-- s = 10 as in the paper. p is set to exactly 1 when it rounds to 1 (above 1 − 1e-12), so a well-constrained window stays bit-identical.
+- s = 10 as in the paper. p is set to exactly 1 above 1 − 1e-6 (z above about 4.75), so a well-constrained window stays bit-identical.
 
 **Constants.**
 - σp = `degenerate_point_sigma_m`, default 0.02 m. This is the range noise of the Livox Mid-360 class, which Mandeye uses. The paper used 1 to 1.5 cm for Velodyne and Ouster. To be confirmed by the user for their sensor.

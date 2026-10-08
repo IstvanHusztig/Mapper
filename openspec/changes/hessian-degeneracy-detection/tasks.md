@@ -26,10 +26,25 @@ Close the GUI before building. Never run two jobs on the same input folder at on
   - Computed once per window, in the first iteration (as LIO-SAM decides degeneracy), and held.
   - Constants: σp = `degenerate_point_sigma_m` 0.02 m (Livox Mid-360 class, to be confirmed for the user's sensor), s = 10.
   - The count test is not needed. The point-sigma setting is a fifth key next to the four of the delta spec; the spec is amended.
-- [ ] 1.2 Compute the window's rigid-motion information and its translation and rotation Schur complements, and the per-direction p (design, decisions 1 and 2), as a separate, tested helper.
+- [x] 1.2 Compute the window's rigid-motion information and its translation and rotation Schur complements, and the per-direction p (design, decisions 1 and 2), as a separate, tested helper.
   - Tests: synthetic room, nothing degenerate; synthetic corridor, translation along the axis degenerate; a round synthetic tunnel, rotation about the axis degenerate; noise added to the corridor's cells doesn't make the axis look constrained; invariance under moving the world origin.
   - Log per window behind `log_window_diagnostics`: the three translation and three rotation p values with their directions, next to today's ratio.
   - Verify: `ctest`; `44_short` IDENTICAL. Commit.
+
+  Result:
+  - **Helper:** `src/domain/degeneracy.{h,cpp}` with `PlaneObservation`, `normal_rotation_covariance` (Eq. 34), `is_planar_cell` and `detect_degeneracy`.
+  - **Cells:** they store their eigen-decomposition (`frame_spreads`, `frame_vectors`) when the test or its diagnostics are on (`refresh_cell_inverse`, `update_rgd(..., store_frame)`).
+  - **Optimizer:** `optimize_lidar_odometry` collects the planar observations per node in point order and runs the test once per window. The result is held in `ScanToMapWorkspace::degeneracy`, and the window loop marks each window's first call.
+  - **Log:** a `window degeneracy N` line behind `log_window_diagnostics`.
+  - **Settings:** `degenerate_snr_detection` (false), `degenerate_snr_factor` (10), `degenerate_point_sigma_m` (0.02); golden files in their own commit.
+  - **Tests** (`tests/degeneracy_test.cpp`):
+    - room: all six p = 1;
+    - corridor: p along the axis < 0.01, the rest 1;
+    - round tunnel: translation along the axis and rotation about it < 0.01;
+    - corridor with 2 deg normal noise: p along the axis still about 1e-217;
+    - shifted by (1000, -500, 20) m: the same p.
+  - A clearly constrained direction is set to exactly 1 above 1 − 1e-6 (z > 4.75); the room showed 1 − 1e-10.
+  - **Checks:** `ctest` passes; `44_short` identical data.
 - [ ] 1.3 Full 44 with the diagnostics (precise build). Report p along the blind passage at t = 123 to 126 s (windows 303 to 311), at the two-solution place around t = 74 s, and in the first room, and compare with today's ratio. Choose `degenerate_snr_factor` (start at the paper's 10) and the constants from this, without fitting to single windows. Record the choice here.
 
 ## 2. Attenuation

@@ -56,7 +56,7 @@ std::vector<Point3Di> decimate(const std::vector<Point3Di>& points, double bucke
 // first point, the normal is fixed from the first 3 points, and later points update the covariance only if they pass
 // the view-point test against that normal
 static void update_rgd_legacy(const NdtGridParameters &rgd_params, NDTBucketMapType &buckets,
-                              std::vector<Point3Di> &points_global, Eigen::Vector3d viewport, double in_plane_sigma_m)
+                              std::vector<Point3Di> &points_global, Eigen::Vector3d viewport, double in_plane_sigma_m, bool store_frame)
 {
     Eigen::Vector3d b(rgd_params.resolution_X, rgd_params.resolution_Y, rgd_params.resolution_Z);
     std::vector<uint64_t> changed; // the cells whose covariance may have changed, refreshed once at the end
@@ -134,15 +134,15 @@ static void update_rgd_legacy(const NdtGridParameters &rgd_params, NDTBucketMapT
     std::sort(changed.begin(), changed.end());
     changed.erase(std::unique(changed.begin(), changed.end()), changed.end());
     for (const auto index : changed)
-        refresh_cell_inverse(buckets.at(index), in_plane_sigma_m);
+        refresh_cell_inverse(buckets.at(index), in_plane_sigma_m, store_frame);
 }
 
 void update_rgd(const NdtGridParameters &rgd_params, NDTBucketMapType &buckets,
-                std::vector<Point3Di> &points_global, Eigen::Vector3d viewport, bool exact, double in_plane_sigma_m)
+                std::vector<Point3Di> &points_global, Eigen::Vector3d viewport, bool exact, double in_plane_sigma_m, bool store_frame)
 {
     if (!exact)
     {
-        update_rgd_legacy(rgd_params, buckets, points_global, viewport, in_plane_sigma_m);
+        update_rgd_legacy(rgd_params, buckets, points_global, viewport, in_plane_sigma_m, store_frame);
         return;
     }
 
@@ -213,7 +213,7 @@ void update_rgd(const NdtGridParameters &rgd_params, NDTBucketMapType &buckets,
     std::sort(touched.begin(), touched.end());
     touched.erase(std::unique(touched.begin(), touched.end()), touched.end());
     for (const auto index : touched)
-        refresh_cell_inverse(buckets.at(index), in_plane_sigma_m);
+        refresh_cell_inverse(buckets.at(index), in_plane_sigma_m, store_frame);
 }
 
 void update_rgd_spherical_coordinates(const NdtGridParameters &rgd_params, NDTBucketMapType &buckets,
