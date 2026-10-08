@@ -412,6 +412,9 @@ bool compute_step_1(
 void run_consistency(std::vector<Window> &windows, const OdometryConfig &params, PointStore &point_store, Logger &logger)
 {
     log_info(logger) << "Point cloud consistency and trajectory smoothness START";
+    // log_stage_timing: the phases of Consistency, summed over the passes (the second variant has no timers)
+    ConsistencyTiming timing;
+    ConsistencyTiming *timing_target = params.log_stage_timing && !params.use_mutliple_gaussian ? &timing : nullptr;
     for (int i = 0; i < params.num_constistency_iter; i++)
     {
         log_info(logger) << "Iteration " << i + 1 << " of " << params.num_constistency_iter;
@@ -421,7 +424,7 @@ void run_consistency(std::vector<Window> &windows, const OdometryConfig &params,
         }
         if (!params.use_mutliple_gaussian)
         {
-            Consistency(windows, params, point_store, logger);
+            Consistency(windows, params, point_store, logger, timing_target);
         }
         else
         {
@@ -429,6 +432,28 @@ void run_consistency(std::vector<Window> &windows, const OdometryConfig &params,
         }
     }
     log_info(logger) << "Point cloud consistency and trajectory smoothness FINISHED";
+    if (timing_target)
+    {
+        const auto line = [&](const char *name, const PhaseTime &t)
+        {
+            auto msg = log_info(logger);
+            msg << "timing consistency " << std::left << std::setw(16) << name << std::right << std::fixed << std::setprecision(1) << std::setw(8) << t.seconds
+                << " s " << std::setw(5) << (timing.pass.seconds > 0.0 ? 100.0 * t.seconds / timing.pass.seconds : 0.0) << " %";
+        };
+        log_info(logger) << "timing consistency " << params.num_constistency_iter << " passes, " << std::fixed << std::setprecision(1) << timing.pass.seconds << " s:";
+        line("load_points", timing.load_points);
+        line("smoothness", timing.smoothness);
+        line("chunk_prepare", timing.chunk_prepare);
+        line("update_rgd", timing.update_rgd);
+        line("point_loop", timing.point_loop);
+        line("sparse_build", timing.sparse_build);
+        line("sparse_products", timing.sparse_products);
+        line("solve", timing.solve);
+        line("apply", timing.apply);
+        const double named = timing.load_points.seconds + timing.smoothness.seconds + timing.chunk_prepare.seconds + timing.update_rgd.seconds +
+                             timing.point_loop.seconds + timing.sparse_build.seconds + timing.sparse_products.seconds + timing.solve.seconds + timing.apply.seconds;
+        line("other", PhaseTime{timing.pass.seconds - named, 0});
+    }
 }
 
 void save_result(std::vector<Window> &windows, const OdometryConfig &params, const OdometryState &state, const GuiPreferences &gui, double elapsed_time_s, ResultSink &sink, PointStore &point_store, Logger &logger)

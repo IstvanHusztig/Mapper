@@ -8,8 +8,13 @@
 #include "angle_units.h"
 #include <mutex>
 
-void Consistency(std::vector<Window> &windows, const OdometryConfig &params, PointStore &point_store, Logger &logger)
+void Consistency(std::vector<Window> &windows, const OdometryConfig &params, PointStore &point_store, Logger &logger, ConsistencyTiming *timing)
 {
+    // log_stage_timing: the timers get a target only when the caller passed one
+    const auto phase = [timing](PhaseTime ConsistencyTiming::*p) { return timing ? &(timing->*p) : nullptr; };
+    PhaseTimer pass_timer(phase(&ConsistencyTiming::pass));
+    PhaseTimer load_timer(phase(&ConsistencyTiming::load_points));
+
     std::vector<Eigen::Affine3d> trajectory;
     std::vector<std::pair<double, double>> timestamps;
     std::vector<Point3Di> all_points_local;
@@ -38,6 +43,8 @@ void Consistency(std::vector<Window> &windows, const OdometryConfig &params, Poi
         for (int j = 0; j < intermediate_points.size(); j++)
             all_points_local.push_back(intermediate_points[j]);
     }
+    load_timer.stop();
+    PhaseTimer smoothness_timer(phase(&ConsistencyTiming::smoothness));
 
     std::vector<Eigen::Triplet<double>> tripletListA;
     std::vector<Eigen::Triplet<double>> tripletListP;
@@ -188,6 +195,8 @@ void Consistency(std::vector<Window> &windows, const OdometryConfig &params, Poi
     tripletListP.clear();
     tripletListB.clear();
 
+    smoothness_timer.stop();
+
     // ndt
 
     log_info(logger) << "NDT observations START";
@@ -197,6 +206,7 @@ void Consistency(std::vector<Window> &windows, const OdometryConfig &params, Poi
         std::vector<Point3Di> points_local;
         std::vector<Point3Di> points_global;
 
+        PhaseTimer chunk_prepare_timer(phase(&ConsistencyTiming::chunk_prepare));
         for (int index = index_point_begin; index < index_point_begin + 1000000; index++)
         {
             if (index < all_points_local.size())
@@ -217,9 +227,13 @@ void Consistency(std::vector<Window> &windows, const OdometryConfig &params, Poi
             }
         }
 
+        chunk_prepare_timer.stop();
+
         if (points_global.size() > 10000)
         {
+            PhaseTimer rgd_timer(phase(&ConsistencyTiming::update_rgd));
             update_rgd(params.in_out_params_indoor, buckets, points_global, trajectory[points_global[0].index_pose].translation(), params.use_exact_ndt_bucket_statistics);
+            rgd_timer.stop();
 
             const auto hessian_fun = [&](const Point3Di &intermediate_points_i)
             {
@@ -288,11 +302,14 @@ void Consistency(std::vector<Window> &windows, const OdometryConfig &params, Poi
                 tripletListP.emplace_back(ir + 2, ir + 2, infm(2, 2));
             };
 
+            PhaseTimer loop_timer(phase(&ConsistencyTiming::point_loop));
             if (multithread)
                 std::for_each(std::execution::par_unseq, std::begin(points_local), std::end(points_local), hessian_fun);
             else
                 std::for_each(std::begin(points_local), std::end(points_local), hessian_fun);
+            loop_timer.stop();
 
+            PhaseTimer build_timer(phase(&ConsistencyTiming::sparse_build));
             Eigen::SparseMatrix<double> matAndt(tripletListB.size(), trajectory.size() * 6);
             Eigen::SparseMatrix<double> matPndt(tripletListB.size(), tripletListB.size());
             Eigen::SparseMatrix<double> matBndt(tripletListB.size(), 1);
@@ -301,6 +318,9 @@ void Consistency(std::vector<Window> &windows, const OdometryConfig &params, Poi
             matPndt.setFromTriplets(tripletListP.begin(), tripletListP.end());
             matBndt.setFromTriplets(tripletListB.begin(), tripletListB.end());
 
+            build_timer.stop();
+
+            PhaseTimer products_timer(phase(&ConsistencyTiming::sparse_products));
             Eigen::SparseMatrix<double> AtPAndt(trajectory.size() * 6, trajectory.size() * 6);
             Eigen::SparseMatrix<double> AtPBndt(trajectory.size() * 6, 1);
 
@@ -315,17 +335,21 @@ void Consistency(std::vector<Window> &windows, const OdometryConfig &params, Poi
             tripletListB.clear();
             AtPA += AtPAndt;
             AtPB += AtPBndt;
+            products_timer.stop();
         }
     }
     log_info(logger) << "NDT observations FINISHED";
 
+    PhaseTimer solve_timer(phase(&ConsistencyTiming::solve));
     Eigen::SimplicialCholesky<Eigen::SparseMatrix<double>> solver(AtPA);
     Eigen::SparseMatrix<double> x = solver.solve(AtPB);
     std::vector<double> h_x;
     for (int k = 0; k < x.outerSize(); ++k)
         for (Eigen::SparseMatrix<double>::InnerIterator it(x, k); it; ++it)
             h_x.push_back(it.value());
+    solve_timer.stop();
 
+    PhaseTimer apply_timer(phase(&ConsistencyTiming::apply));
     if (h_x.size() == 6 * trajectory.size())
     {
         int counter = 0;
@@ -345,6 +369,7 @@ void Consistency(std::vector<Window> &windows, const OdometryConfig &params, Poi
 
     for (int i = 0; i < indexes.size(); i++)
         windows[indexes[i].first].poses[indexes[i].second] = trajectory[i];
+    apply_timer.stop();
 }
 
 void Consistency2(std::vector<Window> &windows, const OdometryConfig &params, PointStore &point_store, Logger &logger)
