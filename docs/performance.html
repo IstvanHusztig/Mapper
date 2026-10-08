@@ -71,17 +71,17 @@
 <p style="text-align:right;font-size:13px;margin:0 0 8px"><a href="hu/performance.html" hreflang="hu" lang="hu">Magyar nyelven</a> · <a href="index.html">User guide</a></p>
 
 <h1>Performance: how the full recording got 2.2 times faster</h1>
-<p class="lead">Between 2026-10-05 and 2026-10-08 the processing of the full reference recording (<code>44</code>: about 5 minutes of data, 690 windows, 16.5 million points) went from 33 to 15 minutes, and its odometry from 26 to 8.5 minutes. This page shows what was measured, what each step changed, and what is left.</p>
+<p class="lead">Between 2026-10-05 and 2026-10-08 the processing of the full reference recording (<code>44</code>: about 5 minutes of data, 690 windows, 16.5 million points) went from 33 to 11 minutes, and its odometry from 26 to 8.5 minutes. This page shows what was measured, what each step changed, and what is left.</p>
 
 <div class="tldr">
-  <div class="card"><div class="big">1990 → 907 s</div><div class="lbl">whole run, wall-clock (−54 %, 2.2× faster)</div></div>
-  <div class="card"><div class="big">1578 → 510 s</div><div class="lbl">odometry (−68 %, 3.1× faster)</div></div>
-  <div class="card"><div class="big">1969 → 888 s</div><div class="lbl">processing time reported by the program (−55 %)</div></div>
+  <div class="card"><div class="big">1990 → 647 s</div><div class="lbl">whole run, wall-clock (−67 %, 3.1× faster)</div></div>
+  <div class="card"><div class="big">1578 → 517 s</div><div class="lbl">odometry (−67 %, 3.1× faster)</div></div>
+  <div class="card"><div class="big">1969 → 628 s</div><div class="lbl">processing time reported by the program (−68 %)</div></div>
 </div>
 
-<h2>The four steps</h2>
+<h2>The five steps</h2>
 <figure>
-<svg viewBox="0 0 880 210" role="img" aria-label="stacked bars: odometry and the rest of the run for the four steps">
+<svg viewBox="0 0 880 256" role="img" aria-label="stacked bars: odometry and the rest of the run for the five steps">
   <text x="196" y="35" text-anchor="end" font-size="14">Before</text>
   <rect x="204" y="16" width="444.2" height="26" rx="3" fill="var(--accent)"/>
   <rect x="648.2" y="16" width="115.8" height="26" rx="3" fill="var(--node-line)"/>
@@ -98,8 +98,12 @@
   <rect x="204" y="154" width="143.5" height="26" rx="3" fill="var(--accent)"/>
   <rect x="347.5" y="154" width="111.8" height="26" rx="3" fill="var(--node-line)"/>
   <text x="467.2" y="172" font-size="13.5">907 s</text>
-  <rect x="204" y="198" width="12" height="9" fill="var(--accent)"/><text class="muted" x="222" y="207" font-size="12.5">odometry</text>
-  <rect x="400" y="198" width="12" height="9" fill="var(--node-line)"/><text class="muted" x="418" y="207" font-size="12.5">rest of the run (load, loop closure, consistency, save)</text>
+  <text x="196" y="219" text-anchor="end" font-size="14">Faster consistency</text>
+  <rect x="204" y="200" width="145.5" height="26" rx="3" fill="var(--accent)"/>
+  <rect x="349.5" y="200" width="36.6" height="26" rx="3" fill="var(--node-line)"/>
+  <text x="394.1" y="218" font-size="13.5">647 s</text>
+  <rect x="204" y="244" width="12" height="9" fill="var(--accent)"/><text class="muted" x="222" y="253" font-size="12.5">odometry</text>
+  <rect x="400" y="244" width="12" height="9" fill="var(--node-line)"/><text class="muted" x="418" y="253" font-size="12.5">rest of the run (load, loop closure, consistency, save)</text>
 </svg>
 <figcaption>Full recording <code>44</code>, Release build, <code>settings/lidar-vertical.toml</code>, 16 logical cores. The bars are wall-clock seconds of the whole run; the blue part is the odometry.</figcaption>
 </figure>
@@ -110,6 +114,7 @@
 <tr><td>Deterministic multithreading</td><td class="num">1059.6 s</td><td class="num">1467 s</td><td>The NDT point terms of a window's trajectory nodes run in parallel, each node's points still summed in their original order, so the result is the same bits as the single-threaded one. The NDT loops: 737 s → 180 s.</td></tr>
 <tr><td>Banded normal matrix</td><td class="num">688.7 s</td><td class="num">1137 s</td><td>The dense 2166×2166 normal matrix (37 MB), zeroed and freed in every one of 69,000 iterations, is stored by band. Setup 4.1 → 0.17 ms per iteration; freeing it, 118 s → 4 s in total.</td></tr>
 <tr><td>Fixed Cholesky pattern, <code>/fp:precise</code></td><td class="num">509.8 s</td><td class="num">907 s</td><td>The symbolic analysis of the two sparse Cholesky solves is done 57 + 58 times in 138,000 solves instead of every time. One floating-point mode everywhere, at no speed cost.</td></tr>
+<tr><td>Faster consistency</td><td class="num">516.7 s</td><td class="num">647 s</td><td>The normal equations of the consistency passes (10) are accumulated directly into a banded matrix instead of sparse products; the points and the Cholesky analysis are kept between passes; the 1M-point chunks are built in parallel and merged in order. Consistency: 363.6 → 44.7 s.</td></tr>
 </table></div>
 
 <h2>What was slow</h2>
@@ -137,6 +142,7 @@
 <tr><td>Banded normal matrix</td><td>2026-10-08</td><td>odometry −35 %, bit-identical on <code>44_short</code></td></tr>
 <tr><td>Fixed Cholesky pattern</td><td>2026-10-08</td><td>odometry −26 %, results within 1e-10</td></tr>
 <tr><td>One floating-point mode (<code>/fp:precise</code>)</td><td>2026-10-08</td><td>no speed difference; results moved (below)</td></tr>
+<tr><td>Faster consistency</td><td>2026-10-08</td><td>consistency 363.6 → 44.7 s (−88 %), processing time 888 → 628 s; results within 1e-10</td></tr>
 </table></div>
 
 <h2>Did the results change?</h2>
@@ -145,16 +151,16 @@
 On <code>44_short</code> the two baselines differ by up to 2 cm in position. On the full recording the calculated route is 215.46 m long instead of 216.06 m, and some per-window gyro-bias estimates differ by up to 0.19 °/s. The quality metrics of <code>tools/eval_odometry.py</code> are equal or slightly better with precise (window yaw difference 1.37 → 1.33 °, spikes above 3 °: 6 → 4, final yaw −126.4 → −126.0 ° against the gyro's −136.9 → −136.8 °). Without ground truth neither mode can be called closer to the truth. The switch was made because <code>/fp:fast</code> bought only 0–2 % speed while making the result depend on how the compiler ordered sums, which needed a second build and a tolerance rule for every check. The old baselines are kept as dated folders.</div>
 
 <h2>What is left</h2>
-<p>The whole run of 907 s now consists of (approximately):</p>
+<p>The whole run of 647 s now consists of (approximately):</p>
 <div class="table-wrap"><table>
 <tr><th>Stage</th><th class="num">Time</th><th class="num">Share</th></tr>
-<tr><td>Odometry</td><td class="num">510 s</td><td class="num">56 %</td></tr>
-<tr><td>Consistency (serial)</td><td class="num">320 s</td><td class="num">35 %</td></tr>
-<tr><td>Loop closure</td><td class="num">54 s</td><td class="num">6 %</td></tr>
-<tr><td>Saving the result</td><td class="num">19 s</td><td class="num">2 %</td></tr>
+<tr><td>Odometry</td><td class="num">517 s</td><td class="num">80 %</td></tr>
+<tr><td>Consistency</td><td class="num">45 s</td><td class="num">7 %</td></tr>
+<tr><td>Loop closure</td><td class="num">54 s</td><td class="num">8 %</td></tr>
+<tr><td>Saving the result</td><td class="num">19 s</td><td class="num">3 %</td></tr>
 <tr><td>Loading and preparing the windows</td><td class="num">14 s</td><td class="num">2 %</td></tr>
 </table></div>
-<p>The consistency step is the largest piece that has not been touched yet. Inside the odometry, the remaining time is the NDT point loops, the motion-model terms and the matrix assembly, plus the two Cholesky solves, which are now mostly numeric work.</p>
+<p>Four fifths of the run are now the odometry: the NDT point loops, the motion-model terms and the matrix assembly, plus the two Cholesky solves, which are mostly numeric work. Loop closure is the next sizeable piece.</p>
 
 <p class="meta">Details, the method and every number: <a href="../docs/PERFORMANCE.md">PERFORMANCE.md</a> in the repository. Times are for the reference recordings with the Release build; the machine has 16 logical cores.</p>
 

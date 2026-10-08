@@ -86,7 +86,7 @@ Refactors must reproduce `44_short` and the full 44 bit for bit (see `docs/ARCHI
 | dataset | what | run time (Release) | manifest |
 |---|---|---|---|
 | `raw data/44_short` | first 30 s of 44, made with `cut_recording` | about 1.5 min | `tools/baseline/44_short.manifest.json` |
-| `raw data/44` | the full recording (loops on every floor) | about 15 min | `tools/baseline/44.manifest.json` |
+| `raw data/44` | the full recording (loops on every floor) | about 11 min | `tools/baseline/44.manifest.json` |
 
 Workflow: check **every intermediate commit on `44_short`**, and run the **full 44 once at the end of each change** (only the full recording exercises loop closure). Always run with the Release build and `settings/lidar-vertical.toml`, into a new output folder outside the input folder. Never run two jobs on the same input folder at the same time: they share its `cache/`. A stale `cache/` from an older build is harmless (every run rewrites it).
 

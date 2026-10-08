@@ -71,17 +71,17 @@
 <p style="text-align:right;font-size:13px;margin:0 0 8px"><a href="../performance.html" hreflang="en" lang="en">English version</a> · <a href="index.html">Felhasználói útmutató</a></p>
 
 <h1>Teljesítmény: hogyan lett a teljes felvétel feldolgozása 2,2-szer gyorsabb</h1>
-<p class="lead">2026-10-05 és 2026-10-08 között a teljes referenciafelvétel (<code>44</code>: kb. 5 perc adat, 690 ablak, 16,5 millió pont) feldolgozása 33 percről 15 percre, az odometria pedig 26 percről 8,5 percre gyorsult. Ez az oldal megmutatja, mit mértünk, mit változtatott az egyes lépés, és mi maradt hátra.</p>
+<p class="lead">2026-10-05 és 2026-10-08 között a teljes referenciafelvétel (<code>44</code>: kb. 5 perc adat, 690 ablak, 16,5 millió pont) feldolgozása 33 percről 11 percre, az odometria pedig 26 percről 8,5 percre gyorsult. Ez az oldal megmutatja, mit mértünk, mit változtatott az egyes lépés, és mi maradt hátra.</p>
 
 <div class="tldr">
-  <div class="card"><div class="big">1990 → 907 s</div><div class="lbl">teljes futás, falióra szerint (−54 %, 2,2-szer gyorsabb)</div></div>
-  <div class="card"><div class="big">1578 → 510 s</div><div class="lbl">odometria (−68 %, 3,1-szer gyorsabb)</div></div>
-  <div class="card"><div class="big">1969 → 888 s</div><div class="lbl">a program által jelentett feldolgozási idő (−55 %)</div></div>
+  <div class="card"><div class="big">1990 → 647 s</div><div class="lbl">teljes futás, falióra szerint (−67 %, 3,1-szer gyorsabb)</div></div>
+  <div class="card"><div class="big">1578 → 517 s</div><div class="lbl">odometria (−67 %, 3,1-szer gyorsabb)</div></div>
+  <div class="card"><div class="big">1969 → 628 s</div><div class="lbl">a program által jelentett feldolgozási idő (−68 %)</div></div>
 </div>
 
-<h2>A négy lépés</h2>
+<h2>Az öt lépés</h2>
 <figure>
-<svg viewBox="0 0 880 210" role="img" aria-label="halmozott oszlopok: odometria és a futás többi része a négy lépésre">
+<svg viewBox="0 0 880 256" role="img" aria-label="halmozott oszlopok: odometria és a futás többi része az öt lépésre">
   <text x="196" y="35" text-anchor="end" font-size="14">Előtte</text>
   <rect x="204" y="16" width="444.2" height="26" rx="3" fill="var(--accent)"/>
   <rect x="648.2" y="16" width="115.8" height="26" rx="3" fill="var(--node-line)"/>
@@ -98,8 +98,12 @@
   <rect x="204" y="154" width="143.5" height="26" rx="3" fill="var(--accent)"/>
   <rect x="347.5" y="154" width="111.8" height="26" rx="3" fill="var(--node-line)"/>
   <text x="467.2" y="172" font-size="13.5">907 s</text>
-  <rect x="204" y="198" width="12" height="9" fill="var(--accent)"/><text class="muted" x="222" y="207" font-size="12.5">odometria</text>
-  <rect x="400" y="198" width="12" height="9" fill="var(--node-line)"/><text class="muted" x="418" y="207" font-size="12.5">a futás többi része (betöltés, hurokzárás, konzisztencia, mentés)</text>
+  <text x="196" y="219" text-anchor="end" font-size="14">Gyorsabb konzisztencia</text>
+  <rect x="204" y="200" width="145.5" height="26" rx="3" fill="var(--accent)"/>
+  <rect x="349.5" y="200" width="36.6" height="26" rx="3" fill="var(--node-line)"/>
+  <text x="394.1" y="218" font-size="13.5">647 s</text>
+  <rect x="204" y="244" width="12" height="9" fill="var(--accent)"/><text class="muted" x="222" y="253" font-size="12.5">odometria</text>
+  <rect x="400" y="244" width="12" height="9" fill="var(--node-line)"/><text class="muted" x="418" y="253" font-size="12.5">a futás többi része (betöltés, hurokzárás, konzisztencia, mentés)</text>
 </svg>
 <figcaption>A teljes <code>44</code> felvétel, Release build, <code>settings/lidar-vertical.toml</code>, 16 logikai mag. Az oszlopok a teljes futás falióra szerinti másodpercei; a kék rész az odometria.</figcaption>
 </figure>
@@ -110,6 +114,7 @@
 <tr><td>Determinisztikus többszálúság</td><td class="num">1059,6 s</td><td class="num">1467 s</td><td>Egy ablak trajektória-csomópontjainak NDT-tagjai párhuzamosan számolódnak, de minden csomópont pontjai az eredeti sorrendben összegződnek, így az eredmény bitre azonos az egyszálúval. Az NDT-ciklusok: 737 s → 180 s.</td></tr>
 <tr><td>Sávos normálmátrix</td><td class="num">688,7 s</td><td class="num">1137 s</td><td>A sűrű 2166×2166-os normálmátrixot (37 MB), amelyet a 69 000 iteráció mindegyikében lenulláztunk és felszabadítottunk, sávosan tároljuk. Előkészítés: 4,1 → 0,17 ms iterációnként; a felszabadítás összesen 118 s → 4 s.</td></tr>
 <tr><td>Rögzített Cholesky-minta, <code>/fp:precise</code></td><td class="num">509,8 s</td><td class="num">907 s</td><td>A két ritka Cholesky-megoldás szimbolikus elemzése 138 000 megoldásból csak 57 + 58-szor fut le, nem minden alkalommal. Mindenhol egyetlen lebegőpontos mód, sebességveszteség nélkül.</td></tr>
+<tr><td>Gyorsabb konzisztencia</td><td class="num">516,7 s</td><td class="num">647 s</td><td>A konzisztencia (10 menet) normálegyenleteit közvetlenül, sávos mátrixba gyűjtjük a ritka szorzatok helyett; a pontok és a Cholesky-elemzés menetek között megmarad; az 1 M pontos darabok párhuzamosan készülnek és sorrendben egyesülnek. Konzisztencia: 363,6 → 44,7 s.</td></tr>
 </table></div>
 
 <h2>Mi volt lassú</h2>
@@ -137,6 +142,7 @@
 <tr><td>Sávos normálmátrix</td><td>2026-10-08</td><td>odometria −35 %, bitazonos a <code>44_short</code>-on</td></tr>
 <tr><td>Rögzített Cholesky-minta</td><td>2026-10-08</td><td>odometria −26 %, az eredmények 1e-10-en belül</td></tr>
 <tr><td>Egyetlen lebegőpontos mód (<code>/fp:precise</code>)</td><td>2026-10-08</td><td>nincs sebességkülönbség; az eredmények elmozdultak (lent)</td></tr>
+<tr><td>Gyorsabb konzisztencia</td><td>2026-10-08</td><td>konzisztencia 363,6 → 44,7 s (−88 %), a teljes feldolgozási idő 888 → 628 s; az eredmények 1e-10-en belül</td></tr>
 </table></div>
 
 <h2>Változtak az eredmények?</h2>
@@ -145,16 +151,16 @@
 A <code>44_short</code>-on a két alapeset (baseline) legfeljebb 2 cm-rel tér el pozícióban. A teljes felvételen a számított útvonal 215,46 m hosszú 216,06 m helyett, és néhány ablakonkénti giroszkóp-bias becslés legfeljebb 0,19 °/s-mal tér el. A <code>tools/eval_odometry.py</code> minőségi mutatói a precise móddal egyenlők vagy kissé jobbak (az ablakonkénti yaw-különbség 1,37 → 1,33 °, a 3 ° feletti kiugrások 6 → 4, a végső yaw −126,4 → −126,0 ° a giroszkóp −136,9 → −136,8 °-ához képest). Valós referencia (ground truth) nélkül egyik módról sem mondható, hogy közelebb van az igazsághoz. Az átállást az indokolta, hogy a <code>/fp:fast</code> csak 0–2 % sebességet hozott, miközben az eredmény attól függött, hogyan rendezte a fordító az összegeket, ami második buildet és minden ellenőrzéshez tűrési szabályt igényelt. A régi alapesetek dátumozott mappákban megmaradtak.</div>
 
 <h2>Mi maradt hátra</h2>
-<p>A 907 s-os teljes futás (megközelítőleg) ezekből áll:</p>
+<p>A 647 s-os teljes futás (megközelítőleg) ezekből áll:</p>
 <div class="table-wrap"><table>
 <tr><th>Szakasz</th><th class="num">Idő</th><th class="num">Arány</th></tr>
-<tr><td>Odometria</td><td class="num">510 s</td><td class="num">56 %</td></tr>
-<tr><td>Konzisztencia (soros)</td><td class="num">320 s</td><td class="num">35 %</td></tr>
-<tr><td>Hurokzárás</td><td class="num">54 s</td><td class="num">6 %</td></tr>
-<tr><td>Az eredmény mentése</td><td class="num">19 s</td><td class="num">2 %</td></tr>
+<tr><td>Odometria</td><td class="num">517 s</td><td class="num">80 %</td></tr>
+<tr><td>Konzisztencia</td><td class="num">45 s</td><td class="num">7 %</td></tr>
+<tr><td>Hurokzárás</td><td class="num">54 s</td><td class="num">8 %</td></tr>
+<tr><td>Az eredmény mentése</td><td class="num">19 s</td><td class="num">3 %</td></tr>
 <tr><td>Az ablakok betöltése és előkészítése</td><td class="num">14 s</td><td class="num">2 %</td></tr>
 </table></div>
-<p>A konzisztencia-lépés a legnagyobb még érintetlen darab. Az odometrián belül a hátralévő idő az NDT pontciklusoké, a mozgásmodell-tagoké és a mátrix összeállításáé, valamint a két Cholesky-megoldásé, amelyek most már főleg numerikus munkát végeznek.</p>
+<p>A futás négyötöde most az odometria: az NDT pontciklusok, a mozgásmodell-tagok és a mátrix összeállítása, valamint a két Cholesky-megoldás, amelyek már főleg numerikus munkát végeznek. A hurokzárás a következő számottevő darab.</p>
 
 <p class="meta">A részletek, a módszer és minden szám: <a href="../../docs/PERFORMANCE.md">PERFORMANCE.md</a> a tárolóban. Az időket a referenciafelvételeken mértük Release builddel; a gép 16 logikai magos.</p>
 

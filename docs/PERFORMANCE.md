@@ -3,7 +3,7 @@
 This page lists the changes that made dMapper faster or kept it from becoming slower: what was slow, what changed, what it gained, and how the result was checked. It also lists the settings that trade speed for accuracy or reproducibility, and the open performance findings.
 
 Times are for the reference recordings in `raw data/`, with the Release build and `settings/lidar-vertical.toml`:
-- `44` is the full recording, 690 windows, about 15 min (30 min before the performance fixes);
+- `44` is the full recording, 690 windows, about 11 min (30 min before the performance fixes);
 - `44_short` is its first 30 s, 70 windows, about 1.5 min (3.5 min before).
 
 ## Summary
@@ -20,6 +20,7 @@ Times are for the reference recordings in `raw data/`, with the Release build an
 | [Banded normal matrix](#8-banded-normal-matrix) | 2026-10-08 | window optimizer | 44: odometry 1060 → 689 s (−35 %), whole run 1467 → 1137 s (−22 %) | bit-identical on `44_short`; full 44 within 1e-9 |
 | [Fixed Cholesky pattern](#9-fixed-cholesky-pattern) | 2026-10-08 | window optimizer | 44: odometry 689 → 510 s (−26 %), whole run about 1090 → 908 s | within 1e-10 |
 | [One floating-point mode (`/fp:precise`)](#10-one-floating-point-mode) | 2026-10-08 | build | no speed cost measured | results change by cm–dm over the 44 (new baselines) |
+| [Faster consistency](#11-faster-consistency) | 2026-10-08 | consistency | 44: consistency (10 passes) 363.6 → 44.7 s (−88 %), processing time 888 → 628 s | within 1e-10 (new baselines) |
 
 ## 1. Sparse band of the normal matrix
 
@@ -172,6 +173,21 @@ The quality metrics of `tools/eval_odometry.py` are equal or slightly better wit
 
 OpenSpec change `fixed-pattern-precise-fp`.
 
+## 11. Faster consistency
+
+**Problem.** `Consistency` was 363.6 s of the 888 s full 44 (10 passes). Its profile (`log_stage_timing`): sparse products 156.6 s (43 %), sparse build 50.6 s (14 %), serial point loop 48.4 s (13 %), smoothness term 30.6 s (8 %), solve 24.3 s (7 %), chunk preparation 22.4 s (6 %), loading the points 12.8 s, `update_rgd` 12.7 s.
+
+**Fix.**
+- The normal equations are accumulated directly into a `BandedNormalMatrix` (band 17) and a dense right-hand side, with no triplet lists and no sparse products: the point terms of each node in parallel, in point order (a point writes only its own node's block); the smoothness blocks in parallel batches added in order; then `to_sparse()` and the Cholesky.
+- A `ConsistencyData` object lives for one run: the points with their nodes are loaded once instead of in every pass, and the Cholesky symbolic analysis is kept (`PatternCachedCholesky`) because the pattern is the same in every pass.
+- The chunks of 1M points (each with its own NDT map) are built in parallel, at most 8 at a time, and their partial sums are merged in chunk order, so the result does not depend on the thread timing.
+
+**Effect** (full 44, 10 passes): consistency 363.6 → 87.7 s (direct accumulation) → 44.7 s (shared data, parallel chunks): chunks 18.6 s, assembly 9.2 s, solve 9.2 s, smoothness 4.6 s, loading 1.3 s. `44_short` consistency 38.7 → 13.2 s after the first step. Whole full 44: processing time 888 → 628 s (odometry 517 s, consistency 45 s).
+
+**Checks.** `ctest` passes; the recorded numbers of the consistency tests are unchanged to the printed precision, and a new case runs several chunks twice and requires identical results. The full 44 is within 1e-10 of the previous baseline (`eval_odometry.py` metrics unchanged to the printed precision); a repeat of `44_short` is bit-identical with itself. Because the order of the sums changed the results are not bit-identical with the old baseline, so the baselines were refreshed (old ones kept as `*_2026-10-08c`). Not added: a dedicated unit test of the assembled normal equations (the assembly is not exposed); the end-to-end consistency tests cover it.
+
+OpenSpec change `consistency-speedup`.
+
 ## Settings that trade speed
 
 | Setting | Default | Effect on speed | Cost |
@@ -279,7 +295,7 @@ The debug setting `log_stage_timing` (`[lidar_odometry_debug_info]`, off by defa
 1. `deterministic-multithread` (done, [fix 7](#7-deterministic-multithreading));
 2. `banded-normal-matrix` (done, [fix 8](#8-banded-normal-matrix)), and the fixed Cholesky pattern (done, [fix 9](#9-fixed-cholesky-pattern));
 3. `ndt-lookup-cache` (it shortens the NDT loops, and its gain after multithreading is to be measured);
-4. a consistency analysis;
+4. the consistency analysis (done, [fix 11](#11-faster-consistency));
 5. `io-and-copies`.
 
 Result-changing levers come later, each judged with `eval_odometry.py`: a convergence stop rule, and per-pose blocks in `Consistency`.
