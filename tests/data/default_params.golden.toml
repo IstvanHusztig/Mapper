@@ -102,6 +102,7 @@ use_motion_from_previous_step = true
 calibration_validation_points = 1000000
 log_iteration_convergence = false
 log_stage_timing = false
+log_window_diagnostics = false
 save_calibration_validation = false
 
 [loop_closure]
