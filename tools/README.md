@@ -79,6 +79,18 @@ tools/merge_chunks.sh "<result_folder>" ["<output.laz>"]
 
 The default output is `<result_folder>/scan_lio_merged.laz`. Set `CLOUDCOMPARE` if CloudCompare is not installed in `C:\Program Files\CloudCompare`.
 
+## trajectory_seams.py
+
+Shows where two results of the same recording disagree in position, which `eval_odometry.py` (yaw only) can't: a stretch of the path that lags or leaps by decimetres draws a ghost wall where the path passes the same place again. Pure Python.
+
+```
+python tools/trajectory_seams.py "<raw data>/44/lio_result_2" "<raw data>/44/lio_result_3"
+```
+
+- The first folder is the reference; each further folder is compared pose by pose (same recording and settings, same number of poses).
+- Per result it prints the route length, the largest position difference with its time and the reference position, the first time the difference exceeds each threshold (`--thresholds`, default 5, 20 and 50 cm), and the longest stretch above the first threshold.
+- Used for `odometry-stall-fix`: a `/fp:fast` and a `/fp:precise` build of the same code should stay within a few centimetres over the whole 44.
+
 ## Regression baseline (compare_baseline.py, cut_recording)
 
 Refactors must reproduce `44_short` and the full 44 bit for bit (see `docs/ARCHITECTURE.md`). Two reference datasets live next to the raw data, outside git:
