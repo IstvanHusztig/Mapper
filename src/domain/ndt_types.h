@@ -39,11 +39,6 @@ struct NdtBucket
 	Eigen::Matrix3d cov_inverse = Eigen::Matrix3d::Zero();
 	bool inverse_computed = false;
 	bool inverse_usable = false;
-	// the covariance's eigen-decomposition (spreads ascending, vectors as columns); stored by update_rgd only when the
-	// degeneracy test needs it (OdometryConfig::degenerate_snr_detection or log_window_diagnostics)
-	Eigen::Vector3d frame_spreads = Eigen::Vector3d::Zero();
-	Eigen::Matrix3d frame_vectors = Eigen::Matrix3d::Identity();
-	bool frame_valid = false;
 };
 
 struct NdtBucketCoef

@@ -6,7 +6,6 @@
 #include <vector>
 #include <structures.h>
 #include "ndt_map.h"
-#include "degeneracy.h"
 #include "normal_equations.h"
 #include "optimizer_options.h"
 #include "phase_timing.h"
@@ -19,10 +18,6 @@ struct ScanToMapWorkspace
 {
     PatternCachedCholesky covariance;
     PatternCachedCholesky damped;
-    // the degeneracy test of the current window: computed in its first call (degeneracy_pending), held for the others;
-    // the window loop sets degeneracy_pending before each window
-    bool degeneracy_pending = true;
-    DegeneracyVerdict degeneracy;
 };
 
 // this function performs main LiDAR odometry calculations

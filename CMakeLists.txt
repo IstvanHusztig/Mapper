@@ -155,7 +155,6 @@ file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/settings/default_settings.toml"
 add_library(lo_domain STATIC
   src/domain/ndt_map.cpp
   src/domain/normal_equations.cpp
-  src/domain/degeneracy.cpp
   src/domain/imu_kinematics.cpp
   src/domain/window_steps.cpp
   src/domain/optimizer_options.cpp

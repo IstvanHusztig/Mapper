@@ -25,11 +25,6 @@ struct ScanToMapOptions
     // degeneracy-aware NDT terms (see OdometryConfig::degenerate_projection_ratio); ratio_full = 0: off
     double degenerate_projection_ratio = 0.0;
     double degenerate_projection_ratio_full = 0.0;
-    // noise-aware degeneracy test (see OdometryConfig::degenerate_snr_detection); snr_diagnostics computes it for the log only
-    bool snr_detection = false;
-    bool snr_diagnostics = false;
-    double snr_factor = 10.0;
-    double point_sigma_m = 0.02;
 };
 
 // motion model of a window: correction of the IMU frame and the sigmas of the consecutive-node and fix-origin priors

@@ -11,7 +11,6 @@ add_executable(lidar_odometry_tests
   window_steps_test.cpp
   imu_kinematics_test.cpp
   normal_equations_test.cpp
-  degeneracy_test.cpp
   phase_timing_test.cpp
   scan_to_map_test.cpp
   ndt_map_test.cpp

@@ -100,3 +100,16 @@ Close the GUI before building. Never run two jobs on the same input folder at on
 - [ ] 4.1 If the shipped settings change: new baselines (old folders renamed with a date suffix, both manifests rewritten from the final code).
   - Docs: `docs/degeneracy-information.html` and the Hungarian copy, the settings tables of `docs/index.html` and `docs/hu/index.html`, `docs/PERFORMANCE.md` if the time changes, `CLAUDE.md` if it describes the detector.
   - Memory notes. Commit, archive (sync the delta spec), push.
+
+## Outcome (2026-10-09): rejected, code removed
+
+- **Rotation-only variant**, tried at the user's request:
+  - full 44, precise build only (short test);
+  - SNR test on rotation, ratio projection on translation;
+  - 8.29 m from `44_baseline` (above 50 cm from t = 18.9 s);
+  - loop closure 11 loops instead of 21;
+  - 651 s instead of 587 s.
+  - Better heading consistency again: window yaw difference 0.98, final yaw 3 deg from the gyro. Not adopted.
+- **The code is removed.** At the user's request, the detector, the attenuation, the settings and the tests are not kept switched off. Every file outside `openspec/` is restored to the proposal commit `b8258af`; `ctest` passes and `44_short` is IDENTICAL with the manifest. The implementation is in git history (commits up to `4f1d937`) if it is ever wanted again.
+- **The delta spec is not synced:** the main spec keeps the ratio projection.
+

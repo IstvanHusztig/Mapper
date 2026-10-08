@@ -26,18 +26,9 @@ inline bool ndt_inverse_usable(const Eigen::Matrix3d &infm)
 
 // in_plane_sigma_m > 0: a planar cell (smallest spread below a third of the next) gets its in-plane variances raised to
 // at least in_plane_sigma_m^2 before the inversion, so it constrains mainly along its normal (OdometryConfig::ndt_plane_in_plane_sigma_m)
-// store_frame: also keep the covariance's eigen-decomposition in the cell (for the degeneracy test)
-inline void refresh_cell_inverse(NdtBucket &bucket, double in_plane_sigma_m = 0.0, bool store_frame = false)
+inline void refresh_cell_inverse(NdtBucket &bucket, double in_plane_sigma_m = 0.0)
 {
     bucket.cov_inverse = bucket.cov.inverse();
-    bucket.frame_valid = false;
-    if (store_frame)
-    {
-        const Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eig(bucket.cov);
-        bucket.frame_spreads = eig.eigenvalues();
-        bucket.frame_vectors = eig.eigenvectors();
-        bucket.frame_valid = true;
-    }
     if (in_plane_sigma_m > 0.0)
     {
         const Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eig(bucket.cov);
@@ -74,8 +65,7 @@ std::vector<Point3Di> decimate(const std::vector<Point3Di> &points, double bucke
 // exact = OdometryConfig::use_exact_ndt_bucket_statistics: true uses the statistics of all of a cell's points,
 // false the previous ones
 void update_rgd(const NdtGridParameters &rgd_params, NDTBucketMapType &buckets,
-                std::vector<Point3Di> &points_global, Eigen::Vector3d viewport, bool exact, double in_plane_sigma_m = 0.0,
-                bool store_frame = false);
+                std::vector<Point3Di> &points_global, Eigen::Vector3d viewport, bool exact, double in_plane_sigma_m = 0.0);
 
 void update_rgd_spherical_coordinates(const NdtGridParameters &rgd_params, NDTBucketMapType &buckets,
                                       std::vector<Point3Di> &points_global, std::vector<Eigen::Vector3d> &points_global_spherical);

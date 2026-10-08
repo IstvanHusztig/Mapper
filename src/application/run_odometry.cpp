@@ -73,8 +73,6 @@ namespace
 
     OdometryRunSetup prepare_run(const std::vector<Window> &windows, const OdometryConfig &params, Logger &logger)
     {
-        if (params.degenerate_snr_detection && params.degenerate_projection_ratio_full > 0.0)
-            log_warning(logger) << "degenerate_snr_detection and degenerate_projection_ratio_full are both set: the noise-aware test is used, the ratio is ignored";
         OdometryRunSetup s;
         s.rotation_options = get_motion_model_rotation_options(params);
         s.scan_to_map = get_scan_to_map_options(params);
@@ -379,7 +377,6 @@ namespace
     {
         double delta = 100000.0;
         double lm_factor = params.lm_factor_initial;
-        workspace.degeneracy_pending = true; // the degeneracy test runs in this window's first call
 
         std::chrono::time_point<std::chrono::system_clock> start, end;
         start = std::chrono::system_clock::now();
@@ -450,7 +447,7 @@ namespace
     // velocity would give over the same time. time_s counts from the first window's first node.
     void log_window_diagnostics(int i, const std::vector<Window> &windows, const std::vector<Eigen::Affine3d> &guess, const WindowOptimization &optimization,
                                 const PreviousVelocity &previous, const AccTerm &acc_term, const Eigen::Matrix3d &lidar_translation_information,
-                                const DegeneracyVerdict &degeneracy, const OdometryConfig &params, Logger &logger)
+                                const OdometryConfig &params, Logger &logger)
     {
         if (!params.log_window_diagnostics)
             return;
@@ -469,18 +466,6 @@ namespace
                          << ", result move " << v(result_move) << ", previous-velocity move " << (previous.use ? v(velocity_move) : std::string("none"))
                          << ", result-guess " << v(result_move - guess_move) << ", info ratio " << std::setprecision(3) << ratio << ", weak " << v(eig.eigenvectors().col(0))
                          << ", acc term " << (acc_term.options.enabled ? "on" : "off");
-        if (degeneracy.valid)
-        {
-            // the noise-aware test: p and direction of each translation and rotation eigen-direction (weakest first)
-            auto msg = log_info(logger);
-            msg << "window degeneracy " << i + 1 << ":" << std::fixed;
-            for (int k = 0; k < 3; k++)
-                msg << " t" << k << " p " << std::setprecision(3) << degeneracy.translation_p(k) << " dir " << v(degeneracy.translation_directions.col(k))
-                    << " info " << std::scientific << std::setprecision(2) << degeneracy.translation_information(k) << std::fixed;
-            for (int k = 0; k < 3; k++)
-                msg << " r" << k << " p " << std::setprecision(3) << degeneracy.rotation_p(k) << " dir " << v(degeneracy.rotation_directions.col(k))
-                    << " info " << std::scientific << std::setprecision(2) << degeneracy.rotation_information(k) << std::fixed;
-        }
     }
 
     // log_iteration_convergence: after how many iterations the window's poses settled, and where fast mode would have stopped
@@ -528,12 +513,10 @@ namespace
         for (int i = 0; i < pp.size(); i++)
             pp[i].point = state.m_g * pp[i].point;
 
-        update_rgd(params.in_out_params_indoor, state.buckets_indoor, pp, state.m_g.translation(), params.use_exact_ndt_bucket_statistics, params.ndt_plane_in_plane_sigma_m,
-                   params.degenerate_snr_detection || params.log_window_diagnostics);
+        update_rgd(params.in_out_params_indoor, state.buckets_indoor, pp, state.m_g.translation(), params.use_exact_ndt_bucket_statistics, params.ndt_plane_in_plane_sigma_m);
 
         if (params.ablation_study_use_hierarchical_rgd){
-            update_rgd(params.in_out_params_outdoor, state.buckets_outdoor, pp, state.m_g.translation(), params.use_exact_ndt_bucket_statistics, params.ndt_plane_in_plane_sigma_m,
-                   params.degenerate_snr_detection || params.log_window_diagnostics);
+            update_rgd(params.in_out_params_outdoor, state.buckets_outdoor, pp, state.m_g.translation(), params.use_exact_ndt_bucket_statistics, params.ndt_plane_in_plane_sigma_m);
         }
     }
 
@@ -607,12 +590,10 @@ namespace
                 carry.points_global = decimate(carry.points_global, params.decimation, params.decimation, params.decimation);
             }
 
-            update_rgd(params.in_out_params_indoor, state.buckets_indoor, carry.points_global, window.poses[0].translation(), params.use_exact_ndt_bucket_statistics, params.ndt_plane_in_plane_sigma_m,
-                   params.degenerate_snr_detection || params.log_window_diagnostics);
+            update_rgd(params.in_out_params_indoor, state.buckets_indoor, carry.points_global, window.poses[0].translation(), params.use_exact_ndt_bucket_statistics, params.ndt_plane_in_plane_sigma_m);
             if (params.ablation_study_use_hierarchical_rgd)
             {
-                update_rgd(params.in_out_params_outdoor, state.buckets_outdoor, carry.points_global, window.poses[0].translation(), params.use_exact_ndt_bucket_statistics, params.ndt_plane_in_plane_sigma_m,
-                   params.degenerate_snr_detection || params.log_window_diagnostics);
+                update_rgd(params.in_out_params_outdoor, state.buckets_outdoor, carry.points_global, window.poses[0].translation(), params.use_exact_ndt_bucket_statistics, params.ndt_plane_in_plane_sigma_m);
             }
         }
         else
@@ -624,12 +605,10 @@ namespace
                 pp.point = window.poses[intermediate_points[j].index_pose] * pp.point;
                 pg.push_back(pp);
             }
-            update_rgd(params.in_out_params_indoor, state.buckets_indoor, pg, window.poses[0].translation(), params.use_exact_ndt_bucket_statistics, params.ndt_plane_in_plane_sigma_m,
-                   params.degenerate_snr_detection || params.log_window_diagnostics);
+            update_rgd(params.in_out_params_indoor, state.buckets_indoor, pg, window.poses[0].translation(), params.use_exact_ndt_bucket_statistics, params.ndt_plane_in_plane_sigma_m);
             if (params.ablation_study_use_hierarchical_rgd)
             {
-                update_rgd(params.in_out_params_outdoor, state.buckets_outdoor, pg, window.poses[0].translation(), params.use_exact_ndt_bucket_statistics, params.ndt_plane_in_plane_sigma_m,
-                   params.degenerate_snr_detection || params.log_window_diagnostics);
+                update_rgd(params.in_out_params_outdoor, state.buckets_outdoor, pg, window.poses[0].translation(), params.use_exact_ndt_bucket_statistics, params.ndt_plane_in_plane_sigma_m);
             }
         }
     }
@@ -852,7 +831,7 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
             const std::chrono::duration<double> window_seconds = std::chrono::system_clock::now() - window_start;
             log_window_result(i, windows.size(), optimization, carry.acc_distance, window_seconds.count(), params, logger);
             log_iteration_convergence(i, params, optimization, carry, logger);
-            log_window_diagnostics(i, windows, poses_before_optimization, optimization, previous, acc_term, lidar_translation_information, workspace.degeneracy, params, logger);
+            log_window_diagnostics(i, windows, poses_before_optimization, optimization, previous, acc_term, lidar_translation_information, params, logger);
 
             update_gyro_bias_after_window(windows[i], i, setup, carry, params, logger);
             update_acc_term_after_window(windows[i], i, acc_term, lidar_translation_information, acc_offset, setup, carry, params, logger);
