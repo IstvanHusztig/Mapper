@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cmath>
 #include <sstream>
+#include <string>
 
 namespace
 {
@@ -57,6 +58,9 @@ namespace
         Eigen::Vector3d acc_gravity = Eigen::Vector3d::Zero();  // gravity in the odometry frame [accelerometer units]
         Eigen::Matrix3d acc_offset_cov = Eigen::Matrix3d::Zero(); // prior of the next window's acceleration offset
         bool previous_window_degenerate = false;                // decides about the accelerometer term in the next window
+        double acc_weight = 0.0;                                // continuous weight of the term in the next window (imu_degenerate_weight_ratio_full)
+        std::vector<double> ratio_history;                      // the last windows' information ratios (for the median)
+        Eigen::Vector3d weak_direction = Eigen::Vector3d::Zero(); // the last window's weakest LiDAR direction
         double degenerate_time_s = 0.0;                         // time spent in the current degenerate stretch
         double acc_distance = 0.0;                              // trajectory length since the last sliding-window reset [m]
         std::vector<Point3Di> points_global;                    // map points since the last reset
@@ -163,8 +167,19 @@ namespace
         double sigma_x_m = params.lidar_odometry_motion_model_x_1_sigma_m;
         double sigma_y_m = params.lidar_odometry_motion_model_y_1_sigma_m;
         double sigma_z_m = params.lidar_odometry_motion_model_z_1_sigma_m;
+        const bool weighted = params.imu_degenerate_weight_ratio_full > params.imu_degenerate_information_ratio;
         if (setup.acc_gated && acc_term_active)
-            sigma_x_m = sigma_y_m = sigma_z_m = params.imu_degenerate_translation_sigma_m;
+        {
+            if (weighted)
+            {
+                const double w = carry.acc_weight;
+                sigma_x_m += w * (params.imu_degenerate_translation_sigma_m - sigma_x_m);
+                sigma_y_m += w * (params.imu_degenerate_translation_sigma_m - sigma_y_m);
+                sigma_z_m += w * (params.imu_degenerate_translation_sigma_m - sigma_z_m);
+            }
+            else
+                sigma_x_m = sigma_y_m = sigma_z_m = params.imu_degenerate_translation_sigma_m;
+        }
         t.motion_model = setup.motion_model;
         t.motion_model.x_sigma_m = sigma_x_m;
         t.motion_model.y_sigma_m = sigma_y_m;
@@ -179,9 +194,17 @@ namespace
             t.options.gravity = carry.acc_gravity;
             t.options.to_mps2 = 9.80665 / carry.acc_gravity.norm();
             t.options.sigma_mps2 = params.imu_acceleration_sigma_mps2;
+            if (setup.acc_gated && weighted)
+                t.options.sigma_mps2 /= std::sqrt(std::max(carry.acc_weight, 1e-6));
             t.options.span_s = params.imu_acceleration_span_s;
             t.options.prev_velocity_age_s = prev_velocity_age_s;
             t.options.offset_prior_cov = carry.acc_offset_cov + Eigen::Matrix3d::Identity() * (rw * rw * window_duration);
+            if (params.imu_acceleration_offset_freeze_blind && carry.weak_direction.squaredNorm() > 0.5)
+            {
+                // the offset's spread along the weakest LiDAR direction shrunk to 1 %: it stays where it was there
+                const Eigen::Matrix3d A = Eigen::Matrix3d::Identity() - 0.99 * carry.weak_direction * carry.weak_direction.transpose();
+                t.options.offset_prior_cov = A * t.options.offset_prior_cov * A.transpose();
+            }
             t.offset_cov = t.options.offset_prior_cov;
         }
         return t;
@@ -199,11 +222,29 @@ namespace
             // degeneracy of this window decides about the term in the next one
             const Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eig(lidar_translation_information);
             const double ratio = eig.eigenvalues().maxCoeff() > 0.0 ? eig.eigenvalues().minCoeff() / eig.eigenvalues().maxCoeff() : 0.0;
-            carry.previous_window_degenerate = ratio < params.imu_degenerate_information_ratio;
             const Eigen::Vector3d weak = eig.eigenvectors().col(0);
+            carry.weak_direction = weak;
+            const bool weighted = params.imu_degenerate_weight_ratio_full > params.imu_degenerate_information_ratio;
+            if (weighted)
+            {
+                // the median of the last windows' ratios, so one window's noise doesn't flip the term
+                carry.ratio_history.push_back(ratio);
+                const size_t keep = static_cast<size_t>(std::max(1, params.imu_degenerate_smoothing_windows));
+                if (carry.ratio_history.size() > keep)
+                    carry.ratio_history.erase(carry.ratio_history.begin());
+                std::vector<double> sorted = carry.ratio_history;
+                std::sort(sorted.begin(), sorted.end());
+                const double median = sorted[sorted.size() / 2];
+                const double r0 = params.imu_degenerate_information_ratio, r1 = params.imu_degenerate_weight_ratio_full;
+                carry.acc_weight = std::clamp((r1 - median) / (r1 - r0), 0.0, 1.0);
+                carry.previous_window_degenerate = carry.acc_weight > 0.0;
+            }
+            else
+                carry.previous_window_degenerate = ratio < params.imu_degenerate_information_ratio;
             log_info(logger) << "lidar translation information window " << i + 1 << ": ratio " << std::fixed << std::setprecision(4) << ratio
                              << " weakest direction " << std::setprecision(2) << weak.x() << " " << weak.y() << " " << weak.z()
-                             << (t.options.enabled ? " | accelerometer term active" : "");
+                             << (t.options.enabled ? " | accelerometer term active" : "")
+                             << (weighted ? " | next weight " : "") << (weighted ? std::to_string(carry.acc_weight).substr(0, 4) : std::string());
 
             // outside degenerate stretches: calibrate the gravity vector from the LiDAR-constrained trajectory
             Eigen::Vector3d observed;

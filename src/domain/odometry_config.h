@@ -166,6 +166,16 @@ struct OdometryConfig
     double imu_degenerate_information_ratio = 0.05;
     double imu_degenerate_max_duration_s = 15.0;
     double imu_degenerate_translation_sigma_m = 3e-4; // lidar_odometry_motion_model_x/y/z_1_sigma_m while the term is active
+    // continuous weight instead of the on/off gate: with imu_degenerate_weight_ratio_full above imu_degenerate_information_ratio,
+    // the term's weight is 1 at or below imu_degenerate_information_ratio, 0 at or above imu_degenerate_weight_ratio_full and
+    // linear in between, from the median ratio of the last imu_degenerate_smoothing_windows windows; the accelerometer sigma is
+    // divided by sqrt(weight) and the translation sigma moves from the normal one towards imu_degenerate_translation_sigma_m.
+    // 0 = the on/off gate (previous window's ratio below imu_degenerate_information_ratio)
+    double imu_degenerate_weight_ratio_full = 0.0;
+    int imu_degenerate_smoothing_windows = 5;
+    // keep the acceleration offset where it is along the window's weakest LiDAR direction while the term is active (it is not
+    // observable there: the LiDAR can't see the motion it would explain)
+    bool imu_acceleration_offset_freeze_blind = false;
     // degeneracy-aware scan-to-map (solution remapping): along a direction whose share of the window's geometric
     // information (eigenvalue / largest eigenvalue of sum(n * n^T) over the matched surface normals) is below
     // degenerate_projection_ratio, the NDT terms carry no translation information, so the motion model (prediction,

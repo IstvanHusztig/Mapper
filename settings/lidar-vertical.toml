@@ -55,6 +55,9 @@ degenerate_projection_ratio = 0.0
 degenerate_projection_ratio_full = 0.0
 # accelerometer as a soft measurement of the change of velocity, only where the LiDAR geometry does not
 # constrain the translation (corridor turnaround, stairwell), for at most 15 s per stretch; tested on b1/42/43
+imu_acceleration_offset_freeze_blind = false
+imu_degenerate_smoothing_windows = 5
+imu_degenerate_weight_ratio_full = 0.0
 use_imu_acceleration_term = true
 imu_acceleration_only_when_degenerate = true
 imu_degenerate_information_ratio = 0.3
