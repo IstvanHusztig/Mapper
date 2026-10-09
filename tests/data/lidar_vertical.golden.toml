@@ -40,11 +40,11 @@ imu_accel_floor_sigma_mps2 = 0.1
 imu_accel_noise_density_mps2_sqrt_hz = 0.0013
 imu_acceleration_offset_freeze_blind = false
 imu_acceleration_offset_initial_sigma_mps2 = 0.1
-imu_acceleration_offset_rw_mps2_sqrt_s = 0.05
+imu_acceleration_offset_rw_mps2_sqrt_s = 1e-04
 imu_acceleration_only_when_degenerate = true
 imu_acceleration_sigma_mps2 = 0.5
 imu_acceleration_span_s = 0.01
-imu_always_on = false
+imu_always_on = true
 imu_degenerate_information_ratio = 0.3
 imu_degenerate_max_duration_s = 15.0
 imu_degenerate_smoothing_windows = 5
@@ -117,9 +117,12 @@ log_window_diagnostics = false
 save_calibration_validation = false
 
 [loop_closure]
+loop_closure_candidates = 3
 loop_closure_edge_sigma_deg = 0.3
 loop_closure_edge_sigma_m = 0.05
 loop_closure_max_correction_m = 6.0
+loop_closure_max_residual_deg = 2.0
+loop_closure_max_residual_m = 0.15
 loop_closure_max_vertical_offset_m = 1.5
 loop_closure_min_fitness = 0.5
 loop_closure_min_time_gap_s = 30.0

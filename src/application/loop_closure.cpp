@@ -4,6 +4,8 @@
 #include <python-scripts/point-to-point-metrics/point_to_point_source_to_target_tait_bryan_wc_jacobian_simplified.h>
 #include <python-scripts/constraints/relative_pose_tait_bryan_wc_jacobian.h>
 
+#include <algorithm>
+#include <iomanip>
 #include <unordered_set>
 
 namespace
@@ -340,6 +342,20 @@ std::vector<Eigen::Affine3d> optimize_loop_pose_graph(const std::vector<Eigen::A
     return result;
 }
 
+std::vector<LoopEdgeResidual> loop_edge_residuals(const std::vector<Eigen::Affine3d> &initial, const std::vector<Eigen::Affine3d> &optimized,
+                                                  const std::vector<LoopClosureEdge> &loops)
+{
+    std::vector<LoopEdgeResidual> out;
+    for (const auto &e : loops)
+    {
+        const Eigen::Affine3d measured = initial[e.i].inverse() * e.correction * initial[e.j];
+        const Eigen::Affine3d solved = optimized[e.i].inverse() * optimized[e.j];
+        const Eigen::Affine3d d = measured.inverse() * solved;
+        out.push_back({d.translation().norm(), Eigen::AngleAxisd(d.linear()).angle() / DEG});
+    }
+    return out;
+}
+
 bool loop_pose_graph_plausible(const std::vector<Eigen::Affine3d> &initial, const std::vector<Eigen::Affine3d> &optimized,
                                const std::vector<LoopClosureEdge> &loops, const OdometryConfig &params, double &max_shift_m)
 {
@@ -407,8 +423,9 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
     std::vector<LoopClosureEdge> loops;
     for (int j = 0; j < static_cast<int>(segments.size()); j++)
     {
-        int best_i = -1;
-        double best_d = params.loop_closure_search_radius_m;
+        // earlier segments within the search radius, nearest first; when a registration is rejected the next one is tried
+        // (the nearest centre is not always the same view: a short last segment can pick a wrong partner)
+        std::vector<std::pair<double, int>> candidates;
         for (int i = 0; i < j; i++)
         {
             if (segments[j].t_begin - segments[i].t_end < params.loop_closure_min_time_gap_s)
@@ -417,45 +434,47 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
             if (std::abs(d.z()) > params.loop_closure_max_vertical_offset_m)
                 continue;
             const double dh = d.head<2>().norm();
-            if (dh < best_d)
-            {
-                best_d = dh;
-                best_i = i;
-            }
+            if (dh < params.loop_closure_search_radius_m)
+                candidates.emplace_back(dh, i);
         }
-        if (best_i < 0)
-            continue;
-
-        // target: the earlier segment with its neighbours
-        std::vector<Eigen::Vector3d> target;
-        for (int i = std::max(0, best_i - 1); i <= std::min(j - 1, best_i + 1); i++)
-            target.insert(target.end(), segments[i].points.begin(), segments[i].points.end());
-        const auto &source = segments[j].points;
-        if (source.size() < 500 || target.size() < 500)
-            continue;
-
-        const auto fitness_grid = voxel_set(target, 0.2);
-        const double before = overlap(source, Eigen::Affine3d::Identity(), fitness_grid, 0.2);
-        Eigen::Affine3d T = coarse_search(source, target, params.loop_closure_max_correction_m);
-        T = ndt_refine(source, target, T, params.use_exact_ndt_bucket_statistics);
-        const double after = overlap(source, T, fitness_grid, 0.2);
-        const double shift = T.translation().norm();
-        const double angle = Eigen::AngleAxisd(T.linear()).angle() / DEG;
-        // an already aligned revisit (no improvement possible) is a valid constraint as well
-        const bool accepted = after >= params.loop_closure_min_fitness && after >= before - 0.02 &&
-                              shift <= params.loop_closure_max_correction_m + 1.0 && angle <= 15.0;
-        log_info(logger) << "loop candidate segments " << best_i << " -> " << j << " (t " << std::fixed << std::setprecision(1)
-                         << segments[best_i].t_begin - segments[0].t_begin << " s / " << segments[j].t_begin - segments[0].t_begin
-                         << " s): overlap " << std::setprecision(2) << before << " -> " << after << ", correction " << shift << " m "
-                         << std::setprecision(1) << angle << " deg" << (accepted ? " ACCEPTED" : " rejected");
-        if (accepted)
+        std::sort(candidates.begin(), candidates.end());
+        const int tries = std::min(static_cast<int>(candidates.size()), std::max(1, params.loop_closure_candidates));
+        for (int c = 0; c < tries; c++)
         {
-            LoopClosureEdge e;
-            e.i = best_i;
-            e.j = j;
-            e.correction = T;
-            e.fitness = after;
-            loops.push_back(e);
+            const int best_i = candidates[c].second;
+
+            // target: the earlier segment with its neighbours
+            std::vector<Eigen::Vector3d> target;
+            for (int i = std::max(0, best_i - 1); i <= std::min(j - 1, best_i + 1); i++)
+                target.insert(target.end(), segments[i].points.begin(), segments[i].points.end());
+            const auto &source = segments[j].points;
+            if (source.size() < 500 || target.size() < 500)
+                continue;
+
+            const auto fitness_grid = voxel_set(target, 0.2);
+            const double before = overlap(source, Eigen::Affine3d::Identity(), fitness_grid, 0.2);
+            Eigen::Affine3d T = coarse_search(source, target, params.loop_closure_max_correction_m);
+            T = ndt_refine(source, target, T, params.use_exact_ndt_bucket_statistics);
+            const double after = overlap(source, T, fitness_grid, 0.2);
+            const double shift = T.translation().norm();
+            const double angle = Eigen::AngleAxisd(T.linear()).angle() / DEG;
+            // an already aligned revisit (no improvement possible) is a valid constraint as well
+            const bool accepted = after >= params.loop_closure_min_fitness && after >= before - 0.02 &&
+                                  shift <= params.loop_closure_max_correction_m + 1.0 && angle <= 15.0;
+            log_info(logger) << "loop candidate segments " << best_i << " -> " << j << " (t " << std::fixed << std::setprecision(1)
+                             << segments[best_i].t_begin - segments[0].t_begin << " s / " << segments[j].t_begin - segments[0].t_begin
+                             << " s): overlap " << std::setprecision(2) << before << " -> " << after << ", correction " << shift << " m "
+                             << std::setprecision(1) << angle << " deg" << (accepted ? " ACCEPTED" : " rejected");
+            if (accepted)
+            {
+                LoopClosureEdge e;
+                e.i = best_i;
+                e.j = j;
+                e.correction = T;
+                e.fitness = after;
+                loops.push_back(e);
+                break;
+            }
         }
     }
 
@@ -469,7 +488,44 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
     std::vector<Eigen::Affine3d> initial;
     for (const auto &s : segments)
         initial.push_back(s.pose);
-    std::vector<Eigen::Affine3d> optimized = optimize_loop_pose_graph(initial, loops, params);
+    // a loop edge the solution disagrees with by more than loop_closure_max_residual_m / _deg is a false match that bends
+    // the trajectory (a ghost wall at the revisit): the worst one is dropped and the graph solved again
+    std::vector<Eigen::Affine3d> optimized;
+    for (;;)
+    {
+        optimized = optimize_loop_pose_graph(initial, loops, params);
+        const std::vector<LoopEdgeResidual> residuals = loop_edge_residuals(initial, optimized, loops);
+        size_t worst = loops.size();
+        double worst_ratio = 1.0;
+        for (size_t e = 0; e < loops.size(); e++)
+        {
+            const double ratio = std::max(residuals[e].translation_m / params.loop_closure_max_residual_m,
+                                          residuals[e].angle_deg / params.loop_closure_max_residual_deg);
+            if (ratio > worst_ratio)
+            {
+                worst_ratio = ratio;
+                worst = e;
+            }
+        }
+        if (worst == loops.size())
+        {
+            auto line = log_info(logger);
+            line << "loop closure: loop edge residuals [m/deg]" << std::fixed;
+            for (size_t e = 0; e < loops.size(); e++)
+                line << " " << loops[e].i << "->" << loops[e].j << " " << std::setprecision(2) << residuals[e].translation_m << "/"
+                     << std::setprecision(1) << residuals[e].angle_deg;
+            break;
+        }
+        log_info(logger) << "loop segments " << loops[worst].i << " -> " << loops[worst].j << " dropped: residual " << std::fixed
+                         << std::setprecision(2) << residuals[worst].translation_m << " m " << std::setprecision(1) << residuals[worst].angle_deg
+                         << " deg";
+        loops.erase(loops.begin() + static_cast<std::ptrdiff_t>(worst));
+        if (loops.empty())
+        {
+            log_info(logger) << "loop closure: no loops left, trajectory unchanged";
+            return 0;
+        }
+    }
     double max_shift = 0.0;
     if (!loop_pose_graph_plausible(initial, optimized, loops, params, max_shift))
     {

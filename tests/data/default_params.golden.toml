@@ -117,9 +117,12 @@ log_window_diagnostics = false
 save_calibration_validation = false
 
 [loop_closure]
+loop_closure_candidates = 3
 loop_closure_edge_sigma_deg = 0.3
 loop_closure_edge_sigma_m = 0.05
 loop_closure_max_correction_m = 6.0
+loop_closure_max_residual_deg = 2.0
+loop_closure_max_residual_m = 0.15
 loop_closure_max_vertical_offset_m = 1.5
 loop_closure_min_fitness = 0.5
 loop_closure_min_time_gap_s = 30.0

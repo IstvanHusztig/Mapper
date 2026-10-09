@@ -31,6 +31,15 @@ struct LoopClosureEdge
 std::vector<Eigen::Affine3d> optimize_loop_pose_graph(const std::vector<Eigen::Affine3d> &initial, const std::vector<LoopClosureEdge> &loops,
                                                       const OdometryConfig &params);
 
+// How far the optimized poses are from each loop edge's measurement: (initial_i^-1 correction initial_j)^-1 (optimized_i^-1 optimized_j).
+struct LoopEdgeResidual
+{
+    double translation_m = 0.0;
+    double angle_deg = 0.0;
+};
+std::vector<LoopEdgeResidual> loop_edge_residuals(const std::vector<Eigen::Affine3d> &initial, const std::vector<Eigen::Affine3d> &optimized,
+                                                  const std::vector<LoopClosureEdge> &loops);
+
 // The optimized poses may be applied: all finite, and no segment moved further than loop_closure_max_correction_m plus
 // the largest accepted loop correction (a pose graph that ran away). max_shift_m receives the largest segment correction.
 bool loop_pose_graph_plausible(const std::vector<Eigen::Affine3d> &initial, const std::vector<Eigen::Affine3d> &optimized,

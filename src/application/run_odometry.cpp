@@ -531,6 +531,9 @@ namespace
                          << ", result move " << v(result_move) << ", previous-velocity move " << (previous.use ? v(velocity_move) : std::string("none"))
                          << ", result-guess " << v(result_move - guess_move) << ", info ratio " << std::setprecision(3) << ratio << ", weak " << v(eig.eigenvectors().col(0))
                          << ", acc term " << (acc_term.options.enabled ? "on" : "off");
+        if (params.imu_always_on)
+            log_info(logger) << "window diagnostics " << i + 1 << ": velocity start " << v(window.velocity.start) << ", end " << v(window.velocity.end)
+                             << ", end sigma " << std::setprecision(3) << std::sqrt(window.velocity.end_covariance.trace() / 3.0) << " m/s";
     }
 
     // log_window_diagnostics: how the accelerometer fits the optimized trajectory. Anchor nodes ~50 ms apart; per triple the

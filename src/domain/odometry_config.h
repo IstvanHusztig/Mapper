@@ -128,6 +128,11 @@ struct OdometryConfig
     double loop_closure_odometry_sigma_deg = 0.5;
     double loop_closure_edge_sigma_m = 0.05;
     double loop_closure_edge_sigma_deg = 0.3;
+    // registrations tried per segment (the next nearest earlier segment when one is rejected), and the largest disagreement
+    // between the solved pose graph and a loop edge before that edge is dropped as a false match
+    int loop_closure_candidates = 3;
+    double loop_closure_max_residual_m = 0.15;
+    double loop_closure_max_residual_deg = 2.0;
 
     // online gyro bias estimation (3 extra unknowns per window, carried across windows as a prior)
     bool use_gyro_bias_estimation = true;          // validated against a static recording (43/static)

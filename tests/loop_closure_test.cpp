@@ -217,3 +217,36 @@ TEST_CASE("loop closure pose graph: a result that ran away or is not finite is r
     broken[1].translation().y() = std::numeric_limits<double>::quiet_NaN();
     CHECK_FALSE(loop_pose_graph_plausible(initial, broken, loops, c, max_shift));
 }
+
+TEST_CASE("loop closure pose graph: a false loop edge stands out by its residual")
+{
+    OdometryConfig c = loop_closure_config();
+    std::vector<Eigen::Affine3d> truth, initial;
+    for (int k = 0; k < 8; k++)
+    {
+        const double x = k < 4 ? k * 2.0 : (7 - k) * 2.0;
+        const double y = k < 4 ? 0.0 : 3.0;
+        truth.push_back(segment_pose(x, y, k < 4 ? 0.0 : 180.0));
+        initial.push_back(segment_pose(x, y + 0.05 * k, k < 4 ? 0.0 : 180.0));
+    }
+    const auto edge = [&](int i, int j, const Eigen::Vector3d &error)
+    {
+        LoopClosureEdge e;
+        e.i = i;
+        e.j = j;
+        e.correction = (initial[i] * truth[i].inverse() * truth[j]) * initial[j].inverse();
+        e.correction.translation() += error;
+        return e;
+    };
+    // two revisits measured exactly, one registration that snapped 1 m off (a wrong match): the solution spreads its error
+    // over the good edges too, but it keeps the largest residual, so dropping the worst edge first removes it
+    std::vector<LoopClosureEdge> loops{edge(0, 7, Eigen::Vector3d::Zero()), edge(1, 6, Eigen::Vector3d::Zero()),
+                                       edge(2, 5, Eigen::Vector3d(1.0, 0.0, 0.0))};
+    const std::vector<LoopEdgeResidual> r = loop_edge_residuals(initial, optimize_loop_pose_graph(initial, loops, c), loops);
+    REQUIRE(r.size() == 3);
+    CHECK(r[2].translation_m > c.loop_closure_max_residual_m);
+    CHECK(r[2].translation_m > std::max(r[0].translation_m, r[1].translation_m));
+    loops.pop_back();
+    for (const LoopEdgeResidual &good : loop_edge_residuals(initial, optimize_loop_pose_graph(initial, loops, c), loops))
+        CHECK(good.translation_m < 0.02);
+}
