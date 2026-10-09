@@ -46,7 +46,7 @@ The term then constrains rotations and positions together. A tilt that leaks gra
     - below: the measured white noise, 0.023 to 0.028 m/s² per sample;
     - above: the data sheet's filter value `acc_cov` 0.1 m/s², which is 3 to 4 times the measured per-sample noise and so already includes a vibration margin.
   - The lever arm (1.7 cm in the settings; the data sheet says co-located) adds at most about 0.02 m/s² at walking rotation rates. It is covered by the floor and not modelled.
-- **Bias random walk:** today's `imu_acceleration_offset_rw_mps2_sqrt_s` = 0.05 is a guess. The data sheet gives 0.0001 without units and an actively heated IMU, which both point to a much smaller value. Task 3 tries 0.05, 0.01 and 0.001.
+- **Bias random walk:** today's `imu_acceleration_offset_rw_mps2_sqrt_s` = 0.05 is a guess. The data sheet gives 0.0001 without units and an actively heated IMU, which both point to a much smaller value. Task 3 tries today's 0.05 and the two readings of the Unitree value: 0.01 (variance) and 0.0001 (sigma).
 - **Timestamps, not rates:** the data sheet's 500 Hz output doesn't match the recordings (882 to 892 Hz, bursts, gaps such as 607 samples in one second of 44). The span τ and the noise per term come from the timestamps of the anchor nodes. A term whose span is stretched by a gap beyond twice `imu_acceleration_span_s` is dropped.
 - **Settings:**
   - `imu_always_on` (bool, default false);

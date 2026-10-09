@@ -51,7 +51,7 @@ Close the GUI before building. Never run two jobs on the same input folder at on
 
 ## 3. Judge
 
-- [ ] 3.1 Full 44, precise build, with `imu_always_on`. At most five runs: the floor sigma at the task-1 measurement and at the data-sheet bound 0.1 m/s², and the bias random walk at 0.05 (today), 0.01 and 0.001 m/s²/√s, combined as task 1 suggests. Each run reported with:
+- [ ] 3.1 Full 44, precise build, with `imu_always_on`. At most five runs: the floor sigma at the task-1 measurement and at the data-sheet bound 0.1 m/s², and the bias random walk at 0.05 (today) and the two readings of the Unitree L2 value, 0.01 and 0.0001 m/s²/√s, combined as task 1 suggests. Each run reported with:
   - the difference from `44_baseline`;
   - the loop-closure corrections and the number of loops;
   - `eval_odometry.py` and the time.

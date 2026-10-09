@@ -17,13 +17,15 @@ The term itself has three weaknesses:
 
 The LiDAR-inertial systems that hold up in tunnels and caves keep the IMU in the solution all the time, with velocity and accelerometer bias as estimated states and noise taken from the IMU, not switched on and off. This is the literature survey of `odometry-stall-fix` (`openspec/changes/archive/2026-10-08-odometry-stall-fix/research.md`). The figures below are what the papers report, not our measurements.
 - **Wildcat**, Ramezani et al. 2022, CSIRO, the family used for handheld cave mapping: 0.34 to 0.42 m in tunnels, against 0.92 to 1.69 m for LIO-SAM.
-- LIO-SAM, FAST-LIO2, CT-ICP and Super Odometry work the same way. FAST-LIO2 and Point-LIO are the stacks Unitree configures the L2 for.
+- LIO-SAM, FAST-LIO2, CT-ICP and Super Odometry work the same way.
+
+Only the method comes from the literature. Every sensor value in this change is from the user's Unitree L2: its data sheet and its own built-in IMU, measured at rest (below).
 
 The two other improvements tried in the meantime were measured and dropped (changes `odometry-stall-fix` and `hessian-degeneracy-detection`). This is the remaining structural step, next to robust loop-closure gating.
 
-## The sensor: Unitree L2
+## The sensor: Unitree L2 and its built-in IMU
 
-From the user's data sheet (2026-10-09), and what each value means here.
+The user's scanner is a Unitree L2, and the IMU is the 6-axis IMU inside it; no other sensor is assumed. The table is the user's data sheet (2026-10-09) and what each value means here.
 
 | Data sheet | Value | Consequence for this change |
 |---|---|---|
@@ -31,13 +33,13 @@ From the user's data sheet (2026-10-09), and what each value means here.
 | Range | 30 m at 90 % reflectivity, 15 m at 10 %; blind zone 0.05 m | Dark, wet rock reflects little. In large chambers the far walls drop out, so more windows are partly blind and the IMU carries more. |
 | Scan | 360° × 90° (96° NEGA), non-repetitive, 64,000 points/s, 5.55 Hz rotation | A 0.4 s window spans about 2.2 rotations, so coverage within a window doesn't limit it. |
 | IMU rates | 1000 Hz sampling, 500 Hz output | The recordings carry 882 to 892 samples/s, with timestamps in bursts, and gaps: recording 44 has only 607 samples in its third second. The term must use the timestamps, never a nominal rate. |
-| Noise for filters | `acc_cov` 0.1 m/s², `gyr_cov` 0.1 rad/s | Filter tuning values (the same numbers ship in the FAST-LIO configs of other sensors), not a measured noise. They are 3 to 4 times the measured per-sample white noise (below), so they include a margin for vibration. They bound the floor sigma from above. |
-| Bias random walk | `b_acc_cov`, `b_gyr_cov` 0.0001 | Units are not stated (variance or sigma). With the active heating, the bias is meant to stay stable. Either reading is 5 to 500 times smaller than today's 0.05 m/s²/√s, so the random walk becomes a measured choice instead of a guess. |
+| Noise for filters | `acc_cov` 0.1 m/s², `gyr_cov` 0.1 rad/s | Unitree's values for its FAST-LIO / Point-LIO configuration: filter tuning, not a measured noise density. They are 3 to 4 times the measured per-sample white noise (below), so they include a margin for vibration. They bound the floor sigma from above. |
+| Bias random walk | `b_acc_cov`, `b_gyr_cov` 0.0001 | Units are not stated (variance or sigma). With the active heating, the bias is meant to stay stable. Read as a variance it is 0.01 m/s²/√s, read as a sigma 0.0001 m/s²/√s: 5 to 500 times smaller than today's 0.05. Both readings are tried (task 3). |
 | Heating | Active internal heating for bias control | Supports a slowly varying accelerometer bias, carried as a state over the whole run. |
 | Extrinsics | Rotation identity, translation 0 (co-located) | No alignment state is needed. dMapper's settings keep a lever arm of 1.7 cm (`lidar_imu_lever_arm_*`, from the Unitree SDK). Its centripetal effect is about 0.017 m/s² at 1 rad/s, below the noise floor, so the term needs no lever-arm correction. |
 | Start-up | 3 to 5 s at rest for gravity alignment and bias | Recording 44 doesn't have one: in its first 3 s the gyro reaches 0.15 rad/s and the specific force spreads by 0.02 g, against 0.0025 g at rest. The change must work without a rest period, and use one when it is there (below). |
 
-**Measured on the user's own static recording**, `raw data/43/static` (17 s at rest, 882 Hz, task 1.0), the same recording the gyro ARW was measured on in `gyro-bias-estimation`:
+**Measured on the L2's built-in IMU at rest**, the user's static recording `raw data/43/static` (17 s, 882 Hz, task 1.0; same device and file format as recording 44), the same recording the gyro ARW was measured on in `gyro-bias-estimation`:
 - accelerometer white noise: 0.023 to 0.028 m/s² per sample; noise density x 0.0011, y 0.0013, z 0.0013 m/s²/√Hz (110 / 131 / 135 µg/√Hz);
 - gyro: ARW 0.028 / 0.042 / 0.057 °/√s (the shipped values), about 0.03 rad/s per sample;
 - spread of the 1 s means: x 0.064, y 0.007, z 0.005 m/s². The 17 s are too short for a bias-instability figure.
