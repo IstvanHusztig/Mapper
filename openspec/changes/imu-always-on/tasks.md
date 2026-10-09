@@ -25,8 +25,9 @@ Close the GUI before building. Never run two jobs on the same input folder at on
   - **Mistake recorded:** an earlier draft of this task asked for a new static recording, although this one existed and had been used before (2026-09-30).
 
 - [ ] 1.1 Behind `log_window_diagnostics`, log per window how the accelerometer fits the LiDAR trajectory in windows where no direction is degenerate (ratio above 0.3). For each anchor triple, compare the trajectory's second difference with R·f − g, and fit the residual of the window as offset + tilt leakage (the part explained by a small attitude error, [g]× δθ) + rest. Log the three sizes.
-  - One full-44 run (precise). Report their distributions, the size of the tilt that would explain the leakage, and the noise level after both are removed.
-  - Decide from it: the order of tasks 2.1 and 2.2, and `imu_accel_floor_sigma_mps2`. Record here. Results unchanged; `44_short` IDENTICAL. Commit.
+  - Also log per window the IMU gaps (longest sample spacing, terms that a gap would drop) and whether the zero-velocity detection finds it at rest.
+  - One full-44 run (precise). Report their distributions, the size of the tilt that would explain the leakage, the noise level after both are removed (against the bounds of design decision 4: 0.023 to 0.028 m/s² measured, 0.1 m/s² data-sheet filter value), the gaps and the windows at rest.
+  - Decide from it: the order of tasks 2.1 and 2.2, `imu_accel_floor_sigma_mps2`, and whether the bias drifts faster than the heated IMU suggests. Record here. Results unchanged; `44_short` IDENTICAL. Commit.
 
 ## 2. Build
 
@@ -35,18 +36,22 @@ Close the GUI before building. Never run two jobs on the same input folder at on
   - Test: a stationary synthetic window in the room, started 1 deg tilted, reduces the tilt and keeps the positions within a few millimetres. Commit.
 - [ ] 2.2 Velocity and accelerometer bias as carried states (design, decision 3).
   - The start velocity becomes an unknown with a prior. The final velocity and its covariance (a marginal of the window's normal matrix) and the bias are carried to the next window.
-  - Noise from `imu_accel_noise_density_mps2_sqrt_hz` and `imu_accel_floor_sigma_mps2` (decision 4).
+  - Noise from `imu_accel_noise_density_mps2_sqrt_hz` and `imu_accel_floor_sigma_mps2` (decision 4), span from the timestamps; terms stretched by a gap beyond twice `imu_acceleration_span_s` dropped.
   - With `imu_always_on` the term is active in every window after the first, without the degenerate gate, the 15 s limit, the loosened translation sigmas and the gravity calibration (decision 5).
   - Settings in `TomlIO` and the shipped TOMLs (off), golden files in their own commit.
   - Tests:
     - a synthetic corridor walk at 1 m/s whose axis the LiDAR can't see keeps about 0.4 m per window with the IMU showing no acceleration;
     - a stationary window doesn't drift;
-    - the existing gyro-bias tests are unchanged.
+    - the existing gyro-bias tests are unchanged;
+    - a window with an IMU gap drops the stretched terms and is still solved.
+  - `ctest`; `44_short` IDENTICAL with it off. Commit.
+- [ ] 2.3 Zero velocity at rest (design, decision 6): with `imu_always_on`, the zero-velocity detection runs in every window, and a window at rest gets a zero-velocity measurement on its velocity unknowns (`imu_zero_velocity_sigma_mps`); a first window at rest starts from zero velocity and its mean specific force.
+  - Test: a blind corridor window at rest, with a previous velocity of 0.5 m/s, stays within a few millimetres.
   - `ctest`; `44_short` IDENTICAL with it off. Commit.
 
 ## 3. Judge
 
-- [ ] 3.1 Full 44, precise build, with `imu_always_on` and a few values of the floor sigma around the task-1 measurement, each reported with:
+- [ ] 3.1 Full 44, precise build, with `imu_always_on`. At most five runs: the floor sigma at the task-1 measurement and at the data-sheet bound 0.1 m/s², and the bias random walk at 0.05 (today), 0.01 and 0.001 m/s²/√s, combined as task 1 suggests. Each run reported with:
   - the difference from `44_baseline`;
   - the loop-closure corrections and the number of loops;
   - `eval_odometry.py` and the time.
@@ -58,6 +63,7 @@ Close the GUI before building. Never run two jobs on the same input folder at on
 - [ ] 4.1 Shipped settings, new baselines (old folders renamed with a date suffix, both manifests rewritten), and docs:
   - `docs/degeneracy-information.html` and the Hungarian copy (the gate replaced);
   - the settings tables of `docs/index.html` and `docs/hu/index.html`;
-  - `CLAUDE.md` (the IMU paragraph).
+  - `CLAUDE.md` (the IMU paragraph);
+  - a recording note in `docs/index.html` and `docs/hu/index.html`: start each recording with 3 to 5 s at rest (Unitree L2 data sheet), and stop briefly now and then in long blind passages.
 
   Sync the delta spec, archive, push. Memory notes.
