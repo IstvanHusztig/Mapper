@@ -66,6 +66,11 @@ The data sheet asks for 3 to 5 s at rest at start-up, and a cave surveyor stops 
 - **First window:** if it is at rest, its velocity prior is zero with `imu_zero_velocity_sigma_mps`, and the bias starts from its mean specific force; otherwise the prior has `imu_velocity_initial_sigma_mps`.
 - **Recording 44 has no rest at the start** (gyro up to 0.15 rad/s and a specific-force spread of 0.02 g in the first 3 s, against 0.0025 g at rest), so the change is judged without it there. Task 1.1 counts the windows at rest in 44. The user docs will ask for a rest period at the start of each recording.
 
+### 7. The guess follows the accelerometer (found while testing decision 3)
+The translation motion model ties each step to the guess's step with σ_p, a velocity prior on every node (σ_p / dt) around the guess. Summed over a window, these hold the window's mean velocity at the guess's: with the shipped 1e-4 m at about 1.1 ms per node, within 4.7 mm/s. The guess is constant velocity (the previous window's end velocity), so along a blind axis the window's speed is the guess's whatever the accelerometer says. The accelerometer term only constrains changes of velocity and the start velocity. In a test walk (a 2 m/s² surge at 2 Hz), the window followed the surge's shape but 0.106 m/s too slow, as the motion model and the start prior split the surge's mean.
+
+With `imu_always_on`, `integrate_window_translations` therefore predicts the window's translations from the start velocity prior with the term's own model, (R_k f_k − g) · to_mps2 with the carried gravity and offset. The motion model then agrees with the accelerometer, keeps its role of smoothing node to node, and its sigma stays as shipped. A window at rest keeps its motionless guess. Loosening the translation sigma instead would also loosen that smoothing.
+
 ## Risks / Trade-offs
 
 - **Gravity and bias are not separable without rotation dynamics.** Long straight walks leave them correlated, so the bias random walk must stay small, as the heated IMU allows. Measured in task 1; rests (decision 6) help separate them.

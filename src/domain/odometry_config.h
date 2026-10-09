@@ -176,6 +176,15 @@ struct OdometryConfig
     // keep the acceleration offset where it is along the window's weakest LiDAR direction while the term is active (it is not
     // observable there: the LiDAR can't see the motion it would explain)
     bool imu_acceleration_offset_freeze_blind = false;
+    // the accelerometer in every window after the first (implies use_imu_acceleration_term; the degenerate gate, its time limit,
+    // its loosened translation sigma and the gravity calibration are not used): each term weighted by the sensor's noise,
+    // sigma^2 = density^2 / span + floor^2; the window's start and end velocities are unknowns, the start with a prior carried from
+    // the previous window's end (its marginal covariance, grown over the gap); a window at rest gets a zero-velocity measurement
+    bool imu_always_on = false;
+    double imu_accel_noise_density_mps2_sqrt_hz = 0.0013; // Unitree L2, measured at rest (raw data/43/static), largest axis
+    double imu_accel_floor_sigma_mps2 = 0.1;               // walking vibration and unmodelled effects (L2 data sheet acc_cov)
+    double imu_velocity_initial_sigma_mps = 1.0;           // velocity prior of the first window with the term, if not at rest
+    double imu_zero_velocity_sigma_mps = 0.01;             // velocity measurement of a window at rest
     // degeneracy-aware scan-to-map (solution remapping): along a direction whose share of the window's geometric
     // information (eigenvalue / largest eigenvalue of sum(n * n^T) over the matched surface normals) is below
     // degenerate_projection_ratio, the NDT terms carry no translation information, so the motion model (prediction,

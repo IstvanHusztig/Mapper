@@ -15,6 +15,15 @@ struct GyroBiasState
     Eigen::Matrix3d covariance = Eigen::Matrix3d::Zero();
 };
 
+// world-frame velocity at the window's first and last node, estimated with imu_always_on; the end and its marginal covariance
+// are the prior of the next window's start
+struct VelocityState
+{
+    Eigen::Vector3d start = Eigen::Vector3d::Zero();              // [m/s]
+    Eigen::Vector3d end = Eigen::Vector3d::Zero();                // [m/s]
+    Eigen::Matrix3d end_covariance = Eigen::Matrix3d::Identity(); // [(m/s)^2]
+};
+
 // one optimization window: consecutive trajectory nodes (one per IMU sample) and what the odometry estimates for them
 struct Window
 {
@@ -24,6 +33,7 @@ struct Window
     std::vector<Eigen::Vector3d> imu_angles;           // IMU orientation (om, fi, ka) [rad] per node
     std::vector<Eigen::Vector3d> imu_acc;              // raw accelerometer of each node [g], body frame (empty if unknown)
     GyroBiasState gyro_bias;                           // estimated gyro bias of this window
+    VelocityState velocity;                            // start and end velocity (imu_always_on)
 };
 
 // AHRS orientation track: IMU timestamp -> (pose matrix, unix timestamp)

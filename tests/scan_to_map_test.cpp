@@ -586,3 +586,211 @@ TEST_CASE("scan-to-map: degeneracy-aware NDT terms change nothing in a closed ro
     for (size_t k = 0; k < off.size(); k++)
         CHECK(off[k].matrix() == on[k].matrix());
 }
+
+// change imu-always-on: the accelerometer in the window with the node rotations, noise from the sensor (Unitree L2) and the
+// start and end velocity as unknowns
+namespace
+{
+    constexpr double g_mps2 = 9.80665;
+
+    struct AlwaysOnCase
+    {
+        std::vector<Eigen::Affine3d> truth;
+        std::vector<Eigen::Affine3d> guess;
+        std::vector<Eigen::Vector3d> world_acceleration; // true acceleration of each node [m/s^2]
+        std::vector<double> times;                       // node timestamps (node_dt apart unless changed)
+        Eigen::Vector3d velocity_prior = Eigen::Vector3d::Zero();
+        double velocity_prior_sigma = 0.02;
+        bool at_rest = false;
+        bool imu = true;            // false: the term off (the velocity-continuity prior instead)
+        bool points = true;         // false: no LiDAR points (only the motion model and the accelerometer)
+        double translation_sigma_m = 1e-3;
+        double offset_sigma = 0.01;      // acceleration offset prior: a carried bias, not a fresh one
+        double rotation_sigma_deg = 0.0; // > 0: constant rotation sigmas instead of the gyro's (time-scaled ARW)
+    };
+
+    // runs 30 iterations; the accelerometer reads the specific force R^T (a + g) in g
+    Window run_always_on(const Scene &s, const AlwaysOnCase &k)
+    {
+        OdometryConfig c = test_config();
+        c.lidar_odometry_motion_model_x_1_sigma_m = c.lidar_odometry_motion_model_y_1_sigma_m = c.lidar_odometry_motion_model_z_1_sigma_m =
+            k.translation_sigma_m;
+        if (k.rotation_sigma_deg > 0.0)
+        {
+            c.use_time_scaled_rotation_sigma = false;
+            c.lidar_odometry_motion_model_om_1_sigma_deg = c.lidar_odometry_motion_model_fi_1_sigma_deg =
+                c.lidar_odometry_motion_model_ka_1_sigma_deg = k.rotation_sigma_deg;
+        }
+        Options o = options_from(c);
+        // the shipped degeneracy-aware NDT terms: without them, planar cells keep an in-plane pull along the corridor
+        o.scan_to_map.degenerate_projection_ratio = 0.1;
+        o.scan_to_map.degenerate_projection_ratio_full = 0.2;
+        Maps maps = build_maps(s, o.scan_to_map);
+        std::vector<Point3Di> points = k.points ? observe(s, k.truth) : std::vector<Point3Di>{};
+        Window w = make_window(k.guess);
+        if (!k.times.empty())
+            for (size_t i = 0; i < w.timestamps.size(); i++)
+            {
+                w.timestamps[i] = {k.times[i], k.times[i]};
+                for (Point3Di &p : points)
+                    if (p.index_pose == static_cast<int>(i))
+                        p.timestamp = k.times[i];
+            }
+        std::vector<Eigen::Vector3d> acc;
+        for (size_t i = 0; i < k.truth.size(); i++)
+            acc.push_back(k.truth[i].linear().transpose() * (k.world_acceleration[i] + Eigen::Vector3d(0.0, 0.0, g_mps2)) / g_mps2);
+        if (k.imu)
+        {
+            o.translation_imu.enabled = true;
+            o.translation_imu.acc = &acc;
+            o.translation_imu.gravity = Eigen::Vector3d(0.0, 0.0, 1.0);
+            o.translation_imu.to_mps2 = g_mps2;
+            o.translation_imu.span_s = 0.008; // one term per node: anchors 10 ms apart, well inside the 2 * span_s gap limit
+            o.translation_imu.offset_prior_cov = Eigen::Matrix3d::Identity() * k.offset_sigma * k.offset_sigma;
+            o.translation_imu.always_on = true;
+            o.translation_imu.noise_density_mps2_sqrt_hz = 0.0013;
+            o.translation_imu.floor_sigma_mps2 = 0.1;
+            o.translation_imu.velocity_prior_mean = k.velocity_prior;
+            o.translation_imu.velocity_prior_cov = Eigen::Matrix3d::Identity() * k.velocity_prior_sigma * k.velocity_prior_sigma;
+            o.translation_imu.at_rest = k.at_rest;
+            o.translation_imu.zero_velocity_sigma_mps = 0.01;
+            w.velocity.start = w.velocity.end = k.velocity_prior;
+        }
+        else
+            o.velocity_prior = VelocityPrior{true, k.velocity_prior};
+        NullLogger logger;
+        run_iterations(points, w, maps, o, 5.0, 30, logger);
+        return w;
+    }
+
+    // along x at speed v0 with acceleration a (both along x), no rotation, from (-1, 0, 1.5)
+    std::vector<Eigen::Affine3d> straight(double v0, double a)
+    {
+        std::vector<Eigen::Affine3d> poses;
+        for (int i = 0; i < n_nodes; i++)
+        {
+            const double t = i * node_dt;
+            poses.push_back(pose(Eigen::Vector3d(-1.0 + v0 * t + 0.5 * a * t * t, 0.0, 1.5), 0.0));
+        }
+        return poses;
+    }
+
+    // walking along x: speed v0 plus a surge of amplitude a_mps2 at frequency f_hz (acceleration a sin(2 pi f t))
+    constexpr double pi = 3.14159265358979323846;
+    constexpr double walk_v0 = 1.0, walk_a = 2.0, walk_f = 2.0;
+    double walk_x(double t)
+    {
+        const double w = 2.0 * pi * walk_f;
+        return -1.0 + walk_v0 * t + walk_a / w * (t - std::sin(w * t) / w);
+    }
+}
+
+TEST_CASE("scan-to-map, imu always on: a blind corridor follows the accelerometer along its axis")
+{
+    // the truth surges like a walk (2 m/s^2 at 2 Hz) along the corridor; the guess keeps the start speed (8 cm short at the end).
+    // A constant acceleration over the whole window would instead look like a bias, which the offset e takes in part
+    AlwaysOnCase k;
+    for (int i = 0; i < n_nodes; i++)
+    {
+        const double t = i * node_dt;
+        k.truth.push_back(pose(Eigen::Vector3d(walk_x(t), 0.0, 1.5), 0.0));
+        k.world_acceleration.push_back(Eigen::Vector3d(walk_a * std::sin(2.0 * pi * walk_f * t), 0.0, 0.0));
+    }
+    k.guess = straight(walk_v0, 0.0);
+    k.velocity_prior = Eigen::Vector3d(walk_v0, 0.0, 0.0);
+    // The translation motion model ties each step to the guess's step: a velocity prior on every node (sigma_p / dt) around the
+    // guess, which together hold the window's mean velocity at the guess's. With this constant-velocity guess that is the start
+    // velocity, while the surge raises the true mean by a / w = 0.16 m/s; at 1e-3 m the motion model and the start prior split it,
+    // and the window follows the surge's shape 0.106 m/s too slow (measured 2026-10-09: 54 of 80 mm left). The pipeline therefore
+    // predicts the guess from the accelerometer (integrate_window_translations); here the motion model is loose, to test the term
+    k.translation_sigma_m = 0.03;
+    const Window on = run_always_on(corridor(), k);
+    k.imu = false;
+    const Window off = run_always_on(corridor(), k);
+    const auto end_error = [&](const Window &w) { return (w.poses.back().translation() - k.truth.back().translation()).x(); };
+    const double guess_error = (k.guess.back().translation() - k.truth.back().translation()).x();
+    const double t_end = (n_nodes - 1) * node_dt, w = 2.0 * pi * walk_f;
+    const double v_end = walk_v0 + walk_a / w * (1.0 - std::cos(w * t_end));
+    MESSAGE("blind corridor, end error along the axis: guess ", guess_error * 1000.0, " mm, accelerometer off ", end_error(off) * 1000.0,
+            " mm, always on ", end_error(on) * 1000.0, " mm; end velocity ", on.velocity.end.x(), " m/s (true ", v_end, ")");
+    CHECK(std::abs(end_error(on)) < 0.2 * std::abs(guess_error));
+    CHECK(std::abs(end_error(off)) > 0.5 * std::abs(guess_error)); // without the accelerometer nothing sees the axis
+    CHECK(on.velocity.end.x() == doctest::Approx(v_end).epsilon(0.02));
+}
+
+TEST_CASE("scan-to-map, imu always on: a blind window at rest stays put")
+{
+    // at rest in the corridor, guessed at rest, but the previous window's end velocity says 0.5 m/s along the axis
+    AlwaysOnCase k;
+    k.truth = straight(0.0, 0.0);
+    k.guess = k.truth;
+    k.world_acceleration.assign(n_nodes, Eigen::Vector3d::Zero());
+    k.velocity_prior = Eigen::Vector3d(0.5, 0.0, 0.0);
+    k.velocity_prior_sigma = 0.1;
+    k.at_rest = true;
+    const Window rest = run_always_on(corridor(), k);
+    k.at_rest = false;
+    const Window moving = run_always_on(corridor(), k);
+    const PoseError e = max_error(rest.poses, k.truth), e_moving = max_error(moving.poses, k.truth);
+    MESSAGE("blind window at rest: largest position error ", e.position * 1000.0, " mm with the zero-velocity measurement, ",
+            e_moving.position * 1000.0, " mm without; velocities ", rest.velocity.start.x(), " / ", rest.velocity.end.x(), " m/s");
+    CHECK(e.position < 0.003);
+    CHECK(std::abs(rest.velocity.end.x()) < 0.05);
+}
+
+TEST_CASE("scan-to-map, imu always on: a stationary window in the room doesn't drift")
+{
+    AlwaysOnCase k;
+    k.truth = straight(0.0, 0.0);
+    k.guess = k.truth;
+    k.world_acceleration.assign(n_nodes, Eigen::Vector3d::Zero());
+    const Window w = run_always_on(room(), k);
+    const PoseError e = max_error(w.poses, k.truth);
+    MESSAGE("stationary room: largest position error ", e.position * 1000.0, " mm, rotation ", e.rotation / deg, " deg");
+    CHECK(e.position < 0.001);
+    CHECK(w.velocity.end.norm() < 0.01);
+}
+
+TEST_CASE("scan-to-map, imu always on: a tilt drift is corrected in the attitude, not the positions")
+{
+    // no LiDAR points: only the motion model and the accelerometer. The guess's roll drifts from 0 to 1 deg over the window
+    // (node 0 is held by the fix-origin prior); the accelerometer still reads gravity straight down in the true frame. Within one
+    // window the gyro (time-scaled ARW) is far stronger than the accelerometer's tilt information, so the rotation sigma is set
+    // loose here: the test checks that the term's rotation Jacobian pulls the right way, by the right amount
+    AlwaysOnCase k;
+    k.truth = straight(0.0, 0.0);
+    k.guess = k.truth;
+    for (int i = 0; i < n_nodes; i++)
+        k.guess[i].linear() = Eigen::AngleAxisd(1.0 * deg * i / (n_nodes - 1), Eigen::Vector3d::UnitX()).toRotationMatrix();
+    k.world_acceleration.assign(n_nodes, Eigen::Vector3d::Zero());
+    k.points = false;
+    k.translation_sigma_m = 1e-4;
+    k.rotation_sigma_deg = 1.0;
+    const Window w = run_always_on(room(), k);
+    const PoseError before = max_error(k.guess, k.truth), after = max_error(w.poses, k.truth);
+    MESSAGE("tilt drift: largest rotation error ", before.rotation / deg, " -> ", after.rotation / deg, " deg, largest position error ",
+            after.position * 1000.0, " mm");
+    CHECK(after.rotation < 0.5 * before.rotation);
+    CHECK(after.position < 0.005);
+}
+
+TEST_CASE("scan-to-map, imu always on: a gap in the IMU samples drops the stretched terms")
+{
+    // a 60 ms gap between nodes 24 and 25 (the terms across it span more than 2 * span_s); the window still converges
+    AlwaysOnCase k;
+    k.truth = straight(1.0, 0.0);
+    for (int i = 0; i < n_nodes; i++)
+        k.times.push_back(i * node_dt + (i >= 25 ? 0.05 : 0.0));
+    for (int i = 0; i < n_nodes; i++)
+        k.truth[i].translation().x() = -1.0 + 1.0 * k.times[i];
+    k.guess = k.truth;
+    for (int i = 0; i < n_nodes; i++)
+        k.guess[i].translation() += Eigen::Vector3d(0.01, -0.01, 0.005) * (double(i) / (n_nodes - 1));
+    k.world_acceleration.assign(n_nodes, Eigen::Vector3d::Zero());
+    k.velocity_prior = Eigen::Vector3d(1.0, 0.0, 0.0);
+    const Window w = run_always_on(room(), k);
+    const PoseError e = max_error(w.poses, k.truth);
+    MESSAGE("IMU gap: largest position error ", e.position * 1000.0, " mm; end velocity ", w.velocity.end.x(), " m/s");
+    CHECK(e.position < 0.002);
+    CHECK(std::isfinite(w.velocity.end.x()));
+}

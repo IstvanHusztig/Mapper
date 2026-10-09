@@ -58,6 +58,13 @@ GyroBiasState apply_gyro_bias_prior(Window &window, const GyroBiasState &carried
 // true if the guess turns about the vertical faster than threshold_rad_s on average over the window
 bool is_turn_window(const Window &window, double threshold_rad_s);
 
+// imu_always_on: the window's guess follows the accelerometer, so that the translation motion model (a velocity prior on every
+// node around the guess) agrees with the accelerometer term instead of holding the window's mean velocity at its start velocity.
+// From the first node, with start_velocity, the translations are integrated with the accelerations (R_k f_k - gravity) * to_mps2
+// of the guess's rotations (the accelerometer term's model); rotations and the first node are kept. Returns false (and changes
+// nothing) without an accelerometer reading and a timestamp for every node.
+bool integrate_window_translations(Window &window, const Eigen::Vector3d &start_velocity, const Eigen::Vector3d &gravity, double to_mps2);
+
 // window hand-off: the last tail_nodes nodes carry almost no points (the last one none), so their pose is
 // re-propagated from the last well-constrained node with the IMU rotation (motion_model_poses, corrected by
 // bias_update) and the velocity of the 20 nodes before it; the next window starts from the re-propagated last node.

@@ -318,3 +318,34 @@ TEST_CASE("convergence_of finds when the poses settle and when delta drops below
         CHECK(r.fast_stop_after == 0);
     }
 }
+
+TEST_CASE("integrate_window_translations follows the accelerometer from the start velocity")
+{
+    // turning at 0.3 rad/s with a constant world acceleration; the accelerometer reads R^T (a + g) in g. The integration is exact
+    // for a constant acceleration, whatever the node spacing (here uneven, as IMU bursts are)
+    const double g = 9.80665;
+    const Eigen::Vector3d a(1.0, -0.5, 0.2), v0(1.2, 0.3, 0.0), start(2.0, -1.0, 0.5);
+    Window w;
+    double t = 0.0;
+    for (int k = 0; k < 40; k++)
+    {
+        w.poses.push_back(pose(0.0, 0.0, 0.0, 0.3 * t)); // translations wrong on purpose (all at the origin)
+        w.timestamps.push_back({t, 0.0});
+        w.imu_acc.push_back(w.poses.back().linear().transpose() * (a + Eigen::Vector3d(0.0, 0.0, g)) / g);
+        t += (k % 3 == 0) ? 0.0002 : 0.0015;
+    }
+    w.poses[0].translation() = start;
+    REQUIRE(integrate_window_translations(w, v0, Eigen::Vector3d(0.0, 0.0, 1.0), g));
+    double worst = 0.0;
+    for (size_t k = 0; k < w.poses.size(); k++)
+    {
+        const double tk = w.timestamps[k].first;
+        worst = std::max(worst, (w.poses[k].translation() - (start + v0 * tk + 0.5 * a * tk * tk)).norm());
+        CHECK(w.motion_model_poses[k].isApprox(w.poses[k]));
+    }
+    CHECK(worst < 1e-12);
+    CHECK(Eigen::AngleAxisd(w.poses.back().linear()).angle() == doctest::Approx(0.3 * w.timestamps.back().first)); // rotations kept
+
+    Window no_imu = moving_window(5, 1.0, 0.0);
+    CHECK_FALSE(integrate_window_translations(no_imu, v0, Eigen::Vector3d(0.0, 0.0, 1.0), g));
+}

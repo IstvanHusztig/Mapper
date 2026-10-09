@@ -32,6 +32,7 @@ namespace
         double gravity_norm = 1.0; // accelerometer reading of gravity [g]
         bool use_acc_term = false; // accelerometer term in the optimization
         bool acc_gated = false;    // ... only in LiDAR-degenerate stretches
+        bool always_on = false;    // ... in every window after the first, with velocity states (imu_always_on)
         double acc_offset_sigma0 = 0.0;
         bool use_acc_prior = false;               // velocity-continuity prior
         bool uses_previous_velocity = false;      // the acc prior, IMU translation or the accelerometer term need it
@@ -67,6 +68,12 @@ namespace
         int stationary_windows = 0;
         int turn_windows = 0;
         int acc_term_windows = 0;
+        int rest_windows = 0;                                        // imu_always_on: windows at rest
+        bool velocity_valid = false;                                 // imu_always_on: the previous window estimated its end velocity
+        Eigen::Vector3d velocity_mean = Eigen::Vector3d::Zero();     // ... the prior of the next window's start velocity
+        Eigen::Matrix3d velocity_cov = Eigen::Matrix3d::Identity();
+        double velocity_time_s = 0.0;                                // ... at the previous window's last node
+        bool first_window_at_rest = false;
         std::vector<IterationConvergence> convergence; // per window, with log_iteration_convergence
         OdometryTiming timing;                         // with log_stage_timing
     };
@@ -101,16 +108,17 @@ namespace
             s.gravity_norm = sum / double(windows[0].imu_acc.size());
         }
 
-        s.use_acc_term = params.use_imu_acceleration_term && s.have_acc;
+        s.use_acc_term = (params.use_imu_acceleration_term || params.imu_always_on) && s.have_acc;
+        s.always_on = params.imu_always_on && s.have_acc;
         s.acc_offset_sigma0 = params.imu_acceleration_offset_initial_sigma_mps2;
         // gating to LiDAR-degenerate stretches: degeneracy of the previous window, time spent in the current stretch
-        s.acc_gated = s.use_acc_term && params.imu_acceleration_only_when_degenerate;
+        s.acc_gated = s.use_acc_term && params.imu_acceleration_only_when_degenerate && !s.always_on;
 
         s.use_acc_prior = params.lidar_odometry_motion_model_acc_1_sigma_mps2 > 0.0;
         const bool imu_translation = s.use_imu_pred || s.use_zupt;
         s.uses_previous_velocity = s.use_acc_prior || imu_translation || s.use_acc_term;
         s.prediction.use_imu_pred = s.use_imu_pred;
-        s.prediction.use_zupt = s.use_zupt;
+        s.prediction.use_zupt = s.use_zupt || s.always_on; // imu_always_on: a window at rest is also predicted without motion
         s.prediction.constant_velocity = s.use_acc_prior || s.use_acc_term;
         s.prediction.gravity_norm = s.gravity_norm;
         s.prediction.acc_smoothing_half_width_s = 0.5 * params.imu_acc_smoothing_s;
@@ -206,8 +214,58 @@ namespace
                 t.options.offset_prior_cov = A * t.options.offset_prior_cov * A.transpose();
             }
             t.offset_cov = t.options.offset_prior_cov;
+            if (setup.always_on)
+            {
+                t.options.always_on = true;
+                t.options.noise_density_mps2_sqrt_hz = params.imu_accel_noise_density_mps2_sqrt_hz;
+                t.options.floor_sigma_mps2 = params.imu_accel_floor_sigma_mps2;
+                t.options.zero_velocity_sigma_mps = params.imu_zero_velocity_sigma_mps;
+            }
         }
         return t;
+    }
+
+    // imu_always_on: is the window at rest? The zero-velocity detection of predict_window_poses on the window's guess
+    bool window_at_rest(const Window &window, const OdometryRunSetup &setup, const OdometryConfig &params)
+    {
+        if (window.imu_acc.size() != window.poses.size() || window.imu_angles.size() != window.poses.size() ||
+            window.timestamps.size() != window.poses.size())
+            return false;
+        constexpr double zupt_smoothing_half_width_s = 0.025; // as predict_window_poses
+        return is_window_stationary(window.poses, window.timestamps,
+                                    world_acceleration(window.poses, window.timestamps, window.imu_acc, window.imu_angles, setup.gravity_norm,
+                                                       zupt_smoothing_half_width_s),
+                                    params.zero_velocity_acc_threshold_mps2, params.zero_velocity_gyro_threshold_deg_s * DEG_TO_RAD);
+    }
+
+    // imu_always_on: the start velocity prior (the previous window's end velocity, its covariance grown over the gap; in the first
+    // window with the term zero if the recording starts at rest, else the previous window's velocity with imu_velocity_initial_sigma_mps)
+    // and the window's velocity unknowns started from it
+    void prepare_velocity_state(Window &window, const PreviousVelocity &previous, bool at_rest, const OdometryRunSetup &setup,
+                                const WindowLoopCarry &carry, AccTerm &t, const OdometryConfig &params)
+    {
+        if (!setup.always_on || !t.options.enabled)
+            return;
+        const double initial = params.imu_velocity_initial_sigma_mps, rest = params.imu_zero_velocity_sigma_mps;
+        Eigen::Vector3d mean = previous.use ? previous.velocity : Eigen::Vector3d::Zero();
+        Eigen::Matrix3d cov = Eigen::Matrix3d::Identity() * (initial * initial);
+        if (carry.velocity_valid && carry.velocity_mean.norm() <= params.max_prior_velocity_mps)
+        {
+            const double gap = std::max(window.timestamps.front().first - carry.velocity_time_s, 0.0);
+            const double density = params.imu_accel_noise_density_mps2_sqrt_hz, floor = params.imu_accel_floor_sigma_mps2;
+            mean = carry.velocity_mean;
+            cov = carry.velocity_cov + Eigen::Matrix3d::Identity() * (density * density * gap + floor * floor * gap * gap);
+        }
+        else if (!carry.velocity_valid && carry.first_window_at_rest)
+        {
+            mean.setZero();
+            cov = Eigen::Matrix3d::Identity() * (rest * rest);
+        }
+        t.options.velocity_prior_mean = mean;
+        t.options.velocity_prior_cov = cov;
+        t.options.at_rest = at_rest;
+        window.velocity.start = mean;
+        window.velocity.end = mean;
     }
 
     // after the window: its degeneracy decides about the term in the next window, gravity is calibrated outside
@@ -257,6 +315,13 @@ namespace
             }
         }
 
+        if (t.options.enabled && t.options.always_on)
+        {
+            carry.velocity_valid = true;
+            carry.velocity_mean = window.velocity.end;
+            carry.velocity_cov = window.velocity.end_covariance;
+            carry.velocity_time_s = window.timestamps.back().first;
+        }
         if (t.options.enabled)
         {
             carry.acc_term_windows++;
@@ -394,7 +459,7 @@ namespace
             optimize_lidar_odometry(intermediate_points, window, state.buckets_indoor, state.buckets_outdoor,
                                     setup.scan_to_map, acc_term.motion_model, window_rotation_options, acc_term.options,
                                     velocity_prior, lm_factor, delta, acc_offset, acc_term.offset_cov, logger,
-                                    setup.acc_gated ? &lidar_translation_information : nullptr, timing, &workspace);
+                                    setup.acc_gated || params.log_window_diagnostics ? &lidar_translation_information : nullptr, timing, &workspace);
             if (params.log_iteration_convergence)
             {
                 poses_after.push_back(window.poses);
@@ -466,6 +531,79 @@ namespace
                          << ", result move " << v(result_move) << ", previous-velocity move " << (previous.use ? v(velocity_move) : std::string("none"))
                          << ", result-guess " << v(result_move - guess_move) << ", info ratio " << std::setprecision(3) << ratio << ", weak " << v(eig.eigenvectors().col(0))
                          << ", acc term " << (acc_term.options.enabled ? "on" : "off");
+    }
+
+    // log_window_diagnostics: how the accelerometer fits the optimized trajectory. Anchor nodes ~50 ms apart; per triple the
+    // change of the trajectory's velocity is compared with the mean of R f - g over the same time, as an acceleration
+    // residual (IMU minus LiDAR) [m/s^2]. Logged: its mean in the world and in the body frame (at the middle anchor), the rms
+    // around the mean, the longest IMU sample spacing, and whether the window rests. The world mean's horizontal part is
+    // what a tilt of |h| / g would leak; a body-frame mean that stays put from window to window is a bias.
+    void log_accelerometer_fit(int i, const Window &window, const Eigen::Matrix3d &lidar_translation_information, const AccTerm &acc_term,
+                               const OdometryRunSetup &setup, const WindowLoopCarry &carry, const OdometryConfig &params, Logger &logger)
+    {
+        const int n = static_cast<int>(window.poses.size());
+        if (!params.log_window_diagnostics || !setup.have_acc || carry.acc_gravity.squaredNorm() == 0.0 ||
+            window.timestamps.size() != window.poses.size() || window.imu_acc.size() != window.poses.size() || n < 3)
+            return;
+        constexpr double span_s = 0.05;
+        const double to_mps2 = 9.80665 / carry.acc_gravity.norm();
+        std::vector<Eigen::Vector3d> a(n);
+        for (int k = 0; k < n; k++)
+            a[k] = (rotation_of(window.poses[k]) * window.imu_acc[k] - carry.acc_gravity) * to_mps2;
+        std::vector<int> anchors{0};
+        for (int k = 1; k < n; k++)
+            if (window.timestamps[k].first - window.timestamps[anchors.back()].first >= span_s)
+                anchors.push_back(k);
+        std::vector<Eigen::Vector3d> world, body;
+        for (size_t j = 1; j + 1 < anchors.size(); j++)
+        {
+            const int A = anchors[j - 1], B = anchors[j], C = anchors[j + 1];
+            const double tA = window.timestamps[A].first, tB = window.timestamps[B].first, tC = window.timestamps[C].first;
+            const double m1 = 0.5 * (tA + tB), m2 = 0.5 * (tB + tC), tau = m2 - m1;
+            const Eigen::Vector3d dv = (window.poses[C].translation() - window.poses[B].translation()) / (tC - tB) -
+                                       (window.poses[B].translation() - window.poses[A].translation()) / (tB - tA);
+            Eigen::Vector3d sum = Eigen::Vector3d::Zero();
+            double weight = 0.0;
+            for (int k = A; k < C; k++)
+            {
+                const double s0 = std::max(window.timestamps[k].first, m1), s1 = std::min(window.timestamps[k + 1].first, m2);
+                if (s1 > s0)
+                {
+                    sum += a[k] * (s1 - s0);
+                    weight += s1 - s0;
+                }
+            }
+            if (weight <= 0.0 || tau <= 0.0)
+                continue;
+            world.push_back(sum / weight - dv / tau);
+            body.push_back(rotation_of(window.poses[B]).conjugate() * world.back());
+        }
+        if (world.empty())
+            return;
+        Eigen::Vector3d world_mean = Eigen::Vector3d::Zero(), body_mean = Eigen::Vector3d::Zero();
+        for (size_t k = 0; k < world.size(); k++)
+        {
+            world_mean += world[k] / double(world.size());
+            body_mean += body[k] / double(world.size());
+        }
+        double rest = 0.0;
+        for (const auto &w : world)
+            rest += (w - world_mean).squaredNorm() / double(world.size());
+        double max_gap = 0.0;
+        for (int k = 1; k < n; k++)
+            max_gap = std::max(max_gap, window.timestamps[k].first - window.timestamps[k - 1].first);
+        constexpr double zupt_smoothing_half_width_s = 0.025; // as predict_window_poses
+        const bool at_rest = is_window_stationary(window.poses, window.timestamps,
+                                                  world_acceleration(window.poses, window.timestamps, window.imu_acc, window.imu_angles,
+                                                                     setup.gravity_norm, zupt_smoothing_half_width_s),
+                                                  params.zero_velocity_acc_threshold_mps2, params.zero_velocity_gyro_threshold_deg_s * DEG_TO_RAD);
+        const Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eig(lidar_translation_information);
+        const double ratio = eig.eigenvalues().maxCoeff() > 0.0 ? eig.eigenvalues().minCoeff() / eig.eigenvalues().maxCoeff() : 0.0;
+        const auto v = [](const Eigen::Vector3d &x) { std::ostringstream o; o << std::fixed << std::setprecision(4) << x.x() << " " << x.y() << " " << x.z(); return o.str(); };
+        log_info(logger) << "accelerometer fit " << i + 1 << ": ratio " << std::fixed << std::setprecision(3) << ratio << ", acc term "
+                         << (acc_term.options.enabled ? 1 : 0) << ", triples " << world.size() << ", world mean " << v(world_mean)
+                         << ", body mean " << v(body_mean) << ", rms " << std::setprecision(4) << std::sqrt(rest) << ", max gap ms "
+                         << std::setprecision(2) << max_gap * 1000.0 << ", rest " << (at_rest ? 1 : 0);
     }
 
     // log_iteration_convergence: after how many iterations the window's poses settled, and where fast mode would have stopped
@@ -719,6 +857,8 @@ namespace
             log_info(logger) << "zero-velocity detection: " << carry.stationary_windows << " of " << windows.size() << " windows stationary";
         if (setup.use_acc_term)
             log_info(logger) << "accelerometer term: active in " << carry.acc_term_windows << " of " << windows.size() << " windows";
+        if (setup.always_on)
+            log_info(logger) << "accelerometer always on: " << carry.rest_windows << " of " << windows.size() << " windows at rest";
         if (params.rotation_sigma_inflation_k_turn > 0.0)
             log_info(logger) << "turn windows (gyro trusted more): " << carry.turn_windows << " of " << windows.size();
         if (params.log_iteration_convergence && !carry.convergence.empty())
@@ -807,6 +947,19 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
 
             // accelerometer term (from the second window on, like the bias) and the window's translation sigmas
             AccTerm acc_term = prepare_acc_term(windows[i], i > 0, previous.age_s, setup, carry, params);
+            if (setup.always_on)
+            {
+                const bool at_rest = window_at_rest(windows[i], setup, params);
+                if (at_rest)
+                    carry.rest_windows++;
+                if (i == 0)
+                    carry.first_window_at_rest = at_rest;
+                prepare_velocity_state(windows[i], previous, at_rest, setup, carry, acc_term, params);
+                // the guess (and so the motion model) follows the accelerometer from the start velocity prior; a window at rest
+                // keeps its motionless guess
+                if (acc_term.options.enabled && !at_rest)
+                    integrate_window_translations(windows[i], windows[i].velocity.start, carry.acc_gravity, acc_term.options.to_mps2);
+            }
             Eigen::Matrix3d lidar_translation_information = Eigen::Matrix3d::Zero();
             Eigen::Vector3d acc_offset = Eigen::Vector3d::Zero();
             const VelocityPrior velocity_prior{previous.use, previous.velocity};
@@ -832,6 +985,7 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
             log_window_result(i, windows.size(), optimization, carry.acc_distance, window_seconds.count(), params, logger);
             log_iteration_convergence(i, params, optimization, carry, logger);
             log_window_diagnostics(i, windows, poses_before_optimization, optimization, previous, acc_term, lidar_translation_information, params, logger);
+            log_accelerometer_fit(i, windows[i], lidar_translation_information, acc_term, setup, carry, params, logger);
 
             update_gyro_bias_after_window(windows[i], i, setup, carry, params, logger);
             update_acc_term_after_window(windows[i], i, acc_term, lidar_translation_information, acc_offset, setup, carry, params, logger);

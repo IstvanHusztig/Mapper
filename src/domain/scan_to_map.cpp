@@ -12,6 +12,36 @@
 #include <cassert>
 #include <numeric>
 
+namespace
+{
+    // d(world rotation increment) / d(om, fi, ka) at the node's attitude, by central differences (independent of the angle
+    // convention): column j is the rotation vector of R(angles + h e_j) R(angles - h e_j)^T / 2h
+    Eigen::Matrix3d tait_bryan_rotation_jacobian(const Eigen::Affine3d &m)
+    {
+        const TaitBryanPose p = pose_tait_bryan_from_affine_matrix(m);
+        constexpr double h = 1e-5;
+        Eigen::Matrix3d e;
+        for (int j = 0; j < 3; j++)
+        {
+            TaitBryanPose plus = p, minus = p;
+            double *const angle_plus[3] = {&plus.om, &plus.fi, &plus.ka};
+            double *const angle_minus[3] = {&minus.om, &minus.fi, &minus.ka};
+            *angle_plus[j] += h;
+            *angle_minus[j] -= h;
+            const Eigen::Matrix3d d = affine_matrix_from_pose_tait_bryan(plus).linear() * affine_matrix_from_pose_tait_bryan(minus).linear().transpose();
+            e.col(j) = Eigen::Vector3d(d(2, 1) - d(1, 2), d(0, 2) - d(2, 0), d(1, 0) - d(0, 1)) * 0.5 / (2.0 * h);
+        }
+        return e;
+    }
+
+    Eigen::Matrix3d skew(const Eigen::Vector3d &v)
+    {
+        Eigen::Matrix3d s;
+        s << 0.0, -v.z(), v.y(), v.z(), 0.0, -v.x(), -v.y(), v.x(), 0.0;
+        return s;
+    }
+}
+
 void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window &window,
                              NDTBucketMapType &buckets_indoor, NDTBucketMapType &buckets_outdoor,
                              const ScanToMapOptions &scan_to_map, const MotionModelOptions &motion_model,
@@ -32,10 +62,13 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
     const int n_pose_params = static_cast<int>(window.poses.size()) * 6;
     const bool acc_term = translation_imu_options.enabled && have_dt && translation_imu_options.acc &&
                           translation_imu_options.acc->size() == window.poses.size();
-    // [pose_0 .. pose_n-1 | b_om b_fi b_ka (gyro bias) | e_x e_y e_z (acceleration offset)]
-    const int n_params = n_pose_params + (estimate_bias ? 3 : 0) + (acc_term ? 3 : 0);
+    const bool always_on = acc_term && translation_imu_options.always_on;
+    // [pose_0 .. pose_n-1 | b_om b_fi b_ka (gyro bias) | e_x e_y e_z (acceleration offset) | v_start | v_end (imu_always_on)]
+    const int n_params = n_pose_params + (estimate_bias ? 3 : 0) + (acc_term ? 3 : 0) + (always_on ? 6 : 0);
     const int ib = n_pose_params;                        // first bias column
     const int io = n_pose_params + (estimate_bias ? 3 : 0); // first acceleration offset column
+    const int iv = io + 3;                               // start velocity (imu_always_on)
+    const int ie = iv + 3;                               // end velocity (imu_always_on)
 
     double sigma_motion_model_om = motion_model.om_sigma_deg * DEG_TO_RAD;
     double sigma_motion_model_fi = motion_model.fi_sigma_deg * DEG_TO_RAD;
@@ -63,9 +96,12 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
                 anchors.push_back(k);
         for (size_t j = 1; j + 1 < anchors.size(); j++)
             pose_band_offset = std::max(pose_band_offset, (anchors[j + 1] - anchors[j - 1]) * 6 + 5);
-        if (velocity_prior.use && anchors.size() > 1)
+        if ((velocity_prior.use || always_on) && anchors.size() > 1)
             pose_band_offset = std::max(pose_band_offset, anchors[1] * 6 + 5);
     }
+    // imu_always_on: the end velocity is tied to the last two anchors, with the accelerometer from their midpoint to the last node
+    if (always_on && anchors.size() > 1)
+        pose_band_offset = std::max(pose_band_offset, (static_cast<int>(window.poses.size()) - 1 - anchors[anchors.size() - 2]) * 6 + 5);
 
     // the normal matrix, stored by band (only the band is ever used)
     BandedNormalMatrix AtPAndt(n_pose_params, n_params - n_pose_params, pose_band_offset);
@@ -597,10 +633,157 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
         }
     }
 
+    // imu_always_on: the accelerometer term with the node rotations, noise from the sensor and the start and end velocity as
+    // unknowns. One term: residual r = sum(c_j * p_j) + c_v * v - sign * (mean acceleration - e) * tau [m/s], with mean
+    // acceleration = time-weighted mean of (R_k f_k - g) * to_mps2 over the term's interval; the node rotations enter through
+    // d(R f) = -[R f]x d(theta). Weight 1 / (sigma^2 tau^2) with sigma^2 = density^2 / tau + floor^2.
+    if (always_on)
+    {
+        const auto &acc = *translation_imu_options.acc;
+        const int n = static_cast<int>(window.poses.size());
+        const double s = translation_imu_options.to_mps2;
+        std::vector<Eigen::Vector3d> rf(n), a(n);
+        std::vector<Eigen::Matrix3d> e_rot(n);
+        for (int k = 0; k < n; k++)
+        {
+            rf[k] = Eigen::Quaterniond(window.poses[k].linear()).normalized() * acc[k];
+            a[k] = (rf[k] - translation_imu_options.gravity) * s;
+            e_rot[k] = tait_bryan_rotation_jacobian(window.poses[k]);
+        }
+        const double density2 = translation_imu_options.noise_density_mps2_sqrt_hz * translation_imu_options.noise_density_mps2_sqrt_hz;
+        const double floor2 = translation_imu_options.floor_sigma_mps2 * translation_imu_options.floor_sigma_mps2;
+        const double max_dt = 2.0 * translation_imu_options.span_s; // a longer stretch has a gap in the IMU samples: its terms are dropped
+
+        auto add_term = [&](const std::vector<std::pair<int, double>> &translation, int velocity_column, double c_v, double t0, double t1,
+                            int first, int last, double sign, double tau)
+        {
+            // time weights of the nodes over [t0, t1)
+            std::vector<std::pair<int, double>> weights;
+            double weight = 0.0;
+            for (int k = first; k <= last && k + 1 < n; k++)
+            {
+                const double s0 = std::max(window.timestamps[k].first, t0);
+                const double s1 = std::min(window.timestamps[k + 1].first, t1);
+                if (s1 > s0)
+                {
+                    weights.push_back({k, s1 - s0});
+                    weight += s1 - s0;
+                }
+            }
+            if (weight <= 0.0 || tau <= 0.0)
+                return;
+            Eigen::Vector3d mean_acc = Eigen::Vector3d::Zero();
+            for (auto &[k, wk] : weights)
+            {
+                wk /= weight;
+                mean_acc += a[k] * wk;
+            }
+            Eigen::Vector3d r = -sign * (mean_acc - acc_offset) * tau;
+            for (const auto &[node, c] : translation)
+                r += c * window.poses[node].translation();
+            if (velocity_column >= 0)
+                r += c_v * (velocity_column == iv ? window.velocity.start : window.velocity.end);
+
+            // Jacobian blocks (3x3 each, by parameter group)
+            std::vector<std::pair<int, Eigen::Matrix3d>> blocks;
+            for (const auto &[node, c] : translation)
+                blocks.push_back({node * 6, Eigen::Matrix3d::Identity() * c});
+            for (const auto &[k, wk] : weights)
+                blocks.push_back({k * 6 + 3, sign * tau * wk * s * skew(rf[k]) * e_rot[k]});
+            blocks.push_back({io, Eigen::Matrix3d::Identity() * (sign * tau)});
+            if (velocity_column >= 0)
+                blocks.push_back({velocity_column, Eigen::Matrix3d::Identity() * c_v});
+
+            const double w = 1.0 / ((density2 / tau + floor2) * tau * tau);
+            for (const auto &[ca, ja] : blocks)
+            {
+                const Eigen::Vector3d g = w * ja.transpose() * r;
+                for (int p = 0; p < 3; p++)
+                    AtPBndt(ca + p, 0) -= g(p);
+                for (const auto &[cb, jb] : blocks)
+                {
+                    const Eigen::Matrix3d h = w * ja.transpose() * jb;
+                    for (int p = 0; p < 3; p++)
+                        for (int q = 0; q < 3; q++)
+                            AtPAndt.add(ca + p, cb + q, h(p, q));
+                }
+            }
+        };
+
+        for (size_t j = 1; j + 1 < anchors.size(); j++)
+        {
+            const int A = anchors[j - 1], B = anchors[j], C = anchors[j + 1];
+            const double tA = window.timestamps[A].first, tB = window.timestamps[B].first, tC = window.timestamps[C].first;
+            const double dt1 = tB - tA, dt2 = tC - tB;
+            if (dt1 > max_dt || dt2 > max_dt)
+                continue;
+            const double m1 = 0.5 * (tA + tB), m2 = 0.5 * (tB + tC);
+            add_term({{A, 1.0 / dt1}, {B, -(1.0 / dt1 + 1.0 / dt2)}, {C, 1.0 / dt2}}, -1, 0.0, m1, m2, A, C, 1.0, m2 - m1);
+        }
+        // start velocity: the mean velocity over [node 0, first anchor] is v_start + (mean acceleration over its first half) * dt / 2
+        if (anchors.size() > 1)
+        {
+            const int B = anchors[1];
+            const double t0 = window.timestamps[0].first, tB = window.timestamps[B].first, dt = tB - t0;
+            if (dt <= max_dt)
+                add_term({{0, -1.0 / dt}, {B, 1.0 / dt}}, iv, -1.0, t0, 0.5 * (t0 + tB), 0, B, 1.0, 0.5 * dt);
+        }
+        // end velocity: the mean velocity over the last two anchors is v_end - (mean acceleration from their midpoint to the last
+        // node) * (time from the midpoint to the last node)
+        bool end_tied = false;
+        if (anchors.size() > 1)
+        {
+            const int P = anchors[anchors.size() - 2], Q = anchors.back(), N = n - 1;
+            const double tP = window.timestamps[P].first, tQ = window.timestamps[Q].first, tN = window.timestamps[N].first, dt = tQ - tP;
+            const double mid = 0.5 * (tP + tQ);
+            if (dt <= max_dt && tN - tQ <= max_dt)
+            {
+                add_term({{P, -1.0 / dt}, {Q, 1.0 / dt}}, ie, -1.0, mid, tN, P, N, -1.0, tN - mid);
+                end_tied = true;
+            }
+        }
+
+        // start velocity prior: the previous window's end velocity
+        const Eigen::Matrix3d velocity_inf = translation_imu_options.velocity_prior_cov.inverse();
+        const Eigen::Vector3d velocity_rhs = velocity_inf * (translation_imu_options.velocity_prior_mean - window.velocity.start);
+        for (int r = 0; r < 3; r++)
+        {
+            for (int c = 0; c < 3; c++)
+                AtPAndt.add(iv + r, iv + c, velocity_inf(r, c));
+            AtPBndt(iv + r, 0) += velocity_rhs(r);
+        }
+        // at rest: both velocities are zero
+        if (translation_imu_options.at_rest)
+        {
+            const double w = 1.0 / (translation_imu_options.zero_velocity_sigma_mps * translation_imu_options.zero_velocity_sigma_mps);
+            for (int r = 0; r < 3; r++)
+            {
+                AtPAndt.add(iv + r, iv + r, w);
+                AtPBndt(iv + r, 0) -= w * window.velocity.start(r);
+                AtPAndt.add(ie + r, ie + r, w);
+                AtPBndt(ie + r, 0) -= w * window.velocity.end(r);
+            }
+        }
+        // the end velocity must be determined even without its term (a gap at the end): a weak prior at the start velocity
+        if (!end_tied)
+            for (int r = 0; r < 3; r++)
+            {
+                AtPAndt.add(ie + r, ie + r, 1.0);
+                AtPBndt(ie + r, 0) += window.velocity.start(r) - window.velocity.end(r);
+            }
+
+        // offset prior carried over from the previous window
+        const Eigen::Matrix3d prior_inf = translation_imu_options.offset_prior_cov.inverse();
+        for (int r = 0; r < 3; r++)
+            for (int c = 0; c < 3; c++)
+                AtPAndt.add(io + r, io + c, prior_inf(r, c));
+        AtPBndt.block<3, 1>(io, 0) += prior_inf * (translation_imu_options.offset_prior_mean - acc_offset);
+    }
+
     // accelerometer as a soft measurement of the change of world-frame velocity between node anchors ~span_s apart:
     // residual = sum(c_j * p_j) - (mean acceleration - e) * tau, with mean acceleration = mean(R f - g) * to_mps2
     // (the node rotations are taken as fixed here) and e the acceleration offset of this window
-    if (acc_term)
+    if (acc_term && !always_on)
     {
         const auto &acc = *translation_imu_options.acc;
         const int n = static_cast<int>(window.poses.size());
@@ -720,6 +903,8 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
                     window.gyro_bias.covariance = cols.block<3, 3>(ib, ib - n_pose_params);
                 if (acc_term)
                     acc_offset_cov = cols.block<3, 3>(io, io - n_pose_params);
+                if (always_on)
+                    window.velocity.end_covariance = cols.block<3, 3>(ie, ie - n_pose_params);
             }
         }
     }
@@ -760,6 +945,12 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
         if (acc_term)
             for (int r = 0; r < 3; r++)
                 acc_offset(r) += h_x[io + r];
+        if (always_on)
+            for (int r = 0; r < 3; r++)
+            {
+                window.velocity.start(r) += h_x[iv + r];
+                window.velocity.end(r) += h_x[ie + r];
+            }
 
         if (estimate_bias)
         {

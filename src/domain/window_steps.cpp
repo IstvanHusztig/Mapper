@@ -171,6 +171,25 @@ bool is_turn_window(const Window &window, double threshold_rad_s)
     return false;
 }
 
+bool integrate_window_translations(Window &window, const Eigen::Vector3d &start_velocity, const Eigen::Vector3d &gravity, double to_mps2)
+{
+    const size_t n = window.poses.size();
+    if (n == 0 || window.imu_acc.size() != n || window.timestamps.size() != n)
+        return false;
+    Eigen::Vector3d p = window.poses[0].translation();
+    Eigen::Vector3d v = start_velocity;
+    for (size_t k = 1; k < n; k++)
+    {
+        const double dt = std::max(window.timestamps[k].first - window.timestamps[k - 1].first, 0.0);
+        const Eigen::Vector3d a = (rotation_of(window.poses[k - 1]) * window.imu_acc[k - 1] - gravity) * to_mps2;
+        p += v * dt + 0.5 * a * dt * dt;
+        v += a * dt;
+        window.poses[k].translation() = p;
+    }
+    window.motion_model_poses = window.poses;
+    return true;
+}
+
 void repropagate_window_tail(Window &window, int tail_nodes, const Eigen::Vector3d &bias_update)
 {
     auto &tr = window.poses;

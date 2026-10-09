@@ -81,6 +81,15 @@ struct MotionModelTranslationImuOptions
     double prev_velocity_age_s = 0.0;                            // time from the centre of prev_velocity to the first node
     Eigen::Vector3d offset_prior_mean = Eigen::Vector3d::Zero(); // [m/s^2]
     Eigen::Matrix3d offset_prior_cov = Eigen::Matrix3d::Identity();
+    // imu_always_on: noise from the sensor, rotations in the term, the window's start and end velocity as unknowns
+    // (Window::velocity), the start with a prior; a window at rest gets a zero-velocity measurement on both
+    bool always_on = false;
+    double noise_density_mps2_sqrt_hz = 0.0;
+    double floor_sigma_mps2 = 0.0;
+    Eigen::Vector3d velocity_prior_mean = Eigen::Vector3d::Zero();     // [m/s]
+    Eigen::Matrix3d velocity_prior_cov = Eigen::Matrix3d::Identity(); // [(m/s)^2]
+    bool at_rest = false;
+    double zero_velocity_sigma_mps = 0.01;
 };
 
 ScanToMapOptions get_scan_to_map_options(const OdometryConfig &config);
