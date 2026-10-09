@@ -24,7 +24,7 @@ Close the GUI before building. Never run two jobs on the same input folder at on
   - Rigid window motion about the window's mean node position; noise as in the paper, Eqs. 7, 8 and 34, with the cell's point count and in-plane spreads.
   - Translation and rotation are separated by Schur complements, and the test is the paper's Eq. 20.
   - Computed once per window, in the first iteration (as LIO-SAM decides degeneracy), and held.
-  - Constants: σp = `degenerate_point_sigma_m` 0.02 m (Livox Mid-360 class, to be confirmed for the user's sensor), s = 10.
+  - Constants: σp = `degenerate_point_sigma_m` 0.02 m (Livox Mid-360 class assumed; the sensor is a Unitree L2, also ≤ 2 cm), s = 10.
   - The count test is not needed. The point-sigma setting is a fifth key next to the four of the delta spec; the spec is amended.
 - [x] 1.2 Compute the window's rigid-motion information and its translation and rotation Schur complements, and the per-direction p (design, decisions 1 and 2), as a separate, tested helper.
   - Tests: synthetic room, nothing degenerate; synthetic corridor, translation along the axis degenerate; a round synthetic tunnel, rotation about the axis degenerate; noise added to the corridor's cells doesn't make the axis look constrained; invariance under moving the world origin.
