@@ -34,6 +34,16 @@
 Everything below was measured or rejected on recordings whose IMU lagged the LiDAR by 50 to 80 ms, with settings tuned around that lag. A "worse" there may be "better" now, and a "better" may have been a compensation. Each item is re-run on the retuned settings and the corrected 44 (and on the user's new synchronized scans, as soon as there are some), with the same measures as in task 1.
 
 - [ ] 4.1 **NDT cell statistics.** Exact cell statistics (`use_exact_ndt_bucket_statistics`) against the default "previous" statistics. Measured on lagging data in `odometry-stall-fix`: 2.8 and 8 m off. Also the in-plane regularization of planar cells (`ndt_plane_in_plane_sigma_m`, 8.8 m off) and the archived `ndt-bucket-statistics` change (rejected 2026-10-03). The question is whether the cell statistics decide ghost walls and drift, or whether the lag did. The NDT map is built from poses that the lagging gyro and the lag-compensating rotation weights shaped.
+- **The spot in 44 (found 2026-10-09):** the bad runs are stalls in blind passages. Run A (shipped, no shift) and run B (+1 ms) were compared odometry-only with `log_window_diagnostics`:
+  - they separate gradually (1 cm at window 52, 5 cm at 120), then sharply in the passage at windows 171–186 (t ≈ 69–76 s, weak direction ≈ (0.96, 0.26, 0));
+  - **in A, window 172 reverses the motion** (+0.07 m against a guess of −0.12). Its information ratio was 0.237, just above the projection's 0.2, so it wasn't projected. The carried speed then stays near zero for 15 windows, about 6 m of walking lost, and the solver doesn't converge (step 1e-5 to 1e-4 after 100 iterations);
+  - **B** had a ratio of 0.128 in that window (projected), walked on at 0.4 m per window and converged.
+
+  A stall detector (trajectory speed < 0.25 m/s over 1 s for ≥ 1.2 s while the IMU's step rhythm shows walking) finds:
+  - a stall at 70–73 s in most runs with bad loop closure, none in any run with good loop closure, and one stall at 125 s (the original ghost-wall passage);
+  - in 45f, the same short stalls in every variant, probably real turns on the spot.
+
+  Widening the projection (0.15/0.3, 0.2/0.4) didn't stabilise 44 (8–14 loops). Cause: in a blind passage the speed is unobservable (the LiDAR is blind along the axis, the accelerometer sees only changes), so one wrong window kills the carried speed. The principled fix is 4.3: velocity as a carried state that only the accelerometer may change. Judge it by stalls and loops over three perturbed runs and on 45f.
 - [ ] 4.2 **Degeneracy projection** (`degenerate_projection_ratio` 0.1 / `_full` 0.2): the thresholds were chosen for the ghost wall of 44 on lagging data. Check the thresholds and the information-ratio gate (0.3) again.
 - [ ] 4.3 **Accelerometer on its own:** the gate, its sigma and the continuous weight variant (measured harmful, 4.4 m off), then IMU always on (branch `imu-always-on`; on corrected data v3 was 1.0 m off against 22 m).
 - [ ] 4.4 **Hessian signal-to-noise degeneracy test and its rotation-only variant** (rejected 2026-10-09, in git history at the implementation commit named in the archived change): the test handed rotations to the gyro, which was 80 ms late.
