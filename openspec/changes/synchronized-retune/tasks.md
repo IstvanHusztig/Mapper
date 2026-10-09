@@ -33,7 +33,18 @@
 
 Everything below was measured or rejected on recordings whose IMU lagged the LiDAR by 50 to 80 ms, with settings tuned around that lag. A "worse" there may be "better" now, and a "better" may have been a compensation. Each item is re-run on the retuned settings and the corrected 44 (and on the user's new synchronized scans, as soon as there are some), with the same measures as in task 1.
 
-- [ ] 4.1 **NDT cell statistics.** Exact cell statistics (`use_exact_ndt_bucket_statistics`) against the default "previous" statistics. Measured on lagging data in `odometry-stall-fix`: 2.8 and 8 m off. Also the in-plane regularization of planar cells (`ndt_plane_in_plane_sigma_m`, 8.8 m off) and the archived `ndt-bucket-statistics` change (rejected 2026-10-03). The question is whether the cell statistics decide ghost walls and drift, or whether the lag did. The NDT map is built from poses that the lagging gyro and the lag-compensating rotation weights shaped.
+- [x] 4.1 **NDT cell statistics.** Exact cell statistics (`use_exact_ndt_bucket_statistics`) against the default "previous" statistics. Measured on lagging data in `odometry-stall-fix`: 2.8 and 8 m off. Also the in-plane regularization of planar cells (`ndt_plane_in_plane_sigma_m`, 8.8 m off) and the archived `ndt-bucket-statistics` change (rejected 2026-10-03). The question is whether the cell statistics decide ghost walls and drift, or whether the lag did. The NDT map is built from poses that the lagging gyro and the lag-compensating rotation weights shaped.
+  **Done 2026-10-09, both rejected again, now on synchronized data** (shipped settings with `imu_always_on` and loop-closure gating; three 44 runs with the IMU shifted 0/1/2 ms plus 45f; reference `44_lc_s0..s2`, `45f_lc`):
+
+  | variant | 44 loops | 44 largest correction | 44 route | 45f loops / largest correction | first-chunk cells 3 cm, 44 / 45f |
+  |---|---|---|---|---|---|
+  | shipped | 23 / 21 / 21 | 1.72 / 1.86 / 1.92 m | 404 / 402 / 419 m | 21 / 0.20 m | 26,373–26,910 / 12,345 |
+  | exact statistics | 0 / 0 / 0 | – | 617 / 673 / 674 m (runaway, 6,000–15,500 jump warnings) | 21 / 0.24 m | – / 12,224 |
+  | in-plane sigma 0.3 | 10 / 11 / 6 | 1.98 / 0.12 / 2.91 m | 408 / 410 / 567 m (runaway in s2) | 10 / 1.99 m | 24,777–24,829 / 12,283 |
+
+  - Exact statistics drift from the start in all three runs (heading +3° by 15 s, 1 m off by 45 s, runaway at the stairwell). Likely cause: cells that keep averaging in new points follow the odometry's drift, while the default cells keep their first view and anchor the map. On 45f neutral (1 % sharper, the same 23 cm largest revisit offset).
+  - The in-plane sigma makes the first chunk 4–8 % sharper but loses half the loops and runs away once.
+  - So the lag did not decide these; the cell statistics stay as shipped.
 - **The spot in 44 (found 2026-10-09):** the bad runs are stalls in blind passages. Run A (shipped, no shift) and run B (+1 ms) were compared odometry-only with `log_window_diagnostics`:
   - they separate gradually (1 cm at window 52, 5 cm at 120), then sharply in the passage at windows 171–186 (t ≈ 69–76 s, weak direction ≈ (0.96, 0.26, 0));
   - **in A, window 172 reverses the motion** (+0.07 m against a guess of −0.12). Its information ratio was 0.237, just above the projection's 0.2, so it wasn't projected. The carried speed then stays near zero for 15 windows, about 6 m of walking lost, and the solver doesn't converge (step 1e-5 to 1e-4 after 100 iterations);
