@@ -69,6 +69,33 @@ python tools/fix_imu_timestamps.py "<input_folder>/imu.csv" -o "<new_folder>/imu
 - It prints the step statistics before and after and how much later the samples arrived than their new time.
 - Write the output into a **new** input folder together with copies of the LAZ files: every `.csv` in an input folder is read as IMU data.
 
+## imu_time_offset.py
+
+Measures how far the IMU timestamps of a recording are off against its LiDAR timestamps, and how well the accelerometer agrees with a result's trajectory. Pure Python 3.
+
+```
+python tools/imu_time_offset.py "<raw data>/44" "<raw data>/44_baseline" [--shift-ms S] [--from T0 --to T1] [--no-prediction]
+```
+
+- The trajectory files are chunk-relative; the tool places them with `session_poses.mrp`. The accelerometer is rotated into the world with the trajectory's rotations (one node per IMU sample).
+- **Prediction:** from p(t0), v(t0), the error of predicting the trajectory h = 0.1 to 5 s ahead, by constant velocity and by integrating the accelerometer.
+- **Coherence:** per frequency band and axis, the coherence and gain between the trajectory's acceleration and the accelerometer. A good trajectory follows the walk at 0.3 to 2 Hz (vertical coherence about 0.9).
+- **Delay:** from the cross-spectrum phase slope at 0.5 to 4 Hz. Negative means the IMU stamps are late against the LiDAR's.
+- `--shift-ms` tests an offset (the prediction error is smallest at the true one); `--from/--to` restricts the analysis to a time range, so running it per segment shows a drift.
+- **Found with it on 2026-10-09:** the IMU of recording 44 was 79 ms behind the LiDAR at the start and 52 ms at the end. A per-window yaw check with `eval_odometry.py` against shifted gyro data agreed (minimum at 80 to 100 ms). The recording was corrected with `restamp_imu.py`.
+
+## restamp_imu.py
+
+Corrects the IMU timestamps of a recording by a measured lag d(t) = A + B·t against the LiDAR (from `imu_time_offset.py`). Pure Python 3.
+
+```
+python tools/restamp_imu.py "<original>/imu0001.csv" "<raw data>/44/imu0001.csv" --offset-ms 79.4 --drift-ms-per-s -0.0983
+```
+
+- `timestamp` and `timestampUnix` [ns] are reduced by d(t), t in seconds from the first sample. Samples that would fall before zero are dropped; the timestamps must keep increasing. All other columns are copied unchanged.
+- The output must be a new file. Keep the original **outside** `raw data`, so a wrongly timed file can't be processed by accident. The originals of all unsynchronized recordings are in `dLidar/unsynced_archive` (35, 42, 43 and 44's original IMU file; see its README).
+- `fix_imu_timestamps.py` is a different repair: it removes bursts by rebuilding a steady clock from the arrival times. It doesn't align the IMU with the LiDAR, and its fitted period can drift.
+
 ## merge_chunks.sh
 
 Merges the chunk clouds of a result folder into one LAZ in world coordinates, using the CloudCompare command line. Each `scan_lio_N.laz` is stored relative to its chunk's first pose; `session_poses.mrp` holds those poses.
@@ -107,7 +134,12 @@ out/build/x64-Release/bin/dMapper.exe "<raw data>/44_short" settings/lidar-verti
 python tools/compare_baseline.py "<raw data>/44_short_check" tools/baseline/44_short.manifest.json
 ```
 
-The baselines were last refreshed on 2026-10-08 by `fixed-pattern-precise-fp`, which changed the compiler's floating-point mode to `/fp:precise` and the Cholesky pattern. Its results differ from the previous (`/fp:fast`) ones by up to 2 cm on `44_short` and about 0.6 m in the route length of the full 44 (see `docs/PERFORMANCE.md`, fixes 9 and 10). The previous references are kept as `raw data/44_baseline_2026-10-08b` and `raw data/44_short_baseline_2026-10-08b`; older ones carry earlier dates.
+**Since 2026-10-09 the datasets are the corrected recording 44:**
+- its IMU was re-stamped by `restamp_imu.py` (79.4 ms − 0.0983 ms/s · t), because it lagged the LiDAR;
+- `44_short` was cut again from it (`cut_recording`, 0 to 30 s);
+- the baselines were made from it by the code of that day.
+
+All earlier baselines came from the unsynchronized data and were deleted, together with the other recordings' results.
 
 The folders `raw data/44_baseline` and `raw data/44_short_baseline` hold the output the manifests were written from. Keep them: a change that deliberately alters numbers compares its output with them to measure the effect, with `--tolerance`, before it writes new baselines:
 
