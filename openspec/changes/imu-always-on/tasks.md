@@ -10,6 +10,11 @@ Close the GUI before building. Never run two jobs on the same input folder at on
 
 ## 1. Diagnose
 
+- [ ] 1.0 The IMU's own noise.
+  - With a static recording from the user (the scanner standing still for 3 to 5 minutes, no motion), compute the Allan deviation of the accelerometer and gyro. A small pure-Python tool next to `tools/eval_odometry.py`, in the same CSV format as `imu*.csv`, gives the noise density, bias instability and random walk per axis.
+  - Without such a recording, use the upper bound from the stillest second of recording 44 (hand-held, about 0.009 m/s²/√Hz) and note it as provisional.
+  - Record the constants here and as the defaults of `imu_accel_noise_density_mps2_sqrt_hz` and the bias random walk. Commit.
+
 - [ ] 1.1 Behind `log_window_diagnostics`, log per window how the accelerometer fits the LiDAR trajectory in windows where no direction is degenerate (ratio above 0.3). For each anchor triple, compare the trajectory's second difference with R·f − g, and fit the residual of the window as offset + tilt leakage (the part explained by a small attitude error, [g]× δθ) + rest. Log the three sizes.
   - One full-44 run (precise). Report their distributions, the size of the tilt that would explain the leakage, and the noise level after both are removed.
   - Decide from it: the order of tasks 2.1 and 2.2, and `imu_accel_floor_sigma_mps2`. Record here. Results unchanged; `44_short` IDENTICAL. Commit.

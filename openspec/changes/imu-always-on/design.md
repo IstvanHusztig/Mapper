@@ -41,7 +41,7 @@ The term then constrains rotations and positions together. A tilt that leaks gra
 
 ### 4. Noise from the sensor
 - **The weight of a term** over the span τ is 1 / (σ_eff² · τ), with σ_eff² = σ_d² / τ + σ_floor².
-  - σ_d: the accelerometer noise density, default from the ICM-40609 data sheet;
+  - σ_d: the accelerometer noise density, from an Allan variance of a static recording of the user's scanner (task 1.0), or the hand-held upper bound of recording 44 (about 0.009 m/s²/√Hz) while there is none;
   - σ_floor: an assumed floor for walking vibration and unmodelled lever-arm effects, set from the task-1 measurement, not fitted to single windows.
 - **Settings:**
   - `imu_always_on` (bool, default false);

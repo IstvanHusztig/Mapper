@@ -28,7 +28,11 @@ The two other improvements tried in the meantime were measured and dropped (chan
   - the window's start velocity becomes an unknown with a prior: the previous window's estimate and its covariance, grown by the acceleration noise over the gap;
   - the accelerometer bias, the existing acceleration offset, is carried with its covariance like the gyro bias (already done) and grows by a random walk;
   - the window's final velocity and its covariance are handed to the next window.
-- **IMU noise from the sensor, not from tuning:** the accelerometer sigma per term from a noise density and the span (σ_a / √Δt), plus a floor for walking vibration. The constants are settings with defaults from the data sheet of the Livox Mid-360's IMU (ICM-40609), to be confirmed for the user's sensor.
+- **IMU noise from the sensor, not from tuning:** the accelerometer sigma per term from a noise density and the span (σ_a / √Δt), plus a floor for walking vibration.
+  - The sensor model is not known: the LAZ header and the CSV don't name it.
+  - The IMU runs at about 892 Hz, so it isn't the Livox Mid-360's internal 200 Hz IMU.
+  - The constants are therefore measured from the user's own sensor: noise density and bias instability (Allan variance) from a static recording of a few minutes, the scanner standing still.
+  - Until there is one, the upper bound from recording 44 is used. Its stillest second, hand-held at t ≈ 1.5 s, gives an accelerometer spread of about 0.02 g per sample, about 0.009 m/s²/√Hz, tremor included.
 - **Always on:** with the new setting the accelerometer term is active in every window. The degenerate-stretch gate (`imu_acceleration_only_when_degenerate`, the 15 s limit, the loosened translation sigma) is then not used. The gravity calibration from the LiDAR trajectory is replaced by the estimated bias.
 - **Judged on the full 44** (short test, precise build only, until the final check with both builds):
   - against the verified `44_baseline`;
