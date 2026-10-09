@@ -22,6 +22,7 @@ Times are for the reference recordings in `raw data/`, with the Release build an
 | [One floating-point mode (`/fp:precise`)](#10-one-floating-point-mode) | 2026-10-08 | build | no speed cost measured | results change by cm–dm over the 44 (new baselines) |
 | [Faster consistency](#11-faster-consistency) | 2026-10-08 | consistency | 44: consistency (10 passes) 363.6 → 44.7 s (−88 %), processing time 888 → 628 s | within 1e-10 (new baselines) |
 | [Stored NDT cell inverses](#12-stored-ndt-cell-inverses) | 2026-10-08 | window optimizer, consistency | 44: odometry 517 → 490 s (−5 %), processing time 628 → 601 s | bit-identical |
+| [IMU always on (a cost, for precision)](#13-imu-always-on-a-cost) | 2026-10-09 | window optimizer, loop closure | 44: processing time 715 → 1249 s (1.75×), `44_short` 76 → 120 s | new algorithm (new baselines) |
 
 ## 1. Sparse band of the normal matrix
 
@@ -204,6 +205,14 @@ OpenSpec change `consistency-speedup`.
 **Checks.** `tests/ndt_map_test.cpp`: after one and after two `update_rgd` calls (both statistics modes) every cell's stored inverse equals `cov.inverse()` bit for bit and the usable flag matches the thresholds. `tests/scan_to_map_test.cpp`: an optimizer run with the stored inverses equals one inverting on the spot, bit for bit. `ctest` passes; `44_short` IDENTICAL with its manifest; the full 44 differs from its manifest only in the parameter file (the timing setting of the run).
 
 OpenSpec change `ndt-lookup-cache`.
+
+## 13. IMU always on (a cost)
+
+Not a speed fix: a precision change that costs time, recorded here so the time is explained. `imu_always_on` (on in `settings/lidar-vertical.toml`, changes `imu-always-on` and `loop-closure-gating`) puts the accelerometer term into every window, with rotation coupling and velocity unknowns. On the synchronized 44 it removed the stalls in blind passages; with the loop-closure fix the ghost walls fell from up to 112 cm to at most 16–25 cm horizontally. Precision comes before speed (see `CLAUDE.md`), so the cost is accepted.
+
+**Cost** (Release, `/fp:precise`, one run at a time on the same machine): full 44 processing time 714.9 s (the previous settings on the corrected recording) → 1249.4 s (1.75×); `44_short` 75.6 → 120.2 s (1.6×). The window optimizer does the extra work: about 36 accelerometer triples per window, each now with a rotation Jacobian block for every node it spans, which widens the band of the normal matrix (the rotations of the anchor nodes enter the same rows), plus 9 more unknowns. Loop closure may run up to three registrations per segment instead of one where the first is rejected; on 44 that is a few extra registrations, not measurable in the total.
+
+Not yet looked at: whether the denser band costs mostly in assembly or in the Cholesky solves (`log_stage_timing` would show it), and whether the rotation blocks could be added per anchor instead of per node.
 
 ## Settings that trade speed
 
