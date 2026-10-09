@@ -10,10 +10,19 @@ Close the GUI before building. Never run two jobs on the same input folder at on
 
 ## 1. Diagnose
 
-- [ ] 1.0 The IMU's own noise.
-  - With a static recording from the user (the scanner standing still for 3 to 5 minutes, no motion), compute the Allan deviation of the accelerometer and gyro. A small pure-Python tool next to `tools/eval_odometry.py`, in the same CSV format as `imu*.csv`, gives the noise density, bias instability and random walk per axis.
-  - Without such a recording, use the upper bound from the stillest second of recording 44 (hand-held, about 0.009 m/s²/√Hz) and note it as provisional.
-  - Record the constants here and as the defaults of `imu_accel_noise_density_mps2_sqrt_hz` and the bias random walk. Commit.
+- [x] 1.0 The IMU's own noise, from the static recording `raw data/43/static` (17.2 s at rest, 15,160 samples, 882 Hz average; the timestamps come in bursts, so the rate is samples per duration). It is the recording `gyro-bias-estimation` measured the gyro on (ARW 0.028 / 0.042 / 0.057 °/√s, the shipped values).
+
+  Accelerometer, white noise from sample differences (MAD, robust):
+
+  | Axis | Per sample | Noise density | Spread of 1 s means |
+  |---|---|---|---|
+  | x | 0.0226 m/s² | 0.00107 m/s²/√Hz (110 µg/√Hz) | 0.064 m/s² |
+  | y | 0.0269 m/s² | 0.00128 m/s²/√Hz (131 µg/√Hz) | 0.007 m/s² |
+  | z | 0.0277 m/s² | 0.00132 m/s²/√Hz (135 µg/√Hz) | 0.005 m/s² |
+
+  - **Defaults:** `imu_accel_noise_density_mps2_sqrt_hz` = 0.0013, the largest axis.
+  - **Bias random walk:** stays at the existing 0.05 m/s²/√s, provisional, because 17 s is too short for bias instability. The larger x drift may be a touch during the recording.
+  - **Mistake recorded:** an earlier draft of this task asked for a new static recording, although this one existed and had been used before (2026-09-30).
 
 - [ ] 1.1 Behind `log_window_diagnostics`, log per window how the accelerometer fits the LiDAR trajectory in windows where no direction is degenerate (ratio above 0.3). For each anchor triple, compare the trajectory's second difference with R·f − g, and fit the residual of the window as offset + tilt leakage (the part explained by a small attitude error, [g]× δθ) + rest. Log the three sizes.
   - One full-44 run (precise). Report their distributions, the size of the tilt that would explain the leakage, and the noise level after both are removed.
