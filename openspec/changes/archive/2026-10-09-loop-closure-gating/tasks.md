@@ -17,4 +17,4 @@
 
 ## 3. Ship
 
-- [ ] 3.1 New baselines together with `imu-always-on` (the two changes are merged in one baseline commit), docs (loop closure section and `[loop_closure]` table in `docs/index.html` and the Hungarian copy), sync the spec, archive, push.
+- [x] 3.1 New baselines together with `imu-always-on` (the two changes are merged in one baseline commit), docs (loop closure section and `[loop_closure]` table in `docs/index.html` and the Hungarian copy), sync the spec, archive, push.

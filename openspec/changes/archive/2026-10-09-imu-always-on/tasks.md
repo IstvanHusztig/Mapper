@@ -82,10 +82,12 @@ Close the GUI before building. Never run two jobs on the same input folder at on
 
 ## 4. Ship (only if adopted)
 
-- [ ] 4.1 Shipped settings, new baselines (old folders renamed with a date suffix, both manifests rewritten), and docs:
+- [x] 4.1 Shipped settings, new baselines (old folders renamed with a date suffix, both manifests rewritten), and docs:
   - `docs/degeneracy-information.html` and the Hungarian copy (the gate replaced);
   - the settings tables of `docs/index.html` and `docs/hu/index.html`;
   - `CLAUDE.md` (the IMU paragraph);
   - a recording note in `docs/index.html` and `docs/hu/index.html`: start each recording with 3 to 5 s at rest (Unitree L2 data sheet), and stop briefly now and then in long blind passages.
 
   Sync the delta spec, archive, push. Memory notes.
+
+  **Done 2026-10-09** together with `loop-closure-gating`: `imu_always_on = true` and `imu_acceleration_offset_rw_mps2_sqrt_s = 0.0001` in `settings/lidar-vertical.toml`; new baselines (old `*_2026-10-09`; full 44: 23 loops, largest correction 1.72 m, 1249 s instead of 715 s); docs as listed, plus the vibration floor, the stairwell window as a known limitation and `docs/PERFORMANCE.md` section 13.
