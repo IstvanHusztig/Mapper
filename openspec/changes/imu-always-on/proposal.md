@@ -29,6 +29,7 @@ The two other improvements tried in the meantime were measured and dropped (chan
   - the accelerometer bias, the existing acceleration offset, is carried with its covariance like the gyro bias (already done) and grows by a random walk;
   - the window's final velocity and its covariance are handed to the next window.
 - **IMU noise from the sensor, not from tuning:** the accelerometer sigma per term from a noise density and the span (σ_a / √Δt), plus a floor for walking vibration.
+  - The sensor is a Unitree L2: 4D ToF, non-repetitive scan, 360° × 90°, range accuracy ≤ 2 cm, 30 m range at 90 % reflectivity and 15 m at 10 %. Its 6-axis IMU samples at 1000 Hz with 500 Hz output (user's data sheet, 2026-10-09). The data sheet gives no IMU noise density, and the recordings show about 882 to 892 Hz with timestamps in bursts.
   - The constants come from the user's own static recording, `raw data/43/static` (17 s at rest, 882 Hz). It is the same recording the gyro ARW was measured on in `gyro-bias-estimation`.
   - Accelerometer noise density: x 0.0011, y 0.0013, z 0.0013 m/s²/√Hz (110 / 131 / 135 µg/√Hz).
   - Spread of the 1 s means: x 0.064, y 0.007, z 0.005 m/s². The 17 s are too short for a reliable bias-instability figure, so the bias random walk stays provisional.
