@@ -4,7 +4,21 @@
 
 ## 1. Rotation and accelerometer (batch 1)
 
-- [ ] 1.1 `rotation_sigma_inflation_k` 2 and 1 (shipped 4), and the accelerometer term off (`use_imu_acceleration_term = false`). Record here.
+- [x] 1.1 `rotation_sigma_inflation_k` 2 and 1 (shipped 4), and the accelerometer term off (`use_imu_acceleration_term = false`). Record here.
+
+  **Result (2026-10-09).** On the corrected 44, a single run can't pick settings: the noise of one run is larger than every effect.
+  - **Noise test:** each candidate re-run with the IMU shifted by +1 and +2 ms, a physically meaningless change:
+
+    | Setting | Loops | Largest correction | 3 cm cells | Window yaw diff |
+    |---|---|---|---|---|
+    | shipped (k = 4) | 11 / 21 / 10 | 5.56 / 0.79 / 6.29 m | 24,485 / 24,239 / 24,409 | 0.87 / 0.84 / 0.78° |
+    | k = 1 | 20 / 15 / 11 | 0.69 / 3.89 / 5.07 m | 24,464 / 26,684 / 23,957 | 0.78 / 0.75 / 0.75° |
+    | accelerometer off | 18 / 11 / 13 | 4.10 / 6.49 / 5.05 m | 21,658 / 24,441 / 24,226 | 0.85 / 0.81 / 0.83° |
+
+  - **Single runs, no shift:** k = 2: 13 loops, 4.89 m; k = 0.5: 14 loops, 8.75 m; k = 0.25: 18 loops, 2.01 m, 27,166 cells; k = 1 with the accelerometer off: 16 loops, 2.98 m, 21,459 cells.
+  - **New synchronized recording 45f** (dLidar fix, residual offset x −1.4 / z +1.9 ms): shipped, k = 1, accelerometer off and both are equal within the noise (17–18 loops, 0.59–0.75 m, cells within ±1 %).
+  - **Conclusion:** no candidate is better than the shipped settings beyond the noise. k = 1 only agrees slightly better with the gyro (0.75–0.78° against 0.78–0.87°). The two apparent wins, k = 1 on drift and the accelerometer off on sharpness, were single lucky runs.
+  - **The real finding:** on the corrected 44, loop closure is chaotic. The largest correction ranges from 0.8 to 6.3 m for 1–2 ms changes, and most runs leave the baseline at the same place, t ≈ 74–78 s (the two-solution place noted in `hessian-degeneracy-detection`). From now on, settings are judged by at least three perturbed runs (median) and on 45f. That place in 44 is the precision problem to look at.
 
 ## 2. Follow-up (batch 2)
 
