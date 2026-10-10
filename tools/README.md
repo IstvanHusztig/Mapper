@@ -118,6 +118,33 @@ python tools/trajectory_seams.py "<raw data>/44/lio_result_2" "<raw data>/44/lio
 - Per result it prints the route length, the largest position difference with its time and the reference position, the first time the difference exceeds each threshold (`--thresholds`, default 5, 20 and 50 cm), and the longest stretch above the first threshold.
 - Used for `odometry-stall-fix`: a `/fp:fast` and a `/fp:precise` build of the same code should stay within a few centimetres over the whole 44.
 
+## spot_check.py
+
+Checks one place of a result for a structure drawn twice (a doubled railing or wall) and tells which passes draw which copy. `eval_odometry.py` and revisit checks that fit walls and floors don't see thin structures. Pure Python, plus CloudCompare for the export.
+
+```
+python tools/spot_check.py "<raw data>/44_lc_s0" -3.0121 -5.4233 -0.1179 0.8
+```
+
+- The arguments are a point picked in `scan_lio_merged.laz` (CloudCompare point picking) and a radius (default 0.8 m).
+- Each chunk LAZ is exported once to `scan_lio_<n>.asc` in the result folder and placed with the chunk poses of `session_poses.mrp`, so the coordinates are those of the merged cloud.
+- The points within the radius are split into passes at time gaps over 2 s. Each pass is compared with the largest one: median distance to its nearest neighbour, the share farther than 5 cm, and the median offset vector.
+- Passes within a few centimetres draw the same surface (the L2's noise); a pass 10+ cm off draws a second copy, and its time range points to the stretch of the trajectory that is off.
+- Found the doubled stairwell railings of 44 (`robust-loop-closure`): seen from floor 0 every pass agrees within 2–5 cm, seen from floor −1 at 139–149 s the railing is 24 cm off.
+
+## stairwell_check.py
+
+Measures the drift between floors on a round stairwell. The shaft is plumb, so its railing circle has the same centre on every floor; an offset between the circles is drift of the trajectory between the floors (the doubled railings of 44). Pure Python, plus CloudCompare for the export (as `spot_check.py`).
+
+```
+python tools/stairwell_check.py "<raw data>/44_lc_s0" -4.7 -4.9
+```
+
+- The arguments are a rough guess of the shaft's centre in the coordinates of `scan_lio_merged.laz` (within half a metre is enough). Options: `--radius` (points within this of the guess, default 3.5 m), `--ring` (starting railing radius, 1.5 m), `--band` (railing band relative to the sensor's level on a floor, default −0.55..−0.05 m), `--min-storey` (1.8 m).
+- Floors are the heights where the trajectory dwells; each point belongs to the pass it was seen from (a stretch with the sensor on one floor). In each floor's railing band, a circle is fitted per pass.
+- Per band it prints every pass's centre, radius, median residual and arc, and the offset from the floor's own first pass. The summary gives, for neighbouring floors, the stack (each floor's railing seen from its own floor) and the upper railing seen from the floor below. A few cm is the noise; the railing of 44 fits with 1–3 cm residuals.
+- On 44 with the shipped settings (input `44_s0`): floor −1 is 30 cm off floor 0 (stack), floor −2 31 cm off floor −1 (seen from below; floor −2 has no railing of its own).
+
 ## Regression baseline (compare_baseline.py, cut_recording)
 
 Refactors must reproduce `44_short` and the full 44 bit for bit (see `docs/ARCHITECTURE.md`). Two reference datasets live next to the raw data, outside git:

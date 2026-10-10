@@ -6,6 +6,8 @@
 
 #include <algorithm>
 #include <iomanip>
+#include <string>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace
@@ -45,6 +47,58 @@ namespace
         for (const auto &p : points)
             s.insert(voxel_key(p, r));
         return s;
+    }
+
+    // the points of `points` whose horizontal cell (with one cell of margin) also holds points of `other`: the footprint two
+    // segments on different floors share, in practice the stairwell
+    std::vector<Eigen::Vector3d> crop_to_shared_footprint(const std::vector<Eigen::Vector3d> &points, const std::vector<Eigen::Vector3d> &other,
+                                                         double cell)
+    {
+        const auto key = [cell](double x, double y)
+        {
+            return (static_cast<uint64_t>(static_cast<uint32_t>(static_cast<int32_t>(std::floor(x / cell)))) << 32) |
+                   static_cast<uint32_t>(static_cast<int32_t>(std::floor(y / cell)));
+        };
+        std::unordered_set<uint64_t> footprint;
+        for (const auto &p : other)
+            for (int dx = -1; dx <= 1; dx++)
+                for (int dy = -1; dy <= 1; dy++)
+                    footprint.insert(key(p.x() + dx * cell, p.y() + dy * cell));
+        std::vector<Eigen::Vector3d> out;
+        for (const auto &p : points)
+            if (footprint.count(key(p.x(), p.y())))
+                out.push_back(p);
+        return out;
+    }
+
+    // how well a point set constrains every direction: smallest over largest eigenvalue of sum(n n^T) over the normals of
+    // its planar cells (cells of `cell` m with at least 8 points, smallest spread under a fifth of the next)
+    double information_ratio(const std::vector<Eigen::Vector3d> &points, double cell)
+    {
+        std::unordered_map<uint64_t, std::vector<Eigen::Vector3d>> cells;
+        for (const auto &p : points)
+            cells[voxel_key(p, cell)].push_back(p);
+        Eigen::Matrix3d info = Eigen::Matrix3d::Zero();
+        for (const auto &[key, ps] : cells)
+        {
+            if (ps.size() < 8)
+                continue;
+            Eigen::Vector3d mean = Eigen::Vector3d::Zero();
+            for (const auto &p : ps)
+                mean += p;
+            mean /= double(ps.size());
+            Eigen::Matrix3d cov = Eigen::Matrix3d::Zero();
+            for (const auto &p : ps)
+                cov += (p - mean) * (p - mean).transpose();
+            const Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eig(cov);
+            if (eig.eigenvalues()(0) < 0.2 * eig.eigenvalues()(1))
+            {
+                const Eigen::Vector3d n = eig.eigenvectors().col(0);
+                info += n * n.transpose();
+            }
+        }
+        const Eigen::Vector3d ev = Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d>(info).eigenvalues();
+        return ev(2) > 0.0 ? ev(0) / ev(2) : 0.0;
     }
 
     double overlap(const std::vector<Eigen::Vector3d> &source, const Eigen::Affine3d &T, const std::unordered_set<uint64_t> &target, double r)
@@ -196,10 +250,19 @@ namespace
     }
 
     void add_relative_pose_edge(std::vector<Eigen::Triplet<double>> &A, Eigen::VectorXd &b, const std::vector<TaitBryanPose> &poses,
-                                int from, int to, const Eigen::Matrix<double, 6, 1> &measurement, double w_t, double w_r)
+                                int from, int to, const Eigen::Matrix<double, 6, 1> &measurement_in, double w_t, double w_r)
     {
         const TaitBryanPose &p1 = poses[from];
         const TaitBryanPose &p2 = poses[to];
+        // the angle residuals wrapped into (-pi, pi] as in relative_pose_edge_cost: the measurement's angles are shifted by
+        // whole turns, so an edge whose relative yaw is near +-180 deg doesn't see a residual of 360 deg after a small step
+        Eigen::Matrix<double, 6, 1> delta;
+        relative_pose_obs_eq_tait_bryan_wc_case1_simplified_1(delta, p1.px, p1.py, p1.pz, p1.om, p1.fi, p1.ka, p2.px, p2.py, p2.pz, p2.om, p2.fi, p2.ka,
+                                                              measurement_in(0), measurement_in(1), measurement_in(2),
+                                                              measurement_in(3), measurement_in(4), measurement_in(5));
+        Eigen::Matrix<double, 6, 1> measurement = measurement_in;
+        for (int r = 3; r < 6; r++)
+            measurement(r) -= delta(r) - std::remainder(delta(r), 2.0 * M_PI);
         Eigen::Matrix<double, 12, 12> AtPA;
         relative_pose_obs_eq_tait_bryan_wc_case1_AtPA_simplified(AtPA, p1.px, p1.py, p1.pz, p1.om, p1.fi, p1.ka,
                                                                  p2.px, p2.py, p2.pz, p2.om, p2.fi, p2.ka, w_t, w_t, w_t, w_r, w_r, w_r);
@@ -272,69 +335,104 @@ std::vector<Eigen::Affine3d> optimize_loop_pose_graph(const std::vector<Eigen::A
     for (const auto &p : initial)
         poses.push_back(pose_tait_bryan_from_affine_matrix(p));
 
+    // robust kernel on the loop edges: s2 = the edge's squared residual in sigmas. Two stages: plain least squares first,
+    // then the kernel from that solution. Reweighting from the odometry's poses would treat every true loop as an outlier:
+    // before the solve each one is off by the whole drift (on 44 1-2 m, 20-40 sigmas)
+    const double kernel_scale2 = params.loop_closure_kernel_scale * params.loop_closure_kernel_scale;
+    double kernel2 = 0.0; // the kernel of the current stage (0: plain)
+    // a cross-floor edge ties the translation but hardly the rotation
+    const double w_cross_floor_r = 1.0 / std::pow(params.loop_closure_cross_floor_rotation_sigma_deg * DEG, 2);
+    const auto loop_w_r = [&](size_t e) { return loops[e].cross_floor ? w_cross_floor_r : w_loop_r; };
+    const auto loop_edge_cost = [&](const std::vector<TaitBryanPose> &ps, size_t e)
+    {
+        const double s2 = relative_pose_edge_cost(ps, loops[e].i, loops[e].j, loop_meas[e], w_loop_t, loop_w_r(e));
+        return kernel2 > 0.0 ? kernel2 * std::log1p(s2 / kernel2) : s2;
+    };
+    const auto loop_edge_weight = [&](const std::vector<TaitBryanPose> &ps, size_t e)
+    {
+        if (kernel2 <= 0.0)
+            return 1.0;
+        const double s2 = relative_pose_edge_cost(ps, loops[e].i, loops[e].j, loop_meas[e], w_loop_t, loop_w_r(e));
+        return 1.0 / (1.0 + s2 / kernel2);
+    };
+
     const auto cost_of = [&](const std::vector<TaitBryanPose> &ps)
     {
         double c = 0.0;
         for (int k = 0; k + 1 < n; k++)
             c += relative_pose_edge_cost(ps, k, k + 1, odo[k], w_odo_t, w_odo_r);
         for (size_t e = 0; e < loops.size(); e++)
-            c += relative_pose_edge_cost(ps, loops[e].i, loops[e].j, loop_meas[e], w_loop_t, w_loop_r);
+            c += loop_edge_cost(ps, e);
         return c;
     };
 
-    double cost = cost_of(poses);
-    double lambda = 0.0; // 0: plain Gauss-Newton; raised only when a step fails to lower the cost
-    int iter = 0;
-    for (int attempt = 0; attempt < 60 && iter < 30; attempt++)
+    const auto solve = [&]()
     {
-        std::vector<Eigen::Triplet<double>> A;
-        Eigen::VectorXd b = Eigen::VectorXd::Zero(6 * n);
-        for (int k = 0; k + 1 < n; k++)
-            add_relative_pose_edge(A, b, poses, k, k + 1, odo[k], w_odo_t, w_odo_r);
-        for (size_t e = 0; e < loops.size(); e++)
-            add_relative_pose_edge(A, b, poses, loops[e].i, loops[e].j, loop_meas[e], w_loop_t, w_loop_r);
-        for (int r = 0; r < 6; r++)
-            A.emplace_back(r, r, 1e12); // first segment pose fixed
-        Eigen::SparseMatrix<double> AtPA(6 * n, 6 * n);
-        AtPA.setFromTriplets(A.begin(), A.end());
-        if (lambda > 0.0)
-            for (int r = 0; r < 6 * n; r++)
-                AtPA.coeffRef(r, r) *= 1.0 + lambda;
-        Eigen::SimplicialCholesky<Eigen::SparseMatrix<double>> solver(AtPA);
-        if (solver.info() != Eigen::Success)
-            break;
-        const Eigen::VectorXd dx = solver.solve(b);
-        if (solver.info() != Eigen::Success || !dx.allFinite())
-            break;
-        std::vector<TaitBryanPose> trial = poses;
-        for (int k = 0; k < n; k++)
+        double cost = cost_of(poses);
+        double lambda = 0.0; // 0: plain Gauss-Newton; raised only when a step fails to lower the cost
+        int iter = 0;
+        for (int attempt = 0; attempt < 60 && iter < 30; attempt++)
         {
-            trial[k].px += dx(6 * k + 0);
-            trial[k].py += dx(6 * k + 1);
-            trial[k].pz += dx(6 * k + 2);
-            trial[k].om += dx(6 * k + 3);
-            trial[k].fi += dx(6 * k + 4);
-            trial[k].ka += dx(6 * k + 5);
-        }
-        const double trial_cost = cost_of(trial);
-        // a step that doesn't raise the cost beyond rounding is kept; otherwise damp and try again from the same poses
-        if (std::isfinite(trial_cost) && trial_cost <= cost * (1.0 + 1e-9) + 1e-12)
-        {
-            poses = trial;
-            cost = trial_cost;
-            lambda = lambda > 0.0 ? lambda * 0.1 : 0.0;
-            if (lambda < 1e-9)
-                lambda = 0.0;
-            iter++;
-            if (dx.norm() < 1e-8)
+            std::vector<Eigen::Triplet<double>> A;
+            Eigen::VectorXd b = Eigen::VectorXd::Zero(6 * n);
+            for (int k = 0; k + 1 < n; k++)
+                add_relative_pose_edge(A, b, poses, k, k + 1, odo[k], w_odo_t, w_odo_r);
+            for (size_t e = 0; e < loops.size(); e++)
+            {
+                // the kernel's weight at the current poses (1 without the kernel): the reweighted quadratic bounds the robust
+                // cost from above, so a step that lowers it lowers the cost, and the step check below stays valid
+                const double f = loop_edge_weight(poses, e);
+                add_relative_pose_edge(A, b, poses, loops[e].i, loops[e].j, loop_meas[e], w_loop_t * f, loop_w_r(e) * f);
+            }
+            for (int r = 0; r < 6; r++)
+                A.emplace_back(r, r, 1e12); // first segment pose fixed
+            Eigen::SparseMatrix<double> AtPA(6 * n, 6 * n);
+            AtPA.setFromTriplets(A.begin(), A.end());
+            if (lambda > 0.0)
+                for (int r = 0; r < 6 * n; r++)
+                    AtPA.coeffRef(r, r) *= 1.0 + lambda;
+            Eigen::SimplicialCholesky<Eigen::SparseMatrix<double>> solver(AtPA);
+            if (solver.info() != Eigen::Success)
                 break;
-        }
-        else
-        {
-            lambda = lambda > 0.0 ? lambda * 10.0 : 1e-3;
-            if (lambda > 1e6)
+            const Eigen::VectorXd dx = solver.solve(b);
+            if (solver.info() != Eigen::Success || !dx.allFinite())
                 break;
+            std::vector<TaitBryanPose> trial = poses;
+            for (int k = 0; k < n; k++)
+            {
+                trial[k].px += dx(6 * k + 0);
+                trial[k].py += dx(6 * k + 1);
+                trial[k].pz += dx(6 * k + 2);
+                trial[k].om += dx(6 * k + 3);
+                trial[k].fi += dx(6 * k + 4);
+                trial[k].ka += dx(6 * k + 5);
+            }
+            const double trial_cost = cost_of(trial);
+            // a step that doesn't raise the cost beyond rounding is kept; otherwise damp and try again from the same poses
+            if (std::isfinite(trial_cost) && trial_cost <= cost * (1.0 + 1e-9) + 1e-12)
+            {
+                poses = trial;
+                cost = trial_cost;
+                lambda = lambda > 0.0 ? lambda * 0.1 : 0.0;
+                if (lambda < 1e-9)
+                    lambda = 0.0;
+                iter++;
+                if (dx.norm() < 1e-8)
+                    break;
+            }
+            else
+            {
+                lambda = lambda > 0.0 ? lambda * 10.0 : 1e-3;
+                if (lambda > 1e6)
+                    break;
+            }
         }
+    };
+    solve();
+    if (kernel_scale2 > 0.0)
+    {
+        kernel2 = kernel_scale2;
+        solve();
     }
     std::vector<Eigen::Affine3d> result;
     for (const auto &p : poses)
@@ -354,6 +452,12 @@ std::vector<LoopEdgeResidual> loop_edge_residuals(const std::vector<Eigen::Affin
         out.push_back({d.translation().norm(), Eigen::AngleAxisd(d.linear()).angle() / DEG});
     }
     return out;
+}
+
+double loop_edge_drop_ratio(const LoopClosureEdge &edge, const LoopEdgeResidual &residual, const OdometryConfig &params)
+{
+    return std::max(residual.translation_m / params.loop_closure_max_residual_m,
+                    edge.cross_floor ? 0.0 : residual.angle_deg / params.loop_closure_max_residual_deg);
 }
 
 bool loop_pose_graph_plausible(const std::vector<Eigen::Affine3d> &initial, const std::vector<Eigen::Affine3d> &optimized,
@@ -421,62 +525,97 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
 
     // 2.+3. revisit candidates and their registration
     std::vector<LoopClosureEdge> loops;
+    const bool use_cross_floor = params.loop_closure_cross_floor_max_vertical_m > params.loop_closure_max_vertical_offset_m;
+    int cross_floor_tries = 0;
+    int cross_floor_accepted = 0;
     for (int j = 0; j < static_cast<int>(segments.size()); j++)
     {
         // earlier segments within the search radius, nearest first; when a registration is rejected the next one is tried
-        // (the nearest centre is not always the same view: a short last segment can pick a wrong partner)
-        std::vector<std::pair<double, int>> candidates;
-        for (int i = 0; i < j; i++)
+        // (the nearest centre is not always the same view: a short last segment can pick a wrong partner).
+        // Pass 0: the same floor. Pass 1 (cross-floor loops): the floors above and below, as one more edge
+        for (int pass = 0; pass < (use_cross_floor ? 2 : 1); pass++)
         {
-            if (segments[j].t_begin - segments[i].t_end < params.loop_closure_min_time_gap_s)
-                continue;
-            const Eigen::Vector3d d = segments[j].center - segments[i].center;
-            if (std::abs(d.z()) > params.loop_closure_max_vertical_offset_m)
-                continue;
-            const double dh = d.head<2>().norm();
-            if (dh < params.loop_closure_search_radius_m)
-                candidates.emplace_back(dh, i);
-        }
-        std::sort(candidates.begin(), candidates.end());
-        const int tries = std::min(static_cast<int>(candidates.size()), std::max(1, params.loop_closure_candidates));
-        for (int c = 0; c < tries; c++)
-        {
-            const int best_i = candidates[c].second;
-
-            // target: the earlier segment with its neighbours
-            std::vector<Eigen::Vector3d> target;
-            for (int i = std::max(0, best_i - 1); i <= std::min(j - 1, best_i + 1); i++)
-                target.insert(target.end(), segments[i].points.begin(), segments[i].points.end());
-            const auto &source = segments[j].points;
-            if (source.size() < 500 || target.size() < 500)
-                continue;
-
-            const auto fitness_grid = voxel_set(target, 0.2);
-            const double before = overlap(source, Eigen::Affine3d::Identity(), fitness_grid, 0.2);
-            Eigen::Affine3d T = coarse_search(source, target, params.loop_closure_max_correction_m);
-            T = ndt_refine(source, target, T, params.use_exact_ndt_bucket_statistics);
-            const double after = overlap(source, T, fitness_grid, 0.2);
-            const double shift = T.translation().norm();
-            const double angle = Eigen::AngleAxisd(T.linear()).angle() / DEG;
-            // an already aligned revisit (no improvement possible) is a valid constraint as well
-            const bool accepted = after >= params.loop_closure_min_fitness && after >= before - 0.02 &&
-                                  shift <= params.loop_closure_max_correction_m + 1.0 && angle <= 15.0;
-            log_info(logger) << "loop candidate segments " << best_i << " -> " << j << " (t " << std::fixed << std::setprecision(1)
-                             << segments[best_i].t_begin - segments[0].t_begin << " s / " << segments[j].t_begin - segments[0].t_begin
-                             << " s): overlap " << std::setprecision(2) << before << " -> " << after << ", correction " << shift << " m "
-                             << std::setprecision(1) << angle << " deg" << (accepted ? " ACCEPTED" : " rejected");
-            if (accepted)
+            const bool cross_floor = pass == 1;
+            std::vector<std::pair<double, int>> candidates;
+            for (int i = 0; i < j; i++)
             {
-                LoopClosureEdge e;
-                e.i = best_i;
-                e.j = j;
-                e.correction = T;
-                e.fitness = after;
-                loops.push_back(e);
-                break;
+                const double min_gap = cross_floor ? params.loop_closure_cross_floor_min_time_gap_s : params.loop_closure_min_time_gap_s;
+                if (segments[j].t_begin - segments[i].t_end < min_gap)
+                    continue;
+                const Eigen::Vector3d d = segments[j].center - segments[i].center;
+                const double dz = std::abs(d.z());
+                const bool height_fits = cross_floor ? dz > params.loop_closure_max_vertical_offset_m && dz <= params.loop_closure_cross_floor_max_vertical_m
+                                                     : dz <= params.loop_closure_max_vertical_offset_m;
+                if (!height_fits)
+                    continue;
+                const double dh = d.head<2>().norm();
+                if (dh < params.loop_closure_search_radius_m)
+                    candidates.emplace_back(dh, i);
+            }
+            std::sort(candidates.begin(), candidates.end());
+            const int tries = std::min(static_cast<int>(candidates.size()), std::max(1, params.loop_closure_candidates));
+            for (int c = 0; c < tries; c++)
+            {
+                const int best_i = candidates[c].second;
+
+                // target: the earlier segment with its neighbours
+                std::vector<Eigen::Vector3d> target;
+                for (int i = std::max(0, best_i - 1); i <= std::min(j - 1, best_i + 1); i++)
+                    target.insert(target.end(), segments[i].points.begin(), segments[i].points.end());
+                std::vector<Eigen::Vector3d> source = segments[j].points;
+                if (cross_floor)
+                {
+                    // only what both floors see (the shaft): the rest of each segment is ground the other never saw
+                    const std::vector<Eigen::Vector3d> shared_target = crop_to_shared_footprint(target, source, 0.5);
+                    source = crop_to_shared_footprint(source, target, 0.5);
+                    target = shared_target;
+                }
+                if (source.size() < 500 || target.size() < 500)
+                    continue;
+
+                const auto fitness_grid = voxel_set(target, 0.2);
+                const double before = overlap(source, Eigen::Affine3d::Identity(), fitness_grid, 0.2);
+                Eigen::Affine3d T = coarse_search(source, target, cross_floor ? params.loop_closure_cross_floor_search_m
+                                                                              : params.loop_closure_max_correction_m);
+                T = ndt_refine(source, target, T, params.use_exact_ndt_bucket_statistics);
+                const double after = overlap(source, T, fitness_grid, 0.2);
+                const double shift = T.translation().norm();
+                const double angle = Eigen::AngleAxisd(T.linear()).angle() / DEG;
+                // between floors the shared region may be a single wall (a facade), which fixes only the direction across it
+                const double info_ratio = cross_floor ? information_ratio(target, 0.2) : 1.0;
+                // an already aligned revisit (no improvement possible) is a valid constraint as well. Between floors only
+                // the shaft is shared: a lower overlap, and a correction no larger than the drift between floors can be
+                const bool accepted = cross_floor ? after >= params.loop_closure_cross_floor_min_fitness && after >= before - 0.02 &&
+                                                        shift <= 1.0 && angle <= params.loop_closure_cross_floor_max_angle_deg &&
+                                                        info_ratio >= params.loop_closure_cross_floor_min_information_ratio
+                                                  : after >= params.loop_closure_min_fitness && after >= before - 0.02 &&
+                                                        shift <= params.loop_closure_max_correction_m + 1.0 && angle <= 15.0;
+                if (cross_floor)
+                    cross_floor_tries++;
+                log_info(logger) << (cross_floor ? "cross-floor " : "") << "loop candidate segments " << best_i << " -> " << j << " (t "
+                                 << std::fixed << std::setprecision(1) << segments[best_i].t_begin - segments[0].t_begin << " s / "
+                                 << segments[j].t_begin - segments[0].t_begin << " s): overlap " << std::setprecision(2) << before << " -> "
+                                 << after << ", correction " << shift << " m " << std::setprecision(1) << angle << " deg"
+                                 << (cross_floor ? ", information ratio " + std::to_string(info_ratio) : std::string())
+                                 << (accepted ? " ACCEPTED" : " rejected");
+                if (accepted)
+                {
+                    LoopClosureEdge e;
+                    e.i = best_i;
+                    e.j = j;
+                    e.correction = T;
+                    e.fitness = after;
+                    e.cross_floor = cross_floor;
+                    loops.push_back(e);
+                    if (cross_floor)
+                        cross_floor_accepted++;
+                    break;
+                }
             }
         }
     }
+    if (use_cross_floor)
+        log_info(logger) << "loop closure: " << cross_floor_accepted << " of " << cross_floor_tries << " cross-floor registrations accepted";
 
     if (loops.empty())
     {
@@ -499,8 +638,7 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
         double worst_ratio = 1.0;
         for (size_t e = 0; e < loops.size(); e++)
         {
-            const double ratio = std::max(residuals[e].translation_m / params.loop_closure_max_residual_m,
-                                          residuals[e].angle_deg / params.loop_closure_max_residual_deg);
+            const double ratio = loop_edge_drop_ratio(loops[e], residuals[e], params);
             if (ratio > worst_ratio)
             {
                 worst_ratio = ratio;
@@ -510,13 +648,14 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
         if (worst == loops.size())
         {
             auto line = log_info(logger);
-            line << "loop closure: loop edge residuals [m/deg]" << std::fixed;
+            line << "loop closure: loop edge residuals [m/deg] (=> cross-floor)" << std::fixed;
             for (size_t e = 0; e < loops.size(); e++)
-                line << " " << loops[e].i << "->" << loops[e].j << " " << std::setprecision(2) << residuals[e].translation_m << "/"
+                line << " " << loops[e].i << (loops[e].cross_floor ? "=>" : "->") << loops[e].j << " " << std::setprecision(2) << residuals[e].translation_m << "/"
                      << std::setprecision(1) << residuals[e].angle_deg;
             break;
         }
-        log_info(logger) << "loop segments " << loops[worst].i << " -> " << loops[worst].j << " dropped: residual " << std::fixed
+        log_info(logger) << (loops[worst].cross_floor ? "cross-floor " : "") << "loop segments " << loops[worst].i << " -> " << loops[worst].j
+                         << " dropped: residual " << std::fixed
                          << std::setprecision(2) << residuals[worst].translation_m << " m " << std::setprecision(1) << residuals[worst].angle_deg
                          << " deg";
         loops.erase(loops.begin() + static_cast<std::ptrdiff_t>(worst));

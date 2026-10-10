@@ -250,3 +250,131 @@ TEST_CASE("loop closure pose graph: a false loop edge stands out by its residual
     for (const LoopEdgeResidual &good : loop_edge_residuals(initial, optimize_loop_pose_graph(initial, loops, c), loops))
         CHECK(good.translation_m < 0.02);
 }
+
+// the robust kernel on the loop edges (loop_closure_kernel_scale): two laps of the square, 8 segments each, drifting 3 cm
+// sideways per segment; lap 2 revisits lap 1 segment by segment, so every stretch is covered by several loops and one
+// edge that disagrees with the others can be told apart (with a single loop its error just spreads into the odometry)
+namespace
+{
+    struct TwoLaps
+    {
+        std::vector<Eigen::Affine3d> truth, initial;
+        TwoLaps()
+        {
+            for (int k = 0; k < 16; k++)
+            {
+                const int q = k % 8;
+                const double x = q < 4 ? q * 2.0 : (7 - q) * 2.0;
+                const double y = q < 4 ? 0.0 : 3.0;
+                truth.push_back(segment_pose(x, y, q < 4 ? 0.0 : 180.0));
+                initial.push_back(segment_pose(x, y + 0.03 * k, q < 4 ? 0.0 : 180.0));
+            }
+        }
+        // the revisits of lap 1 by lap 2 as measured; the one at `wrong` off by `error` along x
+        std::vector<LoopClosureEdge> loops(int wrong = -1, double error = 0.0) const
+        {
+            std::vector<LoopClosureEdge> out;
+            for (int k = 0; k < 8; k++)
+            {
+                LoopClosureEdge e;
+                e.i = k;
+                e.j = k + 8;
+                e.correction = (initial[k] * truth[k].inverse() * truth[k + 8]) * initial[k + 8].inverse();
+                if (k == wrong)
+                    e.correction.translation().x() += error;
+                out.push_back(e);
+            }
+            return out;
+        }
+        double largest_error(const std::vector<Eigen::Affine3d> &poses) const
+        {
+            double m = 0.0;
+            for (size_t k = 0; k < poses.size(); k++)
+                m = std::max(m, (poses[k].translation() - truth[k].translation()).norm());
+            return m;
+        }
+    };
+
+    OdometryConfig with_kernel(double scale)
+    {
+        OdometryConfig c = loop_closure_config();
+        c.loop_closure_kernel_scale = scale;
+        return c;
+    }
+}
+
+TEST_CASE("loop closure pose graph: the kernel weakens a slightly wrong edge")
+{
+    const TwoLaps s;
+    // one revisit 15 cm off, below the drop limit: without the kernel it counts in full
+    const auto loops = s.loops(3, 0.15);
+    const double e_plain = s.largest_error(optimize_loop_pose_graph(s.initial, loops, with_kernel(0.0)));
+    const double e_robust = s.largest_error(optimize_loop_pose_graph(s.initial, loops, with_kernel(0.5)));
+    const double e_truth = s.largest_error(optimize_loop_pose_graph(s.initial, s.loops(), with_kernel(0.0)));
+    MESSAGE("largest position error: plain ", e_plain, " m, kernel 0.5 ", e_robust, " m, all edges right ", e_truth, " m");
+    CHECK(e_robust < 0.75 * e_plain);
+    CHECK(e_robust < e_truth + 0.005);
+}
+
+TEST_CASE("loop closure pose graph: consistent edges give the same solution with and without the kernel")
+{
+    const TwoLaps s;
+    const auto a = optimize_loop_pose_graph(s.initial, s.loops(), with_kernel(0.0));
+    const auto b = optimize_loop_pose_graph(s.initial, s.loops(), with_kernel(0.5));
+    REQUIRE(a.size() == b.size());
+    double largest = 0.0;
+    for (size_t k = 0; k < a.size(); k++)
+        largest = std::max(largest, (a[k].translation() - b[k].translation()).norm());
+    MESSAGE("largest difference ", largest, " m");
+    CHECK(largest < 2e-3);
+}
+
+TEST_CASE("loop closure pose graph: with the kernel a false edge still stands out by its residual")
+{
+    const TwoLaps s;
+    const OdometryConfig c = with_kernel(0.5);
+    const auto loops = s.loops(3, 1.0);
+    const std::vector<LoopEdgeResidual> r = loop_edge_residuals(s.initial, optimize_loop_pose_graph(s.initial, loops, c), loops);
+    REQUIRE(r.size() == 8);
+    CHECK(r[3].translation_m > c.loop_closure_max_residual_m);
+    for (int k = 0; k < 8; k++)
+        if (k != 3)
+            CHECK(r[3].translation_m > r[k].translation_m);
+}
+
+
+TEST_CASE("loop closure pose graph: a cross-floor edge ties the translation, not the rotation")
+{
+    // the revisits of the two laps, plus one more edge whose registration turned 3 deg about the vertical (a round shaft):
+    // as a cross-floor edge it hardly turns the solution and isn't dropped for its rotation; as a same-floor edge it turns it
+    const TwoLaps s;
+    const OdometryConfig c = with_kernel(0.0);
+    auto loops = s.loops();
+    const auto reference = optimize_loop_pose_graph(s.initial, loops, c);
+    LoopClosureEdge turned = s.loops()[5];
+    turned.correction = Eigen::AngleAxisd(3.0 * DEG_TO_RAD, Eigen::Vector3d::UnitZ()) * turned.correction;
+    loops.push_back(turned);
+    const auto yaw_change = [&](const std::vector<Eigen::Affine3d> &p)
+    {
+        double m = 0.0;
+        for (size_t k = 0; k < p.size(); k++)
+            m = std::max(m, Eigen::AngleAxisd(reference[k].linear().transpose() * p[k].linear()).angle() / DEG_TO_RAD);
+        return m;
+    };
+
+    loops.back().cross_floor = false;
+    const double same_floor = yaw_change(optimize_loop_pose_graph(s.initial, loops, c));
+    loops.back().cross_floor = true;
+    const auto solved = optimize_loop_pose_graph(s.initial, loops, c);
+    const double cross_floor = yaw_change(solved);
+    MESSAGE("largest rotation change: as a same-floor edge ", same_floor, " deg, as a cross-floor edge ", cross_floor, " deg");
+    CHECK(cross_floor < 0.2 * same_floor);
+    CHECK(cross_floor < 0.1);
+
+    const std::vector<LoopEdgeResidual> r = loop_edge_residuals(s.initial, solved, loops);
+    CHECK(r.back().angle_deg > c.loop_closure_max_residual_deg); // the rotation disagrees ...
+    CHECK(loop_edge_drop_ratio(loops.back(), r.back(), c) < 1.0); // ... but only the translation counts
+    LoopClosureEdge same = loops.back();
+    same.cross_floor = false;
+    CHECK(loop_edge_drop_ratio(same, r.back(), c) > 1.0);
+}
