@@ -24,13 +24,26 @@ struct LoopClosureEdge
     int j = 0;                                                // later segment
     Eigen::Affine3d correction = Eigen::Affine3d::Identity(); // world transform moving segment j onto i
     double fitness = 0.0;
-    bool cross_floor = false; // between floors: ties the translation, the rotation only weakly (loop_closure_cross_floor_*)
-    // a point edge (loop_closure_cross_floor_point_edges): point_i (in segment i's frame) and point_j (in segment j's frame)
-    // must coincide horizontally; no rotation and no height
-    bool point = false;
-    Eigen::Vector3d point_i = Eigen::Vector3d::Zero();
-    Eigen::Vector3d point_j = Eigen::Vector3d::Zero();
+    bool cross_floor = false; // between floors (loop_closure_cross_floor_*); such an edge is information-weighted
+    // an information-weighted edge: omega weights its relative-pose residual in place of the fixed sigmas
+    // (see loop_edge_information)
+    bool information = false;
+    Eigen::Matrix<double, 6, 6> omega = Eigen::Matrix<double, 6, 6>::Zero();
 };
+
+// The information matrix of a loop edge's relative-pose residual from its registration's information H (the normal matrix
+// over the Tait-Bryan parameters of correction, the world transform moving segment j onto i): H mapped through the
+// Jacobian G of the edge's measurement rel(pose_i, correction * pose_j) with respect to those parameters (G^-T H G^-1),
+// with free_height the world-vertical shift eliminated as a free parameter, and scaled so that the best-determined
+// translation direction has the sigma sigma_m. ok is false (and the result zero) if G or H can't be used.
+Eigen::Matrix<double, 6, 6> loop_edge_information(const Eigen::Affine3d &pose_i, const Eigen::Affine3d &pose_j, const Eigen::Affine3d &correction,
+                                                  const Eigen::Matrix<double, 6, 6> &H, bool free_height, double sigma_m, bool &ok);
+
+// An information-weighted edge's sigmas in the frame of its shared region: the move of the region's centre (x, y, z, in
+// metres) and the rotation about it (roll, pitch, yaw about world axes, in degrees); a direction the edge leaves free
+// comes out very large.
+Eigen::Matrix<double, 6, 1> loop_edge_region_sigmas(const Eigen::Affine3d &pose_i, const Eigen::Affine3d &pose_j, const LoopClosureEdge &edge,
+                                                    const Eigen::Vector3d &centre);
 
 // Levenberg-Marquardt on the segment poses: odometry edges between consecutive segments, loop edges, first pose fixed.
 // A step is kept only if the cost falls (a plain Gauss-Newton step first, damping only when it fails). With
@@ -45,12 +58,14 @@ struct LoopEdgeResidual
 {
     double translation_m = 0.0;
     double angle_deg = 0.0;
+    double weighted = -1.0; // information-weighted edges: sqrt(r^T omega r), the residual in edge sigmas; -1 otherwise
 };
 std::vector<LoopEdgeResidual> loop_edge_residuals(const std::vector<Eigen::Affine3d> &initial, const std::vector<Eigen::Affine3d> &optimized,
                                                   const std::vector<LoopClosureEdge> &loops);
 
 // How far a loop edge's residual is beyond the drop limits (loop_closure_max_residual_m / _deg); above 1 it is a candidate
-// for dropping. A cross-floor edge is judged by its translation only (its rotation is weak by design).
+// for dropping. An information-weighted edge is judged by its weighted residual in metres of loop_closure_edge_sigma_m
+// (free directions don't count).
 double loop_edge_drop_ratio(const LoopClosureEdge &edge, const LoopEdgeResidual &residual, const OdometryConfig &params);
 
 // The optimized poses may be applied: all finite, and no segment moved further than loop_closure_max_correction_m plus

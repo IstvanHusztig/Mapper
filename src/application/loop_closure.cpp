@@ -182,8 +182,9 @@ namespace
     }
 
     // fine registration: rigid point-to-distribution alignment of the source to NDT cells of the target
+    // information: the undamped normal matrix of the last iteration (at the finest resolution), over T's Tait-Bryan parameters
     Eigen::Affine3d ndt_refine(const std::vector<Eigen::Vector3d> &source, const std::vector<Eigen::Vector3d> &target, Eigen::Affine3d T,
-                               bool exact_ndt_statistics)
+                               bool exact_ndt_statistics, Eigen::Matrix<double, 6, 6> *information = nullptr)
     {
         std::vector<Point3Di> target_points(target.size());
         Eigen::Vector3d viewport = Eigen::Vector3d::Zero();
@@ -232,6 +233,8 @@ namespace
                 }
                 if (used < 100)
                     break;
+                if (information)
+                    *information = AtPA;
                 AtPA += Eigen::Matrix<double, 6, 6>::Identity() * (1e-3 * AtPA.trace() / 6.0);
                 const Eigen::Matrix<double, 6, 1> dx = AtPA.ldlt().solve(AtPB);
                 if (!dx.allFinite())
@@ -297,51 +300,90 @@ namespace
         return w_t * delta.head<3>().squaredNorm() + w_r * delta.tail<3>().squaredNorm();
     }
 
-    // a point edge's residual: the horizontal difference of point_i placed with pose i and point_j placed with pose j
-    Eigen::Vector2d point_edge_residual(const TaitBryanPose &pi, const TaitBryanPose &pj, const LoopClosureEdge &e)
+    // an information edge's residual (measurement minus the relative pose of the two poses), angles wrapped into (-pi, pi]
+    Eigen::Matrix<double, 6, 1> information_edge_residual(const TaitBryanPose &p1, const TaitBryanPose &p2, const Eigen::Matrix<double, 6, 1> &m)
     {
-        const Eigen::Vector3d d = affine_matrix_from_pose_tait_bryan(pi) * e.point_i - affine_matrix_from_pose_tait_bryan(pj) * e.point_j;
-        return d.head<2>();
+        Eigen::Matrix<double, 6, 1> delta;
+        relative_pose_obs_eq_tait_bryan_wc_case1_simplified_1(delta, p1.px, p1.py, p1.pz, p1.om, p1.fi, p1.ka, p2.px, p2.py, p2.pz, p2.om, p2.fi, p2.ka,
+                                                              m(0), m(1), m(2), m(3), m(4), m(5));
+        for (int r = 3; r < 6; r++)
+            delta(r) = std::remainder(delta(r), 2.0 * M_PI);
+        return delta;
     }
 
-    // its Gauss-Newton terms (numeric Jacobian over the two poses' 6 parameters each): A += J^T w J, b -= J^T w r
-    void add_point_edge(std::vector<Eigen::Triplet<double>> &A, Eigen::VectorXd &b, const std::vector<TaitBryanPose> &poses,
-                        const LoopClosureEdge &e, double w)
+    // its Gauss-Newton terms: A += J^T omega J, b -= J^T omega delta (the generator's convention for AtPA / AtPB)
+    void add_information_edge(std::vector<Eigen::Triplet<double>> &A, Eigen::VectorXd &b, const std::vector<TaitBryanPose> &poses, int from, int to,
+                              const Eigen::Matrix<double, 6, 1> &measurement, const Eigen::Matrix<double, 6, 6> &omega)
     {
-        const Eigen::Vector2d r = point_edge_residual(poses[e.i], poses[e.j], e);
-        Eigen::Matrix<double, 2, 12> J;
-        const auto param = [](TaitBryanPose &p, int k) -> double &
+        const TaitBryanPose &p1 = poses[from];
+        const TaitBryanPose &p2 = poses[to];
+        const Eigen::Matrix<double, 6, 1> delta = information_edge_residual(p1, p2, measurement);
+        Eigen::Matrix<double, 6, 12, Eigen::RowMajor> J;
+        relative_pose_obs_eq_tait_bryan_wc_case1_jacobian(J, p1.px, p1.py, p1.pz, p1.om, p1.fi, p1.ka, p2.px, p2.py, p2.pz, p2.om, p2.fi, p2.ka);
+        const Eigen::Matrix<double, 12, 12> H = J.transpose() * omega * J;
+        const Eigen::Matrix<double, 12, 1> g = J.transpose() * omega * delta;
+        const int c[2] = {from * 6, to * 6};
+        for (int r = 0; r < 12; r++)
         {
-            switch (k)
-            {
-            case 0: return p.px;
-            case 1: return p.py;
-            case 2: return p.pz;
-            case 3: return p.om;
-            case 4: return p.fi;
-            default: return p.ka;
-            }
-        };
+            for (int col = 0; col < 12; col++)
+                A.emplace_back(c[r / 6] + r % 6, c[col / 6] + col % 6, H(r, col));
+            b(c[r / 6] + r % 6) -= g(r);
+        }
+    }
+
+    // the Tait-Bryan parameters of a pose, as a vector
+    Eigen::Matrix<double, 6, 1> pose_vector(const Eigen::Affine3d &T)
+    {
+        const TaitBryanPose p = pose_tait_bryan_from_affine_matrix(T);
+        Eigen::Matrix<double, 6, 1> v;
+        v << p.px, p.py, p.pz, p.om, p.fi, p.ka;
+        return v;
+    }
+
+    Eigen::Affine3d pose_from_vector(const Eigen::Matrix<double, 6, 1> &v)
+    {
+        TaitBryanPose p;
+        p.px = v(0);
+        p.py = v(1);
+        p.pz = v(2);
+        p.om = v(3);
+        p.fi = v(4);
+        p.ka = v(5);
+        return affine_matrix_from_pose_tait_bryan(p);
+    }
+
+    // Jacobian (central differences) of a 6-vector function of a 6-parameter perturbation; angle outputs wrapped
+    template <typename F>
+    Eigen::Matrix<double, 6, 6> numeric_jacobian(const F &f)
+    {
         constexpr double h = 1e-6;
-        for (int k = 0; k < 12; k++)
+        Eigen::Matrix<double, 6, 6> G;
+        for (int k = 0; k < 6; k++)
         {
-            TaitBryanPose pi = poses[e.i], pj = poses[e.j];
-            TaitBryanPose &p = k < 6 ? pi : pj;
-            param(p, k % 6) += h;
-            const Eigen::Vector2d plus = point_edge_residual(pi, pj, e);
-            param(p, k % 6) -= 2.0 * h;
-            const Eigen::Vector2d minus = point_edge_residual(pi, pj, e);
-            J.col(k) = (plus - minus) / (2.0 * h);
+            Eigen::Matrix<double, 6, 1> e = Eigen::Matrix<double, 6, 1>::Zero();
+            e(k) = h;
+            Eigen::Matrix<double, 6, 1> d = f(e) - f(-e);
+            for (int r = 3; r < 6; r++)
+                d(r) = std::remainder(d(r), 2.0 * M_PI);
+            G.col(k) = d / (2.0 * h);
         }
-        const Eigen::Matrix<double, 12, 12> H = w * J.transpose() * J;
-        const Eigen::Matrix<double, 12, 1> g = w * J.transpose() * r;
-        const int c[2] = {e.i * 6, e.j * 6};
-        for (int r1 = 0; r1 < 12; r1++)
-        {
-            for (int c1 = 0; c1 < 12; c1++)
-                A.emplace_back(c[r1 / 6] + r1 % 6, c[c1 / 6] + c1 % 6, H(r1, c1));
-            b(c[r1 / 6] + r1 % 6) -= g(r1);
-        }
+        return G;
+    }
+
+    Eigen::Matrix<double, 6, 1> relative_measurement(const Eigen::Affine3d &a, const Eigen::Affine3d &b);
+
+    // the edge's measurement as a function of a perturbation of the correction's Tait-Bryan parameters
+    Eigen::Matrix<double, 6, 6> measurement_jacobian(const Eigen::Affine3d &pose_i, const Eigen::Affine3d &pose_j, const Eigen::Affine3d &correction)
+    {
+        const Eigen::Matrix<double, 6, 1> c = pose_vector(correction);
+        return numeric_jacobian([&](const Eigen::Matrix<double, 6, 1> &e) { return relative_measurement(pose_i, pose_from_vector(c + e) * pose_j); });
+    }
+
+    // a symmetric matrix with its negative eigenvalues (rounding) set to zero
+    Eigen::Matrix<double, 6, 6> clip_negative(const Eigen::Matrix<double, 6, 6> &M)
+    {
+        const Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double, 6, 6>> eig(0.5 * (M + M.transpose()));
+        return eig.eigenvectors() * eig.eigenvalues().cwiseMax(0.0).asDiagonal() * eig.eigenvectors().transpose();
     }
 
     Eigen::Matrix<double, 6, 1> relative_measurement(const Eigen::Affine3d &a, const Eigen::Affine3d &b)
@@ -363,6 +405,58 @@ namespace
         return r;
     }
 } // namespace
+
+Eigen::Matrix<double, 6, 6> loop_edge_information(const Eigen::Affine3d &pose_i, const Eigen::Affine3d &pose_j, const Eigen::Affine3d &correction,
+                                                  const Eigen::Matrix<double, 6, 6> &H, bool free_height, double sigma_m, bool &ok)
+{
+    ok = false;
+    const Eigen::Matrix<double, 6, 6> G = measurement_jacobian(pose_i, pose_j, correction);
+    const Eigen::FullPivLU<Eigen::Matrix<double, 6, 6>> lu(G);
+    if (!G.allFinite() || !H.allFinite() || lu.rcond() < 1e-9)
+        return Eigen::Matrix<double, 6, 6>::Zero();
+    const Eigen::Matrix<double, 6, 6> Gi = lu.inverse();
+    Eigen::Matrix<double, 6, 6> omega = clip_negative(Gi.transpose() * H * Gi);
+    if (free_height)
+    {
+        // the world-vertical shift of the source (the correction's pz) as a free nuisance parameter: Schur complement
+        const Eigen::Matrix<double, 6, 1> u = G.col(2);
+        const double uu = u.dot(omega * u);
+        if (uu > 1e-12 * omega.trace())
+        {
+            const Eigen::Matrix<double, 6, 1> w = omega * u;
+            omega = clip_negative(omega - w * w.transpose() / uu);
+        }
+    }
+    const double best = Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d>(omega.topLeftCorner<3, 3>()).eigenvalues()(2);
+    if (!(best > 0.0) || !omega.allFinite())
+        return Eigen::Matrix<double, 6, 6>::Zero();
+    ok = true;
+    return omega * (1.0 / (sigma_m * sigma_m) / best);
+}
+
+Eigen::Matrix<double, 6, 1> loop_edge_region_sigmas(const Eigen::Affine3d &pose_i, const Eigen::Affine3d &pose_j, const LoopClosureEdge &edge,
+                                                    const Eigen::Vector3d &centre)
+{
+    // the correction perturbed by a move of the centre and a rotation about it (world axes)
+    const auto measurement = [&](const Eigen::Matrix<double, 6, 1> &e)
+    {
+        const Eigen::Vector3d r = e.tail<3>();
+        Eigen::Affine3d D = Eigen::Affine3d::Identity();
+        D.translate(centre + e.head<3>());
+        if (r.norm() > 0.0)
+            D.rotate(Eigen::AngleAxisd(r.norm(), r.normalized()));
+        D.translate(-centre);
+        return relative_measurement(pose_i, D * edge.correction * pose_j);
+    };
+    const Eigen::Matrix<double, 6, 6> K = numeric_jacobian(measurement);
+    const Eigen::Matrix<double, 6, 6> info = K.transpose() * edge.omega * K;
+    // a tiny regularization keeps the free directions finite (and very large)
+    const Eigen::Matrix<double, 6, 6> cov = (info + Eigen::Matrix<double, 6, 6>::Identity() * (1e-12 * std::max(info.trace(), 1e-30))).inverse();
+    Eigen::Matrix<double, 6, 1> s;
+    for (int k = 0; k < 6; k++)
+        s(k) = std::sqrt(std::max(cov(k, k), 0.0)) / (k < 3 ? 1.0 : DEG);
+    return s;
+}
 
 std::vector<Eigen::Affine3d> optimize_loop_pose_graph(const std::vector<Eigen::Affine3d> &initial, const std::vector<LoopClosureEdge> &loops,
                                                       const OdometryConfig &params)
@@ -389,15 +483,15 @@ std::vector<Eigen::Affine3d> optimize_loop_pose_graph(const std::vector<Eigen::A
     // before the solve each one is off by the whole drift (on 44 1-2 m, 20-40 sigmas)
     const double kernel_scale2 = params.loop_closure_kernel_scale * params.loop_closure_kernel_scale;
     double kernel2 = 0.0; // the kernel of the current stage (0: plain)
-    // a cross-floor edge ties the translation but hardly the rotation
-    const double w_cross_floor_r = 1.0 / std::pow(params.loop_closure_cross_floor_rotation_sigma_deg * DEG, 2);
-    const auto loop_w_r = [&](size_t e) { return loops[e].cross_floor ? w_cross_floor_r : w_loop_r; };
     // the edge's squared residual in sigmas
     const auto loop_edge_s2 = [&](const std::vector<TaitBryanPose> &ps, size_t e)
     {
-        if (loops[e].point)
-            return w_loop_t * point_edge_residual(ps[loops[e].i], ps[loops[e].j], loops[e]).squaredNorm();
-        return relative_pose_edge_cost(ps, loops[e].i, loops[e].j, loop_meas[e], w_loop_t, loop_w_r(e));
+        if (loops[e].information)
+        {
+            const Eigen::Matrix<double, 6, 1> d = information_edge_residual(ps[loops[e].i], ps[loops[e].j], loop_meas[e]);
+            return d.dot(loops[e].omega * d);
+        }
+        return relative_pose_edge_cost(ps, loops[e].i, loops[e].j, loop_meas[e], w_loop_t, w_loop_r);
     };
     const auto loop_edge_cost = [&](const std::vector<TaitBryanPose> &ps, size_t e)
     {
@@ -438,10 +532,10 @@ std::vector<Eigen::Affine3d> optimize_loop_pose_graph(const std::vector<Eigen::A
                 // the kernel's weight at the current poses (1 without the kernel): the reweighted quadratic bounds the robust
                 // cost from above, so a step that lowers it lowers the cost, and the step check below stays valid
                 const double f = loop_edge_weight(poses, e);
-                if (loops[e].point)
-                    add_point_edge(A, b, poses, loops[e], w_loop_t * f);
+                if (loops[e].information)
+                    add_information_edge(A, b, poses, loops[e].i, loops[e].j, loop_meas[e], loops[e].omega * f);
                 else
-                    add_relative_pose_edge(A, b, poses, loops[e].i, loops[e].j, loop_meas[e], w_loop_t * f, loop_w_r(e) * f);
+                    add_relative_pose_edge(A, b, poses, loops[e].i, loops[e].j, loop_meas[e], w_loop_t * f, w_loop_r * f);
             }
             for (int r = 0; r < 6; r++)
                 A.emplace_back(r, r, 1e12); // first segment pose fixed
@@ -505,24 +599,28 @@ std::vector<LoopEdgeResidual> loop_edge_residuals(const std::vector<Eigen::Affin
     std::vector<LoopEdgeResidual> out;
     for (const auto &e : loops)
     {
-        if (e.point)
-        {
-            const Eigen::Vector3d d = optimized[e.i] * e.point_i - optimized[e.j] * e.point_j;
-            out.push_back({d.head<2>().norm(), 0.0});
-            continue;
-        }
         const Eigen::Affine3d measured = initial[e.i].inverse() * e.correction * initial[e.j];
         const Eigen::Affine3d solved = optimized[e.i].inverse() * optimized[e.j];
         const Eigen::Affine3d d = measured.inverse() * solved;
-        out.push_back({d.translation().norm(), Eigen::AngleAxisd(d.linear()).angle() / DEG});
+        LoopEdgeResidual r{d.translation().norm(), Eigen::AngleAxisd(d.linear()).angle() / DEG};
+        if (e.information)
+        {
+            const Eigen::Matrix<double, 6, 1> delta =
+                information_edge_residual(pose_tait_bryan_from_affine_matrix(optimized[e.i]), pose_tait_bryan_from_affine_matrix(optimized[e.j]),
+                                          relative_measurement(initial[e.i], e.correction * initial[e.j]));
+            r.weighted = std::sqrt(std::max(delta.dot(e.omega * delta), 0.0));
+        }
+        out.push_back(r);
     }
     return out;
 }
 
 double loop_edge_drop_ratio(const LoopClosureEdge &edge, const LoopEdgeResidual &residual, const OdometryConfig &params)
 {
+    if (edge.information)
+        return residual.weighted * params.loop_closure_edge_sigma_m / params.loop_closure_max_residual_m;
     return std::max(residual.translation_m / params.loop_closure_max_residual_m,
-                    edge.cross_floor ? 0.0 : residual.angle_deg / params.loop_closure_max_residual_deg);
+                    residual.angle_deg / params.loop_closure_max_residual_deg);
 }
 
 bool loop_pose_graph_plausible(const std::vector<Eigen::Affine3d> &initial, const std::vector<Eigen::Affine3d> &optimized,
@@ -667,7 +765,8 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
                 const double before = overlap(source, Eigen::Affine3d::Identity(), fitness_grid, 0.2);
                 Eigen::Affine3d T = coarse_search(source, target, cross_floor ? params.loop_closure_cross_floor_search_m
                                                                               : params.loop_closure_max_correction_m);
-                T = ndt_refine(source, target, T, params.use_exact_ndt_bucket_statistics);
+                Eigen::Matrix<double, 6, 6> registration_information = Eigen::Matrix<double, 6, 6>::Zero();
+                T = ndt_refine(source, target, T, params.use_exact_ndt_bucket_statistics, &registration_information);
                 const double after = overlap(source, T, fitness_grid, 0.2);
                 const double shift = T.translation().norm();
                 const double angle = Eigen::AngleAxisd(T.linear()).angle() / DEG;
@@ -713,20 +812,37 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
                                          << std::setprecision(2) << centre.x() << " " << centre.y() << " " << centre.z() << ", its move "
                                          << move.x() << " " << move.y() << " " << move.z() << " m";
                     }
-                    if (cross_floor && params.loop_closure_cross_floor_keep_height)
+                    if (cross_floor)
                     {
-                        // the vertical move of the shared region's centre is removed; rotation and horizontal move stay
-                        const double dz = (e.correction * centre - centre).z();
-                        e.correction.translation().z() -= dz;
-                        log_info(logger) << "  cross-floor edge " << best_i << " -> " << j << ": vertical correction " << std::fixed
-                                         << std::setprecision(2) << dz << " m removed (height from the odometry)";
-                    }
-                    if (cross_floor && params.loop_closure_cross_floor_point_edges)
-                    {
-                        // the shared region's centre as segment j sees it, and where the registration puts it in segment i
-                        e.point = true;
-                        e.point_j = segments[j].pose.inverse() * centre;
-                        e.point_i = segments[best_i].pose.inverse() * (e.correction * centre);
+                        // weighted by what the registration determines, without the height (a shaft fixes neither its
+                        // height nor the turn about its axis)
+                        bool ok = false;
+                        e.omega = loop_edge_information(segments[best_i].pose, segments[j].pose, e.correction, registration_information, cross_floor,
+                                                        params.loop_closure_edge_sigma_m, ok);
+                        e.information = ok;
+                        auto line = log_info(logger);
+                        line << "  cross-floor edge " << best_i << " -> " << j;
+                        if (!ok)
+                        {
+                            line << ": registration information unusable, edge not used";
+                            continue; // the next candidate, as after a rejected registration
+                        }
+                        {
+                            const Eigen::Matrix<double, 6, 1> s = loop_edge_region_sigmas(segments[best_i].pose, segments[j].pose, e, centre);
+                            const auto put = [&](double v, double scale, double free_above)
+                            {
+                                if (v > free_above)
+                                    line << " free";
+                                else
+                                    line << " " << v * scale;
+                            };
+                            line << ": information sigmas at the shared region, move x y z [cm]" << std::fixed << std::setprecision(1);
+                            for (int k = 0; k < 3; k++)
+                                put(s(k), 100.0, 10.0);
+                            line << ", rotation roll pitch yaw [deg]";
+                            for (int k = 3; k < 6; k++)
+                                put(s(k), 1.0, 90.0);
+                        }
                     }
                     loops.push_back(e);
                     if (cross_floor)
@@ -772,14 +888,20 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
             auto line = log_info(logger);
             line << "loop closure: loop edge residuals [m/deg] (=> cross-floor)" << std::fixed;
             for (size_t e = 0; e < loops.size(); e++)
+            {
                 line << " " << loops[e].i << (loops[e].cross_floor ? "=>" : "->") << loops[e].j << " " << std::setprecision(2) << residuals[e].translation_m << "/"
                      << std::setprecision(1) << residuals[e].angle_deg;
+                if (loops[e].information)
+                    line << "/w" << std::setprecision(2) << residuals[e].weighted * params.loop_closure_edge_sigma_m;
+            }
             break;
         }
         log_info(logger) << (loops[worst].cross_floor ? "cross-floor " : "") << "loop segments " << loops[worst].i << " -> " << loops[worst].j
                          << " dropped: residual " << std::fixed
                          << std::setprecision(2) << residuals[worst].translation_m << " m " << std::setprecision(1) << residuals[worst].angle_deg
-                         << " deg";
+                         << " deg"
+                         << (loops[worst].information ? ", weighted " + std::to_string(residuals[worst].weighted * params.loop_closure_edge_sigma_m) + " m"
+                                                      : std::string());
         loops.erase(loops.begin() + static_cast<std::ptrdiff_t>(worst));
         if (loops.empty())
         {

@@ -159,6 +159,23 @@ python tools/facade_check.py "<raw data>/44_lc_s0" --facade 2.15 --spacing 1.135
 - The façade's position in each slice is compared with `--facade`, here the façade's outer face seen through the Wohnen windows at the start.
 - On 44 (the gallery in front of flat 56, building plan Haus 47 LG): shipped +29 / −52 / +39 cm mean deviation on `44_s0/s1/s2`. Few slices find the pair (1–7), so the numbers are rough.
 
+## floor_shape_check.py
+
+Checks the shape of the floors of a multi-storey result: the tilt of the slabs, the lift shaft's walls on each floor, and a 2-D ICP between floors. Pure Python, plus CloudCompare for the export (as `spot_check.py`). The defaults are the floors of recording 44.
+
+```
+python tools/floor_shape_check.py slabs "<raw data>/44_x6_s2" --levels -1.1 -4.0 -6.8
+python tools/floor_shape_check.py lift "<raw data>/44_x6_s2"
+python tools/floor_shape_check.py floors-icp "<raw data>/44_x6_s2" --box -7.35 -2.15 -1.2 4.0 --band 0.3 2.3
+```
+
+- Floors are `--floor=SLAB_Z:T0-T1[,T0-T1]` (slab height and the pass times in seconds on it, repeated; write the `=` for a negative height). Default `-1.1:1-92,220-280`, `-4.0:99-158,201-212`, `-6.8:165-194`. Each floor's points come only from its own pass times.
+- `slabs` fits a plane to the points near each slab height (trimmed least squares) and prints the tilt about y and x. A level slab gives 0; on 44 floor −1 tilts about +1 degree.
+- `lift` fits a line to each wall box (`--wall name:x0,x1,y0,y1`, repeated; default the lift shaft of 44: `bottom`, `right`, `long`) in the wall band above each slab (`--band`, default 0.3..2.3 m), and prints the direction and the offset against the first floor. `long@shaft` is the `long` wall over the seconds in which `bottom` was seen.
+- `floors-icp` moves each floor's wall points (`--band`, default 0.8..1.8 m) onto its neighbour's over the 0.5 m cells both cover, from starts at −6/0/+6 degrees, and prints rotation, shift, rms and matched share. `--box x0 x1 y0 y1` or `--radius R --centre x y` (from `--radius-min`) restricts it to a region. A rotation that every start finds is the floors turned against each other; starts that disagree mean no reliable fit.
+- Each run takes a few minutes (it reads every point).
+- On `44_x6_s2`: slab tilt about y −0.11 / +1.03 / +1.06 degrees; the bottom wall of floor −2 is 12.9 cm and 2.19 degrees off floor 0; whole-floor ICP from +0: floor −1 onto 0 +0.02, −2 onto −1 +0.39, −2 onto 0 +0.65 degrees.
+
 ## evaluate_floors.py
 
 The evaluation suite of `floor-alignment-diagnosis`: one table over the perturbed 44 inputs (and 45f), against reference results. It runs `stairwell_check.py`, `facade_check.py` and `spot_check.py` one after the other, and reads the loop summary from the run logs.

@@ -134,3 +134,39 @@ Reprocessed from the snapshots, all with X5 (keep-height), cross-floor edge grou
   - the largest corrections equal shipped, there are no jump warnings, and every point-edge residual is ≤ 4 cm, so the graph has no tension left.
 - **Remaining weakness:** floor −2 on `44_s2` is turned about 6° (1.1). Points at the shaft alone can't correct a turn, and the other shared points (around the staircase) are too few.
   - Refinement (not done): weight each cross-floor edge by its registration's information matrix (what the shared geometry actually determines), so a well-conditioned registration also ties the rotation.
+
+### 1.5 Information-weighted cross-floor edges (I1): the lowest floor tied on all three inputs (measured, 2026-10-11)
+
+Change `information-weighted-loop-edges`: each accepted cross-floor edge is weighted by its registration's NDT normal matrix, mapped into the edge's residual, with the height eliminated and the best translation scaled to 5 cm. Settings: X3 plus `loop_closure_cross_floor_information_edges`. Reprocessed from the snapshots.
+
+- **Edge sigmas on `44_s0`** (19 cross-floor edges):
+  - height free on every edge;
+  - horizontal position 5–8 cm;
+  - turn and tilt 0.4–2.7°, and 0.8–1.3° even at the round shaft.
+
+  The shared region also holds the stairs and landings, which fix the turn: more than the design expected (its stop rule at 3°). We went on after a visual check by the user ("looks much better").
+
+| X6 → I1 | `44_s0` | `44_s1` | `44_s2` |
+|---|---|---|---|
+| stairwell floor −2/−1 [cm] | 5.8 → **1.2** | 6.7 → **1.3** | 24.3 → **7.2** |
+| stairwell floor −1/0, stack [cm] | 4.5 → 6.6 | 15.4 → 11.9 | 4.1 → 7.4 |
+| lift shaft, lowest floor (bottom / long wall) [cm] | −8.6 / +9.6 → −6.2 / +6.4 | −12.1 / +0.8 → −8.9 / −4.1 | −12.9 / +12.4 → −11.9 / +2.9 |
+| floor −1 tilt against floor 0 (about y / x) [°] | 0.83 / 0.33 → 0.59 / 0.85 | 1.14 / 0.00 → 0.90 / 0.13 | 1.14 / −0.08 → 0.64 / 0.29 |
+| storey −1/−2 [m] (shipped 2.88 / 2.67 / 3.15) | 2.89 → 2.78 | 2.64 → 2.62 | 3.15 → 2.96 |
+| gallery façade [cm] (shipped +29.1 / −52.0 / +38.6) | +36.0 → +34.4 | −59.5 → −56.0 | +46.3 → +45.3 |
+
+- **The D8 criteria:**
+  1. Stairwell on s2 ≤ 10 cm: **met** (7.2). Floor −1/0 at most 3 cm worse than X6: missed by 0.3 cm on s2 (7.4 against 4.1).
+  2. Lift shaft on s2 ≤ 5 cm: **missed** on the bottom wall (−11.9), met on the long wall (+2.9).
+  3. Floor −1 tilt at most half of X6's: **missed** (it fell by 28 / 21 / 44 %), and on s0 a tilt of 0.85° about x appeared.
+  4. Gallery within 8 cm of shipped: **met**. Storeys within 2 cm of shipped: **missed** (−10 / −5 / −19 cm). But shipped isn't the truth here: its lowest storey varies 2.67–3.15 m between inputs, and I1 brings s2 nearer to 2.9.
+  5. 45f identical to shipped (no cross-floor pair): **met** (largest difference 0.000 m). No jump warnings.
+- **I1b** (2° rotation noise about the shared region added to each edge, against the over-confident rotations):
+  - it removes the tilt about x on s0 (0.17°) and lifts the s0 storey to 2.85 m;
+  - but s2's lowest floor falls back to 19.2 cm and its railings double again;
+  - so the rotation information is what fixes s2. The option was removed again.
+- **I2** (same-floor edges weighted too): **rejected**.
+  - Floor 0 turns by about 3° (lift-shaft wall 13.6° against 10.3°).
+  - The gallery façade goes to −52.5 / −50.8 cm on s0/s2 (shipped +29.1 / +38.6), and floor −1/0 gets worse (15.0 / 18.9 / 12.7 cm).
+  - 45f moves by up to 13 cm.
+  - A same-floor edge's information is far more confident in rotation than the fixed 0.3°, against a gallery seen along a single façade.

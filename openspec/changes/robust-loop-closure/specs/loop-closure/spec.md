@@ -3,7 +3,7 @@
 ## ADDED Requirements
 
 ### Requirement: Cross-floor revisits
-With `loop_closure_cross_floor_max_vertical_m` greater than `loop_closure_max_vertical_offset_m`, loop closure SHALL also try, for each segment, earlier segments whose centre lies between those two heights above or below it, at least `loop_closure_cross_floor_min_time_gap_s` apart in time and within the horizontal search radius, nearest first, up to `loop_closure_candidates` registrations. It SHALL add at most one such edge per segment, in addition to any same-floor edge. Such a pair SHALL be registered only on the horizontal footprint both segments cover, with the search limited to `loop_closure_cross_floor_search_m`. The edge SHALL be accepted only with an overlap of at least `loop_closure_cross_floor_min_fitness`, no worse than before registration, a translation correction of at most 1 m and a rotation correction of at most `loop_closure_cross_floor_max_angle_deg`. It SHALL constrain the relative pose like any loop edge. Each tried cross-floor registration SHALL be logged as such, with a count of tries and accepted edges. With `loop_closure_cross_floor_max_vertical_m` = 0 no cross-floor candidate SHALL be tried.
+With `loop_closure_cross_floor_max_vertical_m` greater than `loop_closure_max_vertical_offset_m`, loop closure SHALL also try, for each segment, earlier segments whose centre lies between those two heights above or below it, at least `loop_closure_cross_floor_min_time_gap_s` apart in time and within the horizontal search radius, nearest first, up to `loop_closure_candidates` registrations. It SHALL add at most one such edge per segment, in addition to any same-floor edge. Such a pair SHALL be registered only on the horizontal footprint both segments cover, with the search limited to `loop_closure_cross_floor_search_m`. The edge SHALL be accepted only with an overlap of at least `loop_closure_cross_floor_min_fitness`, no worse than before registration, a translation correction of at most 1 m and a rotation correction of at most `loop_closure_cross_floor_max_angle_deg`. It SHALL constrain the relative pose as weighted by its registration's information (change `information-weighted-loop-edges`). Each tried cross-floor registration SHALL be logged as such, with a count of tries and accepted edges. With `loop_closure_cross_floor_max_vertical_m` = 0 no cross-floor candidate SHALL be tried.
 
 #### Scenario: Two floors linked through a stairwell
 - **WHEN** a segment on one floor and an earlier segment on the floor below both see the same stairwell shaft, and their registration passes the cross-floor acceptance test
@@ -38,7 +38,7 @@ The pose-graph solve SHALL wrap every edge's angle residuals into (−180°, 180
 ## MODIFIED Requirements
 
 ### Requirement: False loop edges are dropped
-After the pose graph is solved, loop closure SHALL compute, for every loop edge, how far the solved relative pose of its two segments is from the edge's measurement (translation and rotation). While the largest of these, relative to `loop_closure_max_residual_m` and `loop_closure_max_residual_deg`, exceeds the limit, it SHALL drop that one edge and solve the graph again. For a cross-floor edge only the translation residual SHALL count. It SHALL log each dropped edge with its residual and the residuals of the edges kept, marking cross-floor edges. If no edge is left, the trajectory SHALL stay unchanged.
+After the pose graph is solved, loop closure SHALL compute, for every loop edge, how far the solved relative pose of its two segments is from the edge's measurement (translation and rotation). While the largest of these, relative to `loop_closure_max_residual_m` and `loop_closure_max_residual_deg`, exceeds the limit, it SHALL drop that one edge and solve the graph again. For an information-weighted (cross-floor) edge its weighted residual SHALL count instead (change `information-weighted-loop-edges`). It SHALL log each dropped edge with its residual and the residuals of the edges kept, marking cross-floor edges. If no edge is left, the trajectory SHALL stay unchanged.
 
 #### Scenario: One false edge among consistent ones
 - **WHEN** one accepted registration is off by a metre while the other loop edges agree with each other
@@ -47,7 +47,3 @@ After the pose graph is solved, loop closure SHALL compute, for every loop edge,
 #### Scenario: Consistent edges
 - **WHEN** all loop edges agree with the solved graph within the limits
 - **THEN** no edge is dropped, and the result is that of the graph with all accepted edges
-
-#### Scenario: A cross-floor edge with a rotation residual
-- **WHEN** a cross-floor edge agrees with the solved graph in translation but not in rotation
-- **THEN** it is not dropped for its rotation residual

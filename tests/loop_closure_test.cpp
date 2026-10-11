@@ -4,6 +4,7 @@
 #include "loop_closure.h"
 #include "memory_point_store.h"
 #include "synthetic_recording.h"
+#include <transformations.h>
 
 #include <chrono>
 #include <limits>
@@ -343,75 +344,266 @@ TEST_CASE("loop closure pose graph: with the kernel a false edge still stands ou
 }
 
 
-TEST_CASE("loop closure pose graph: a cross-floor edge ties the translation, not the rotation")
+// Information-weighted loop edges (cross-floor edges): the registration's information over the correction's Tait-Bryan parameters, here built from a synthetic shared region
+// (points with their surface normals, point-to-plane), as ndt_refine's normal matrix would describe it.
+namespace
 {
-    // the revisits of the two laps, plus one more edge whose registration turned 3 deg about the vertical (a round shaft):
-    // as a cross-floor edge it hardly turns the solution and isn't dropped for its rotation; as a same-floor edge it turns it
-    const TwoLaps s;
-    const OdometryConfig c = with_kernel(0.0);
-    auto loops = s.loops();
-    const auto reference = optimize_loop_pose_graph(s.initial, loops, c);
-    LoopClosureEdge turned = s.loops()[5];
-    turned.correction = Eigen::AngleAxisd(3.0 * DEG_TO_RAD, Eigen::Vector3d::UnitZ()) * turned.correction;
-    loops.push_back(turned);
-    const auto yaw_change = [&](const std::vector<Eigen::Affine3d> &p)
+    struct SurfacePoint
     {
-        double m = 0.0;
-        for (size_t k = 0; k < p.size(); k++)
-            m = std::max(m, Eigen::AngleAxisd(reference[k].linear().transpose() * p[k].linear()).angle() / DEG_TO_RAD);
-        return m;
+        Eigen::Vector3d p; // in world coordinates of the target (after the correction)
+        Eigen::Vector3d n;
     };
 
-    loops.back().cross_floor = false;
-    const double same_floor = yaw_change(optimize_loop_pose_graph(s.initial, loops, c));
-    loops.back().cross_floor = true;
-    const auto solved = optimize_loop_pose_graph(s.initial, loops, c);
-    const double cross_floor = yaw_change(solved);
-    MESSAGE("largest rotation change: as a same-floor edge ", same_floor, " deg, as a cross-floor edge ", cross_floor, " deg");
-    CHECK(cross_floor < 0.2 * same_floor);
-    CHECK(cross_floor < 0.1);
+    // a vertical cylinder (a round shaft): radius r around (cx, cy), from z0 to z1
+    std::vector<SurfacePoint> cylinder(double cx, double cy, double r, double z0, double z1)
+    {
+        std::vector<SurfacePoint> out;
+        for (int a = 0; a < 72; a++)
+            for (int h = 0; h <= 10; h++)
+            {
+                const double t = a * 5.0 * DEG_TO_RAD;
+                const Eigen::Vector3d n(std::cos(t), std::sin(t), 0.0);
+                out.push_back({Eigen::Vector3d(cx, cy, z0 + (z1 - z0) * h / 10.0) + r * n, n});
+            }
+        return out;
+    }
 
-    const std::vector<LoopEdgeResidual> r = loop_edge_residuals(s.initial, solved, loops);
-    CHECK(r.back().angle_deg > c.loop_closure_max_residual_deg); // the rotation disagrees ...
-    CHECK(loop_edge_drop_ratio(loops.back(), r.back(), c) < 1.0); // ... but only the translation counts
-    LoopClosureEdge same = loops.back();
-    same.cross_floor = false;
-    CHECK(loop_edge_drop_ratio(same, r.back(), c) > 1.0);
+    // a box 2 x 3 m with floor and ceiling (a lift shaft seen from inside, a room)
+    std::vector<SurfacePoint> box(const Eigen::Vector3d &c)
+    {
+        std::vector<SurfacePoint> out;
+        const Eigen::Vector3d half(1.0, 1.5, 1.25);
+        for (int axis = 0; axis < 3; axis++)
+            for (int side = -1; side <= 1; side += 2)
+                for (int u = 0; u <= 8; u++)
+                    for (int v = 0; v <= 8; v++)
+                    {
+                        Eigen::Vector3d q = Eigen::Vector3d::Zero();
+                        const int a1 = (axis + 1) % 3, a2 = (axis + 2) % 3;
+                        q(axis) = side * half(axis);
+                        q(a1) = (u / 4.0 - 1.0) * half(a1);
+                        q(a2) = (v / 4.0 - 1.0) * half(a2);
+                        Eigen::Vector3d n = Eigen::Vector3d::Zero();
+                        n(axis) = side;
+                        out.push_back({c + q, n});
+                    }
+        return out;
+    }
+
+    Eigen::Matrix<double, 6, 1> tb(const Eigen::Affine3d &T)
+    {
+        const TaitBryanPose p = pose_tait_bryan_from_affine_matrix(T);
+        Eigen::Matrix<double, 6, 1> v;
+        v << p.px, p.py, p.pz, p.om, p.fi, p.ka;
+        return v;
+    }
+
+    Eigen::Affine3d from_tb(const Eigen::Matrix<double, 6, 1> &v)
+    {
+        TaitBryanPose p;
+        p.px = v(0);
+        p.py = v(1);
+        p.pz = v(2);
+        p.om = v(3);
+        p.fi = v(4);
+        p.ka = v(5);
+        return affine_matrix_from_pose_tait_bryan(p);
+    }
+
+    // the point-to-plane normal matrix of a registration with the result `correction` over its Tait-Bryan parameters
+    Eigen::Matrix<double, 6, 6> registration_information(const std::vector<SurfacePoint> &region, const Eigen::Affine3d &correction)
+    {
+        const Eigen::Matrix<double, 6, 1> c = tb(correction);
+        Eigen::Matrix<double, 6, 6> H = Eigen::Matrix<double, 6, 6>::Zero();
+        constexpr double h = 1e-6;
+        for (const SurfacePoint &s : region)
+        {
+            const Eigen::Vector3d source = correction.inverse() * s.p;
+            Eigen::Matrix<double, 1, 6> J;
+            for (int k = 0; k < 6; k++)
+            {
+                Eigen::Matrix<double, 6, 1> e = Eigen::Matrix<double, 6, 1>::Zero();
+                e(k) = h;
+                J(k) = s.n.dot(from_tb(c + e) * source - from_tb(c - e) * source) / (2.0 * h);
+            }
+            H += J.transpose() * J * 1e4; // a 1 cm point sigma (the scale is replaced anyway)
+        }
+        return H;
+    }
+
+    Eigen::Affine3d tilted_pose(double x, double y, double z, double yaw_deg, double pitch_deg)
+    {
+        Eigen::Affine3d p = segment_pose(x, y, yaw_deg);
+        p.translation().z() = z;
+        p.linear() = p.linear() * Eigen::AngleAxisd(pitch_deg * DEG_TO_RAD, Eigen::Vector3d::UnitY()).toRotationMatrix();
+        return p;
+    }
+
+    double relative_angle_about(const Eigen::Affine3d &a, const Eigen::Affine3d &b, const Eigen::Vector3d &axis)
+    {
+        const Eigen::AngleAxisd d(a.linear().transpose() * b.linear());
+        return d.angle() * d.axis().dot(axis) / DEG_TO_RAD;
+    }
 }
 
-TEST_CASE("loop closure pose graph: a point edge ties a point horizontally, not the rotation or the height")
+TEST_CASE("loop closure information edges: the transformed information reproduces the registration's error in the edge's residual")
 {
-    // three segments 2 m apart; the odometry turned the last one 2 deg and drifted it 0.3 m sideways and 0.2 m up
+    const Eigen::Affine3d pose_i = tilted_pose(0, 0, 0, 10, 0), pose_j = tilted_pose(5, 1, 0.1, 40, 1);
+    Eigen::Affine3d correction = Eigen::Affine3d::Identity();
+    correction.translation() = Eigen::Vector3d(0.2, -0.1, 0.05);
+    correction.linear() = Eigen::AngleAxisd(1.5 * DEG_TO_RAD, Eigen::Vector3d(0.1, 0.2, 1.0).normalized()).toRotationMatrix();
+    const Eigen::Matrix<double, 6, 6> H = registration_information(box(Eigen::Vector3d(3, 2, 1)), correction);
+    bool ok = false;
+    const Eigen::Matrix<double, 6, 6> omega = loop_edge_information(pose_i, pose_j, correction, H, false, 0.05, ok);
+    REQUIRE(ok);
+    // the best-determined translation has the edge sigma
+    const double best = Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d>(omega.topLeftCorner<3, 3>()).eigenvalues()(2);
+    CHECK(best == doctest::Approx(1.0 / (0.05 * 0.05)).epsilon(1e-9));
+    // for small perturbations of the registration, the measurement's weighted change is the registration's weighted error,
+    // up to the one scale factor
+    const auto measurement = [&](const Eigen::Affine3d &C)
+    {
+        Eigen::Matrix<double, 6, 1> m = tb(pose_i.inverse() * C * pose_j);
+        return m;
+    };
+    std::vector<double> ratios;
+    for (int k = 0; k < 6; k++)
+    {
+        Eigen::Matrix<double, 6, 1> e;
+        e << 1e-4 * (k + 1), -2e-4 * (k % 2), 1.5e-4, 0.5e-4 * (k % 3), -1e-4, 2e-4 * (k == 2);
+        const Eigen::Matrix<double, 6, 1> dm = measurement(from_tb(tb(correction) + e)) - measurement(correction);
+        ratios.push_back(dm.dot(omega * dm) / e.dot(H * e));
+    }
+    for (double r : ratios)
+        CHECK(r == doctest::Approx(ratios.front()).epsilon(1e-3));
+}
+
+TEST_CASE("loop closure information edges: a cross-floor edge carries no height")
+{
+    const Eigen::Affine3d pose_i = tilted_pose(0, 0, 0, 0, 0), pose_j = tilted_pose(1, 3, -2.9, 30, 0.5);
+    const Eigen::Affine3d correction = Eigen::Affine3d(Eigen::Translation3d(0.1, 0.05, 0.3));
+    const Eigen::Matrix<double, 6, 6> H = registration_information(box(Eigen::Vector3d(1, 4, -1.6)), correction);
+    bool ok = false;
+    const Eigen::Matrix<double, 6, 6> omega = loop_edge_information(pose_i, pose_j, correction, H, true, 0.05, ok);
+    REQUIRE(ok);
+    const auto measurement = [&](const Eigen::Affine3d &C) { return Eigen::Matrix<double, 6, 1>(tb(pose_i.inverse() * C * pose_j)); };
+    const Eigen::Matrix<double, 6, 1> up = measurement(Eigen::Translation3d(0, 0, 0.01) * correction) - measurement(correction);
+    const Eigen::Matrix<double, 6, 1> side = measurement(Eigen::Translation3d(0.01, 0, 0) * correction) - measurement(correction);
+    MESSAGE("weighted squared change for 1 cm: up ", up.dot(omega * up), ", sideways ", side.dot(omega * side));
+    CHECK(up.dot(omega * up) < 1e-6 * side.dot(omega * side));
+    CHECK(side.dot(omega * side) > 0.01); // sideways the edge ties (1 cm against a few cm sigma)
+}
+
+TEST_CASE("loop closure information edges: with the fixed sigmas as information the solution equals the fixed-sigma edges'")
+{
+    const TwoLaps s;
+    const OdometryConfig c = with_kernel(0.0);
+    const auto loops = s.loops();
+    const auto reference = optimize_loop_pose_graph(s.initial, loops, c);
+    auto weighted = loops;
+    const double wt = 1.0 / std::pow(c.loop_closure_edge_sigma_m, 2), wr = 1.0 / std::pow(c.loop_closure_edge_sigma_deg * DEG_TO_RAD, 2);
+    for (auto &e : weighted)
+    {
+        e.information = true;
+        e.omega.setZero();
+        e.omega.diagonal() << wt, wt, wt, wr, wr, wr;
+    }
+    const auto solved = optimize_loop_pose_graph(s.initial, weighted, c);
+    REQUIRE(solved.size() == reference.size());
+    double largest = 0.0;
+    for (size_t k = 0; k < solved.size(); k++)
+        largest = std::max(largest, (solved[k].matrix() - reference[k].matrix()).cwiseAbs().maxCoeff());
+    MESSAGE("largest difference ", largest);
+    CHECK(largest < 1e-9);
+}
+
+TEST_CASE("loop closure information edges: a shaft ties the floors horizontally and in tilt, not in height or the turn about its axis")
+{
+    // three segments 2 m apart; the odometry turned the last one 2 deg, tilted it 1 deg about y, and drifted it 0.3 m
+    // sideways and 0.2 m up. A round shaft 3 m to the side is seen from both segment 0 and segment 2
     OdometryConfig c = with_kernel(0.0);
-    std::vector<Eigen::Affine3d> initial{segment_pose(0, 0, 0), segment_pose(2, 0, 0), segment_pose(4, 0.3, 2.0)};
-    initial[2].translation().z() = 0.2;
-    // a shaft centre 3 m to the side: seen by segment 2 at its drifted place, the registration puts it where segment 0 sees it
-    const Eigen::Vector3d centre(4.0, 3.3, 0.5);
+    const std::vector<Eigen::Affine3d> truth{segment_pose(0, 0, 0), segment_pose(2, 0, 0), segment_pose(4, 0, 0)};
+    std::vector<Eigen::Affine3d> initial{truth[0], truth[1], tilted_pose(4, 0.3, 0.2, 2.0, 1.0)};
+    const std::vector<SurfacePoint> shaft = cylinder(4.0, 3.0, 1.5, -1.0, 1.5);
+    // the registration moves segment 2's view of the shaft onto segment 0's: right horizontally and in tilt, but (as a
+    // shaft allows) 0.5 m too high and turned 5 deg about the shaft's axis
+    const Eigen::Vector3d axis_point(4.0, 3.0, 0.0);
+    const Eigen::Affine3d about_axis = Eigen::Translation3d(axis_point) * Eigen::AngleAxisd(5.0 * DEG_TO_RAD, Eigen::Vector3d::UnitZ()) *
+                                       Eigen::Translation3d(-axis_point);
     LoopClosureEdge e;
     e.i = 0;
     e.j = 2;
     e.cross_floor = true;
-    e.point = true;
-    e.point_j = initial[2].inverse() * centre;
-    e.point_i = initial[0].inverse() * Eigen::Vector3d(4.0, 3.0, 0.0);
-    const std::vector<LoopClosureEdge> loops{e};
+    e.correction = Eigen::Translation3d(0, 0, 0.5) * about_axis * truth[2] * initial[2].inverse();
+    bool ok = false;
+    e.omega = loop_edge_information(initial[0], initial[2], e.correction, registration_information(shaft, e.correction), true,
+                                    c.loop_closure_edge_sigma_m, ok);
+    REQUIRE(ok);
+    e.information = true;
+    const Eigen::Matrix<double, 6, 1> sig = loop_edge_region_sigmas(initial[0], initial[2], e, axis_point);
+    MESSAGE("shaft edge sigmas: x ", sig(0), " y ", sig(1), " z ", sig(2), " m, roll ", sig(3), " pitch ", sig(4), " yaw ", sig(5), " deg");
+    CHECK(sig(0) < 0.1);
+    CHECK(sig(1) < 0.1);
+    CHECK(sig(2) > 10.0);
+    CHECK(sig(5) > 90.0);
+    CHECK(sig(3) < 10.0);
+    CHECK(sig(4) < 10.0);
 
+    const std::vector<LoopClosureEdge> loops{e};
     const auto p = optimize_loop_pose_graph(initial, loops, c);
     REQUIRE(p.size() == 3);
-    const Eigen::Vector3d placed_j = p[2] * e.point_j, placed_i = p[0] * e.point_i;
-    MESSAGE("point edge: horizontal gap ", (placed_j - placed_i).head<2>().norm(), " m (before 0.30 m)");
-    // least squares against the two odometry edges (sigma 0.1 m each) and the point edge (0.05 m): the gap left is
-    // 0.30 m * 0.05^2 / (0.05^2 + 2 * 0.1^2)
-    const double expected_gap = 0.30 * std::pow(c.loop_closure_edge_sigma_m, 2) /
-                                (std::pow(c.loop_closure_edge_sigma_m, 2) + 2.0 * std::pow(c.loop_closure_odometry_sigma_m, 2));
-    CHECK((placed_j - placed_i).head<2>().norm() == doctest::Approx(expected_gap).epsilon(0.15));
-    // the odometry's relative rotation and height stay (the edge carries neither)
-    const Eigen::Affine3d rel_before = initial[1].inverse() * initial[2], rel_after = p[1].inverse() * p[2];
-    CHECK(Eigen::AngleAxisd(rel_before.linear().transpose() * rel_after.linear()).angle() / DEG_TO_RAD < 0.3);
+    // where segment 2 puts the shaft's axis, against the truth (segment 0's view)
+    const Eigen::Vector3d axis_in_2 = initial[2] * (truth[2].inverse() * axis_point);
+    const double gap_before = (axis_in_2 - axis_point).head<2>().norm();
+    const double gap_after = ((p[2] * (initial[2].inverse() * axis_in_2)) - p[0] * (initial[0].inverse() * axis_point)).head<2>().norm();
+    const double pitch_before = relative_angle_about(initial[0], initial[2], Eigen::Vector3d::UnitY());
+    const double pitch_after = relative_angle_about(p[0], p[2], Eigen::Vector3d::UnitY());
+    const double yaw_change = relative_angle_about(initial[1].inverse() * initial[2], p[1].inverse() * p[2], Eigen::Vector3d::UnitZ());
+    MESSAGE("shaft edge: axis gap ", gap_before, " -> ", gap_after, " m, pitch ", pitch_before, " -> ", pitch_after,
+            " deg, height change ", (p[2].translation() - initial[2].translation()).z(), " m, yaw change ", yaw_change, " deg");
+    CHECK(gap_after < 0.5 * gap_before);
+    CHECK(std::abs(pitch_after) < std::abs(pitch_before));
     CHECK(std::abs((p[2].translation() - initial[2].translation()).z()) < 0.02);
-    // the drop judges it by the remaining horizontal gap
+    CHECK(std::abs(yaw_change) < 0.3);
+
+    // the drop rule: this edge's residual lies along its free directions (the 0.5 m and 5 deg) and in what the odometry
+    // holds, so it isn't dropped; the same edge 0.3 m off sideways is
     const auto r = loop_edge_residuals(initial, p, loops);
     REQUIRE(r.size() == 1);
-    CHECK(r[0].translation_m == doctest::Approx(expected_gap).epsilon(0.15));
-    CHECK(r[0].angle_deg == 0.0);
+    MESSAGE("weighted residual ", r[0].weighted * c.loop_closure_edge_sigma_m, " m (plain ", r[0].translation_m, " m, ", r[0].angle_deg, " deg)");
+    CHECK(loop_edge_drop_ratio(loops[0], r[0], c) < 1.0);
+    LoopClosureEdge off = e;
+    off.correction = Eigen::Translation3d(0.3, 0, 0) * e.correction;
+    const auto r_off = loop_edge_residuals(initial, p, std::vector<LoopClosureEdge>{off});
+    CHECK(loop_edge_drop_ratio(off, r_off[0], c) > 1.0);
+}
+
+TEST_CASE("loop closure information edges: a box-shaped region also ties the turn")
+{
+    // as above, but the shared region is a box (walls in two directions, floor and ceiling): the turn is tied too
+    OdometryConfig c = with_kernel(0.0);
+    const std::vector<Eigen::Affine3d> truth{segment_pose(0, 0, 0), segment_pose(2, 0, 0), segment_pose(4, 0, 0)};
+    std::vector<Eigen::Affine3d> initial{truth[0], truth[1], tilted_pose(4, 0.3, 0.2, 2.0, 1.0)};
+    LoopClosureEdge e;
+    e.i = 0;
+    e.j = 2;
+    e.cross_floor = true;
+    e.correction = Eigen::Translation3d(0, 0, 0.5) * truth[2] * initial[2].inverse();
+    bool ok = false;
+    e.omega = loop_edge_information(initial[0], initial[2], e.correction, registration_information(box(Eigen::Vector3d(4, 3, 0.25)), e.correction),
+                                    true, c.loop_closure_edge_sigma_m, ok);
+    REQUIRE(ok);
+    e.information = true;
+    const Eigen::Matrix<double, 6, 1> sig = loop_edge_region_sigmas(initial[0], initial[2], e, Eigen::Vector3d(4, 3, 0.25));
+    MESSAGE("box edge sigmas: x ", sig(0), " y ", sig(1), " z ", sig(2), " m, roll ", sig(3), " pitch ", sig(4), " yaw ", sig(5), " deg");
+    CHECK(sig(2) > 10.0);
+    CHECK(sig(5) < 10.0);
+    const auto p = optimize_loop_pose_graph(initial, std::vector<LoopClosureEdge>{e}, c);
+    const double yaw_before = relative_angle_about(initial[0], initial[2], Eigen::Vector3d::UnitZ());
+    const double yaw_after = relative_angle_about(p[0], p[2], Eigen::Vector3d::UnitZ());
+    MESSAGE("box edge: relative yaw ", yaw_before, " -> ", yaw_after, " deg");
+    // the turn moves toward the truth by about what weighted least squares gives: the edge's yaw sigma (2.5 deg, from the
+    // region's size and the 5 cm translation sigma) against two odometry edges of 0.5 deg would take 8 % off; the coupling
+    // with the translation adds some
+    CHECK(std::abs(yaw_after) < std::abs(yaw_before) - 0.1);
 }
