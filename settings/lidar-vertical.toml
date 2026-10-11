@@ -49,6 +49,9 @@ loop_closure_odometry_sigma_m = 0.1
 loop_closure_odometry_sigma_deg = 0.5
 loop_closure_edge_sigma_m = 0.05
 loop_closure_edge_sigma_deg = 0.3
+loop_closure_cross_floor_max_vertical_m = 6.0
+loop_closure_cross_floor_min_fitness = 0.3
+loop_closure_cross_floor_max_angle_deg = 10.0
 
 [imu_translation]
 degenerate_projection_ratio = 0.1

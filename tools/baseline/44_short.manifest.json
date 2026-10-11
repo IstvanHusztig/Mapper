@@ -1,11 +1,11 @@
 {
   "dataset": "44_short",
   "params": "settings/lidar-vertical.toml",
-  "commit": "f62871f",
+  "commit": "3fb7daf",
   "hd_cpu_optimization": "AUTO",
-  "created": "2026-10-09",
+  "created": "2026-10-11",
   "files": {
-    "dMapper_params_0.1.0_<DATETIME>.toml": "486e567a7c9d6ce0f3fe4185d8481be59e913949c5398f5fcb95d2e795e3b71c",
+    "dMapper_params_0.1.0_<DATETIME>.toml": "9eeb9a1936abb0039dacbf083e1687f9f278cbc0cb7c34e12139faf66ecd6dab",
     "dMapper_results_0.1.0_<DATETIME>.json": "5ac5afa4a8b3d93096d5356e0869603deeb89f34052b882ded2bc24f636cabbd",
     "point_sizes_per_chunk.json": "a8173d4d9ba530d097d0941bf88e4a5965e1ab491162039f8dd3c6bb47aadb6c",
     "scan_lio_0.laz": "10d8df57f346596d8e7a711916e3d425e7ee7e3bd20e9d48ed62961ff3547513",
