@@ -53,11 +53,6 @@ struct OdometryConfig
     // NDT map cells: true = mean, covariance and normal of all of a cell's points; false = the previous statistics
     // (first point as mean, normal fixed from the first 3 points)
     bool use_exact_ndt_bucket_statistics = false;
-    // planar NDT cells constrain mainly along their normal (Generalized-ICP style): when a cell of the odometry map is planar
-    // (its smallest spread below a third of the next one), its inverse covariance is formed with the in-plane variances
-    // raised to at least ndt_plane_in_plane_sigma_m^2, so the cell no longer holds points in place along its surface
-    // (false stiffness along a passage); 0 = off (the cell's own covariance)
-    double ndt_plane_in_plane_sigma_m = 0.0;
 
     //lidar-imu extrinsics (applied to raw points)
     double lidar_imu_lever_arm_x_m = 0.00667;

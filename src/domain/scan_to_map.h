@@ -20,6 +20,13 @@ struct ScanToMapWorkspace
     PatternCachedCholesky damped;
 };
 
+// The NDT cost of a window at the given node poses, as the point terms of optimize_lidar_odometry weigh it: the sum over the
+// matched points of w r^T M r (r = the point placed with its node's pose minus its cell's mean, M the cell's information,
+// w the planarity / norm weight when those are on), indoor and, with use_hierarchical_rgd, outdoor grid. Diagnostics only
+// (log_window_diagnostics); sequential.
+double ndt_window_cost(const std::vector<Point3Di> &intermediate_points, const std::vector<Eigen::Affine3d> &poses,
+                       const NDTBucketMapType &buckets_indoor, const NDTBucketMapType &buckets_outdoor, const ScanToMapOptions &scan_to_map);
+
 // this function performs main LiDAR odometry calculations
 // gyro_bias / gyro_bias_cov are updated only when rotation_options.estimate_bias is set
 // timing (log_stage_timing): when not null, the time of each phase is added to it

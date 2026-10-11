@@ -42,6 +42,49 @@ namespace
     }
 }
 
+double ndt_window_cost(const std::vector<Point3Di> &intermediate_points, const std::vector<Eigen::Affine3d> &poses,
+                       const NDTBucketMapType &buckets_indoor, const NDTBucketMapType &buckets_outdoor, const ScanToMapOptions &scan_to_map)
+{
+    double cost = 0.0;
+    const auto grid_cost = [&](const NDTBucketMapType &buckets, const NdtGridParameters &grid, double min_distance)
+    {
+        const Eigen::Vector3d b(grid.resolution_X, grid.resolution_Y, grid.resolution_Z);
+        for (const Point3Di &p : intermediate_points)
+        {
+            const double range = p.point.norm();
+            if (range < min_distance || range > scan_to_map.max_distance)
+                continue;
+            const Eigen::Vector3d g = poses[p.index_pose] * p.point;
+            const auto it = buckets.find(ndt_cell_index(g, b));
+            if (it == buckets.end())
+                continue;
+            const NdtBucket &cell = it->second;
+            Eigen::Matrix3d scratch;
+            const Eigen::Matrix3d *inverse = ndt_cell_inverse(cell, scratch);
+            if (inverse == nullptr)
+                continue;
+            if (scan_to_map.use_view_point_and_normal_vectors && cell.normal_vector.dot(poses[p.index_pose].translation() - cell.mean) < 0)
+                continue;
+            double w = 1.0;
+            if (scan_to_map.use_planarity)
+            {
+                const Eigen::Vector3d ev = Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d>(cell.cov).eigenvalues();
+                const double sum = ev.sum();
+                w *= 1 - ((3 * ev(0) / sum) * (3 * ev(1) / sum) * (3 * ev(2) / sum));
+            }
+            if (scan_to_map.use_norm)
+                w *= range;
+            w = std::min(w, 10.0);
+            const Eigen::Vector3d r = g - cell.mean;
+            cost += w * r.dot(*inverse * r);
+        }
+    };
+    grid_cost(buckets_indoor, scan_to_map.grid_indoor, scan_to_map.min_distance);
+    if (scan_to_map.use_hierarchical_rgd)
+        grid_cost(buckets_outdoor, scan_to_map.grid_outdoor, scan_to_map.min_distance_outdoor_grid);
+    return cost;
+}
+
 void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window &window,
                              NDTBucketMapType &buckets_indoor, NDTBucketMapType &buckets_outdoor,
                              const ScanToMapOptions &scan_to_map, const MotionModelOptions &motion_model,

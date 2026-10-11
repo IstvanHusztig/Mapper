@@ -51,6 +51,38 @@ Storey heights (difference of the sensor's level on the floors, from `tools/stai
 - **Consequence for the metric:** `facade_check`'s absolute deviation is reliable as a **difference between variants** on the same input (X3 moves the gallery by +20 cm on `44_s0` and +64 cm on `44_s2` against shipped). The absolute offsets of `44_s0` and `44_s2` may partly be the reference.
   - The default band (1.5–5.5 m) cuts off `44_s1`'s back-pass façade. Its −52 cm comes from one slice; with 0.6–5.5 m the pairs span −36…−100 cm.
 
+### 2.2 The cause of `44_s1`'s gallery drift: a stall on the way out, which loop closure can't attribute (measured, 2026-10-11)
+
+Full runs of `44_s0` and `44_s1` with `log_window_diagnostics` (shipped settings with cross-floor edges). Odometry positions compared window by window. Scripts: job folder `wdiag.py`, `wdiag2.py`, `lccorr.py`, `postdiff.py`.
+
+- **Before loop closure the gallery is nearly the same in both:**
+  - s1 − s0 stays within ±3 cm until 48 s;
+  - window 119 (48.3 s, entering the gallery) gives −10 cm along the gallery, with s1's accelerometer fit twice as bad (rms 0.37 against 0.17 m/s²);
+  - windows 145–148 (58.8–60 s, the far end, information ratio 0.10) give −30 cm more along the gallery;
+  - across the gallery (x) the two differ by at most 17 cm.
+- **The stall, windows 169–179 (68.5–72.5 s), on the way out** along a corridor whose weakest direction is x (ratio 0.2–0.4):
+  - s1 moves at about 0.4 m/s for 4 s while s0 moves at 1.0–1.2 m/s, then s1 jumps to 1.18 m/s;
+  - it leaves a lag of 1.69 m along x that stays.
+  - The acceleration offset is not the cause: it differs by at most 0.05 m/s² between the runs. Every window runs all 100 iterations.
+  - It is the frontier-drag stall of `odometry-stall-fix` (research item 1, the in-plane pull of planar NDT cells), now with the accelerometer term always on.
+- **What loop closure does with it** (correction = result − odometry):
+  - In s0 it moves the gallery by +0.6…+1.16 m in x: the drift of the gallery pass, corrected between the loops at 34 s and 73–83 s.
+  - In s1 it moves the gallery by about 0 and the stretch after the stall by −1.1…−1.5 m. Only the net error (gallery drift plus stall lag) is visible to the loops, and the pose graph splits it differently.
+  - Result: s1's gallery is drawn up to 1.3 m off s0's (post-loop-closure difference at 48–70 s), snapping back at 70–72 s.
+- **Rejected (measured):** odometry edges weighted by their segment's normal geometry (`loop_closure_odometry_min_information_ratio` 0.05 / 0.2).
+  - s1's façade −51.5 / −64.0 cm (I1 −56.0), s0 and s2 worse (+48.0 / +64.3 against +34.4 / +45.3).
+  - Almost every segment's geometry is weak in some direction (shares 0.05–0.3), so it doesn't single out the stall. The code was removed.
+- **Consequence:** the gallery drift has to be removed where it arises, in the odometry: the stall at 68.5–72.5 s. That is the open change `point-to-plane-ndt`.
+- **Point-to-plane NDT tried (2026-10-11), rejected:** it shrank this stall from 1.69 m to 0.48 m, but the odometry ran away at the stairwell (window 216, ~87 s) on `44_s0` and `44_s1` (route 743 m, 2–3 loops). The stall stays open; a fix must keep the in-plane pull where it holds the stairs.
+- **Directional in-plane release tried (2026-10-11), rejected:** it swaps which run lags (s1 − s0 −1.36 m instead of +1.65 m), s0 loses 7 loops.
+- **The cause (weak-axis diagnostics, 2026-10-11):**
+  - The corridor on the way out (68–73 s) is the corridor of the way in (40–48 s). With `sliding_window_trajectory_length_threshold = 200 m` the odometry registers against the way-in copy as well, offset by the gallery's drift.
+  - In s0, window 176's NDT cost is 47 % lower 0.6 m along the axis, which is the correction loop closure later applies.
+  - In every weak window the start velocity violates its prior (χ² 400–4700, sigma 4 mm/s against jumps of 0.05–0.17 m/s, in both runs). The NDT's stiffness against a velocity offset along the axis is 10–400× the velocity prior's plus the motion model's.
+  - So s1's "stall" is the odometry snapping (and overshooting) onto the earlier visit, an implicit loop closure that the pose graph can't undo.
+  - Map horizons of 20 / 50 m remove the jump (s1 − s0 changes by ≤ 0.2 m), but the periodic halving of the map breaks the odometry elsewhere (route 467–474 m, up to 31 m off at 133 s, 14–27 loops).
+  - Next: the odometry should ignore earlier visits continuously (cells with an age), and leave revisits to loop closure.
+
 ## 3. The heading on the stairs (task 6)
 
 ### 3.1 No turn on the stairs; slow drift where nothing known is in view (measured / likely, 2026-10-10)

@@ -536,6 +536,84 @@ namespace
                              << ", end sigma " << std::setprecision(3) << std::sqrt(window.velocity.end_covariance.trace() / 3.0) << " m/s";
     }
 
+    // log_window_diagnostics, windows with an information ratio below 0.45: what holds the window along its weakest direction w.
+    //  - prior: the start velocity's jump against its prior (the previous window's end velocity), its chi^2, and the prior's
+    //    sigma along w;
+    //  - stiffness against a velocity offset along w (node positions moved by d (t - t0) w): the NDT cost's second derivative
+    //    (central differences, d = 0.01 m/s), against the velocity prior's 2 w^T C^-1 w and the consecutive-node motion
+    //    model's; the accelerometer terms don't see such an offset;
+    //  - profile: the NDT cost with the whole window moved along w by -2 .. +2 m in 5 cm steps, and its local minima.
+    void log_weak_axis_diagnostics(int i, const Window &window, const std::vector<Point3Di> &intermediate_points, const OdometryState &state,
+                                   const ScanToMapOptions &scan_to_map, const AccTerm &acc_term, const Eigen::Matrix3d &lidar_translation_information,
+                                   const OdometryConfig &params, Logger &logger)
+    {
+        if (!params.log_window_diagnostics || window.poses.size() < 2)
+            return;
+        const Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eig(lidar_translation_information);
+        const double largest = eig.eigenvalues().maxCoeff();
+        const double ratio = largest > 0.0 ? eig.eigenvalues().minCoeff() / largest : 0.0;
+        if (!(largest > 0.0) || ratio >= 0.45)
+            return;
+        const Eigen::Vector3d w = eig.eigenvectors().col(0);
+        const auto cost_at = [&](const std::vector<Eigen::Affine3d> &poses)
+        { return ndt_window_cost(intermediate_points, poses, state.buckets_indoor, state.buckets_outdoor, scan_to_map); };
+        const double c0 = cost_at(window.poses);
+
+        // velocity prior
+        const Eigen::Matrix3d C = acc_term.options.velocity_prior_cov;
+        const Eigen::Vector3d jump = window.velocity.start - acc_term.options.velocity_prior_mean;
+        const Eigen::Matrix3d Ci = C.inverse();
+        const double chi2 = jump.dot(Ci * jump);
+        const double prior_sigma_w = std::sqrt(std::max(w.dot(C * w), 0.0));
+
+        // stiffness against a velocity offset along w
+        const double t0 = window.timestamps.front().first, d = 0.01;
+        const auto stretched = [&](double dv)
+        {
+            std::vector<Eigen::Affine3d> poses = window.poses;
+            for (size_t k = 0; k < poses.size(); k++)
+                poses[k].translation() += dv * (window.timestamps[k].first - t0) * w;
+            return poses;
+        };
+        const double ndt_stiffness = (cost_at(stretched(d)) + cost_at(stretched(-d)) - 2.0 * c0) / (d * d);
+        const double prior_stiffness = 2.0 * w.dot(Ci * w);
+        const MotionModelOptions &mm = acc_term.motion_model;
+        double motion_stiffness = 0.0;
+        if (mm.x_sigma_m > 0.0 && mm.y_sigma_m > 0.0 && mm.z_sigma_m > 0.0)
+            for (size_t k = 1; k < window.poses.size(); k++)
+            {
+                const double dt = window.timestamps[k].first - window.timestamps[k - 1].first;
+                const Eigen::Vector3d local = window.poses[k - 1].linear().transpose() * w;
+                motion_stiffness += 2.0 * dt * dt *
+                                    (local.x() * local.x() / (mm.x_sigma_m * mm.x_sigma_m) + local.y() * local.y() / (mm.y_sigma_m * mm.y_sigma_m) +
+                                     local.z() * local.z() / (mm.z_sigma_m * mm.z_sigma_m));
+            }
+
+        // cost profile along w
+        std::vector<double> profile;
+        for (int k = -40; k <= 40; k++)
+        {
+            std::vector<Eigen::Affine3d> poses = window.poses;
+            for (auto &p : poses)
+                p.translation() += 0.05 * k * w;
+            profile.push_back(cost_at(poses));
+        }
+        auto line = log_info(logger);
+        line << "window diagnostics " << i + 1 << ": weak axis " << std::fixed << std::setprecision(2) << w.x() << " " << w.y() << " " << w.z()
+             << " (ratio " << std::setprecision(3) << ratio << "); start-velocity jump " << std::setprecision(3) << jump.x() << " " << jump.y() << " "
+             << jump.z() << " m/s, chi2 " << std::setprecision(1) << chi2 << ", prior sigma along it " << std::setprecision(4) << prior_sigma_w
+             << " m/s; stiffness against a velocity offset along it [cost/(m/s)^2]: ndt " << std::scientific << std::setprecision(2) << ndt_stiffness
+             << ", velocity prior " << prior_stiffness << ", motion model " << motion_stiffness << std::fixed << "; ndt cost " << std::setprecision(1) << c0
+             << ", profile minima [m: cost - cost(0)]:";
+        for (int k = 0; k < static_cast<int>(profile.size()); k++)
+        {
+            const bool left = k == 0 || profile[k] < profile[k - 1];
+            const bool right = k + 1 == static_cast<int>(profile.size()) || profile[k] <= profile[k + 1];
+            if (left && right)
+                line << " " << std::setprecision(2) << 0.05 * (k - 40) << ":" << std::setprecision(1) << profile[k] - c0;
+        }
+    }
+
     // log_window_diagnostics: how the accelerometer fits the optimized trajectory. Anchor nodes ~50 ms apart; per triple the
     // change of the trajectory's velocity is compared with the mean of R f - g over the same time, as an acceleration
     // residual (IMU minus LiDAR) [m/s^2]. Logged: its mean in the world and in the body frame (at the middle anchor), the rms
@@ -654,10 +732,10 @@ namespace
         for (int i = 0; i < pp.size(); i++)
             pp[i].point = state.m_g * pp[i].point;
 
-        update_rgd(params.in_out_params_indoor, state.buckets_indoor, pp, state.m_g.translation(), params.use_exact_ndt_bucket_statistics, params.ndt_plane_in_plane_sigma_m);
+        update_rgd(params.in_out_params_indoor, state.buckets_indoor, pp, state.m_g.translation(), params.use_exact_ndt_bucket_statistics);
 
         if (params.ablation_study_use_hierarchical_rgd){
-            update_rgd(params.in_out_params_outdoor, state.buckets_outdoor, pp, state.m_g.translation(), params.use_exact_ndt_bucket_statistics, params.ndt_plane_in_plane_sigma_m);
+            update_rgd(params.in_out_params_outdoor, state.buckets_outdoor, pp, state.m_g.translation(), params.use_exact_ndt_bucket_statistics);
         }
     }
 
@@ -731,10 +809,10 @@ namespace
                 carry.points_global = decimate(carry.points_global, params.decimation, params.decimation, params.decimation);
             }
 
-            update_rgd(params.in_out_params_indoor, state.buckets_indoor, carry.points_global, window.poses[0].translation(), params.use_exact_ndt_bucket_statistics, params.ndt_plane_in_plane_sigma_m);
+            update_rgd(params.in_out_params_indoor, state.buckets_indoor, carry.points_global, window.poses[0].translation(), params.use_exact_ndt_bucket_statistics);
             if (params.ablation_study_use_hierarchical_rgd)
             {
-                update_rgd(params.in_out_params_outdoor, state.buckets_outdoor, carry.points_global, window.poses[0].translation(), params.use_exact_ndt_bucket_statistics, params.ndt_plane_in_plane_sigma_m);
+                update_rgd(params.in_out_params_outdoor, state.buckets_outdoor, carry.points_global, window.poses[0].translation(), params.use_exact_ndt_bucket_statistics);
             }
         }
         else
@@ -746,10 +824,10 @@ namespace
                 pp.point = window.poses[intermediate_points[j].index_pose] * pp.point;
                 pg.push_back(pp);
             }
-            update_rgd(params.in_out_params_indoor, state.buckets_indoor, pg, window.poses[0].translation(), params.use_exact_ndt_bucket_statistics, params.ndt_plane_in_plane_sigma_m);
+            update_rgd(params.in_out_params_indoor, state.buckets_indoor, pg, window.poses[0].translation(), params.use_exact_ndt_bucket_statistics);
             if (params.ablation_study_use_hierarchical_rgd)
             {
-                update_rgd(params.in_out_params_outdoor, state.buckets_outdoor, pg, window.poses[0].translation(), params.use_exact_ndt_bucket_statistics, params.ndt_plane_in_plane_sigma_m);
+                update_rgd(params.in_out_params_outdoor, state.buckets_outdoor, pg, window.poses[0].translation(), params.use_exact_ndt_bucket_statistics);
             }
         }
     }
@@ -989,6 +1067,8 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
             log_iteration_convergence(i, params, optimization, carry, logger);
             log_window_diagnostics(i, windows, poses_before_optimization, optimization, previous, acc_term, lidar_translation_information, params, logger);
             log_accelerometer_fit(i, windows[i], lidar_translation_information, acc_term, setup, carry, params, logger);
+            log_weak_axis_diagnostics(i, windows[i], intermediate_points, state, setup.scan_to_map, acc_term, lidar_translation_information, params,
+                                      logger);
 
             update_gyro_bias_after_window(windows[i], i, setup, carry, params, logger);
             update_acc_term_after_window(windows[i], i, acc_term, lidar_translation_information, acc_offset, setup, carry, params, logger);

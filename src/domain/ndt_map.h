@@ -24,24 +24,9 @@ inline bool ndt_inverse_usable(const Eigen::Matrix3d &infm)
     return !((infm.array() > threshold).any() || (infm.array() < -threshold).any());
 }
 
-// in_plane_sigma_m > 0: a planar cell (smallest spread below a third of the next) gets its in-plane variances raised to
-// at least in_plane_sigma_m^2 before the inversion, so it constrains mainly along its normal (OdometryConfig::ndt_plane_in_plane_sigma_m)
-inline void refresh_cell_inverse(NdtBucket &bucket, double in_plane_sigma_m = 0.0)
+inline void refresh_cell_inverse(NdtBucket &bucket)
 {
     bucket.cov_inverse = bucket.cov.inverse();
-    if (in_plane_sigma_m > 0.0)
-    {
-        const Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eig(bucket.cov);
-        Eigen::Vector3d spread = eig.eigenvalues(); // ascending
-        constexpr double planar_ratio = 3.0;
-        if (spread(0) > 0.0 && spread(1) >= planar_ratio * spread(0))
-        {
-            const double floor = in_plane_sigma_m * in_plane_sigma_m;
-            spread(1) = std::max(spread(1), floor);
-            spread(2) = std::max(spread(2), floor);
-            bucket.cov_inverse = eig.eigenvectors() * spread.cwiseInverse().asDiagonal() * eig.eigenvectors().transpose();
-        }
-    }
     bucket.inverse_usable = ndt_inverse_usable(bucket.cov_inverse);
     bucket.inverse_computed = true;
 }
@@ -65,7 +50,7 @@ std::vector<Point3Di> decimate(const std::vector<Point3Di> &points, double bucke
 // exact = OdometryConfig::use_exact_ndt_bucket_statistics: true uses the statistics of all of a cell's points,
 // false the previous ones
 void update_rgd(const NdtGridParameters &rgd_params, NDTBucketMapType &buckets,
-                std::vector<Point3Di> &points_global, Eigen::Vector3d viewport, bool exact, double in_plane_sigma_m = 0.0);
+                std::vector<Point3Di> &points_global, Eigen::Vector3d viewport, bool exact);
 
 void update_rgd_spherical_coordinates(const NdtGridParameters &rgd_params, NDTBucketMapType &buckets,
                                       std::vector<Point3Di> &points_global, std::vector<Eigen::Vector3d> &points_global_spherical);

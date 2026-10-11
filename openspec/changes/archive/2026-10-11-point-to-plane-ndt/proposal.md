@@ -25,7 +25,7 @@ A point-to-plane term (residual n · (p − m)) removes the in-plane pull, so wh
 
 ## Impact
 
-- `src/domain/scan_to_map.cpp` (the two NDT point lambdas and the cost of `ScanToMapCost`), `src/domain/ndt_map.h` (cell normal / normal variance alongside the stored inverse), `src/domain/optimizer_options.{h,cpp}`, `src/domain/odometry_config.h`, `src/infrastructure/toml_io.h` (+ golden TOML files).
+- `src/domain/scan_to_map.cpp` (the two NDT point lambdas), `src/domain/ndt_map.h` (cell normal / normal variance alongside the stored inverse), `src/domain/optimizer_options.{h,cpp}`, `src/domain/odometry_config.h`, `src/infrastructure/toml_io.h` (+ golden TOML files).
 - `tests/scan_to_map_test.cpp`: room and corridor cases with the setting on; `tests/ndt_map_test.cpp` for the cell normal.
 - When switched on, the odometry's numbers change everywhere: new baselines (stage 2 only). Cost: about the same per point (a rank-1 term is cheaper than a 3×3); time measured and reported.
-- Interacts with the degeneracy projection (`degenerate_projection_ratio`) and with synchronized-retune's candidate 2. Ordered after `robust-loop-closure`, so the loop closure judging it is the final one.
+- Interacts with the degeneracy projection (`degenerate_projection_ratio`). (Synchronized-retune's candidate 2, which touched the same cost, is not on master.) Ordered after `robust-loop-closure`, so the loop closure judging it is the final one.
