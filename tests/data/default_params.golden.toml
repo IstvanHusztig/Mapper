@@ -101,7 +101,6 @@ lm_factor_initial = 5.0
 max_distance_lidar = 30.0
 min_distance_lidar = 0.06
 min_distance_lidar_outdoor_grid = 1.0
-ndt_plane_in_plane_sigma_m = 0.0
 nr_iter = 100
 sliding_window_trajectory_length_threshold = 5.0
 threshold_initial_points = 10000
