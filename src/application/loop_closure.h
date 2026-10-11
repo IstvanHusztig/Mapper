@@ -25,6 +25,11 @@ struct LoopClosureEdge
     Eigen::Affine3d correction = Eigen::Affine3d::Identity(); // world transform moving segment j onto i
     double fitness = 0.0;
     bool cross_floor = false; // between floors: ties the translation, the rotation only weakly (loop_closure_cross_floor_*)
+    // a point edge (loop_closure_cross_floor_point_edges): point_i (in segment i's frame) and point_j (in segment j's frame)
+    // must coincide horizontally; no rotation and no height
+    bool point = false;
+    Eigen::Vector3d point_i = Eigen::Vector3d::Zero();
+    Eigen::Vector3d point_j = Eigen::Vector3d::Zero();
 };
 
 // Levenberg-Marquardt on the segment poses: odometry edges between consecutive segments, loop edges, first pose fixed.

@@ -6,6 +6,8 @@
 
 #include <algorithm>
 #include <iomanip>
+#include <cstdio>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -295,6 +297,53 @@ namespace
         return w_t * delta.head<3>().squaredNorm() + w_r * delta.tail<3>().squaredNorm();
     }
 
+    // a point edge's residual: the horizontal difference of point_i placed with pose i and point_j placed with pose j
+    Eigen::Vector2d point_edge_residual(const TaitBryanPose &pi, const TaitBryanPose &pj, const LoopClosureEdge &e)
+    {
+        const Eigen::Vector3d d = affine_matrix_from_pose_tait_bryan(pi) * e.point_i - affine_matrix_from_pose_tait_bryan(pj) * e.point_j;
+        return d.head<2>();
+    }
+
+    // its Gauss-Newton terms (numeric Jacobian over the two poses' 6 parameters each): A += J^T w J, b -= J^T w r
+    void add_point_edge(std::vector<Eigen::Triplet<double>> &A, Eigen::VectorXd &b, const std::vector<TaitBryanPose> &poses,
+                        const LoopClosureEdge &e, double w)
+    {
+        const Eigen::Vector2d r = point_edge_residual(poses[e.i], poses[e.j], e);
+        Eigen::Matrix<double, 2, 12> J;
+        const auto param = [](TaitBryanPose &p, int k) -> double &
+        {
+            switch (k)
+            {
+            case 0: return p.px;
+            case 1: return p.py;
+            case 2: return p.pz;
+            case 3: return p.om;
+            case 4: return p.fi;
+            default: return p.ka;
+            }
+        };
+        constexpr double h = 1e-6;
+        for (int k = 0; k < 12; k++)
+        {
+            TaitBryanPose pi = poses[e.i], pj = poses[e.j];
+            TaitBryanPose &p = k < 6 ? pi : pj;
+            param(p, k % 6) += h;
+            const Eigen::Vector2d plus = point_edge_residual(pi, pj, e);
+            param(p, k % 6) -= 2.0 * h;
+            const Eigen::Vector2d minus = point_edge_residual(pi, pj, e);
+            J.col(k) = (plus - minus) / (2.0 * h);
+        }
+        const Eigen::Matrix<double, 12, 12> H = w * J.transpose() * J;
+        const Eigen::Matrix<double, 12, 1> g = w * J.transpose() * r;
+        const int c[2] = {e.i * 6, e.j * 6};
+        for (int r1 = 0; r1 < 12; r1++)
+        {
+            for (int c1 = 0; c1 < 12; c1++)
+                A.emplace_back(c[r1 / 6] + r1 % 6, c[c1 / 6] + c1 % 6, H(r1, c1));
+            b(c[r1 / 6] + r1 % 6) -= g(r1);
+        }
+    }
+
     Eigen::Matrix<double, 6, 1> relative_measurement(const Eigen::Affine3d &a, const Eigen::Affine3d &b)
     {
         const TaitBryanPose p1 = pose_tait_bryan_from_affine_matrix(a);
@@ -343,16 +392,23 @@ std::vector<Eigen::Affine3d> optimize_loop_pose_graph(const std::vector<Eigen::A
     // a cross-floor edge ties the translation but hardly the rotation
     const double w_cross_floor_r = 1.0 / std::pow(params.loop_closure_cross_floor_rotation_sigma_deg * DEG, 2);
     const auto loop_w_r = [&](size_t e) { return loops[e].cross_floor ? w_cross_floor_r : w_loop_r; };
+    // the edge's squared residual in sigmas
+    const auto loop_edge_s2 = [&](const std::vector<TaitBryanPose> &ps, size_t e)
+    {
+        if (loops[e].point)
+            return w_loop_t * point_edge_residual(ps[loops[e].i], ps[loops[e].j], loops[e]).squaredNorm();
+        return relative_pose_edge_cost(ps, loops[e].i, loops[e].j, loop_meas[e], w_loop_t, loop_w_r(e));
+    };
     const auto loop_edge_cost = [&](const std::vector<TaitBryanPose> &ps, size_t e)
     {
-        const double s2 = relative_pose_edge_cost(ps, loops[e].i, loops[e].j, loop_meas[e], w_loop_t, loop_w_r(e));
+        const double s2 = loop_edge_s2(ps, e);
         return kernel2 > 0.0 ? kernel2 * std::log1p(s2 / kernel2) : s2;
     };
     const auto loop_edge_weight = [&](const std::vector<TaitBryanPose> &ps, size_t e)
     {
         if (kernel2 <= 0.0)
             return 1.0;
-        const double s2 = relative_pose_edge_cost(ps, loops[e].i, loops[e].j, loop_meas[e], w_loop_t, loop_w_r(e));
+        const double s2 = loop_edge_s2(ps, e);
         return 1.0 / (1.0 + s2 / kernel2);
     };
 
@@ -382,7 +438,10 @@ std::vector<Eigen::Affine3d> optimize_loop_pose_graph(const std::vector<Eigen::A
                 // the kernel's weight at the current poses (1 without the kernel): the reweighted quadratic bounds the robust
                 // cost from above, so a step that lowers it lowers the cost, and the step check below stays valid
                 const double f = loop_edge_weight(poses, e);
-                add_relative_pose_edge(A, b, poses, loops[e].i, loops[e].j, loop_meas[e], w_loop_t * f, loop_w_r(e) * f);
+                if (loops[e].point)
+                    add_point_edge(A, b, poses, loops[e], w_loop_t * f);
+                else
+                    add_relative_pose_edge(A, b, poses, loops[e].i, loops[e].j, loop_meas[e], w_loop_t * f, loop_w_r(e) * f);
             }
             for (int r = 0; r < 6; r++)
                 A.emplace_back(r, r, 1e12); // first segment pose fixed
@@ -446,6 +505,12 @@ std::vector<LoopEdgeResidual> loop_edge_residuals(const std::vector<Eigen::Affin
     std::vector<LoopEdgeResidual> out;
     for (const auto &e : loops)
     {
+        if (e.point)
+        {
+            const Eigen::Vector3d d = optimized[e.i] * e.point_i - optimized[e.j] * e.point_j;
+            out.push_back({d.head<2>().norm(), 0.0});
+            continue;
+        }
         const Eigen::Affine3d measured = initial[e.i].inverse() * e.correction * initial[e.j];
         const Eigen::Affine3d solved = optimized[e.i].inverse() * optimized[e.j];
         const Eigen::Affine3d d = measured.inverse() * solved;
@@ -526,6 +591,29 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
     // 2.+3. revisit candidates and their registration
     std::vector<LoopClosureEdge> loops;
     const bool use_cross_floor = params.loop_closure_cross_floor_max_vertical_m > params.loop_closure_max_vertical_offset_m;
+    // diagnostics: segment ranges whose cross-floor pairs are not tried (loop_closure_cross_floor_exclude_segments)
+    std::vector<std::pair<int, int>> excluded_ranges;
+    {
+        std::stringstream list(params.loop_closure_cross_floor_exclude_segments);
+        std::string item;
+        while (std::getline(list, item, ','))
+        {
+            int a = 0, b = 0;
+            if (std::sscanf(item.c_str(), "%d-%d", &a, &b) == 2)
+                excluded_ranges.emplace_back(a, b);
+            else if (std::sscanf(item.c_str(), "%d", &a) == 1)
+                excluded_ranges.emplace_back(a, a);
+        }
+    }
+    double near_x = 0.0, near_y = 0.0, near_r = -1.0; // loop_closure_cross_floor_only_near, r < 0: off
+    std::sscanf(params.loop_closure_cross_floor_only_near.c_str(), "%lf %lf %lf", &near_x, &near_y, &near_r);
+    const auto excluded = [&](int segment)
+    {
+        for (const auto &[a, b] : excluded_ranges)
+            if (segment >= a && segment <= b)
+                return true;
+        return false;
+    };
     int cross_floor_tries = 0;
     int cross_floor_accepted = 0;
     for (int j = 0; j < static_cast<int>(segments.size()); j++)
@@ -543,6 +631,8 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
                 if (segments[j].t_begin - segments[i].t_end < min_gap)
                     continue;
                 const Eigen::Vector3d d = segments[j].center - segments[i].center;
+                if (cross_floor && (excluded(i) || excluded(j)))
+                    continue;
                 const double dz = std::abs(d.z());
                 const bool height_fits = cross_floor ? dz > params.loop_closure_max_vertical_offset_m && dz <= params.loop_closure_cross_floor_max_vertical_m
                                                      : dz <= params.loop_closure_max_vertical_offset_m;
@@ -606,6 +696,38 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
                     e.correction = T;
                     e.fitness = after;
                     e.cross_floor = cross_floor;
+                    Eigen::Vector3d centre = Eigen::Vector3d::Zero();
+                    for (const auto &p : source)
+                        centre += p;
+                    centre /= double(std::max<size_t>(source.size(), 1));
+                    if (cross_floor && near_r >= 0.0 && std::hypot(centre.x() - near_x, centre.y() - near_y) > near_r)
+                    {
+                        log_info(logger) << "  cross-floor edge " << best_i << " -> " << j << " not used: shared region outside "
+                                         << params.loop_closure_cross_floor_only_near;
+                        continue; // the next candidate, as after a rejected registration
+                    }
+                    if (cross_floor)
+                    {
+                        const Eigen::Vector3d move = e.correction * centre - centre;
+                        log_info(logger) << "  cross-floor edge " << best_i << " -> " << j << ": shared region centre " << std::fixed
+                                         << std::setprecision(2) << centre.x() << " " << centre.y() << " " << centre.z() << ", its move "
+                                         << move.x() << " " << move.y() << " " << move.z() << " m";
+                    }
+                    if (cross_floor && params.loop_closure_cross_floor_keep_height)
+                    {
+                        // the vertical move of the shared region's centre is removed; rotation and horizontal move stay
+                        const double dz = (e.correction * centre - centre).z();
+                        e.correction.translation().z() -= dz;
+                        log_info(logger) << "  cross-floor edge " << best_i << " -> " << j << ": vertical correction " << std::fixed
+                                         << std::setprecision(2) << dz << " m removed (height from the odometry)";
+                    }
+                    if (cross_floor && params.loop_closure_cross_floor_point_edges)
+                    {
+                        // the shared region's centre as segment j sees it, and where the registration puts it in segment i
+                        e.point = true;
+                        e.point_j = segments[j].pose.inverse() * centre;
+                        e.point_i = segments[best_i].pose.inverse() * (e.correction * centre);
+                    }
                     loops.push_back(e);
                     if (cross_floor)
                         cross_floor_accepted++;

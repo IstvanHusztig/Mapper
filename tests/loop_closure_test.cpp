@@ -378,3 +378,40 @@ TEST_CASE("loop closure pose graph: a cross-floor edge ties the translation, not
     same.cross_floor = false;
     CHECK(loop_edge_drop_ratio(same, r.back(), c) > 1.0);
 }
+
+TEST_CASE("loop closure pose graph: a point edge ties a point horizontally, not the rotation or the height")
+{
+    // three segments 2 m apart; the odometry turned the last one 2 deg and drifted it 0.3 m sideways and 0.2 m up
+    OdometryConfig c = with_kernel(0.0);
+    std::vector<Eigen::Affine3d> initial{segment_pose(0, 0, 0), segment_pose(2, 0, 0), segment_pose(4, 0.3, 2.0)};
+    initial[2].translation().z() = 0.2;
+    // a shaft centre 3 m to the side: seen by segment 2 at its drifted place, the registration puts it where segment 0 sees it
+    const Eigen::Vector3d centre(4.0, 3.3, 0.5);
+    LoopClosureEdge e;
+    e.i = 0;
+    e.j = 2;
+    e.cross_floor = true;
+    e.point = true;
+    e.point_j = initial[2].inverse() * centre;
+    e.point_i = initial[0].inverse() * Eigen::Vector3d(4.0, 3.0, 0.0);
+    const std::vector<LoopClosureEdge> loops{e};
+
+    const auto p = optimize_loop_pose_graph(initial, loops, c);
+    REQUIRE(p.size() == 3);
+    const Eigen::Vector3d placed_j = p[2] * e.point_j, placed_i = p[0] * e.point_i;
+    MESSAGE("point edge: horizontal gap ", (placed_j - placed_i).head<2>().norm(), " m (before 0.30 m)");
+    // least squares against the two odometry edges (sigma 0.1 m each) and the point edge (0.05 m): the gap left is
+    // 0.30 m * 0.05^2 / (0.05^2 + 2 * 0.1^2)
+    const double expected_gap = 0.30 * std::pow(c.loop_closure_edge_sigma_m, 2) /
+                                (std::pow(c.loop_closure_edge_sigma_m, 2) + 2.0 * std::pow(c.loop_closure_odometry_sigma_m, 2));
+    CHECK((placed_j - placed_i).head<2>().norm() == doctest::Approx(expected_gap).epsilon(0.15));
+    // the odometry's relative rotation and height stay (the edge carries neither)
+    const Eigen::Affine3d rel_before = initial[1].inverse() * initial[2], rel_after = p[1].inverse() * p[2];
+    CHECK(Eigen::AngleAxisd(rel_before.linear().transpose() * rel_after.linear()).angle() / DEG_TO_RAD < 0.3);
+    CHECK(std::abs((p[2].translation() - initial[2].translation()).z()) < 0.02);
+    // the drop judges it by the remaining horizontal gap
+    const auto r = loop_edge_residuals(initial, p, loops);
+    REQUIRE(r.size() == 1);
+    CHECK(r[0].translation_m == doctest::Approx(expected_gap).epsilon(0.15));
+    CHECK(r[0].angle_deg == 0.0);
+}

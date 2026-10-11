@@ -73,6 +73,9 @@ struct OdometryConfig
     // diagnostics only: one line per window with its time, iterations, displacement against the guess and the previous
     // velocity, and the state of the accelerometer term (results unchanged)
     bool log_window_diagnostics = false;
+    // after the odometry the CLI writes odometry_snapshot.bin to the output folder, so that the post-processing can be run
+    // again from it (dMapper <input> <params.toml> <output> --from-snapshot <file>) without running the odometry again
+    bool save_odometry_snapshot = false;
     int calibration_validation_points = 1000000;
 
     //consistency
@@ -154,6 +157,18 @@ struct OdometryConfig
     // largest eigenvalue of sum(n n^T) over its planar 0.2 m cells (a single wall such as a facade gives ~0, a round shaft
     // with floor and ceiling much more); 0 = no check
     double loop_closure_cross_floor_min_information_ratio = 0.0;
+    // an accepted cross-floor edge keeps the odometry's height: the vertical part of its correction (at the centre of the
+    // region both segments share) is removed. A round shaft constrains everything but the height (its axis), so its
+    // registrations can slip vertically
+    bool loop_closure_cross_floor_keep_height = false;
+    // diagnostics: cross-floor pairs touching these segments are not tried ("8-15,45-57": segment index ranges, inclusive)
+    std::string loop_closure_cross_floor_exclude_segments;
+    // diagnostics: "x y r" accepts a cross-floor edge only if the centre of its shared region lies within r m of (x, y)
+    std::string loop_closure_cross_floor_only_near;
+    // an accepted cross-floor edge ties only where the region both segments share lies, horizontally: the centre of that
+    // region (in practice a round shaft) must coincide in x and y. A shaft fixes its position well but neither its height
+    // (along its axis) nor the rotation about its axis, so the edge carries no height and no rotation
+    bool loop_closure_cross_floor_point_edges = false;
 
     // online gyro bias estimation (3 extra unknowns per window, carried across windows as a prior)
     bool use_gyro_bias_estimation = true;          // validated against a static recording (43/static)

@@ -115,14 +115,19 @@ log_iteration_convergence = false
 log_stage_timing = false
 log_window_diagnostics = false
 save_calibration_validation = false
+save_odometry_snapshot = false
 
 [loop_closure]
 loop_closure_candidates = 3
+loop_closure_cross_floor_exclude_segments = ''
+loop_closure_cross_floor_keep_height = false
 loop_closure_cross_floor_max_angle_deg = 1.5
 loop_closure_cross_floor_max_vertical_m = 0.0
 loop_closure_cross_floor_min_fitness = 0.3
 loop_closure_cross_floor_min_information_ratio = 0.0
 loop_closure_cross_floor_min_time_gap_s = 5.0
+loop_closure_cross_floor_only_near = ''
+loop_closure_cross_floor_point_edges = false
 loop_closure_cross_floor_rotation_sigma_deg = 5.0
 loop_closure_cross_floor_search_m = 1.0
 loop_closure_edge_sigma_deg = 0.3
