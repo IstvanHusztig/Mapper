@@ -16,6 +16,7 @@ add_executable(lidar_odometry_tests
   ndt_map_test.cpp
   synthetic_recording.cpp
   synthetic_recording_test.cpp
+  odometry_snapshot_test.cpp
   loop_closure_test.cpp
   consistency_test.cpp
   orientation_test.cpp

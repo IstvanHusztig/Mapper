@@ -6,6 +6,7 @@
 #include "format_time.h"
 #include "odometry_config.h"
 #include "odometry_pipeline.h"
+#include "odometry_snapshot_file.h"
 #include "run_services.h"
 #include "toml_config_repository.h"
 
@@ -18,7 +19,7 @@
 
 namespace fs = std::filesystem;
 
-int run_cli(char *argv[])
+int run_cli(int argc, char *argv[])
 {
     // CLI settings: built-in defaults + the given file only (independent of the working directory)
     OdometryConfig config{};
@@ -50,7 +51,31 @@ int run_cli(char *argv[])
     if (pipeline.load())
         log_info(reporter) << "step_1_done";
 
-    pipeline.run_all();
+    if (argc == 6)
+    {
+        // the odometry from an earlier run's snapshot
+        OdometrySnapshot snapshot;
+        std::string why;
+        if (!read_odometry_snapshot(argv[5], config, snapshot, why) || !pipeline.restore_odometry(snapshot, why))
+        {
+            log_error(reporter) << "Cannot use the odometry snapshot '" << argv[5] << "': " << why;
+            return 1;
+        }
+    }
+    else
+    {
+        pipeline.run_odometry();
+        if (config.save_odometry_snapshot)
+        {
+            const fs::path file = fs::path(argv[3]) / "odometry_snapshot.bin";
+            std::string why;
+            if (write_odometry_snapshot(file, pipeline.snapshot(), config, why))
+                log_info(reporter) << "odometry snapshot written to " << file.string();
+            else
+                log_error(reporter) << "odometry snapshot not written: " << why;
+        }
+    }
+    pipeline.post_process();
 
     end = std::chrono::system_clock::now();
     std::chrono::duration<double> elapsed_seconds = end - start;

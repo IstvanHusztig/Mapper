@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lidar_odometry.h"
+#include "odometry_snapshot.h"
 #include "output_ports.h"
 #include "run_reporting.h"
 
@@ -28,6 +29,11 @@ public:
     bool load();
     // LiDAR odometry over all windows; false on failure
     bool run_odometry();
+    // what the later stages read from the odometry (the windows and three values of the run state)
+    OdometrySnapshot snapshot() const;
+    // in place of run_odometry, after load: takes the windows and run state from a snapshot of an earlier run with the same
+    // recording; false (and `why` names the difference) if its window count or window timestamps differ from the loaded ones
+    bool restore_odometry(const OdometrySnapshot &snapshot, std::string &why);
     // loop closure and the consistency pass, each only when enabled in the config
     void post_process();
     // run_odometry + post_process; returns run_odometry's result (post-processing runs regardless, as in the CLI)

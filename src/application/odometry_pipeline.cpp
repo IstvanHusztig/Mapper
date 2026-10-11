@@ -76,6 +76,38 @@ bool OdometryPipeline::run_odometry()
     return optimize_windows(windows, *config_, state, ts_failure, debug_, *inputs_.points, *inputs_.preview, *logger_, *progress_);
 }
 
+OdometrySnapshot OdometryPipeline::snapshot() const
+{
+    OdometrySnapshot s;
+    s.windows = windows;
+    s.m_g = state.m_g;
+    s.total_length_of_calculated_trajectory = state.total_length_of_calculated_trajectory;
+    s.consecutive_distance = state.consecutive_distance;
+    return s;
+}
+
+bool OdometryPipeline::restore_odometry(const OdometrySnapshot &snapshot, std::string &why)
+{
+    progress_->stage_started(RunStage::Odometry);
+    if (snapshot.windows.size() != windows.size())
+    {
+        why = "the snapshot has " + std::to_string(snapshot.windows.size()) + " windows, the recording " + std::to_string(windows.size());
+        return false;
+    }
+    for (size_t i = 0; i < windows.size(); i++)
+        if (snapshot.windows[i].timestamps != windows[i].timestamps)
+        {
+            why = "the timestamps of window " + std::to_string(i + 1) + " differ from the recording's";
+            return false;
+        }
+    windows = snapshot.windows;
+    state.m_g = snapshot.m_g;
+    state.total_length_of_calculated_trajectory = snapshot.total_length_of_calculated_trajectory;
+    state.consecutive_distance = snapshot.consecutive_distance;
+    log_info(*logger_) << "odometry restored from the snapshot (" << windows.size() << " windows)";
+    return true;
+}
+
 void OdometryPipeline::post_process()
 {
     const OdometryConfig &params = *config_;

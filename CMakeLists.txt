@@ -192,6 +192,7 @@ add_library(lo_infrastructure STATIC
   src/infrastructure/folder_result_sink.cpp
   src/infrastructure/toml_io.cpp
   src/infrastructure/toml_config_repository.cpp
+  src/infrastructure/odometry_snapshot_file.cpp
   src/infrastructure/console_reporting.cpp)
 target_include_directories(lo_infrastructure
   PUBLIC src/infrastructure
