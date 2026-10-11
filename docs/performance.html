@@ -120,6 +120,7 @@
 <tr><td>Fixed Cholesky pattern, <code>/fp:precise</code></td><td class="num">509.8 s</td><td class="num">907 s</td><td>The symbolic analysis of the two sparse Cholesky solves is done 57 + 58 times in 138,000 solves instead of every time. One floating-point mode everywhere, at no speed cost.</td></tr>
 <tr><td>Faster consistency</td><td class="num">516.7 s</td><td class="num">647 s</td><td>The normal equations of the consistency passes (10) are accumulated directly into a banded matrix instead of sparse products; the points and the Cholesky analysis are kept between passes; the 1M-point chunks are built in parallel and merged in order. Consistency: 363.6 → 44.7 s.</td></tr>
 <tr><td>Stored NDT cell inverses</td><td class="num">490.5 s</td><td class="num">622 s</td><td>The inverse covariance of every NDT cell (and its usable flag) is stored once when the map is updated, instead of being inverted again by every point in every iteration; the node pose is converted once per node instead of once per point. The result is bit-identical.</td></tr>
+<tr><td>Reprocessing from an odometry snapshot</td><td>2026-10-11</td><td>for loop-closure experiments: 178 s on the full 44 instead of 1338 s for a full run (18 s instead of 179 s on <code>44_short</code>); bit-identical</td></tr>
 </table></div>
 
 <h2>What was slow</h2>

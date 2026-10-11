@@ -120,6 +120,7 @@
 <tr><td>Rögzített Cholesky-minta, <code>/fp:precise</code></td><td class="num">509,8 s</td><td class="num">907 s</td><td>A két ritka Cholesky-megoldás szimbolikus elemzése 138 000 megoldásból csak 57 + 58-szor fut le, nem minden alkalommal. Mindenhol egyetlen lebegőpontos mód, sebességveszteség nélkül.</td></tr>
 <tr><td>Gyorsabb konzisztencia</td><td class="num">516,7 s</td><td class="num">647 s</td><td>A konzisztencia (10 menet) normálegyenleteit közvetlenül, sávos mátrixba gyűjtjük a ritka szorzatok helyett; a pontok és a Cholesky-elemzés menetek között megmarad; az 1 M pontos darabok párhuzamosan készülnek és sorrendben egyesülnek. Konzisztencia: 363,6 → 44,7 s.</td></tr>
 <tr><td>Tárolt NDT-cellainverzek</td><td class="num">490,5 s</td><td class="num">622 s</td><td>Minden NDT-cella inverz kovarianciáját (és a használhatósági jelzőt) a térképfrissítés egyszer tárolja, ahelyett hogy minden pont minden iterációban újra invertálná; a csomópont pózát is csomópontonként egyszer alakítjuk át pontonként helyett. Az eredmény bitazonos.</td></tr>
+<tr><td>Újrafeldolgozás odometria-pillanatképből</td><td>2026-10-11</td><td>hurokzárási kísérletekhez: 178 s a teljes 44-esen a teljes futás 1338 s-a helyett (18 s a <code>44_short</code>-on 179 s helyett); bitazonos</td></tr>
 </table></div>
 
 <h2>Mi volt lassú</h2>
