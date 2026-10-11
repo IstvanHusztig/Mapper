@@ -117,6 +117,7 @@ python tools/trajectory_seams.py "<raw data>/44/lio_result_2" "<raw data>/44/lio
 - The first folder is the reference; each further folder is compared pose by pose (same recording and settings, same number of poses).
 - Per result it prints the route length, the largest position difference with its time and the reference position, the first time the difference exceeds each threshold (`--thresholds`, default 5, 20 and 50 cm), and the longest stretch above the first threshold.
 - Used for `odometry-stall-fix`: a `/fp:fast` and a `/fp:precise` build of the same code should stay within a few centimetres over the whole 44.
+- Positions are world positions: each chunk's rows are placed with its pose from `session_poses.mrp`. Before 2026-10-10 the tool compared the chunk-relative rows, so it missed what loop closure moves (the chunk poses) and mixed frames in the route length. Earlier comparisons of loop-closure variants with it understate the differences.
 
 ## spot_check.py
 
@@ -144,6 +145,35 @@ python tools/stairwell_check.py "<raw data>/44_lc_s0" -4.7 -4.9
 - Floors are the heights where the trajectory dwells; each point belongs to the pass it was seen from (a stretch with the sensor on one floor). In each floor's railing band, a circle is fitted per pass.
 - Per band it prints every pass's centre, radius, median residual and arc, and the offset from the floor's own first pass. The summary gives, for neighbouring floors, the stack (each floor's railing seen from its own floor) and the upper railing seen from the floor below. A few cm is the noise; the railing of 44 fits with 1–3 cm residuals.
 - On 44 with the shipped settings (input `44_s0`): floor −1 is 30 cm off floor 0 (stack), floor −2 31 cm off floor −1 (seen from below; floor −2 has no railing of its own).
+
+## facade_check.py
+
+Checks that a long façade is straight. A straight façade with a parapet at a known distance from the building plan must appear at one position along its whole length. Pure Python, plus CloudCompare for the export (as `spot_check.py`).
+
+```
+python tools/facade_check.py "<raw data>/44_lc_s0" --facade 2.15 --spacing 1.135 --window 35 95
+```
+
+- The points seen in the time window (the pass along the gallery) are turned into the room frame (`--angle`, the direction of the building's walls in the map, 10.55° on 44).
+- In each 1 m slice along the gallery, the façade and the parapet are found as the pair of histogram peaks across it whose spacing matches the plan (`--spacing`, ± `--tolerance`).
+- The façade's position in each slice is compared with `--facade`, here the façade's outer face seen through the Wohnen windows at the start.
+- On 44 (the gallery in front of flat 56, building plan Haus 47 LG): shipped +29 / −52 / +39 cm mean deviation on `44_s0/s1/s2`. Few slices find the pair (1–7), so the numbers are rough.
+
+## evaluate_floors.py
+
+The evaluation suite of `floor-alignment-diagnosis`: one table over the perturbed 44 inputs (and 45f), against reference results. It runs `stairwell_check.py`, `facade_check.py` and `spot_check.py` one after the other, and reads the loop summary from the run logs.
+
+```
+python tools/evaluate_floors.py --results 44_s0=<folder> 44_s1=<folder> 44_s2=<folder> [45f=<folder>]     --reference 44_s0=<raw data>/44_lc_s0 44_s1=<raw data>/44_lc_s1 44_s2=<raw data>/44_lc_s2 --logs <folder with <result>.log>
+```
+
+- **Columns:**
+  - floor −1 against 0 (stack and seen from below), floor −2 against −1 (seen from below), floor 0's start against its end;
+  - the **storey heights** (the sensor's levels on neighbouring floors; the loop closure must not squeeze or stretch them);
+  - the gallery façade (mean and spread), the worst railing pass at the railing spot;
+  - loops, largest correction, cross-floor edges accepted, edges dropped, jump warnings.
+- **Fixed parameters** (constants at the top), specific to 44: shaft centre (−4.7, −4.9); façade 2.15 m, spacing 1.135 m, window 35–95 s; railing spot (−3.0121, −5.4233, −0.1179), radius 0.8 m. 45f gets only the log columns.
+- About 2–3 minutes per result folder.
 
 ## Regression baseline (compare_baseline.py, cut_recording)
 

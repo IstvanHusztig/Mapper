@@ -3,10 +3,14 @@
 Usage:
   python tools/trajectory_seams.py <reference_result> <result> [<result> ...] [--thresholds 0.05 0.2 0.5]
 
-Each folder holds trajectory_lio_*.csv. The poses of a result are the chunks' rows in time order; two results
-are compared pose by pose, so they must come from the same recording and settings. A result that is a ghost wall
-away from the reference shows up as a stretch where the position difference is large: the seam measure
-eval_odometry.py does not have (it looks at yaw only).
+Each folder holds trajectory_lio_<n>.csv (one per chunk, relative to the chunk: the first row is the identity) and
+session_poses.mrp (the chunk poses: a count, then per chunk the laz file name and a 4x4 matrix). The positions
+compared are WORLD positions: each chunk's rows are transformed by that chunk's matrix from session_poses.mrp
+(comparing the chunk-relative rows would hide every difference that sits in the chunk poses, as loop closure
+makes them). The poses of a result are the chunks' rows in time order; two results are compared pose by pose, so
+they must come from the same recording and settings. A result that is a ghost wall away from the reference shows
+up as a stretch where the position difference is large: the seam measure eval_odometry.py does not have (it looks
+at yaw only).
 
 Reported per result:
   max diff    largest position difference [m], its time [s from the first pose] and the reference position there
@@ -20,18 +24,41 @@ import math
 import os
 
 
+def chunk_poses(folder):
+    """[(chunk trajectory file, 4x4 matrix as 4 rows)] from session_poses.mrp, in file order."""
+    fn = os.path.join(folder, "session_poses.mrp")
+    if not os.path.isfile(fn):
+        raise SystemExit(f"no session_poses.mrp in {folder}")
+    with open(fn) as f:
+        lines = [ln.strip() for ln in f if ln.strip()]
+    count = int(lines[0])
+    if len(lines) < 1 + 5 * count:
+        raise SystemExit(f"{fn}: {count} chunks announced, only {(len(lines) - 1) // 5} found")
+    chunks = []
+    for k in range(count):
+        name = lines[1 + 5 * k]
+        matrix = [[float(x) for x in lines[2 + 5 * k + r].split()] for r in range(4)]
+        chunks.append((name.replace("scan_lio_", "trajectory_lio_").rsplit(".", 1)[0] + ".csv", matrix))
+    return chunks
+
+
 def load(folder):
+    """The result's poses as (timestamp, x, y, z) in world coordinates, in time order."""
     rows = []
-    files = glob.glob(os.path.join(folder, "trajectory_lio_*.csv"))
-    if not files:
-        raise SystemExit(f"no trajectory_lio_*.csv in {folder}")
-    for fn in files:
+    for name, m in chunk_poses(folder):
+        fn = os.path.join(folder, name)
+        if not os.path.isfile(fn):
+            raise SystemExit(f"{folder}: session_poses.mrp lists {name}, which is missing")
         with open(fn) as f:
             f.readline()
             for line in f:
                 v = line.split()
                 if len(v) >= 13:
-                    rows.append((float(v[0]), float(v[4]), float(v[8]), float(v[12])))
+                    x, y, z = float(v[4]), float(v[8]), float(v[12])
+                    rows.append((float(v[0]),
+                                 m[0][0] * x + m[0][1] * y + m[0][2] * z + m[0][3],
+                                 m[1][0] * x + m[1][1] * y + m[1][2] * z + m[1][3],
+                                 m[2][0] * x + m[2][1] * y + m[2][2] * z + m[2][3]))
     rows.sort()
     return rows
 
@@ -78,6 +105,9 @@ def main():
         res = load(folder)
         if len(res) != len(ref):
             print(f"warning: {folder} has {len(res)} poses, the reference {len(ref)}; comparing the first {min(len(res), len(ref))}")
+        shifted = sum(1 for i in range(min(len(res), len(ref))) if abs(res[i][0] - ref[i][0]) > 1e6)
+        if shifted:
+            print(f"warning: {shifted} poses of {folder} differ by more than 1 ms in time from the reference's pose with the same index")
         r = compare(ref, res, a.thresholds)
         print(f"{folder}: route {r['route_m']:.2f} m")
         p = r["max_ref_position"]
