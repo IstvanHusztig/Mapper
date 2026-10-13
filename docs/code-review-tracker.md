@@ -28,7 +28,7 @@ The settings audit (`openspec/changes/settings-audit`) follows after that.
 | C8 | "big jump": a node > 1 m from its guess is not updated while the rest of the step is | `scan_to_map.cpp:1111` | B | fixed | 0 times on 44 s0/s1/s2 (counter) |
 | C9 | Loop closure `shift` and plausibility measured as translation of a world-frame transform (rotation about the origin counts; cross-floor limit 1.0 m hard-coded) | `loop_closure.cpp:771`, 636–639, 778 | B | verified | code |
 | C10 | `ndt_cell_index` truncates towards zero: cells at index 0 double width | `ndt_map.cpp` | B | verified | code; grid rotation showed no effect on drift |
-| C11 | `.mrp` / `.mri` written with 6 significant digits | `folder_result_sink.cpp:109` | B | reported | ≈ 5 mm beyond 1 km |
+| C11 | `.mrp` / `.mri` written with 6 significant digits | `folder_result_sink.cpp:109` | B | fixed | ≈ 5 mm beyond 1 km; round-trip test; 44_short data files identical |
 | C12 | `point_sizes_per_chunk.json` holds sizes per window; CSV `om/fi/ka` are raw AHRS angles, not the optimized pose | `lidar_odometry.cpp:482`, 579 | B | fixed (documented) | README output line |
 | C13 | LM never checks the cost; damping ×10 every 10 iterations; always 100 iterations; depends on wall-clock time (`real_time_threshold_seconds`) | `scan_to_map.cpp`, `run_odometry.cpp` | C1 | reported | "every window runs all 100 iterations" matches the logs |
 | C14 | `decimate` keeps the first point after an unstable `std::sort` | `ndt_map.cpp:42` | C2 | reported | |

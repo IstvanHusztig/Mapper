@@ -17,6 +17,7 @@ add_executable(lidar_odometry_tests
   synthetic_recording.cpp
   synthetic_recording_test.cpp
   odometry_snapshot_test.cpp
+  folder_result_sink_test.cpp
   loop_closure_test.cpp
   consistency_test.cpp
   orientation_test.cpp
@@ -51,3 +52,7 @@ if(WIN32)
 endif()
 
 add_test(NAME lidar_odometry_tests COMMAND lidar_odometry_tests)
+
+if (MSVC)
+  target_compile_options(lidar_odometry_tests PRIVATE /we4715)
+endif()

@@ -13,7 +13,8 @@ Rules: `docs/code-review-tracker.md` (status per finding); `44_short` against `t
 
 ## 2. Output precision
 
-- [ ] 2.1 C11: `.mrp` / `.mri` with `setprecision(17)`. Verify: unit test round-trips a pose at 1234.56789 m; `44_short` data files IDENTICAL, `.mrp` / `.mri` differ only in digits; new `44_short` manifest in its own commit.
+- [x] 2.1 C11: `.mrp` / `.mri` with `setprecision(17)`. Verify: unit test round-trips a pose at 1234.56789 m; `44_short` data files IDENTICAL, `.mrp` / `.mri` differ only in digits; new `44_short` manifest in its own commit.
+  Done 2026-10-13: `setprecision(17)` in `save_poses`; test `FolderResultSink writes the chunk poses with full precision` (round trip at 1234.56789012 m); 44_short: 9 of 11 files IDENTICAL, `session_poses.mrp` / `session_ini_poses.mri` differ only in digits; new 44_short baseline in its own commit. The full 44 manifest also lists the pose files: renewed at the end of this change (C9/C10 change numbers anyway).
 
 ## 3. Fixes that change numbers (measured)
 

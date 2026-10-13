@@ -102,6 +102,7 @@ static bool save_poses(const std::string file_name, std::vector<Eigen::Affine3d>
         return false;
     }
 
+    outfile << std::setprecision(17); // full double precision: chunk poses far from the origin keep sub-millimetre digits
     outfile << m_poses.size() << std::endl;
     for (size_t i = 0; i < m_poses.size(); i++)
     {
