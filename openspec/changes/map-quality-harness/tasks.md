@@ -14,11 +14,21 @@
 
 ## 3. Noise floor and config-only experiments
 
-- [ ] 3.1 This change's master on s0/s1/s2: full and odometry-only runs, snapshots saved; harness table. Verify: the table is in this task.
+- [x] 3.1 This change's master on s0/s1/s2: full and odometry-only runs, snapshots saved; harness table. Verify: the table is in this task.
+  Done 2026-10-13 (code c9efa06, `raw data/44_nf_s{0,1,2}`, settings lidar-vertical + diagnostics + snapshot, harness with `--floors`):
+
+  | | façade out / back [°] | revisit yaw med / worst [°], offset [m] | jitter p50 / p99 [°] | railing [cm] | stair max [cm] |
+  |---|---|---|---|---|---|
+  | s0 | −0.40 / −0.73 | 1.33 / 2.29, 0.11 | 0.94 / 4.49 | 4.9 | 8.5 |
+  | s1 | −3.71 / +0.16 | 0.51 / 2.33, 0.03 | 0.94 / 4.38 | 3.4 | 11.9 |
+  | s2 | −0.58 / −0.78 | 1.00 / 3.53, 0.09 | 0.94 / 4.44 | 5.9 | 8.5 |
+  | spread | 3.31 / 0.94 | 0.82 / 1.24, 0.08 | 0.00 / 0.11 | 2.5 | 3.4 |
+
+  Identical to the shipped results of 2026-10-11/12 (s0 −0.40 / −0.73°, s1 −3.71 / +0.16°): the diagnostics change nothing.
 - [ ] 3.2 `/fp:fast` build on s0 (fragility probe). Verify: `trajectory_seams.py` against the `/fp:precise` run, recorded in this task.
 - [ ] 3.3 Consistency off, and 2–3 passes, from the snapshots, on s0/s1/s2. Verify: harness table.
 - [ ] 3.4 Map rebuild off (threshold very large), on s0/s1/s2. Verify: harness table.
-- [ ] 3.5 Event counters on 44 and 45f. Verify: the counts are in this task; they decide which change-B fixes can stay bit-identical.
+- [ ] 3.5 Event counters on 44 and 45f. 44 done: map rebuilds 1 (window 585 s0), solver steps skipped 0, big-jump node updates 0, windows dropped 0 on s0, s1 and s2; 45f still to run. Verify: the counts are in this task; they decide which change-B fixes can stay bit-identical.
 
 ## 4. Wrap-up
 
