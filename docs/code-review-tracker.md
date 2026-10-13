@@ -14,6 +14,8 @@ Status flow: `reported → verified → fixed → measured → accepted | reject
 
 The settings audit (`openspec/changes/settings-audit`) follows after that.
 
+**Separate task: a cave recording for tuning** (user, 2026-10-13). A cave scan will be made for the final retune; it has to be organised as a task of its own (site, route with deliberate revisits and a closed loop, stationary start of 30–50 s for the gyro bias, ideally a few reference measurements such as tape distances between marked points). Stage 2 of the retune waits for it.
+
 | ID | Finding | Where | Change | Status | Evidence / notes |
 |---|---|---|---|---|---|
 | C1 | Consistency adds high-frequency pose jitter: one 6-DOF unknown per IMU node, smoothness weights constant (not scaled by dt), no prior to the input poses, only node 0 held, 10 passes | `consistency.cpp` | H (A.5a first) | verified | measured: rotation over 10 nodes p50/p99 0.40/1.29° (odometry) → 0.94/4.49° (final); route at node rate 218 → 455 m |
