@@ -8,7 +8,8 @@ Rules: `docs/code-review-tracker.md` (status per finding); `44_short` against `t
 - [x] 1.2 C8: big jump rejects the whole step (no pose, bias, velocity or offset change in that iteration). Unit test on a synthetic window. Verify: `ctest`; `44_short` IDENTICAL (0 big jumps on 44).
   Done 2026-10-13: `solution_by_row` (normal_equations) in the optimizer and consistency, the skip counter now counts a failed solve (`info() != Success`); `stepped_poses` decides the big jump before anything is applied (whole step rejected). Unit tests for both; Release ctest 102/102; 44_short IDENTICAL (11 files).
 - [ ] 1.3 C27: MSVC warning C4715 as an error (`/we4715`). Verify: Release and Debug build, `ctest` both.
-- [ ] 1.4 C12: documentation of `point_sizes_per_chunk.json` and the CSV `om/fi/ka` columns (README / output description). Verify: the text exists.
+- [x] 1.4 C12: documentation of `point_sizes_per_chunk.json` and the CSV `om/fi/ka` columns (README / output description). Verify: the text exists.
+  Done 2026-10-13: README output line (the CSV angle columns and `point_sizes_per_chunk.json`); `docs/index.html` and `docs/PIPELINE.md` already called the angles the raw IMU / AHRS angles.
 
 ## 2. Output precision
 

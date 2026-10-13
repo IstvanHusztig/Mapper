@@ -29,7 +29,7 @@ The settings audit (`openspec/changes/settings-audit`) follows after that.
 | C9 | Loop closure `shift` and plausibility measured as translation of a world-frame transform (rotation about the origin counts; cross-floor limit 1.0 m hard-coded) | `loop_closure.cpp:771`, 636–639, 778 | B | verified | code |
 | C10 | `ndt_cell_index` truncates towards zero: cells at index 0 double width | `ndt_map.cpp` | B | verified | code; grid rotation showed no effect on drift |
 | C11 | `.mrp` / `.mri` written with 6 significant digits | `folder_result_sink.cpp:109` | B | reported | ≈ 5 mm beyond 1 km |
-| C12 | `point_sizes_per_chunk.json` holds sizes per window; CSV `om/fi/ka` are raw AHRS angles, not the optimized pose | `lidar_odometry.cpp:482`, 579 | B | reported | |
+| C12 | `point_sizes_per_chunk.json` holds sizes per window; CSV `om/fi/ka` are raw AHRS angles, not the optimized pose | `lidar_odometry.cpp:482`, 579 | B | fixed (documented) | README output line |
 | C13 | LM never checks the cost; damping ×10 every 10 iterations; always 100 iterations; depends on wall-clock time (`real_time_threshold_seconds`) | `scan_to_map.cpp`, `run_odometry.cpp` | C1 | reported | "every window runs all 100 iterations" matches the logs |
 | C14 | `decimate` keeps the first point after an unstable `std::sort` | `ndt_map.cpp:42` | C2 | reported | |
 | C15 | Hand-off off-by-one (node 0 of the next window at t_n gets the pose of t_{n−1}; points in [t_{n−1}, t_n) dropped); windows with ≤ 1000 points dropped silently | `run_odometry.cpp`, `window_steps.cpp`, `lidar_odometry.cpp:353, 385` | D5 | reported | |
