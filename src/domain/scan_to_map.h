@@ -18,6 +18,10 @@ struct ScanToMapWorkspace
 {
     PatternCachedCholesky covariance;
     PatternCachedCholesky damped;
+    // silent events, counted over the run and reported by the window loop: iterations whose solution did not have one
+    // entry per unknown, so the step was not applied; nodes not moved because their step exceeded 1 m ("big jump")
+    int steps_skipped = 0;
+    int big_jump_nodes = 0;
 };
 
 // The NDT cost of a window at the given node poses, as the point terms of optimize_lidar_odometry weigh it: the sum over the

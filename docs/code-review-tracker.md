@@ -36,4 +36,5 @@ Status flow: `reported → verified → fixed → measured → accepted | reject
 | C24 | No robust kernel (`loop_closure_kernel_scale` 0); one edge per segment; coarse-search ties broken in loop order | `loop_closure.cpp` | G3 | verified (kernel) / reported | |
 | C25 | Loop edge pinned at the segment's first node, correction interpolated between first nodes | `loop_closure.cpp:659`, 935–937 | G4 | reported | |
 | C26 | Gyro bias absorbs a constant LiDAR yaw drift (observability) | optimizer / bias carry | feature change | reported | expected by theory |
+| C27 | The build does not warn about a non-void function without `return` (MSVC C4715 not active): found when a missing `return` in a new diagnostic made a check fire every window (2026-10-13, fixed before commit) | `CMakeLists.txt` warning flags | B | verified | 44_short run with the bug: rebuild warning in all 70 windows, summary counter 0 |
 | — | Tait-Bryan gimbal lock with the vertical mount | — | — | rejected | pitch never above 23° on 44 (measured) |

@@ -67,6 +67,7 @@ namespace
         std::vector<Point3Di> points_global;                    // map points since the last reset
         int stationary_windows = 0;
         int turn_windows = 0;
+        int map_rebuilds = 0;                                   // sliding_window_trajectory_length_threshold reached
         int acc_term_windows = 0;
         int rest_windows = 0;                                        // imu_always_on: windows at rest
         bool velocity_valid = false;                                 // imu_always_on: the previous window estimated its end velocity
@@ -614,6 +615,50 @@ namespace
         }
     }
 
+    // log_window_diagnostics: what holds the window's heading.
+    //  - yaw correction: the rotation about the world z axis from the guess (the prediction before the iterations) to the
+    //    result, at the first and the last node [deg]; also the last node's heading [deg];
+    //  - yaw stiffness: the NDT cost's second derivative against a rotation of the whole window about the world z axis
+    //    through the mean node position (central differences, 0.1 deg) [cost/deg^2].
+    void log_heading_diagnostics(int i, const Window &window, const std::vector<Eigen::Affine3d> &guess, const std::vector<Point3Di> &intermediate_points,
+                                 const OdometryState &state, const ScanToMapOptions &scan_to_map, const OdometryConfig &params, Logger &logger)
+    {
+        if (!params.log_window_diagnostics || window.poses.empty() || guess.size() != window.poses.size())
+            return;
+        const auto yaw_between = [](const Eigen::Matrix3d &from, const Eigen::Matrix3d &to)
+        {
+            const Eigen::AngleAxisd aa(to * from.transpose());
+            return aa.angle() * aa.axis().z() * RAD_TO_DEG;
+        };
+        const double yaw_first = yaw_between(guess.front().linear(), window.poses.front().linear());
+        const double yaw_last = yaw_between(guess.back().linear(), window.poses.back().linear());
+        const Eigen::Matrix3d &r = window.poses.back().linear();
+        const double heading = std::atan2(r(1, 0), r(0, 0)) * RAD_TO_DEG;
+
+        Eigen::Vector3d centre = Eigen::Vector3d::Zero();
+        for (const auto &p : window.poses)
+            centre += p.translation();
+        centre /= static_cast<double>(window.poses.size());
+        const double step_deg = 0.1;
+        const auto rotated = [&](double deg)
+        {
+            const Eigen::Matrix3d rz = Eigen::AngleAxisd(deg * DEG_TO_RAD, Eigen::Vector3d::UnitZ()).toRotationMatrix();
+            std::vector<Eigen::Affine3d> poses = window.poses;
+            for (auto &p : poses)
+            {
+                p.linear() = rz * p.linear();
+                p.translation() = rz * (p.translation() - centre) + centre;
+            }
+            return poses;
+        };
+        const auto cost = [&](const std::vector<Eigen::Affine3d> &poses)
+        { return ndt_window_cost(intermediate_points, poses, state.buckets_indoor, state.buckets_outdoor, scan_to_map); };
+        const double stiffness = (cost(rotated(step_deg)) + cost(rotated(-step_deg)) - 2.0 * cost(window.poses)) / (step_deg * step_deg);
+        log_info(logger) << "window diagnostics " << i + 1 << ": heading " << std::fixed << std::setprecision(3) << heading << " deg, yaw correction first "
+                         << yaw_first << " last " << yaw_last << " deg; yaw stiffness " << std::scientific << std::setprecision(3) << stiffness
+                         << " cost/deg^2";
+    }
+
     // log_window_diagnostics: how the accelerometer fits the optimized trajectory. Anchor nodes ~50 ms apart; per triple the
     // change of the trajectory's velocity is compared with the mean of R f - g over the same time, as an acceleration
     // residual (IMU minus LiDAR) [m/s^2]. Logged: its mean in the world and in the body frame (at the middle anchor), the rms
@@ -777,8 +822,8 @@ namespace
     }
 
     // the window's points go into the reference map; after sliding_window_trajectory_length_threshold metres the map
-    // is rebuilt from the newer half of the points since the last reset (decimated)
-    void add_window_to_map(const std::vector<Point3Di> &intermediate_points, const Window &window, WindowLoopCarry &carry,
+    // is rebuilt from the newer half of the points since the last reset (decimated). Returns whether it was rebuilt.
+    bool add_window_to_map(const std::vector<Point3Di> &intermediate_points, const Window &window, WindowLoopCarry &carry,
                            OdometryState &state, const OdometryConfig &params)
     {
         for (int j = 0; j < intermediate_points.size(); j++)
@@ -788,8 +833,10 @@ namespace
             carry.points_global.push_back(pp);
         }
 
-        if (carry.acc_distance > params.sliding_window_trajectory_length_threshold)
+        const bool rebuild = carry.acc_distance > params.sliding_window_trajectory_length_threshold;
+        if (rebuild)
         {
+            carry.map_rebuilds++;
             if (state.reference_points.size() == 0)
             {
                 state.buckets_indoor.clear();
@@ -830,6 +877,7 @@ namespace
                 update_rgd(params.in_out_params_outdoor, state.buckets_outdoor, pg, window.poses[0].translation(), params.use_exact_ndt_bucket_statistics);
             }
         }
+        return rebuild;
     }
 
     // nearest-rank percentile (0..100) of values, which must not be empty
@@ -942,6 +990,8 @@ namespace
             log_info(logger) << "accelerometer always on: " << carry.rest_windows << " of " << windows.size() << " windows at rest";
         if (params.rotation_sigma_inflation_k_turn > 0.0)
             log_info(logger) << "turn windows (gyro trusted more): " << carry.turn_windows << " of " << windows.size();
+        log_info(logger) << "silent events: map rebuilds " << carry.map_rebuilds << ", solver steps skipped " << workspace.steps_skipped
+                         << ", big-jump node updates not applied " << workspace.big_jump_nodes;
         if (params.log_iteration_convergence && !carry.convergence.empty())
             log_convergence_summary(carry.convergence, logger);
         if (params.log_stage_timing)
@@ -1057,10 +1107,18 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
             windows[i].motion_model_poses = windows[i].poses;
 
             PhaseTimer lm_timer(timed(carry.timing.lm_iterations));
+            const int steps_skipped_before = workspace.steps_skipped;
+            const int big_jump_nodes_before = workspace.big_jump_nodes;
             const WindowOptimization optimization = run_lm_iterations(intermediate_points, windows[i], state, setup, acc_term, window_rotation_options,
                                                                       velocity_prior, acc_offset, lidar_translation_information, params, debugMsg, logger,
                                                                       params.log_stage_timing ? &carry.timing.lm : nullptr, workspace);
             lm_timer.stop();
+            if (workspace.steps_skipped > steps_skipped_before)
+                log_warning(logger) << "window " << i + 1 << ": " << workspace.steps_skipped - steps_skipped_before
+                                    << " solver step(s) skipped (the solution had fewer entries than unknowns)";
+            if (workspace.big_jump_nodes > big_jump_nodes_before)
+                log_warning(logger) << "window " << i + 1 << ": " << workspace.big_jump_nodes - big_jump_nodes_before
+                                    << " node update(s) not applied (step > 1 m, big jump)";
 
             const std::chrono::duration<double> window_seconds = std::chrono::system_clock::now() - window_start;
             log_window_result(i, windows.size(), optimization, carry.acc_distance, window_seconds.count(), params, logger);
@@ -1069,6 +1127,7 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
             log_accelerometer_fit(i, windows[i], lidar_translation_information, acc_term, setup, carry, params, logger);
             log_weak_axis_diagnostics(i, windows[i], intermediate_points, state, setup.scan_to_map, acc_term, lidar_translation_information, params,
                                       logger);
+            log_heading_diagnostics(i, windows[i], poses_before_optimization, intermediate_points, state, setup.scan_to_map, params, logger);
 
             update_gyro_bias_after_window(windows[i], i, setup, carry, params, logger);
             update_acc_term_after_window(windows[i], i, acc_term, lidar_translation_information, acc_offset, setup, carry, params, logger);
@@ -1103,7 +1162,9 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
                 place_window_after(windows[i + 1], windows[i].poses[windows[i].poses.size() - 1]);
 
             PhaseTimer add_to_map_timer(timed(carry.timing.add_to_map));
-            add_window_to_map(intermediate_points, windows[i], carry, state, params);
+            if (add_window_to_map(intermediate_points, windows[i], carry, state, params))
+                log_warning(logger) << "window " << i + 1 << ": reference map rebuilt from the newer half of its points "
+                                    << "(sliding_window_trajectory_length_threshold " << params.sliding_window_trajectory_length_threshold << " m reached)";
             add_to_map_timer.stop();
 
             if (i > 1)

@@ -1022,10 +1022,15 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
             if ((p1 - p2).norm() < 1.0)
                 window.poses[i] = affine_matrix_from_pose_tait_bryan(pose);
             else
+            {
                 log_info(logger) << "big jump on trajectory: " << (p1 - p2).norm();
+                cache.big_jump_nodes++;
+            }
         }
         delta = 0.0;
         for (int i = 0; i < h_x.size(); i++)
             delta += sqrt(h_x[i] * h_x[i]);
     }
+    else
+        cache.steps_skipped++;
 }

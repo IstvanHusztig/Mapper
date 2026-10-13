@@ -245,6 +245,7 @@ bool compute_step_1(
     std::vector<std::vector<Point3Di>>& pointsPerFile, const OdometryConfig &params, OdometryState& state, ImuTrajectory& trajectory, std::vector<Window>& windows, PointStore& point_store, Logger& logger, ProgressReporter& progress, const Imu* imu_data)
 {
     int number_of_initial_points = 0;
+    int dropped_windows = 0; // windows with too few points, reported at the end
     double timestamp_begin = 0.0;
 
     // Step 1: Pre-reserve to avoid vector reallocations
@@ -383,7 +384,11 @@ bool compute_step_1(
         points.erase(it, points.end());
 
         if (points.size() <= 1000)
+        {
+            log_warning(logger) << "window slice " << i + 1 << " dropped: " << points.size() << " points (at most 1000)";
             windows.pop_back();
+            dropped_windows++;
+        }
         else
         {
             std::vector<Point3Di> intermediate_points;
@@ -404,6 +409,7 @@ bool compute_step_1(
         progress.checkpoint();
     }
     progress.progress(n_iter, n_iter);
+    log_info(logger) << "silent events: windows dropped for too few points " << dropped_windows;
 
     state.m_g = windows[0].poses[0];
     return true;
