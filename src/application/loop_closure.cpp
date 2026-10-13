@@ -626,17 +626,19 @@ double loop_edge_drop_ratio(const LoopClosureEdge &edge, const LoopEdgeResidual 
 bool loop_pose_graph_plausible(const std::vector<Eigen::Affine3d> &initial, const std::vector<Eigen::Affine3d> &optimized,
                                const std::vector<LoopClosureEdge> &loops, const OdometryConfig &params, double &max_shift_m)
 {
+    // movements of the segment anchors (positions), not translations of world-frame transforms, which would also contain
+    // the rotation about the world origin
     max_shift_m = 0.0;
     double largest_edge = 0.0;
     for (const auto &e : loops)
-        largest_edge = std::max(largest_edge, e.correction.translation().norm());
+        if (e.j >= 0 && static_cast<size_t>(e.j) < initial.size())
+            largest_edge = std::max(largest_edge, (e.correction * initial[e.j].translation() - initial[e.j].translation()).norm());
     bool finite = optimized.size() == initial.size();
     for (size_t k = 0; finite && k < optimized.size(); k++)
     {
-        const Eigen::Affine3d c = optimized[k] * initial[k].inverse();
-        finite = c.matrix().allFinite();
+        finite = optimized[k].matrix().allFinite();
         if (finite)
-            max_shift_m = std::max(max_shift_m, c.translation().norm());
+            max_shift_m = std::max(max_shift_m, (optimized[k].translation() - initial[k].translation()).norm());
     }
     return finite && max_shift_m <= params.loop_closure_max_correction_m + largest_edge;
 }
@@ -768,14 +770,21 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
                 Eigen::Matrix<double, 6, 6> registration_information = Eigen::Matrix<double, 6, 6>::Zero();
                 T = ndt_refine(source, target, T, params.use_exact_ndt_bucket_statistics, &registration_information);
                 const double after = overlap(source, T, fitness_grid, 0.2);
-                const double shift = T.translation().norm();
+                // how far the correction moves the segment: its centre's movement (T's translation would also contain the
+                // rotation about the world origin, growing with the distance from the start)
+                Eigen::Vector3d source_centre = Eigen::Vector3d::Zero();
+                for (const auto &p : source)
+                    source_centre += p;
+                source_centre /= static_cast<double>(source.size());
+                const double shift = (T * source_centre - source_centre).norm();
                 const double angle = Eigen::AngleAxisd(T.linear()).angle() / DEG;
                 // between floors the shared region may be a single wall (a facade), which fixes only the direction across it
                 const double info_ratio = cross_floor ? information_ratio(target, 0.2) : 1.0;
                 // an already aligned revisit (no improvement possible) is a valid constraint as well. Between floors only
                 // the shaft is shared: a lower overlap, and a correction no larger than the drift between floors can be
+                constexpr double cross_floor_max_shift_m = 1.0; // a correction no larger than the drift between floors can be
                 const bool accepted = cross_floor ? after >= params.loop_closure_cross_floor_min_fitness && after >= before - 0.02 &&
-                                                        shift <= 1.0 && angle <= params.loop_closure_cross_floor_max_angle_deg &&
+                                                        shift <= cross_floor_max_shift_m && angle <= params.loop_closure_cross_floor_max_angle_deg &&
                                                         info_ratio >= params.loop_closure_cross_floor_min_information_ratio
                                                   : after >= params.loop_closure_min_fitness && after >= before - 0.02 &&
                                                         shift <= params.loop_closure_max_correction_m + 1.0 && angle <= 15.0;

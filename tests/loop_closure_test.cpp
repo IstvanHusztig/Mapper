@@ -607,3 +607,30 @@ TEST_CASE("loop closure information edges: a box-shaped region also ties the tur
     // with the translation adds some
     CHECK(std::abs(yaw_after) < std::abs(yaw_before) - 0.1);
 }
+
+TEST_CASE("loop closure: the plausibility check does not depend on the distance from the world origin")
+{
+    // two segments and a loop edge whose correction turns segment 1 by 2 deg about its own anchor; the optimized poses
+    // carry that correction. Near the origin and 300 m away the check must see the same small movement (before, the
+    // rotation about the world origin counted: about 10 m at 300 m)
+    for (const double offset : {0.0, 300.0})
+    {
+        std::vector<Eigen::Affine3d> initial(2, Eigen::Affine3d::Identity());
+        initial[0].translation() = Eigen::Vector3d(offset, 0.0, 0.0);
+        initial[1].translation() = Eigen::Vector3d(offset + 5.0, 0.0, 0.0);
+        Eigen::Affine3d turn = Eigen::Affine3d::Identity();
+        turn.translate(initial[1].translation());
+        turn.rotate(Eigen::AngleAxisd(2.0 * M_PI / 180.0, Eigen::Vector3d::UnitZ()));
+        turn.translate(-initial[1].translation());
+        LoopClosureEdge e;
+        e.i = 0;
+        e.j = 1;
+        e.correction = turn;
+        std::vector<Eigen::Affine3d> optimized = initial;
+        optimized[1] = turn * initial[1];
+        OdometryConfig params;
+        double max_shift_m = -1.0;
+        CHECK(loop_pose_graph_plausible(initial, optimized, {e}, params, max_shift_m));
+        CHECK(max_shift_m < 1e-9);
+    }
+}
