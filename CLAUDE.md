@@ -10,6 +10,8 @@ dMapper started as a standalone extraction of the LiDAR odometry (step 1) applic
 
 There are no linters or CI. Unit tests use doctest (`3rdparty/doctest`), and refactors are checked against a golden baseline (see Testing). Mechanical renames in refactors are done with `tools/rename_identifiers.py` (code only, never comments or strings; `-m` for member accesses only; `--dry-run` first).
 
+**Missing tools:** when a tool or package an analysis needs is missing (a Python module such as numpy, a CLI program), ask the user to install it (name the package and the command, e.g. `python -m pip install --user numpy`) instead of working around it with a slower or weaker substitute or reporting it as a blocker. Repo tools in `tools/` stay pure Python unless a change decides otherwise.
+
 **Keep tool output small:** Bash results cost context. Pipe command output through `head`, `tail` or `grep` to reduce its size (build and run logs go to a file, then only the relevant lines are shown), and avoid `cat` on large files — use Read with offset/limit instead.
 
 ## Build
