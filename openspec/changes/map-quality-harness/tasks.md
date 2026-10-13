@@ -26,9 +26,12 @@
 
   Identical to the shipped results of 2026-10-11/12 (s0 −0.40 / −0.73°, s1 −3.71 / +0.16°): the diagnostics change nothing.
 - [ ] 3.2 `/fp:fast` build on s0 (fragility probe). Verify: `trajectory_seams.py` against the `/fp:precise` run, recorded in this task.
-- [ ] 3.3 Consistency off, and 2–3 passes, from the snapshots, on s0/s1/s2. Verify: harness table.
-- [ ] 3.4 Map rebuild off (threshold very large), on s0/s1/s2. Verify: harness table.
-- [ ] 3.5 Event counters on 44 and 45f. 44 done: map rebuilds 1 (window 585 s0), solver steps skipped 0, big-jump node updates 0, windows dropped 0 on s0, s1 and s2; 45f still to run. Verify: the counts are in this task; they decide which change-B fixes can stay bit-identical.
+- [x] 3.3 Consistency off, and 2–3 passes, from the snapshots, on s0/s1/s2. Verify: harness table.
+  Done 2026-10-13 (s0 / s1 / s2): consistency off: façade out −0.37 / −4.18 / −0.49°, railing 5.8 / 4.4 / 8.0 cm, stair 7.2 / 11.1 / 9.6 cm, jitter p99 1.3°; 2 passes: railing 5.2 / 3.9 / 7.6, jitter p99 2.1°; 10 passes (floor): railing 4.9 / 3.4 / 5.9, jitter p99 4.4°. Railing improves monotonically with the passes on all three inputs (dose-response): consistency stays on (10 passes). Whether its trajectory jitter harms the cloud is not shown; change H keeps it as an improvement, lower priority. Odometry only: façade −3.87 / −4.32 / −4.23° (spread 0.45°), revisit yaw median 0.18 / 0.50 / 0.41° (final map 1.33 / 0.51 / 1.00°: loop closure and/or consistency add heading error at revisits), offset 1.00 / 1.99 / 1.67 m.
+- [x] 3.4 Map rebuild off (threshold very large), on s0/s1/s2. Verify: harness table.
+  Done 2026-10-13: façade out −5.27 / −2.84 / +1.14°, back −5.55 / +1.12 / +1.00°, railing 17.1 / 3.9 / 25.7 cm, stair 7.9 / 9.8 / 68.7 cm. Not uniformly worse (s1 equal or better), s2 lands in a different outcome; the mechanism is untested. The rebuild stays (status quo); odometry-only from these snapshots and the six-input floor (s0–s5) follow.
+  **Decisions (user, 2026-10-13, after a Sonnet review):** the final-map façade spread is a loop-closure pass/fail outcome (s1 not corrected), not variation: odometry fixes are judged on odometry-only results, the final-map verdict on s0–s5 counted as pass/fail; loop-closure fixes (G) run in parallel, pulled forward, on snapshots.
+- [x] 3.5 Event counters on 44 and 45f. 45f: all 0. 44 done: map rebuilds 1 (window 585 s0), solver steps skipped 0, big-jump node updates 0, windows dropped 0 on s0, s1 and s2; 45f still to run. Verify: the counts are in this task; they decide which change-B fixes can stay bit-identical.
 
 ## 4. Wrap-up
 
