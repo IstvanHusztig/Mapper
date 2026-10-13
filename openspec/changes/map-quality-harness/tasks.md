@@ -2,8 +2,9 @@
 
 ## 1. Diagnostics (bit-identical)
 
-- [ ] 1.1 Heading diagnostic: with `log_window_diagnostics`, log per window the yaw correction against the guess (first and last node) and the total yaw stiffness. Verify: Release build; `44_short` bit-identical.
-- [ ] 1.2 Silent events, each with a log warning and a per-run counter: map rebuild, window dropped (≤ 1000 points), solver step skipped, big-jump partial update. A summary line at the end of the odometry. Verify: Release `ctest`; on 44 the rebuild line appears at window 586; `44_short` bit-identical.
+- [x] 1.1 Heading diagnostic: with `log_window_diagnostics`, log per window the yaw correction against the guess (first and last node) and the total yaw stiffness. Verify: Release build; `44_short` bit-identical.
+- [x] 1.2 Silent events, each with a log warning and a per-run counter: map rebuild, window dropped (≤ 1000 points), solver step skipped, big-jump partial update. A summary line at the end of the odometry. Verify: Release `ctest`; on 44 the rebuild line appears at window 586; `44_short` bit-identical.
+  Done 2026-10-13 (c9efa06): 44_short IDENTICAL (11 files), Release ctest passes; the counters read 0 on 44_short. The rebuild on 44 at window 586 is checked with the noise-floor runs (3.1). Found on the way: a missing `return` was not flagged by the compiler (tracker C27).
 
 ## 2. Harness
 
