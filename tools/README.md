@@ -192,6 +192,22 @@ python tools/evaluate_floors.py --results 44_s0=<folder> 44_s1=<folder> 44_s2=<f
 - **Fixed parameters** (constants at the top), specific to 44: shaft centre (−4.7, −4.9); façade 2.15 m, spacing 1.135 m, window 35–95 s; railing spot (−3.0121, −5.4233, −0.1179), radius 0.8 m. 45f gets only the log columns.
 - About 2–3 minutes per result folder.
 
+## map_quality.py
+
+Judges results of recording 44 on the three map-quality measures of equal weight (change `map-quality-harness`): global geometry, consistency, sharpness. Needs numpy (and pymupdf for `--overlay`), and CloudCompare for the one-off ASCII export of the chunk LAZ files (as `spot_check.py`).
+
+```
+python tools/map_quality.py [--floors] [--overlay] [label=]result_folder ...
+```
+
+- One row per result, plus a `spread` row (max − min over the results): give s0, s1 and s2 of the same code to see how fragile it is.
+- **Global geometry:** `facade out` / `facade back`: the gallery façade's line angle along the gallery (way out / way back) minus its angle seen through the windows at the start [deg]. The building plan makes them parallel, so 0 is right.
+- **Consistency:** `revisit |yaw| med` / `worst` / `offset med`: heading [deg] and offset [m] between two passes of the same place (2D registration of 2.5 s slices, 11 fixed pairs on 44, pairs with quality ≥ 1.08 counted in `pairs`). 0 means no doubled wall.
+- **Sharpness:** `jitter p50` / `p99`: rotation over 10 trajectory nodes (11 ms) [deg]; with `--floors` also the railing NN and the largest stairwell offset of `evaluate_floors.py` [cm] (labels must then be `44_s0` / `44_s1` / `44_s2`).
+- `--overlay` writes `<result>/map_quality_cache/plan_overlay.png`: the first 100 s in red over the building plan (`haus47_LG_plan.pdf`), anchored at the stairwell centre.
+- The placed points are cached in `<result>/map_quality_cache/points.npy`. The constants of recording 44 (room angle, façade bands, revisit pairs, plan anchor) are at the top of `map_quality_lib.py`.
+- Reference (2026-10-13): shipped final `44_wd_s0` façade −0.40 / −0.73°, revisit 1.33° / 2.29° / 0.11 m (4 pairs), jitter 0.94 / 4.49°; odometry only `44_odo_h0_s0` −3.87 / −4.19°, 0.18° / 1.52° / 1.00 m (10 pairs), 0.40 / 1.29°.
+
 ## Regression baseline (compare_baseline.py, cut_recording)
 
 Refactors must reproduce `44_short` and the full 44 bit for bit (see `docs/ARCHITECTURE.md`). Two reference datasets live next to the raw data, outside git:
