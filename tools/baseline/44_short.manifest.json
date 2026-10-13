@@ -1,9 +1,9 @@
 {
   "dataset": "44_short",
   "params": "settings/lidar-vertical.toml",
-  "commit": "c6edb56",
+  "commit": "95a1226",
   "hd_cpu_optimization": "AUTO",
-  "created": "2026-10-11",
+  "created": "2026-10-13",
   "files": {
     "dMapper_params_0.1.0_<DATETIME>.toml": "280af4edaafd3ebee2437b506e9f9d7df5359b0cebb892c24251791f4344da2a",
     "dMapper_results_0.1.0_<DATETIME>.json": "5ac5afa4a8b3d93096d5356e0869603deeb89f34052b882ded2bc24f636cabbd",
@@ -12,8 +12,8 @@
     "scan_lio_1.laz": "8201d4466358dbe7e7f7a5466ddaf744d984d4c655211dd68316d8e529270bfa",
     "scan_lio_merged.laz": "fc6111dad31a08ce67c2fa028e44e54e3c11eaf912ff8f7e8bb78a219d3d7883",
     "session.mjs": "4e626dbac4a9938ad1dab21f8e986fd408f82e1d532c787f026214ec8fcc5e90",
-    "session_ini_poses.mri": "e66a206e4a9de608ba927c2a6961d9c17aea713bc0897d6100a36127f5a94aab",
-    "session_poses.mrp": "e66a206e4a9de608ba927c2a6961d9c17aea713bc0897d6100a36127f5a94aab",
+    "session_ini_poses.mri": "f9216c6b8e08305845004d8d5cab2e76020863e02760a94c22016d327c818494",
+    "session_poses.mrp": "f9216c6b8e08305845004d8d5cab2e76020863e02760a94c22016d327c818494",
     "trajectory_lio_0.csv": "61d70bc1472f4c8949193d58bdf0f34432614cead2758663d88d026b882f0391",
     "trajectory_lio_1.csv": "9ee32c6548a795b7c76eac8006a7b3996512d20dd5cef2315416438ddb3053ad"
   }
