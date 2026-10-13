@@ -103,7 +103,7 @@ def _ransac_line(u, w, thr=0.03, iters=4000, rng=None):
         return None
     P = np.column_stack([w[best], u[best]])
     m = P.mean(0)
-    _, _, vt = np.linalg.svd(P - m)
+    _, _, vt = np.linalg.svd(P - m, full_matrices=False)  # the full U would be N x N (tens of GB)
     ang = (np.degrees(np.arctan2(vt[0, 1], vt[0, 0])) + 90) % 180 - 90
     return ang, m[1], len(best)
 
