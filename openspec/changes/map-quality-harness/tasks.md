@@ -8,8 +8,9 @@
 
 ## 2. Harness
 
-- [ ] 2.1 Move the helpers into `tools/` (point cache, façade lines, revisit registration, plan anchoring, jitter) and write `tools/map_quality.py`. Verify: it reproduces the known numbers (spec scenario).
-- [ ] 2.2 README entries; CLAUDE.md's testing section names the harness. Verify: the pages describe it.
+- [x] 2.1 Move the helpers into `tools/` (point cache, façade lines, revisit registration, plan anchoring, jitter) and write `tools/map_quality.py`. Verify: it reproduces the known numbers (spec scenario).
+- [x] 2.2 README entries; CLAUDE.md's testing section names the harness. Verify: the pages describe it.
+  Done 2026-10-13 (cbce08e): reproduces 44_wd_s0 −0.40 / −0.73° and 44_odo_h0_s0 −3.87 / −4.19°, jitter p99 4.49 / 1.29°. New: the final map's revisits differ by 1.33° (median) in heading at 0.11 m offset; the odometry's by 0.18° at 1.00 m. Only 4 of 11 pairs pass the quality threshold on the final map (jitter blurs the slices).
 
 ## 3. Noise floor and config-only experiments
 
