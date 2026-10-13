@@ -345,3 +345,19 @@ TEST_CASE("PatternCachedCholesky: the analysis is kept for the same pattern and 
     CHECK(solve_with(cached, a2, b2) == solve_with(fresh2, a2, b2));
     CHECK(cached.analyses() == 3);
 }
+
+TEST_CASE("solution_by_row keeps an entry the sparse result does not store in its place")
+{
+    // a one-column solution with rows 0, 1 and 3 stored and row 2 an exact zero, as a sparse solve returns it
+    Eigen::SparseMatrix<double> x(4, 1);
+    x.insert(0, 0) = 1.5;
+    x.insert(1, 0) = -2.0;
+    x.insert(3, 0) = 4.0;
+    x.makeCompressed();
+    const std::vector<double> v = solution_by_row(x, 4);
+    REQUIRE(v.size() == 4);
+    CHECK(v[0] == 1.5);
+    CHECK(v[1] == -2.0);
+    CHECK(v[2] == 0.0);
+    CHECK(v[3] == 4.0);
+}

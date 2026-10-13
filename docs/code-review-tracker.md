@@ -24,8 +24,8 @@ The settings audit (`openspec/changes/settings-audit`) follows after that.
 | C4 | Sliding-map rebuild at 200 m: map cleared and rebuilt from the newer half of the points (re-decimated, viewport = current position) | `run_odometry.cpp` `add_window_to_map` | F1 (A.5b first) | verified | fires at window 586 (≈ 237 s) on 44; coincides with a −100° yaw correction and the bias estimate collapsing at 240–260 s; counter: 1 rebuild on each of s0/s1/s2 |
 | C5 | IMU rotation prior × `cauchy(measurement)` = 1/π: prior π× weaker than configured, not robust | `scan_to_map.cpp:586–588` | D4 | verified | code |
 | C6 | Carried gyro bias subtracted twice (guess + residual); estimate 30–50 % low | `window_steps.cpp` `apply_gyro_bias_prior`, `scan_to_map.cpp:507–512` | D3 | verified | code + true bias from the trajectory |
-| C7 | Solver step skipped silently when an entry of the sparse solution is exactly zero | `scan_to_map.cpp`, `consistency.cpp:320` | B | verified | code; hit by the rotation-only experiment; 0 times on 44 s0/s1/s2 (counter, 2026-10-13) |
-| C8 | "big jump": a node > 1 m from its guess is not updated while the rest of the step is | `scan_to_map.cpp:1111` | B | reported | 0 times on 44 s0/s1/s2 (counter) |
+| C7 | Solver step skipped silently when an entry of the sparse solution is exactly zero | `scan_to_map.cpp`, `consistency.cpp:320` | B | fixed | code; hit by the rotation-only experiment; 0 times on 44 s0/s1/s2 (counter, 2026-10-13) |
+| C8 | "big jump": a node > 1 m from its guess is not updated while the rest of the step is | `scan_to_map.cpp:1111` | B | fixed | 0 times on 44 s0/s1/s2 (counter) |
 | C9 | Loop closure `shift` and plausibility measured as translation of a world-frame transform (rotation about the origin counts; cross-floor limit 1.0 m hard-coded) | `loop_closure.cpp:771`, 636–639, 778 | B | verified | code |
 | C10 | `ndt_cell_index` truncates towards zero: cells at index 0 double width | `ndt_map.cpp` | B | verified | code; grid rotation showed no effect on drift |
 | C11 | `.mrp` / `.mri` written with 6 significant digits | `folder_result_sink.cpp:109` | B | reported | ≈ 5 mm beyond 1 km |

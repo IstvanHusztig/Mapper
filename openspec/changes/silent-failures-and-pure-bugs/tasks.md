@@ -4,8 +4,9 @@ Rules: `docs/code-review-tracker.md` (status per finding); `44_short` against `t
 
 ## 1. Bit-identical fixes
 
-- [ ] 1.1 C7: `solution_by_row(x, n)` in `normal_equations.{h,cpp}`, used by `optimize_lidar_odometry` and consistency; the size guard counts a real failure only. Unit test: a solution with an exact zero keeps its place. Verify: `ctest`; `44_short` IDENTICAL.
-- [ ] 1.2 C8: big jump rejects the whole step (no pose, bias, velocity or offset change in that iteration). Unit test on a synthetic window. Verify: `ctest`; `44_short` IDENTICAL (0 big jumps on 44).
+- [x] 1.1 C7: `solution_by_row(x, n)` in `normal_equations.{h,cpp}`, used by `optimize_lidar_odometry` and consistency; the size guard counts a real failure only. Unit test: a solution with an exact zero keeps its place. Verify: `ctest`; `44_short` IDENTICAL.
+- [x] 1.2 C8: big jump rejects the whole step (no pose, bias, velocity or offset change in that iteration). Unit test on a synthetic window. Verify: `ctest`; `44_short` IDENTICAL (0 big jumps on 44).
+  Done 2026-10-13: `solution_by_row` (normal_equations) in the optimizer and consistency, the skip counter now counts a failed solve (`info() != Success`); `stepped_poses` decides the big jump before anything is applied (whole step rejected). Unit tests for both; Release ctest 102/102; 44_short IDENTICAL (11 files).
 - [ ] 1.3 C27: MSVC warning C4715 as an error (`/we4715`). Verify: Release and Debug build, `ctest` both.
 - [ ] 1.4 C12: documentation of `point_sizes_per_chunk.json` and the CSV `om/fi/ka` columns (README / output description). Verify: the text exists.
 

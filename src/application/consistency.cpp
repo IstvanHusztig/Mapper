@@ -310,14 +310,12 @@ void Consistency(std::vector<Window> &windows, const OdometryConfig &params, Poi
     PhaseTimer solve_timer(phase(&ConsistencyTiming::solve));
     data.solver.compute(AtPA); // the pattern is the same in every pass, so the symbolic analysis is kept
     Eigen::SparseMatrix<double> x = data.solver.solver().solve(AtPB);
-    std::vector<double> h_x;
-    for (int k = 0; k < x.outerSize(); ++k)
-        for (Eigen::SparseMatrix<double>::InnerIterator it(x, k); it; ++it)
-            h_x.push_back(it.value());
+    const bool solved = data.solver.solver().info() == Eigen::Success;
+    const std::vector<double> h_x = solution_by_row(x, static_cast<int>(6 * trajectory.size()));
     solve_timer.stop();
 
     PhaseTimer apply_timer(phase(&ConsistencyTiming::apply));
-    if (h_x.size() == 6 * trajectory.size())
+    if (solved)
     {
         int counter = 0;
 

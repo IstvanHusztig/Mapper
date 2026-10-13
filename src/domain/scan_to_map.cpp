@@ -42,6 +42,34 @@ namespace
     }
 }
 
+SteppedPoses stepped_poses(const Window &window, const std::vector<double> &h_x, double max_from_guess_m, Logger &logger)
+{
+    SteppedPoses out;
+    out.poses.reserve(window.poses.size());
+    int counter = 0;
+    for (size_t i = 0; i < window.poses.size(); i++)
+    {
+        TaitBryanPose pose = pose_tait_bryan_from_affine_matrix(window.poses[i]);
+        TaitBryanPose prev_pose = pose_tait_bryan_from_affine_matrix(window.motion_model_poses[i]);
+        pose.px += h_x[counter++];
+        pose.py += h_x[counter++];
+        pose.pz += h_x[counter++];
+        pose.om += h_x[counter++];
+        pose.fi += h_x[counter++];
+        pose.ka += h_x[counter++];
+
+        Eigen::Vector3d p1(prev_pose.px, prev_pose.py, prev_pose.pz);
+        Eigen::Vector3d p2(pose.px, pose.py, pose.pz);
+        if (!((p1 - p2).norm() < max_from_guess_m))
+        {
+            log_info(logger) << "big jump on trajectory: " << (p1 - p2).norm() << " (step not applied)";
+            out.big_jump_nodes++;
+        }
+        out.poses.push_back(pose);
+    }
+    return out;
+}
+
 double ndt_window_cost(const std::vector<Point3Di> &intermediate_points, const std::vector<Eigen::Affine3d> &poses,
                        const NDTBucketMapType &buckets_indoor, const NDTBucketMapType &buckets_outdoor, const ScanToMapOptions &scan_to_map)
 {
@@ -973,18 +1001,21 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
 
     cache.damped.compute(AtPA);
     Eigen::SparseMatrix<double> x = cache.damped.solver().solve(AtPB);
-    std::vector<double> h_x;
-    for (int k = 0; k < x.outerSize(); ++k)
-        for (Eigen::SparseMatrix<double>::InnerIterator it(x, k); it; ++it)
-            h_x.push_back(it.value());
+    const bool solved = cache.damped.solver().info() == Eigen::Success;
+    const std::vector<double> h_x = solution_by_row(x, n_params);
     solve_timer.stop();
     PhaseTimer update_timer(phase(&ScanToMapTiming::update));
 
     delta = 1000000.0;
-    if (h_x.size() == static_cast<size_t>(n_params))
+    // the nodes' new poses; a node that would end 1 m or more from its guess ("big jump") rejects the whole step
+    SteppedPoses stepped;
+    if (solved)
     {
-        int counter = 0;
-
+        stepped = stepped_poses(window, h_x, 1.0, logger);
+        cache.big_jump_nodes += stepped.big_jump_nodes;
+    }
+    if (solved && stepped.big_jump_nodes == 0)
+    {
         if (acc_term)
             for (int r = 0; r < 3; r++)
                 acc_offset(r) += h_x[io + r];
@@ -1006,31 +1037,11 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
         }
 
         for (size_t i = 0; i < window.poses.size(); i++)
-        {
-            TaitBryanPose pose = pose_tait_bryan_from_affine_matrix(window.poses[i]);
-            TaitBryanPose prev_pose = pose_tait_bryan_from_affine_matrix(window.motion_model_poses[i]);
-            pose.px += h_x[counter++];
-            pose.py += h_x[counter++];
-            pose.pz += h_x[counter++];
-            pose.om += h_x[counter++];
-            pose.fi += h_x[counter++];
-            pose.ka += h_x[counter++];
-
-            Eigen::Vector3d p1(prev_pose.px, prev_pose.py, prev_pose.pz);
-            Eigen::Vector3d p2(pose.px, pose.py, pose.pz);
-
-            if ((p1 - p2).norm() < 1.0)
-                window.poses[i] = affine_matrix_from_pose_tait_bryan(pose);
-            else
-            {
-                log_info(logger) << "big jump on trajectory: " << (p1 - p2).norm();
-                cache.big_jump_nodes++;
-            }
-        }
+            window.poses[i] = affine_matrix_from_pose_tait_bryan(stepped.poses[i]);
         delta = 0.0;
         for (int i = 0; i < h_x.size(); i++)
             delta += sqrt(h_x[i] * h_x[i]);
     }
-    else
+    else if (!solved)
         cache.steps_skipped++;
 }

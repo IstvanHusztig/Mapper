@@ -31,6 +31,16 @@ struct ScanToMapWorkspace
 double ndt_window_cost(const std::vector<Point3Di> &intermediate_points, const std::vector<Eigen::Affine3d> &poses,
                        const NDTBucketMapType &buckets_indoor, const NDTBucketMapType &buckets_outdoor, const ScanToMapOptions &scan_to_map);
 
+// The window's node poses after adding the pose part of a solver step h_x (Tait-Bryan parameters, 6 per node, first),
+// and how many nodes would end max_from_guess_m or more from their guess (window.motion_model_poses, "big jump"); with
+// such a node the caller rejects the whole step
+struct SteppedPoses
+{
+    std::vector<TaitBryanPose> poses;
+    int big_jump_nodes = 0;
+};
+SteppedPoses stepped_poses(const Window &window, const std::vector<double> &h_x, double max_from_guess_m, Logger &logger);
+
 // this function performs main LiDAR odometry calculations
 // gyro_bias / gyro_bias_cov are updated only when rotation_options.estimate_bias is set
 // timing (log_stage_timing): when not null, the time of each phase is added to it

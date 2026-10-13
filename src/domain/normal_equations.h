@@ -17,6 +17,10 @@ struct Blocks
 // adds each block to AtPAndt at (c, c) and subtracts its right-hand side from AtPBndt at c
 void SumBlocks(const std::vector<Blocks> &blocks, Eigen::MatrixXd &AtPAndt, Eigen::MatrixXd &AtPBndt);
 
+// The solution of a sparse solve (one column) as n values, read by row: an entry the sparse result does not store (an
+// exact zero) stays 0 instead of shifting the entries after it
+std::vector<double> solution_by_row(const Eigen::SparseMatrix<double> &x, int n);
+
 // The normal matrix of a window, stored by band instead of densely. Unknowns: n_pose_params pose parameters, then n_extra
 // extra ones (gyro bias, acceleration offset). The pose-pose part couples parameters up to `band` apart; the rows and
 // columns of the extra unknowns are stored completely, both triangles separately (callers add to both). Each element

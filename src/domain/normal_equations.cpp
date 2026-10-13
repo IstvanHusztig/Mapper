@@ -3,6 +3,16 @@
 #include <algorithm>
 
 //! Sumation of blocks
+std::vector<double> solution_by_row(const Eigen::SparseMatrix<double> &x, int n)
+{
+    std::vector<double> values(static_cast<size_t>(n), 0.0);
+    for (int k = 0; k < x.outerSize(); ++k)
+        for (Eigen::SparseMatrix<double>::InnerIterator it(x, k); it; ++it)
+            if (it.row() < n)
+                values[static_cast<size_t>(it.row())] = it.value();
+    return values;
+}
+
 void SumBlocks(const std::vector<Blocks> &blocks, Eigen::MatrixXd &AtPAndt, Eigen::MatrixXd &AtPBndt)
 {
     for (auto &block : blocks)

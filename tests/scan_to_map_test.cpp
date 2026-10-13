@@ -2,6 +2,7 @@
 
 #include "angle_units.h"
 #include "scan_to_map.h"
+#include <transformations.h>
 #include "synthetic_recording.h"
 
 #include <algorithm>
@@ -251,6 +252,25 @@ TEST_CASE("scan-to-map: a perfect guess stays at the truth")
     CHECK(e.position < 0.001);
     CHECK(e.rotation < 0.1 * deg);
     CHECK(delta < 1e-6);
+}
+
+TEST_CASE("scan-to-map: a node 1 m or more from its guess is a big jump, counted before anything is applied")
+{
+    // the step decision of optimize_lidar_odometry: stepped_poses adds the pose part of a step and counts the nodes that
+    // would end 1 m or more from their guess; with one such node the optimizer applies nothing (before, it held that
+    // node and applied the step to the others and to the extra unknowns)
+    const std::vector<Eigen::Affine3d> truth = true_poses();
+    Window w = make_window(truth);
+    NullLogger logger;
+    std::vector<double> step(w.poses.size() * 6 + 3, 0.0); // 3 extra unknowns after the poses, ignored here
+    step[0] = 0.2;                                        // node 0: 0.2 m in x
+    const SteppedPoses small = stepped_poses(w, step, 1.0, logger);
+    CHECK(small.big_jump_nodes == 0);
+    REQUIRE(small.poses.size() == w.poses.size());
+    CHECK(std::abs(small.poses[0].px - (pose_tait_bryan_from_affine_matrix(w.poses[0]).px + 0.2)) < 1e-12);
+    step[6 * (w.poses.size() - 1) + 1] = 1.2; // last node: 1.2 m in y
+    const SteppedPoses big = stepped_poses(w, step, 1.0, logger);
+    CHECK(big.big_jump_nodes == 1);
 }
 
 TEST_CASE("scan-to-map: a yaw drift is corrected")
