@@ -8,6 +8,12 @@ Status flow: `reported → verified → fixed → measured → accepted | reject
 - **verified**: a red unit test or a code proof (noted in the row); nothing is fixed while only *reported*.
 - **correct-but-unmasks-compensation**: right in the code but measures worse because settings were tuned around the bug; the settings are retuned and it is measured again, not rejected.
 
+**Retuning the settings** (user, 2026-10-13): settings tuned around a bug are retuned in two stages.
+1. **Within the change of the fix**, where the compensating setting is obvious. Examples: `rotation_sigma_inflation_k` and `gyro_arw_*` after C5/C6; the consistency weights and passes after C1.
+2. **Once all fixes are in (change I)**, a systematic retune of the important settings, measured with the harness on s0/s1/s2 and also on 45f and, if possible, another recording, so the settings are not fitted to recording 44 alone.
+
+The settings audit (`openspec/changes/settings-audit`) follows after that.
+
 | ID | Finding | Where | Change | Status | Evidence / notes |
 |---|---|---|---|---|---|
 | C1 | Consistency adds high-frequency pose jitter: one 6-DOF unknown per IMU node, smoothness weights constant (not scaled by dt), no prior to the input poses, only node 0 held, 10 passes | `consistency.cpp` | H (A.5a first) | verified | measured: rotation over 10 nodes p50/p99 0.40/1.29° (odometry) → 0.94/4.49° (final); route at node rate 218 → 455 m |
