@@ -213,6 +213,11 @@ if (MSVC)
   target_compile_options(lo_domain PRIVATE /bigobj)
   target_compile_options(lo_application PRIVATE /bigobj)
   target_compile_options(lo_infrastructure PRIVATE /bigobj)
+  # a function that can end without returning a value is an error (C4715 is off by default; code-review finding C27)
+  target_compile_options(lo_domain PRIVATE /we4715)
+  target_compile_options(lo_application PRIVATE /we4715)
+  target_compile_options(lo_infrastructure PRIVATE /we4715)
+  target_compile_options(lo_gui_view_model PRIVATE /we4715)
 endif()
 
 # presentation (CLI, GUI) and the composition root
@@ -283,7 +288,7 @@ if(WIN32)
 endif()
 
 if (MSVC)
-    target_compile_options(${APP_NAME} PRIVATE /bigobj)
+    target_compile_options(${APP_NAME} PRIVATE /bigobj /we4715)
 endif()
 
 install(TARGETS ${APP_NAME} DESTINATION bin)

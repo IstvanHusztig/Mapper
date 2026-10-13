@@ -7,7 +7,8 @@ Rules: `docs/code-review-tracker.md` (status per finding); `44_short` against `t
 - [x] 1.1 C7: `solution_by_row(x, n)` in `normal_equations.{h,cpp}`, used by `optimize_lidar_odometry` and consistency; the size guard counts a real failure only. Unit test: a solution with an exact zero keeps its place. Verify: `ctest`; `44_short` IDENTICAL.
 - [x] 1.2 C8: big jump rejects the whole step (no pose, bias, velocity or offset change in that iteration). Unit test on a synthetic window. Verify: `ctest`; `44_short` IDENTICAL (0 big jumps on 44).
   Done 2026-10-13: `solution_by_row` (normal_equations) in the optimizer and consistency, the skip counter now counts a failed solve (`info() != Success`); `stepped_poses` decides the big jump before anything is applied (whole step rejected). Unit tests for both; Release ctest 102/102; 44_short IDENTICAL (11 files).
-- [ ] 1.3 C27: MSVC warning C4715 as an error (`/we4715`). Verify: Release and Debug build, `ctest` both.
+- [x] 1.3 C27: MSVC warning C4715 as an error (`/we4715`). Verify: Release and Debug build, `ctest` both.
+  Done 2026-10-13: `/we4715` on lo_domain, lo_application, lo_infrastructure, lo_gui_view_model, dMapper and the tests (106 compile commands); Release and Debug build and `ctest` pass.
 - [x] 1.4 C12: documentation of `point_sizes_per_chunk.json` and the CSV `om/fi/ka` columns (README / output description). Verify: the text exists.
   Done 2026-10-13: README output line (the CSV angle columns and `point_sizes_per_chunk.json`); `docs/index.html` and `docs/PIPELINE.md` already called the angles the raw IMU / AHRS angles.
 
@@ -18,7 +19,8 @@ Rules: `docs/code-review-tracker.md` (status per finding); `44_short` against `t
 
 ## 3. Fixes that change numbers (measured)
 
-- [ ] 3.1 C10: `ndt_cell_index` with `floor`. Unit test: points at −0.01 and +0.01 m fall in different cells. Verify: harness on s0–s5 against the noise floor (change A); new baselines in their own commit if accepted.
+- [ ] 3.1 C10 (deferred 2026-10-13): `ndt_cell_index` with `floor`. Unit test: points at −0.01 and +0.01 m fall in different cells. Verify: harness on s0–s5 against the noise floor (change A); new baselines in their own commit if accepted.
+  Tried 2026-10-13 and reverted: with `floor`, 6 synthetic tests get worse by a few mm (perfect guess 2.3 mm instead of < 1 mm, gyro bias 0.079 instead of < 0.05). Cause: the synthetic floor lies at exactly z = 0, which truncation put inside the double-high cell around 0 (a lucky case for NDT) and `floor` puts on a cell boundary. So the tests show that NDT degrades when a plane falls on a cell boundary, not that `floor` is wrong. The effect on 44 (floor not at a boundary) has to be measured on s0–s5 before deciding; the synthetic scene would then need planes off the cell boundaries.
 - [ ] 3.2 C9: loop-closure shift and plausibility about the segment centre / per node; cross-floor limit as a setting `loop_closure_cross_floor_max_shift_m = 1.0` (golden TOML files in their own commit). Unit test: the synthetic loop shifted by +200 m gives the same edges. Verify: harness from the s0–s5 snapshots (pass/fail count of the loop-closure outcome) against the floor.
 
 ## 4. Wrap-up
