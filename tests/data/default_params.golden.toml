@@ -128,6 +128,7 @@ loop_closure_cross_floor_only_near = ''
 loop_closure_cross_floor_search_m = 1.0
 loop_closure_edge_sigma_deg = 0.3
 loop_closure_edge_sigma_m = 0.05
+loop_closure_edges_per_segment = 1
 loop_closure_kernel_scale = 0.0
 loop_closure_max_correction_m = 6.0
 loop_closure_max_residual_deg = 2.0
