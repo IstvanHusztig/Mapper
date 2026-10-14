@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Loop Closure Research</title>
+<style>
+  :root {
+    --bg: #fbfbfa; --panel: #ffffff; --text: #1d2126; --muted: #5b6470; --line: #e3e5e8;
+    --accent: #1f6fb2; --accent-soft: #e8f1fa; --code-bg: #f2f3f5; --warn: #9a5b00; --warn-soft: #fff4e0;
+    --ok: #20703c; --ok-soft: #e6f4ea; --bad: #b3261e; --bad-soft: #fbe9e7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15181c; --panel: #1c2026; --text: #e4e7eb; --muted: #9aa3ae; --line: #2c323a;
+      --accent: #6cb0ec; --accent-soft: #1d2d3d; --code-bg: #242a31; --warn: #f0b35a; --warn-soft: #3a2c16;
+      --ok: #6ccf8e; --ok-soft: #1a3324; --bad: #f28b82; --bad-soft: #3a1f1d;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15181c; --panel: #1c2026; --text: #e4e7eb; --muted: #9aa3ae; --line: #2c323a;
+    --accent: #6cb0ec; --accent-soft: #1d2d3d; --code-bg: #242a31; --warn: #f0b35a; --warn-soft: #3a2c16;
+    --ok: #6ccf8e; --ok-soft: #1a3324; --bad: #f28b82; --bad-soft: #3a1f1d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 40px 16px 80px; }
+  h1 { font-size: 30px; line-height: 1.25; margin: 0 0 8px; }
+  h2 { font-size: 23px; margin: 48px 0 12px; padding-top: 8px; border-top: 1px solid var(--line); }
+  h3 { font-size: 18px; margin: 28px 0 8px; }
+  .lead { color: var(--muted); font-size: 17px; margin-top: 0; }
+  code { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13.5px; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  a { color: var(--accent); overflow-wrap: anywhere; }
+  .note, .warn, .good, .bad {
+    border-left: 3px solid var(--accent); background: var(--accent-soft);
+    padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 16px 0;
+  }
+  .warn { border-left-color: var(--warn); background: var(--warn-soft); }
+  .good { border-left-color: var(--ok); background: var(--ok-soft); }
+  .bad { border-left-color: var(--bad); background: var(--bad-soft); }
+  .note b, .warn b, .good b, .bad b { display: block; margin-bottom: 2px; }
+  .table-wrap { overflow-x: auto; margin: 14px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 600; color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tldr { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 22px 0; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .card .big { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .card .lbl { color: var(--muted); font-size: 13.5px; }
+  .inf { color: var(--muted); font-style: italic; }
+  .meta { color: var(--muted); font-size: 13.5px; }
+  ul.src { font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+<h1>Loop closure: diagnosis and practice</h1>
+<p class="lead">Research notes for change G (<code>openspec/changes/loop-closure-fixes</code>), October 2026. What dMapper's loop
+closure does, why its result on recording 44 is fragile, what established LiDAR SLAM systems do, and what follows for the fixes
+C22–C25 of <code>docs/code-review-tracker.md</code>. Statements marked <span class="inf">(inference)</span> are reasoning, not taken from a source.</p>
+
+<div class="tldr">
+  <div class="card"><div class="big">0</div><div class="lbl">loops touching the gallery today (the 30 s time gap excludes its out-and-back)</div></div>
+  <div class="card"><div class="big">0.6–1.75 m</div><div class="lbl">gallery out vs back in the odometry, measured by the loops an 8 s gap admits</div></div>
+  <div class="card"><div class="big">≤ 0.1°</div><div class="lbl">façade out vs back with those loops (was up to 1.8°)</div></div>
+  <div class="card"><div class="big">−2.6 … −5.0°</div><div class="lbl">but the gallery against the start: the odometry drift, now kept in every run</div></div>
+</div>
+
+<div class="note"><b>In short</b>
+Loop closure on 44 never compares the gallery's way out with its way back, so the gallery's doubled walls stay and its angle is
+set by how the pose graph happens to spread other loops' errors. Letting those revisits in makes the gallery consistent and the
+results less fragile, but it shows that the façade angle came out right in two runs only by chance: the gallery keeps the
+odometry's −4° unless the drift itself shrinks or a constraint ties the gallery to the start.</div>
+
+<h2>1. dMapper's loop closure today</h2>
+<p>In <code>src/application/loop_closure.cpp</code> (<code>run_loop_closure</code>, <code>optimize_loop_pose_graph</code>):</p>
+<div class="table-wrap"><table>
+<tr><th>Part</th><th>Today</th><th>Finding</th></tr>
+<tr><td>Segments</td><td>12 windows (≈ 4.8 s); anchor = the segment's <b>first</b> node pose; correction interpolated in time between anchors</td><td>C25</td></tr>
+<tr><td>Candidates, same floor</td><td>earlier segments that ended ≥ <code>loop_closure_min_time_gap_s</code> = <b>30 s</b> before, centres within 8 m horizontally, nearest first, up to 3 tried</td><td>C22</td></tr>
+<tr><td>Candidates, cross-floor</td><td>gap ≥ 5 s, cropped to the shared footprint (the shaft)</td><td>–</td></tr>
+<tr><td>Registration</td><td>coarse yaw/translation search on voxel overlap, then NDT refinement (<code>ndt_refine</code>)</td><td>–</td></tr>
+<tr><td>Acceptance</td><td>overlap ≥ 0.5 and not worse; centre shift ≤ 7 m; angle ≤ 15° (cross-floor tighter)</td><td>C9 (fixed)</td></tr>
+<tr><td>Edges per segment</td><td><b>one</b> per pass: the first accepted candidate</td><td>C24</td></tr>
+<tr><td>Loop edge weights</td><td>same floor <b>fixed</b> 5 cm / 0.3°; cross-floor: the registration's information (height freed)</td><td>C23</td></tr>
+<tr><td>Odometry edge weights</td><td><b>fixed</b> 0.1 m / 0.5° per segment, whatever was walked or how degenerate it was</td><td>C23</td></tr>
+<tr><td>Outliers</td><td>worst edge dropped while its residual exceeds 0.15 m / 2°; Cauchy kernel available but <b>off</b> (<code>loop_closure_kernel_scale = 0</code>)</td><td>C24</td></tr>
+<tr><td>Solver</td><td>Levenberg–Marquardt with a cost check over Tait–Bryan segment poses (sound)</td><td>–</td></tr>
+</table></div>
+
+<h2>2. Diagnosis on recording 44</h2>
+<h3>2.1 The gallery never gets a loop</h3>
+<p>State C10 (master 2026-10-14), inputs s0–s5 (44 with 0–5 leading IMU samples dropped): 31–39 loops accepted per run (≈ 20 on the
+same floor, ≈ 15 between floors), 1–5 dropped as outliers; the counts don't differ between passing and failing runs. None of them
+touches the gallery (segments 9–14, 44–70 s). The gallery is a dead end walked out (≈ 45–58 s) and back (≈ 59–70 s); its out and
+back segments are 10–25 s apart, under the 30 s gap. The loops jump from the corridor before it (segment 7, 34 s) to the corridor
+after it (segment 15, 73 s). So:</p>
+<ul>
+  <li>the gallery's doubled walls (out against back) are left to the odometry;</li>
+  <li>its heading is set by how the pose graph spreads the cycle error of 7→15 over segments 8–14: evenly, because all odometry edges are equal, not where the drift happened;</li>
+  <li>the loops at the end of the recording (start room ↔ return, 218–280 s) correct 2.9 m in s4 but 0.7 m in s1: different odometry drift, spread to different places, which fits the reshuffled façade results across s0–s5.</li>
+</ul>
+
+<h3>2.2 Experiment: an 8 s time gap (settings only)</h3>
+<p>Loop closure from the C10 odometry snapshots with <code>loop_closure_min_time_gap_s = 8</code> (neighbouring segments are ≈ 5 s apart),
+s0–s5, measured with <code>tools/map_quality.py --floors</code>. The gallery loops 9→12, 10→13 and 9→14 were accepted in all six runs,
+with corrections of 0.6–1.75 m and up to 2.7°: how far apart the two passes lay in the odometry. Loops per run: 47–54 (was 31–39).</p>
+<div class="table-wrap"><table>
+<tr><th>run</th><th class="num">façade out</th><th class="num">façade back</th><th class="num">revisit med</th><th class="num">worst</th><th class="num">offset [m]</th><th class="num">pairs</th><th class="num">railing [cm]</th><th class="num">stair [cm]</th></tr>
+<tr><td colspan="9"><b>C10, 30 s gap</b></td></tr>
+<tr><td>s0</td><td class="num">−1.08</td><td class="num">−1.37</td><td class="num">1.48</td><td class="num">2.00</td><td class="num">0.11</td><td class="num">6</td><td class="num">4.3</td><td class="num">10.8</td></tr>
+<tr><td>s1</td><td class="num">−0.71</td><td class="num">−1.02</td><td class="num">1.20</td><td class="num">2.27</td><td class="num">0.08</td><td class="num">6</td><td class="num">7.9</td><td class="num">4.8</td></tr>
+<tr><td>s2</td><td class="num">−1.91</td><td class="num">−0.07</td><td class="num">0.75</td><td class="num">1.48</td><td class="num">0.06</td><td class="num">4</td><td class="num">3.8</td><td class="num">8.4</td></tr>
+<tr><td>s3</td><td class="num">−2.53</td><td class="num">−2.83</td><td class="num">2.01</td><td class="num">2.59</td><td class="num">0.30</td><td class="num">2</td><td class="num">10.1</td><td class="num">8.5</td></tr>
+<tr><td>s4</td><td class="num">−4.41</td><td class="num">−4.76</td><td class="num">0.77</td><td class="num">2.35</td><td class="num">0.16</td><td class="num">4</td><td class="num">20.3</td><td class="num">14.9</td></tr>
+<tr><td>s5</td><td class="num">−2.62</td><td class="num">−3.09</td><td class="num">0.62</td><td class="num">2.52</td><td class="num">0.07</td><td class="num">5</td><td class="num">6.1</td><td class="num">8.0</td></tr>
+<tr><td>spread</td><td class="num">3.70</td><td class="num">4.69</td><td class="num">1.39</td><td class="num">1.11</td><td class="num">0.24</td><td class="num"></td><td class="num">16.5</td><td class="num">10.1</td></tr>
+<tr><td colspan="9"><b>8 s gap</b></td></tr>
+<tr><td>s0</td><td class="num">−3.44</td><td class="num">−3.52</td><td class="num">0.59</td><td class="num">2.18</td><td class="num">0.11</td><td class="num">9/11</td><td class="num">5.8</td><td class="num">14.3</td></tr>
+<tr><td>s1</td><td class="num">−3.39</td><td class="num">−3.46</td><td class="num">0.98</td><td class="num">1.92</td><td class="num">0.07</td><td class="num">7/11</td><td class="num">9.1</td><td class="num">7.1</td></tr>
+<tr><td>s2</td><td class="num">−2.62</td><td class="num">−2.60</td><td class="num">0.89</td><td class="num">1.64</td><td class="num">0.07</td><td class="num">9/11</td><td class="num">4.5</td><td class="num">10.5</td></tr>
+<tr><td>s3</td><td class="num">−3.86</td><td class="num">−3.93</td><td class="num">0.32</td><td class="num">1.90</td><td class="num">0.07</td><td class="num">9/11</td><td class="num">10.2</td><td class="num">10.7</td></tr>
+<tr><td>s4</td><td class="num">−4.94</td><td class="num">−4.97</td><td class="num">1.06</td><td class="num">2.74</td><td class="num">0.11</td><td class="num">10/11</td><td class="num">13.5</td><td class="num">19.3</td></tr>
+<tr><td>s5</td><td class="num">−4.96</td><td class="num">−5.05</td><td class="num">0.98</td><td class="num">2.78</td><td class="num">0.09</td><td class="num">8/11</td><td class="num">6.9</td><td class="num">11.0</td></tr>
+<tr><td>spread</td><td class="num">2.34</td><td class="num">2.45</td><td class="num">0.74</td><td class="num">1.13</td><td class="num">0.04</td><td class="num"></td><td class="num">9.0</td><td class="num">12.2</td></tr>
+</table></div>
+<p class="meta">Façade: gallery minus start, 0 = parallel as on the plan. Revisit: heading [deg] / offset [m] between two passes of the same place.
+Pairs: registered of 11 (C10's count was printed before the harness showed the total). Odometry alone: façade −3.9 … −4.7° on all six inputs.</p>
+<div class="good"><b>Better</b> The gallery's way out and way back agree within 0.1° in every run (C10: up to 1.84°); more revisit pairs
+register (7–10 of 11 instead of 2–6) and their median heading error halves; the façade spread shrinks from 3.7° to 2.3°: less fragile.</div>
+<div class="bad"><b>Worse</b> The gallery against the start is −2.6 … −5.0° in every run, about the odometry's drift: no run passes
+(C10: 2 of 6). The stairwell offsets grow somewhat (s0 10.8 → 14.3 cm, s4 14.9 → 19.3 cm).</div>
+<p>Reading <span class="inf">(inference, to be checked)</span>: C10's two "passing" runs were luck: without gallery loops, the cycle error of
+7→15 was spread over the gallery's segments and happened to turn them towards the right angle in some runs. With the gallery tied to
+itself, its heading follows the junction, which carries the drift accumulated on the way there. Loop closure on 44 has no loop that
+ties the gallery's direction to the start, so the global angle can only come from less odometry drift (changes F/E) or a new
+constraint between start and gallery.</p>
+
+<h3>2.3 Which pairs are revisits: distance against path</h3>
+<p>Same-floor segment pairs on s0 (C10 odometry), centre distance and the path walked between them (summed over the windows' first
+nodes, so standing still adds nothing):</p>
+<div class="table-wrap"><table>
+<tr><th>pair</th><th class="num">distance [m]</th><th class="num">path [m]</th><th class="num">ratio</th><th>what it is</th></tr>
+<tr><td>10 → 13</td><td class="num">0.37</td><td class="num">8.74</td><td class="num">0.04</td><td>gallery out/back, same spot</td></tr>
+<tr><td>9 → 14</td><td class="num">1.11</td><td class="num">17.62</td><td class="num">0.06</td><td>gallery out/back, same spot</td></tr>
+<tr><td>22 → 25</td><td class="num">1.14</td><td class="num">8.64</td><td class="num">0.13</td><td>out-and-back on floor −1</td></tr>
+<tr><td>15 → 18</td><td class="num">4.01</td><td class="num">8.87</td><td class="num">0.45</td><td>revisit nearby</td></tr>
+<tr><td>9 → 12</td><td class="num">6.76</td><td class="num">8.61</td><td class="num">0.79</td><td>the gallery seen from its other end (accepted with the 8 s gap only because it is visible from anywhere in it)</td></tr>
+<tr><td>two segments apart</td><td class="num">1.3–7.2</td><td class="num">1.8–8.0</td><td class="num">0.6–2.1</td><td>neighbours on a walk (mostly ≈ 1)</td></tr>
+<tr><td>next segment</td><td class="num">0.4–4.9</td><td class="num">0</td><td class="num">∞</td><td>adjacent (path counted between end and begin)</td></tr>
+</table></div>
+<p>A ratio limit of 0.5 with a minimum path of 8 m keeps the true revisits and excludes standing still, neighbours and places seen
+from afar: the rule proposed for G1 (section 4).</p>
+
+<h2>3. Practice in established systems</h2>
+<h3>3.1 Candidate gating</h3>
+<ul>
+  <li><b>Time gap:</b> LIO-SAM (15 m radius, <code>historyKeyframeSearchTimeDiff</code> = 30 s). The odd one out: it rejects short out-and-back trips and admits standing still.</li>
+  <li><b>Path or index gap:</b> SC-PGO (FAST_LIO_SLAM) excludes recent keyframes by index, and its header notes that a distance-based exclusion works as well; hdl_graph_slam requires a travelled path (<code>accum_distance_thresh</code>: 8 m in the code default, 25 m in the launch file), an XY radius of 15 m and 15 m of path between accepted loops; LAMP 2.0 (mines and caves) scales its search radius with the path, d<sub>max</sub> = 0.2 m × node-index gap with nodes every 2 m (≈ 10 % of the path).</li>
+  <li><b>No gap, overlap only:</b> GLIM (every submap pair within 100 m with overlap ≥ 0.2, neighbours included); KISS-SLAM (all earlier local maps split by distance, 40 % overlap).</li>
+</ul>
+<h3>3.2 Loop edge weighting (practice disagrees)</h3>
+<ul>
+  <li><b>Fixed or scalar:</b> Cartographer (translation weight 1.1e4, rotation 1e5); SC-PGO (variance 0.5 with a Cauchy kernel); LIO-SAM (isotropic variance = ICP fitness); hdl_graph_slam (fitness mapped to an isotropic sigma, clamped to 0.1–5 m and 0.05–0.2 rad).</li>
+  <li><b>From the registration:</b> MULLS (I = AᵀPA / σ̂², the Hessian over the posterior residual variance); GLIM (GICP Hessian for between factors, the full VGICP cost as its loop factor); HBA (bundle-adjustment Hessian).</li>
+  <li><b>Pitfalls:</b> closed-form ICP covariances are over-optimistic (Bonnabel 2016); their error comes mostly from initialization and convergence, not sensor noise (Brossard 2020); points are not independent, so the raw Hessian gives millimetre sigmas; degenerate directions need care (Hinduja 2019 constrains only well-conditioned directions; DARE-SLAM keeps degenerate scans out of the loop search; LAMP 2.0 avoids closing loops in degenerate areas).</li>
+</ul>
+<h3>3.3 Odometry edge covariances</h3>
+<ul>
+  <li>LIO-SAM and SC-PGO: fixed per keyframe (1 cm, 0.057°), but keyframes come every 1–2 m or 0.2 rad, so the covariance effectively grows with distance, not time. Cartographer: fixed weights per node, nodes thinned by a motion filter. GLIM: IMU preintegration plus registration Hessians. HBA: BA Hessians.</li>
+  <li>Least squares spreads a loop's residual along the cycle in proportion to each edge's covariance. With fixed sigmas per 4.8 s, a stationary segment absorbs as much correction as a walking one, and a degenerate one no more than a well-constrained one <span class="inf">(inference)</span>.</li>
+</ul>
+<h3>3.4 Outliers (20–40 loops)</h3>
+<ul>
+  <li>No kernel: LIO-SAM (relies on its gates). Huber: hdl_graph_slam, Cartographer (scale 10); convex, so one bad loop still pulls. Cauchy: SC-PGO. DCS and switchable constraints in older robust back-ends.</li>
+  <li><b>PCM</b> (pairwise consistency maximization, Mangelson 2018; Kimera-RPGO): the maximum clique of pairwise-consistent loops. LAMP adds an odometry-cycle check (reject when the mean error per edge exceeds 0.1 m or 0.05 rad).</li>
+  <li><b>GNC-TLS</b> (Yang 2020): no initial guess needed, tolerates 70–80 % outliers; Kimera2 found it better than PCM on most sequences, worse on some; LAMP 2.0 runs a PCM-style prefilter, then GNC.</li>
+  <li>PCM's χ² test needs honest covariances; LAMP fell back to fixed thresholds without them.</li>
+</ul>
+<h3>3.5 Anchors and dense correction</h3>
+<ul>
+  <li>GLIM: submap origin at the centre frame. LIO-SAM / SC-PGO: target = the candidate keyframe ±25 keyframes, centred on it.</li>
+  <li>Cartographer, LIO-SAM: every node or keyframe is in the graph (no interpolation). KISS-SLAM: a second PGO over the dense local trajectories with the keyposes fixed. HBA: top-down PGO over all frames. MULLS: each submap's reference frame fixed, frames inside optimised.</li>
+  <li>A start anchor couples a rotation error into translation over the lever arm to the points; a diagonal fixed covariance ignores that coupling <span class="inf">(inference)</span>.</li>
+</ul>
+
+<h2>4. What follows for change G</h2>
+<p>In order; each step measured from the snapshots on s0–s5 against the current noise floor before the next one, with an acceptance rule written before its runs (<code>openspec/changes/loop-closure-fixes/design.md</code>):</p>
+<ol>
+  <li><b>G1, revisits by path (C22):</b> ≥ 8 m walked between the two segments and centre distance ≤ min(8 m, 0.5 × path); the time gap goes. Expected from the 8 s experiment: a consistent gallery and less fragility, while the façade angle stays at the odometry's drift.</li>
+  <li><b>G2, candidate choice and redundancy (C24):</b> the best passing registration instead of the first nearest; 2–3 loop edges per segment. Expected: fewer discrete flips between near-identical inputs <span class="inf">(inference)</span>.</li>
+  <li><b>G3, honest weights (C23):</b> odometry edges with translation variance σ0² + k<sub>d</sub>·distance and rotation variance σr0² + k<sub>t</sub>·Δt + k<sub>ψ</sub>·|Δψ|, inflated along the windows' weak directions; same-floor loop edges from the registration information H / σ̂², inflated by a factor calibrated from repeated registrations from perturbed starts, floored (≈ 2 cm, 0.1°), near zero along weak directions; k values calibrated from accepted loops' residuals against path length.</li>
+  <li><b>G4, outliers (C24):</b> odometry-cycle and pairwise consistency checks (an exact maximum clique is cheap for ≈ 40 loops), then GNC-TLS with the odometry edges as known inliers, replacing "least squares, then kernel, then drop the worst edge". Needs G3.</li>
+  <li><b>G5, anchors (C25):</b> anchor at the segment's middle node (or point centroid); the correction onto the nodes by path length, or a second small pose graph with the anchors fixed.</li>
+  <li>Later, if doubled walls remain after the pose graph: plane bundle adjustment (BALM2 / HBA) as a final refinement (precision first, costs time).</li>
+</ol>
+<div class="warn"><b>Open: the global angle</b> Loop closure can make places consistent, not straight. The façade angle needs either
+less odometry drift (the map model, changes F/E: cell statistics C20, coarse grid C18) or a loop between start and gallery. A candidate
+in the data: the façade is seen through the start room's windows, about 10 m from the gallery, outside today's 8 m search radius;
+whether a registration between those views holds is to be checked.</div>
+
+<h2>Sources</h2>
+<ul class="src">
+  <li>LIO-SAM: <a href="https://github.com/TixiaoShan/LIO-SAM">github.com/TixiaoShan/LIO-SAM</a> (<code>config/params.yaml</code>, <code>src/mapOptmization.cpp</code>)</li>
+  <li>SC-A-LOAM / SC-PGO: <a href="https://github.com/gisbi-kim/SC-A-LOAM">github.com/gisbi-kim/SC-A-LOAM</a>; FAST_LIO_SLAM: <a href="https://github.com/gisbi-kim/FAST_LIO_SLAM">github.com/gisbi-kim/FAST_LIO_SLAM</a></li>
+  <li>hdl_graph_slam: <a href="https://github.com/koide3/hdl_graph_slam">github.com/koide3/hdl_graph_slam</a> (<code>loop_detector.hpp</code>, <code>information_matrix_calculator.cpp</code>)</li>
+  <li>Cartographer: <a href="https://github.com/cartographer-project/cartographer/blob/master/configuration_files/pose_graph.lua">pose_graph.lua</a></li>
+  <li>GLIM: <a href="https://github.com/koide3/glim">github.com/koide3/glim</a></li>
+  <li>KISS-SLAM: <a href="https://arxiv.org/abs/2503.12660">arXiv 2503.12660</a>; MULLS: <a href="https://arxiv.org/abs/2102.03771">arXiv 2102.03771</a></li>
+  <li>HBA: <a href="https://arxiv.org/abs/2209.11939">arXiv 2209.11939</a>; BALM2: <a href="https://arxiv.org/abs/2209.08854">arXiv 2209.08854</a></li>
+  <li>LAMP: <a href="https://arxiv.org/abs/2003.01744">arXiv 2003.01744</a>; LAMP 2.0: <a href="https://arxiv.org/abs/2205.13135">arXiv 2205.13135</a></li>
+  <li>Kimera-RPGO: <a href="https://github.com/MIT-SPARK/Kimera-RPGO">github.com/MIT-SPARK/Kimera-RPGO</a>; Kimera2: <a href="https://arxiv.org/abs/2401.06323">arXiv 2401.06323</a></li>
+  <li>GNC: <a href="https://arxiv.org/abs/1909.08605">arXiv 1909.08605</a>; PCM: <a href="https://robots.engin.umich.edu/publications/jmangelson-2018a.pdf">Mangelson 2018</a></li>
+  <li>ICP covariance: <a href="https://arxiv.org/abs/1410.7632">Bonnabel 2016</a>, <a href="https://arxiv.org/abs/1909.05722">Brossard 2020</a></li>
+  <li>Degeneracy: <a href="https://www.cs.cmu.edu/~kaess/pub/Hinduja19iros.html">Hinduja 2019</a>; DARE-SLAM: <a href="https://arxiv.org/abs/2102.05117">arXiv 2102.05117</a></li>
+  <li>DCS: <a href="https://www.ipb.uni-bonn.de/wp-content/papercite-data/pdf/agarwal13icra.pdf">Agarwal 2013</a></li>
+  <li class="meta">Not checked: FAST-LIO-LC and maplab specifics. DLO and DLIO have no loop closure.</li>
+</ul>
+</main>
+</body>
+</html>
