@@ -56,6 +56,17 @@ std::vector<OdometryEdgeWeight> equal_odometry_weights(int n_segments, const Odo
 // loop_closure_odometry_length_floor), roll and pitch keep the fixed sigma; equal lengths give equal_odometry_weights
 std::vector<OdometryEdgeWeight> odometry_weights_by_length(const std::vector<double> &lengths, const OdometryConfig &params);
 
+// G2b, the same-floor revisits registered for segment j: of the qualifying ones (same_floor_revisits), the nearest, the
+// nearest at least 3 segments away from it, the longest-path one, and the longest-path one at least 3 segments away from
+// it; distinct, at most loop_closure_candidates. near / far: chosen as one of the two nearest / longest-path ones.
+struct RevisitTry
+{
+    int i = 0;
+    bool near = false;
+    bool far = false;
+};
+std::vector<RevisitTry> revisit_tries(const std::vector<RevisitSegment> &segments, int j, const OdometryConfig &params);
+
 // Step 4 on its own, for tests: the segment poses, the accepted loop edges, and the check of the result.
 struct LoopClosureEdge
 {
@@ -83,6 +94,17 @@ Eigen::Matrix<double, 6, 6> loop_edge_information(const Eigen::Affine3d &pose_i,
 // comes out very large.
 Eigen::Matrix<double, 6, 1> loop_edge_region_sigmas(const Eigen::Affine3d &pose_i, const Eigen::Affine3d &pose_j, const LoopClosureEdge &edge,
                                                     const Eigen::Vector3d &centre);
+
+// G2b, the same-floor edges kept for one segment from its accepted registrations: with edges_per_segment >= 2 the best near
+// one and the best far one by overlap after the refinement (fitness), both only when their earlier segments are at least 3
+// apart (otherwise the better one); with 1 the best one.
+struct AcceptedRevisit
+{
+    LoopClosureEdge edge;
+    bool near = false;
+    bool far = false;
+};
+std::vector<LoopClosureEdge> revisit_slots(const std::vector<AcceptedRevisit> &accepted, int edges_per_segment);
 
 // Levenberg-Marquardt on the segment poses: odometry edges between consecutive segments, loop edges, first pose fixed.
 // A step is kept only if the cost falls (a plain Gauss-Newton step first, damping only when it fails). With

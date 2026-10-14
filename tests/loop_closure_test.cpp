@@ -247,6 +247,64 @@ TEST_CASE("loop closure revisits: a far revisit is tried before a near one")
     CHECK(same_floor_revisits(segments, 3, c) == std::vector<int>{0, 2});
 }
 
+TEST_CASE("loop closure revisits: the tries are the nearest and the longest-path ones, each with a second one at least 3 segments away")
+{
+    OdometryConfig c;
+    c.loop_closure_min_path_m = 8.0;
+    c.loop_closure_radius_per_path = 0.5;
+    c.loop_closure_search_radius_m = 8.0;
+    c.loop_closure_max_vertical_offset_m = 1.5;
+    c.loop_closure_candidates = 4;
+    // segments 0..7 all qualify as revisits of segment 8 (path between 30..100 m); distances from segment 8's centre:
+    const std::vector<double> distance = {3.0, 2.9, 2.0, 1.0, 1.5, 0.5, 0.4, 0.6};
+    std::vector<RevisitSegment> segments;
+    for (size_t k = 0; k < distance.size(); k++)
+        segments.push_back(segment_at(distance[k], 0.0, 10.0 * static_cast<double>(k), 10.0 * static_cast<double>(k)));
+    segments.push_back(segment_at(0.0, 0.0, 100.0, 104.0));
+    // nearest 6, then 5 and 7 are its neighbours, so 3; longest path 0, then 1 and 2 are its neighbours, so 3 again
+    const std::vector<RevisitTry> tries = revisit_tries(segments, 8, c);
+    REQUIRE(tries.size() == 3);
+    CHECK((tries[0].i == 6 && tries[0].near && !tries[0].far));
+    CHECK((tries[1].i == 3 && tries[1].near && tries[1].far));
+    CHECK((tries[2].i == 0 && !tries[2].near && tries[2].far));
+    c.loop_closure_candidates = 2;
+    const std::vector<RevisitTry> two = revisit_tries(segments, 8, c);
+    REQUIRE(two.size() == 2);
+    CHECK(two[0].i == 6);
+    CHECK(two[1].i == 3);
+}
+
+TEST_CASE("loop closure revisits: two slots keep the best near and the best far edge when their sources are apart, else the best one")
+{
+    const auto accepted = [](int i, double fitness, bool near, bool far) {
+        AcceptedRevisit a;
+        a.edge.i = i;
+        a.edge.j = 8;
+        a.edge.fitness = fitness;
+        a.near = near;
+        a.far = far;
+        return a;
+    };
+    const auto sources = [](const std::vector<LoopClosureEdge> &edges) {
+        std::vector<int> out;
+        for (const auto &e : edges)
+            out.push_back(e.i);
+        return out;
+    };
+    const std::vector<AcceptedRevisit> three = {accepted(6, 0.8, true, false), accepted(3, 0.7, true, true), accepted(0, 0.6, false, true)};
+    CHECK(sources(revisit_slots(three, 1)) == std::vector<int>{6});
+    CHECK(sources(revisit_slots(three, 2)) == std::vector<int>{6, 3});
+    // one edge best in both classes: kept once
+    const std::vector<AcceptedRevisit> one_best = {accepted(6, 0.6, true, false), accepted(3, 0.9, true, true), accepted(0, 0.5, false, true)};
+    CHECK(sources(revisit_slots(one_best, 2)) == std::vector<int>{3});
+    // near and far sources 2 segments apart: they share a target, only the better one is kept
+    const std::vector<AcceptedRevisit> close = {accepted(5, 0.7, true, false), accepted(3, 0.8, false, true)};
+    CHECK(sources(revisit_slots(close, 2)) == std::vector<int>{3});
+    // only one class registered
+    CHECK(sources(revisit_slots({accepted(0, 0.6, false, true)}, 2)) == std::vector<int>{0});
+    CHECK(revisit_slots({}, 2).empty());
+}
+
 TEST_CASE("loop closure odometry weights: equal lengths give the fixed sigmas, a short edge is stiffer, roll and pitch stay")
 {
     OdometryConfig c;

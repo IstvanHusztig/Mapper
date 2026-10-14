@@ -806,6 +806,69 @@ std::vector<int> same_floor_revisits(const std::vector<RevisitSegment> &segments
     return out;
 }
 
+std::vector<RevisitTry> revisit_tries(const std::vector<RevisitSegment> &segments, int j, const OdometryConfig &params)
+{
+    const std::vector<int> by_path = same_floor_revisits(segments, j, params); // longest path first
+    std::vector<int> by_distance = by_path;
+    std::stable_sort(by_distance.begin(), by_distance.end(), [&](int a, int b) {
+        return (segments[j].center - segments[a].center).head<2>().norm() < (segments[j].center - segments[b].center).head<2>().norm();
+    });
+    // the first of an ordered list, then the first at least 3 segments away from it
+    const auto two_apart = [](const std::vector<int> &ordered) {
+        std::vector<int> out;
+        for (const int i : ordered)
+            if (out.empty() || std::abs(i - out.front()) >= 3)
+            {
+                out.push_back(i);
+                if (out.size() == 2)
+                    break;
+            }
+        return out;
+    };
+    std::vector<RevisitTry> tries;
+    const auto add = [&](int i, bool near) {
+        for (auto &t : tries)
+            if (t.i == i)
+            {
+                (near ? t.near : t.far) = true;
+                return;
+            }
+        RevisitTry t;
+        t.i = i;
+        (near ? t.near : t.far) = true;
+        tries.push_back(t);
+    };
+    for (const int i : two_apart(by_distance))
+        add(i, true);
+    for (const int i : two_apart(by_path))
+        add(i, false);
+    if (static_cast<int>(tries.size()) > std::max(1, params.loop_closure_candidates))
+        tries.resize(static_cast<size_t>(std::max(1, params.loop_closure_candidates)));
+    return tries;
+}
+
+std::vector<LoopClosureEdge> revisit_slots(const std::vector<AcceptedRevisit> &accepted, int edges_per_segment)
+{
+    const auto best_of = [&](bool want_near, bool want_far) {
+        const AcceptedRevisit *best = nullptr;
+        for (const auto &a : accepted)
+            if ((!want_near || a.near) && (!want_far || a.far) && (!best || a.edge.fitness > best->edge.fitness))
+                best = &a;
+        return best;
+    };
+    std::vector<LoopClosureEdge> out;
+    const AcceptedRevisit *overall = best_of(false, false);
+    if (!overall)
+        return out;
+    if (edges_per_segment < 2)
+        return {overall->edge};
+    const AcceptedRevisit *near = best_of(true, false);
+    const AcceptedRevisit *far = best_of(false, true);
+    if (near && far && near != far && std::abs(near->edge.i - far->edge.i) >= 3)
+        return {near->edge, far->edge};
+    return {overall->edge};
+}
+
 int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params, PointStore &point_store, Logger &logger)
 {
     const int windows_per_segment = std::max(1, params.loop_closure_segment_windows);
@@ -896,8 +959,14 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
         {
             const bool cross_floor = pass == 1;
             std::vector<int> candidates;
+            std::vector<RevisitTry> same_floor_tries;
+            std::vector<AcceptedRevisit> same_floor_accepted;
             if (!cross_floor)
-                candidates = same_floor_revisits(revisit_segments, j, params);
+            {
+                same_floor_tries = revisit_tries(revisit_segments, j, params);
+                for (const auto &t : same_floor_tries)
+                    candidates.push_back(t.i);
+            }
             else
             {
                 std::vector<std::pair<double, int>> nearest;
@@ -1038,12 +1107,22 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
                                 put(s(k), 1.0, 90.0);
                         }
                     }
-                    loops.push_back(e);
                     if (cross_floor)
+                    {
+                        loops.push_back(e);
                         cross_floor_accepted++;
-                    break;
+                        break;
+                    }
+                    // G2b: all tries are registered, the slots are chosen afterwards
+                    same_floor_accepted.push_back({e, same_floor_tries[c].near, same_floor_tries[c].far});
                 }
             }
+            if (!cross_floor)
+                for (const auto &e : revisit_slots(same_floor_accepted, params.loop_closure_edges_per_segment))
+                {
+                    log_info(logger) << "  loop edge " << e.i << " -> " << j << " kept (overlap " << std::fixed << std::setprecision(2) << e.fitness << ")";
+                    loops.push_back(e);
+                }
         }
     }
     if (use_cross_floor)

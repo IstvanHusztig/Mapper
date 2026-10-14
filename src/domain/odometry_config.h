@@ -127,6 +127,8 @@ struct OdometryConfig
     bool loop_closure_odometry_by_length = false;
     double loop_closure_odometry_turn_m_per_deg = 0.1;
     double loop_closure_odometry_length_floor = 0.1;
+    // same-floor loop edges kept per segment (G2b): 2 = the best near and the best far revisit, 1 = the best one
+    int loop_closure_edges_per_segment = 1;
     // same-floor loop edges weighted by the registration's information like the cross-floor ones (G3b; temporary switch)
     bool loop_closure_same_floor_information = false;
     double loop_closure_search_radius_m = 8.0;
