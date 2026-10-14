@@ -41,3 +41,59 @@ Measured from the C10 odometry snapshots (`raw data/44_c10_sX/odometry_snapshot.
 - **More loops, more false ones:** the 8 s experiment raised accepted loops from 31–39 to 47–54 per run; the outlier handling (drop the worst edge) stays as it is until G4. → Watch the dropped-edge count and the plausibility check; a false gallery loop would show as a residual above 0.15 m / 2°.
 - **Where C10's façade came from:** the yaw correction of C10's loop closure turns the trajectory by about −3° at 9–16 s, in the start room (Sonnet review, yaw of the result minus the odometry's), although the start room's own revisits (accepted with the 8 s gap) show it consistent within 0.4°. If so, C10's better façade angle in two runs rests on a correction placed where the start room shows no drift. Loop closure alone can make places consistent; the gallery's direction against the start needs less odometry drift or a constraint between them (*inference*).
 - **Fixed loop-edge sigmas (5 cm) on a gallery revisit** are overconfident along the gallery axis (C23, fixed in G3).
+
+## G3a — odometry edges weighted by what was walked and turned (C23, part 1)
+
+### Context (measured 2026-10-14)
+
+- Loop closure is where the fragility comes from: the odometry alone gives a façade angle of −3.9…−4.7° on all six inputs (spread 0.8°); C10's loop closure widens it to 3.7°, the 8 s gap to 2.4°, G1 to 5.0°.
+- With every odometry edge at the same 0.1 m / 0.5°, the pose graph can't tell where the odometry drifted. It puts the loops' disagreements into whatever edges are cheapest, and both C10 and G1 turn the map in the start room (C10 −3° at 9–16 s; G1 −1.5° at 0–9 s, inside the façade's start reference), where the start room's own revisits show it consistent within 0.4°. The horizon investigation located the odometry's turn between ≈ 30 s and the gallery (corridor), not in the start room.
+- The accepted loops' corrections don't grow steadily with time or path (angle rms 1.0° at < 20 m, 0.5–0.8° at 20–120 m, 2.0° at > 120 m): the drift comes in episodes, so no time or path model can say where it happened. What a model can do is stop the graph from putting it where little was walked or turned.
+
+### Review (Sonnet, 2026-10-14) and what it changes
+
+- Path-based odometry variances only **dilute**: the start room's share of a correction falls to its share of the path, the rest is spread by path over everything else. They don't move a turn to where the drift happened (path carries no information about episodes). Locators exist (the LiDAR-vs-motion-model yaw disagreement per window of `log_heading_diagnostics`, the per-window gyro bias), but loop closure can't read them today (not in `Window` or the snapshot): a later step.
+- **Series model:** a loop over ≈ 20 segments forces ≈ 98 % of its disagreement into the odometry with 0.3° loop sigmas, ≈ 83 % with 1°. So the six-input spread is mostly the loop registrations' scatter passing straight through; **per-edge loop information** (the registration's shape, weak directions free) matters more than any uniform inflation, and the robust kernel is off (`loop_closure_kernel_scale` 0).
+- Hence G3a and G3b are measured together as a 2 × 2 on the snapshots (G1 is the base cell), with κ = 0 and the floors × 3 / ÷ 3 as controls for G3a.
+
+### Decisions (G3a, revised)
+
+1. **Effective length** of the odometry edge k → k + 1: L_k = d_k + κ · ψ_k, d_k the path walked across segment k (G1's path), ψ_k the **rotation about the world vertical** turned across it [deg], summed as |angle · axis.z| of R_{w+1} R_wᵀ between the windows' first nodes (as `is_turn_window`; not the sensor-frame Tait–Bryan yaw: the sensor is mounted vertically). κ = `loop_closure_odometry_turn_m_per_deg` = 0.1 m/deg (no data behind it: κ = 0 is a control run).
+2. **Translation and yaw variances scale with L normalised to the run's mean:** σ_t,k² = σ_t² · max(L_k / mean L, f) and σ_r,k² = σ_r² · max(L_k / mean L, f), with σ_t = `loop_closure_odometry_sigma_m` (0.1 m) and σ_r = `loop_closure_odometry_sigma_deg` (0.5°) as today; equal L reproduces today's weights exactly, so the odometry's overall stiffness against the loops is unchanged. Floor f = 0.1 (a segment of standing still is ≈ 3× stiffer in sigma than an average one, not rigid; × 3 / ÷ 3 as controls).
+3. **Roll and pitch keep today's constant sigma** (gravity bounds them).
+4. **The correction onto the nodes is interpolated by the path** (by L) between anchors, not by time, so standing still inside a segment takes no share of its turn.
+5. `optimize_loop_pose_graph` takes per-edge odometry weights (tests build equal ones with a helper), one code path.
+
+## G3b — same-floor loop edges from the registration's information (C23, part 2)
+
+1. Same-floor loop edges get the registration's information like the cross-floor ones (`loop_edge_information`, height kept): its shape from the NDT refinement's normal matrix, scaled so that the best-determined direction has today's 5 cm; weakly determined directions get correspondingly larger sigmas instead of a fixed 5 cm / 0.3° in all directions.
+2. The drop rule then uses the weighted residual for them, as for the cross-floor edges today.
+3. Calibrating the overall scale against repeated registrations is left for later; the shape is what the series model says matters.
+
+## Acceptance rule for G3 (written before its runs, 2026-10-14; replaces the G3a rule above)
+
+Configurations from the C10 snapshots on s0–s5: G1 (base), G1 + G3a, G1 + G3b, G1 + G3a + G3b; controls for G3a: κ = 0, floors × 3 and ÷ 3 (on the best G3a cell).
+- **Primary measure: the façade's spread over the six inputs** (fragility; C10 3.7°, G1 5.0°, odometry alone 0.8°) together with its median |out| / |back| (C10 2.2 / 2.1°). A configuration qualifies when its spread is ≤ C10's and its median not worse than C10's.
+- **Hard criterion:** the start room is not turned: the yaw correction in 0–9 s within ±0.3° in every run.
+- **Guards** (not worse than G1 beyond the six-input spread): gallery out vs back, revisit worst, railing and stairwell medians, no `FAIL`.
+- **Reported:** the yaw correction per time band against the independent evidence (the odometry's turn lies between ≈ 30 s and the gallery), dropped loops, the largest per-segment correction / L, runtime; the controls must not move the result.
+- The user decides between the qualifying configurations, or on conflict.
+
+### First draft (superseded by the revised decisions above)
+
+1. **Effective length of an odometry edge** (segment k → k + 1): L_k = d_k + `loop_closure_odometry_turn_m_per_deg` × ψ_k, with d_k the path walked across segment k (the G1 path, standing still adds nothing) and ψ_k the yaw turned across it [deg], summed as |Δyaw| between the windows' first nodes (a turn and the turn back both count). κ = 0.1 m/deg: a 90° turn counts like 9 m walked, about one segment on 44.
+2. **Variances grow with it:** σ_t,k² = σ_t0² + σ_t² · L_k / L_ref and σ_r,k² = σ_r0² + σ_r² · L_k / L_ref, with σ_t = `loop_closure_odometry_sigma_m` (0.1 m) and σ_r = `loop_closure_odometry_sigma_deg` (0.5°) now meaning the sigmas of a reference length L_ref = `loop_closure_odometry_reference_length_m` = 8 m (the mean per segment on 44: 456 m in 58 segments ≈ 7.9 m). So the odometry's overall stiffness against the loops stays as it is; only its distribution changes, which keeps the comparison with G1 about one thing.
+3. **Floors** σ_t0 = 1 cm and σ_r0 = 0.05° (named constants): a segment of standing still is stiff but not rigid.
+4. **All three rotation components scale alike** (roll and pitch too): simpler, and roll/pitch drift is small on 44; to revisit with G3b.
+5. `optimize_loop_pose_graph` takes the per-edge weights (the tests build equal ones with a helper, giving today's behaviour), so there is one code path.
+
+Alternative considered: time-scaled variances (q·Δt, the gyro's random walk) — a standing segment would weigh like a walking one, the artifact this step is meant to remove.
+
+### Acceptance rule of the first draft (superseded by the G3 rule above)
+
+From the C10 snapshots on s0–s5 against C10 (and reported against G1 for attribution), as for G1:
+- the façade pass count (|out|, |back| ≤ 1.5°) not below C10's 2 of 6, with the continuous companion (median |out| / |back|, C10 2.2 / 2.1°, G1 3.2 / 3.4°) and the spread (C10 3.7°); no `FAIL`;
+- consistency: gallery out vs back (C10 0.29–1.84°, G1 0.07–0.24°), revisit worst / offset, the gallery grid image;
+- sharpness: railing and stairwell medians not worse beyond the spread;
+- at least one measure better beyond the spread; on conflict the user decides;
+- reported, not a criterion: the yaw correction in the start room (0–9 s, expected within ±0.3°: the artifact gone) and per band, the accepted loops against G1's, runtime.
