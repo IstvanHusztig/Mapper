@@ -106,13 +106,19 @@ From the C10 snapshots on s0–s5 against C10 (and reported against G1 for attri
 - After the solve, the greedy drop rule can't tell a right edge from a wrong one near its threshold: in G3b s2 the gallery loop 9→13 (twin 8→13 agrees within 3 cm / 0.4°) and the outlier 0→57 were 2 % and 0.8 % over the limit.
 - What separates them is agreement with neighbouring edges, which needs more than one edge per region.
 
-### Decisions
+### Review (Sonnet, 2026-10-14) and what it changes
 
-1. **Candidates tried per segment:** the qualifying segments (G1 path rule), up to `loop_closure_candidates` of them (raised from 3 to 4): the two nearest by centre distance and the two with the longest path between, without duplicates. So the best views and the global closure are both tried.
-2. **Edges kept per segment:** up to `loop_closure_edges_per_segment` (2) of the accepted registrations, the best by overlap after the refinement (registration quality), not by order.
-3. **Sibling consistency before the solve:** two edges are siblings when their earlier and their later segments are each at most one segment apart (in the same pass: same floor or cross-floor). A loop edge's correction is a world transform; siblings see nearly the same drift, so their corrections, applied at the later segment's centre, should agree. An edge that disagrees with every sibling (by more than `loop_closure_sibling_max_m` = 0.3 m or `loop_closure_sibling_max_deg` = 1.0°) while at least two of its siblings agree with each other is removed and logged. An edge without siblings, or one with no agreeing pair to side with, is left to the drop rule after the solve.
-4. **The drop rule after the solve stays** (worst edge while above the limit); with redundancy and the sibling check it should rarely have to choose between a right and a wrong edge.
-5. Settings `loop_closure_edges_per_segment` and the two sibling limits; `loop_closure_candidates` 3 → 4 in the settings files; golden TOML files in their own commit. With `loop_closure_edges_per_segment = 1` and the sibling limits ≤ 0 G2 reduces to G1 except for the tried set (decision 1); that difference is measured, not switched.
+- "Two nearest + two longest path" mostly tries near-duplicates (neighbouring segments share 2/3 of the i−1…i+1 target); overlap after the refinement measures fit, not correctness, and prefers near views; two near twins in both slots re-create the slot displacement and count the same information twice.
+- The sibling check fails on exactly the two cases: 9→13 has one sibling (no agreeing pair), and 0→57's siblings 0→56 / 0→58 share the poor segment 0 (common mode) and can outvote 1→56. A consistency check needs distinct sources and thresholds scaled by the length between the ends (PCM): moved to G4.
+- The drop order is the cheapest lever: worst ratio first dropped 9→13 (2 % over the limit) before 0→57 (0.8 % over).
+
+### Decisions (revised)
+
+1. **Leave-one-out drop order (G2a):** while edges exceed the residual limit, each of them is removed in turn and the graph solved without it; the edge whose removal lowers the total cost the most is dropped (a false edge carries cost its removal frees; a right edge's removal leaves the others strained). It applies to same-floor and cross-floor edges alike, so it is also the first look at the cross-floor drops behind the stairwell regression. Cost: one extra solve per edge over the limit per round (the graph has ≈ 58 nodes, milliseconds).
+2. **Diverse tries (G2b):** of the qualifying segments, the nearest one, then the nearest at least 3 segments away from it; the longest-path one, then the longest-path one at least 3 segments away from it; at most `loop_closure_candidates` = 4 distinct.
+3. **Two slots by class (G2b):** up to one accepted "near" edge (the tried set's two nearest) and one "far" edge (the two longest-path), each the better of its class by overlap after the refinement; a slot is left empty when its class registered nothing. Near and far sources are at least 3 segments apart when both are filled, so they never share a target.
+4. Settings: `loop_closure_candidates` 3 → 4 (settings files) and `loop_closure_edges_per_segment` (1 or 2: one slot reproduces G1's single edge, with the near class tried first); golden TOML files in their own commit.
+5. Measured as G1 + G2a first (drop order alone), then G1 + G2a + G2b, then with G3b: one thing at a time.
 
 ### Acceptance rule for G2 and G2 + G3 (addendum written 2026-10-14, before their runs)
 
@@ -121,4 +127,5 @@ The G3 rule's median criterion compared with C10's chance value, which an honest
 - **Hard:** the start room not turned (0–9 s within ±0.3° in every run).
 - **Guards against G1:** gallery out vs back ≤ 0.3° in every run; revisit worst median not worse beyond the spread; railing median not worse beyond the spread; the stairwell not worse than C10's in 5 or 6 of the six runs (a consistent regression, as G3b's); no `FAIL`.
 - **Reported:** the yaw correction per band, edges removed by the sibling check and dropped after the solve, the accepted loops against G1's, runtime.
-- Configurations: G1 + G2, G1 + G2 + G3b, G1 + G2 + G3a + G3b. The user decides between those that pass.
+- Configurations: G1 + G2a, G1 + G2a + G2b, and with G3b (and G3a + G3b) on the best of them. The user decides between those that pass.
+- **Added after the review (2026-10-14, before the runs):** a positive consistency criterion against the odometry alone (revisit worst median not worse than its 1.7°, revisit offset median well below its ≈ 1.2 m); paired per-run comparison of the façade against G1 (worse in at most 3 of 6); G2-specific checks: in s2 the gallery loop 9→13 is kept and 0→57 is dropped, and the set of accepted loops is similar across s0–s5 (most loops present in at least 4 of the 6 runs).
