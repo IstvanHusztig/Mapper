@@ -1,5 +1,6 @@
 #include "ndt_map.h"
 #include <algorithm>
+#include <cmath>
 
 // this function provides unique index
 unsigned long long int ndt_cell_key(const int16_t x, const int16_t y, const int16_t z)
@@ -12,9 +13,10 @@ unsigned long long int ndt_cell_key(const int16_t x, const int16_t y, const int1
 // this function provides unique index for input point p and 3D space decomposition into buckets b
 unsigned long long int ndt_cell_index(const Eigen::Vector3d p, const Eigen::Vector3d b)
 {
-    int16_t x = static_cast<int16_t>(p.x() / b.x());
-    int16_t y = static_cast<int16_t>(p.y() / b.y());
-    int16_t z = static_cast<int16_t>(p.z() / b.z());
+    // floor, not truncation towards zero: truncation gave the cells through 0 (on each axis) double width
+    int16_t x = static_cast<int16_t>(std::floor(p.x() / b.x()));
+    int16_t y = static_cast<int16_t>(std::floor(p.y() / b.y()));
+    int16_t z = static_cast<int16_t>(std::floor(p.z() / b.z()));
     return ndt_cell_key(x, y, z);
 }
 

@@ -82,7 +82,7 @@ namespace
     }
 
     // seams of +-3 cm / +-0.2 deg per window: the mean pose error and the map's excess of occupied 3 cm voxels over the
-    // truth's must shrink
+    // truth's must shrink (the excess by at least 15 %, see the measurements at the test cases)
     void check_seams(bool multiple_gaussian)
     {
         Recording r = loop_recording(2);
@@ -97,7 +97,7 @@ namespace
                 after.voxels, " (truth ", truth_map.voxels, "); ", ms, " ms");
         CHECK(after.mean.position <= 0.8 * before.mean.position);
         CHECK(after.mean.rotation <= 0.8 * before.mean.rotation);
-        CHECK(after.voxels <= truth_map.voxels + (before.voxels - truth_map.voxels) / 2);
+        CHECK(after.voxels <= truth_map.voxels + 0.85 * (before.voxels - truth_map.voxels));
     }
 
     // poses equal to the truth: every node must stay within 5 mm and 0.1 deg
@@ -166,14 +166,20 @@ TEST_CASE("consistency: Consistency with several chunks is repeatable and reduce
 }
 
 // Measured 2026-10-04 (Release, 3 passes): mean error 27.9 mm / 0.207 deg -> 19.5 mm / 0.147 deg, 3 cm voxels
-// 127,956 -> 126,563 (truth 125,898); 1.0 s
+// 127,956 -> 126,563 (truth 125,898); 1.0 s. That scene lay at the world origin, its faces on the 3 cm voxel boundaries,
+// which made the truth map thick and hid most of the remaining seams (the excess shrank by 68 %).
+// Measured 2026-10-14 with the scene at grid_offset (faces inside the voxels): 27.9 mm / 0.207 deg -> 17.5 mm / 0.145 deg,
+// voxels 127,982 -> 126,492 (truth 121,634): the excess shrinks by 23 % (36 % with the cell index truncated towards zero
+// as before C10, whose double-height cell held the floor with twice the points; 16.8 mm / 0.128 deg); 0.5 s
 TEST_CASE("consistency: Consistency reduces the offsets between windows")
 {
     check_seams(false);
 }
 
 // Measured 2026-10-04 (Release, 3 passes): mean error 27.9 mm / 0.207 deg -> 14.6 mm / 0.125 deg, 3 cm voxels
-// 127,956 -> 126,324 (truth 125,898); 0.6 s
+// 127,956 -> 126,324 (truth 125,898); 0.6 s (scene at the world origin, see above).
+// Measured 2026-10-14 with the scene at grid_offset: 27.9 mm / 0.207 deg -> 12.9 mm / 0.103 deg, voxels 127,982 -> 125,702
+// (truth 121,634): the excess shrinks by 36 % (51 % with the cell index truncated, 12.7 mm / 0.095 deg); 0.8 s
 TEST_CASE("consistency: Consistency2 reduces the offsets between windows")
 {
     check_seams(true);
@@ -182,7 +188,8 @@ TEST_CASE("consistency: Consistency2 reduces the offsets between windows")
 // Expected to fail (found 2026-10-04): the pass moves the true trajectory by up to 6.4 mm / 0.075 deg (mean 2.1 mm),
 // spread evenly over all windows (2-6 mm in each). That is the noise of fitting 150 points per node to 0.15 m NDT
 // cells, not a systematic pull: the rotation stays within 0.1 deg. When the pass leaves a correct trajectory within
-// 5 mm, doctest reports this case as passing unexpectedly: then remove should_fail.
+// 5 mm, doctest reports this case as passing unexpectedly: then remove should_fail. Measured 2026-10-14 (scene at
+// grid_offset, C10): up to 6.3 mm / 0.067 deg.
 TEST_CASE("consistency: Consistency leaves a trajectory that is already right" * doctest::should_fail())
 {
     check_truth(false);
@@ -192,7 +199,8 @@ TEST_CASE("consistency: Consistency leaves a trajectory that is already right" *
 // rotation changes sit in the corner windows (0.2-0.46 deg there, about 0.05 deg on the straights): the smoothness
 // term holds the change of turn rate from node to node to 0.01 deg (Consistency: 0.1 deg), and the fixture's turn rate
 // ramps by 0.29 deg per node in and out of each corner. With a 1 s ramp (half the change per node) the corner windows
-// drop to 0.18 deg, and an even 5-12 mm / 0.1 deg remains in every window.
+// drop to 0.18 deg, and an even 5-12 mm / 0.1 deg remains in every window. Measured 2026-10-14 (scene at grid_offset,
+// C10): up to 10.7 mm / 0.35 deg.
 TEST_CASE("consistency: Consistency2 leaves a trajectory that is already right" * doctest::should_fail())
 {
     check_truth(true);

@@ -10,6 +10,7 @@
 #include <cmath>
 #include <functional>
 #include <random>
+#include <string>
 
 // optimize_lidar_odometry on synthetic scenes with a known true trajectory: a closed box room (and an open corridor),
 // both NDT maps built with the app's update_rgd (exact cell statistics), and a window of nodes 10 ms apart moving through it. The options are
@@ -21,8 +22,9 @@ namespace
 
     const double deg = DEG_TO_RAD;
 
-    Scene room() { return box_scene({-4.0, -2.5, 0.0}, {4.0, 2.5, 3.0}, false); }
-    Scene corridor() { return box_scene({-15.0, -2.5, 0.0}, {15.0, 2.5, 3.0}, true); }
+    // the room with its origin at offset in the world (grid_offset keeps its faces off the cell boundaries)
+    Scene room(const Eigen::Vector3d &offset = grid_offset) { return shifted(box_scene({-4.0, -2.5, 0.0}, {4.0, 2.5, 3.0}, false), offset); }
+    Scene corridor() { return shifted(box_scene({-15.0, -2.5, 0.0}, {15.0, 2.5, 3.0}, true), grid_offset); }
 
     struct Maps
     {
@@ -45,14 +47,14 @@ namespace
     constexpr double node_dt = 0.01;
     constexpr int points_per_node = 60;
 
-    // the true trajectory: from (-1, 0, 1.5) along x at 1 m/s, yawing at 20 deg/s
-    std::vector<Eigen::Affine3d> true_poses()
+    // the true trajectory: from (-1, 0, 1.5) along x at 1 m/s, yawing at 20 deg/s (in the scene, whose origin is at offset)
+    std::vector<Eigen::Affine3d> true_poses(const Eigen::Vector3d &offset = grid_offset)
     {
         std::vector<Eigen::Affine3d> poses;
         for (int k = 0; k < n_nodes; k++)
         {
             const double t = k * node_dt;
-            poses.push_back(pose(Eigen::Vector3d(-1.0 + 1.0 * t, 0.0, 1.5), 20.0 * deg * t));
+            poses.push_back(pose(Eigen::Vector3d(-1.0 + 1.0 * t, 0.0, 1.5) + offset, 20.0 * deg * t));
         }
         return poses;
     }
@@ -245,13 +247,53 @@ TEST_CASE("scan-to-map: a perfect guess stays at the truth")
 
     // Measured 2026-10-04 with exact cell statistics: 0.37 mm, 0.046 deg, delta 9e-8 (with the previous statistics, whose
     // cell mean is the cell's first point: 1.5 mm, 0.046 deg, delta 1.5e-4). The rotation error scales with the point noise
-    // (0.022 deg at +-1 mm). The limits record this with margin.
+    // (0.022 deg at +-1 mm). The limits record this with margin. Measured 2026-10-14 (scene at grid_offset, cell index with
+    // floor, C10): 0.34 mm, 0.038 deg, delta 8e-8.
     const double delta = run_iterations(points, w, maps, o, 5.0, 30, logger);
     const PoseError e = max_error(w.poses, truth);
     MESSAGE("perfect guess after 30 iterations: position ", e.position * 1000.0, " mm, rotation ", e.rotation / deg, " deg, delta ", delta);
     CHECK(e.position < 0.001);
     CHECK(e.rotation < 0.1 * deg);
     CHECK(delta < 1e-6);
+}
+
+TEST_CASE("scan-to-map: where a plane lies in its cell")
+{
+    // The room placed so that some of its faces lie exactly on cell boundaries. A face on a boundary splits its points
+    // (+-5 mm) between two cells, each holding half a slab whose mean lies off the plane, which costs NDT accuracy. Real
+    // surfaces lie anywhere in a cell, so the other tests keep every face off the boundaries (grid_offset); this one
+    // records the cost per case. Measured 2026-10-14 (largest position error of a perfect guess after 30 iterations):
+    // 0.34 mm with no face on a boundary, 0.61 mm with floor and ceiling on 0.15 m boundaries, 1.52 mm with the x walls on
+    // 0.4 m boundaries (the coarse grid costs the most, finding C18), 2.26 mm with both (the scene at the world origin, as
+    // these tests had it before 2026-10-14).
+    struct Case
+    {
+        std::string name;
+        Eigen::Vector3d offset;
+        double limit_m;
+    };
+    const double g = grid_offset.x();
+    const Case cases[] = {
+        {"at grid_offset (no face on a boundary)", grid_offset, 0.001},
+        {"floor and ceiling on 0.15 m boundaries", {g, g, 0.0}, 0.001},
+        {"x walls on 0.4 m boundaries", {0.0, g, g}, 0.002},
+        {"at the world origin (both)", Eigen::Vector3d::Zero(), 0.003},
+    };
+    const Options o = options_from(test_config());
+    for (const Case &c : cases)
+    {
+        const Scene s = room(c.offset);
+        Maps maps = build_maps(s, o.scan_to_map);
+        const std::vector<Eigen::Affine3d> truth = true_poses(c.offset);
+        std::vector<Point3Di> points = observe(s, truth);
+        Window w = make_window(truth);
+        NullLogger logger;
+        run_iterations(points, w, maps, o, 5.0, 30, logger);
+        const PoseError e = max_error(w.poses, truth);
+        MESSAGE("perfect guess, room ", c.name, ": position ", e.position * 1000.0, " mm, rotation ", e.rotation / deg, " deg");
+        CHECK(e.position < c.limit_m);
+        CHECK(e.rotation < 0.1 * deg);
+    }
 }
 
 TEST_CASE("scan-to-map: a node 1 m or more from its guess is a big jump, counted before anything is applied")
@@ -294,7 +336,7 @@ TEST_CASE("scan-to-map: a yaw drift is corrected")
             before.position * 1000.0, " -> ", after.position * 1000.0, " mm; largest rotation error ", before.rotation / deg, " -> ",
             after.rotation / deg, " deg");
     // Measured 2026-10-04: 0.245 -> 0.014 deg at the end; the positions (exact in the guess) pick up 0.69 mm (1.8 mm with
-    // the previous cell statistics)
+    // the previous cell statistics). Measured 2026-10-14 (scene at grid_offset, C10): 0.245 -> 0.024 deg, 0.57 mm
     CHECK(std::abs(heading_after) <= 0.1 * std::abs(heading_before));
     CHECK(after.position < 0.0015);
 }
@@ -318,7 +360,8 @@ TEST_CASE("scan-to-map: the gyro bias is estimated")
     const PoseError after = max_error(w.poses, truth);
     MESSAGE("estimated bias ", b.x(), " ", b.y(), " ", b.z(), " deg/s (injected 0 0 0.5); end heading error ",
             end_heading_error(w.poses, truth) / deg, " deg; largest position error ", after.position * 1000.0, " mm");
-    // Measured 2026-10-04: 0.038 -0.042 0.473 deg/s (0.045 -0.031 0.469 with the previous cell statistics)
+    // Measured 2026-10-04: 0.038 -0.042 0.473 deg/s (0.045 -0.031 0.469 with the previous cell statistics); 2026-10-14
+    // (scene at grid_offset, C10): 0.016 -0.022 0.452 deg/s
     CHECK(b.z() == doctest::Approx(0.5).epsilon(0.1));
     CHECK(std::abs(b.x()) < 0.05);
     CHECK(std::abs(b.y()) < 0.05);
@@ -690,7 +733,7 @@ namespace
         for (int i = 0; i < n_nodes; i++)
         {
             const double t = i * node_dt;
-            poses.push_back(pose(Eigen::Vector3d(-1.0 + v0 * t + 0.5 * a * t * t, 0.0, 1.5), 0.0));
+            poses.push_back(pose(Eigen::Vector3d(-1.0 + v0 * t + 0.5 * a * t * t, 0.0, 1.5) + grid_offset, 0.0));
         }
         return poses;
     }
@@ -713,7 +756,7 @@ TEST_CASE("scan-to-map, imu always on: a blind corridor follows the acceleromete
     for (int i = 0; i < n_nodes; i++)
     {
         const double t = i * node_dt;
-        k.truth.push_back(pose(Eigen::Vector3d(walk_x(t), 0.0, 1.5), 0.0));
+        k.truth.push_back(pose(Eigen::Vector3d(walk_x(t), 0.0, 1.5) + grid_offset, 0.0));
         k.world_acceleration.push_back(Eigen::Vector3d(walk_a * std::sin(2.0 * pi * walk_f * t), 0.0, 0.0));
     }
     k.guess = straight(walk_v0, 0.0);
@@ -802,7 +845,7 @@ TEST_CASE("scan-to-map, imu always on: a gap in the IMU samples drops the stretc
     for (int i = 0; i < n_nodes; i++)
         k.times.push_back(i * node_dt + (i >= 25 ? 0.05 : 0.0));
     for (int i = 0; i < n_nodes; i++)
-        k.truth[i].translation().x() = -1.0 + 1.0 * k.times[i];
+        k.truth[i].translation().x() = grid_offset.x() - 1.0 + 1.0 * k.times[i];
     k.guess = k.truth;
     for (int i = 0; i < n_nodes; i++)
         k.guess[i].translation() += Eigen::Vector3d(0.01, -0.01, 0.005) * (double(i) / (n_nodes - 1));

@@ -22,6 +22,19 @@ Scene box_scene(const Eigen::Vector3d &lo, const Eigen::Vector3d &hi, bool open_
     return s;
 }
 
+Scene shifted(const Scene &s, const Eigen::Vector3d &offset)
+{
+    Scene out = s;
+    for (Face &f : out.faces)
+    {
+        f.value += offset[f.axis];
+        f.lo += offset;
+        f.hi += offset;
+    }
+    out.centre += offset;
+    return out;
+}
+
 // a point on face f at in-plane coordinates (u, v) in [0, 1], moved by jitter along the face normal
 Eigen::Vector3d face_point(const Face &f, double u, double v, double jitter)
 {
@@ -216,7 +229,7 @@ Scene loop_scene()
     add_box(s, {-1.2, 5.0, 0.0}, {-0.6, 5.6, 1.0});
     add_box(s, {-9.6, -0.6, 0.0}, {-9.0, 0.0, 1.0});
     s.centre = Eigen::Vector3d(0.0, 0.0, 1.5);
-    return s;
+    return shifted(s, grid_offset);
 }
 
 Recording loop_recording(int laps)
@@ -250,7 +263,7 @@ Recording loop_recording(int laps)
         {
             const double t = (w * nodes_per_window + k) * r.node_dt;
             const PathPoint pp = path_at(speed * t);
-            const Eigen::Affine3d m = pose({pp.position.x(), pp.position.y(), height}, pp.heading);
+            const Eigen::Affine3d m = pose(Eigen::Vector3d(pp.position.x(), pp.position.y(), height) + grid_offset, pp.heading);
             truth.push_back(m);
             window.timestamps.push_back({t, t});
 

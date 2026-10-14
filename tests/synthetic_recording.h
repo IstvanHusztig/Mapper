@@ -44,6 +44,16 @@ struct PoseError
 // a box with the given corners; open_x leaves out the two faces normal to x (a corridor)
 Scene box_scene(const Eigen::Vector3d &lo, const Eigen::Vector3d &hi, bool open_x);
 
+// Where the scenes' origin lies in the world, the frame of the NDT grids. The scenes use round coordinates (multiples of
+// 0.1 m); at the world origin many faces would lie exactly on a boundary of the 0.15 m or the 0.4 m cells, the floor at
+// z = 0 on both. A face on a boundary splits its points between two cells, which costs NDT a few mm (measured by
+// "scan-to-map: where a plane lies in its cell"); a real surface lies anywhere in its cell. With this offset every face
+// of these scenes is at least 2.5 cm from a boundary of either grid. Scenes and their trajectories are moved together.
+inline const Eigen::Vector3d grid_offset(0.025, 0.025, 0.025);
+
+// the scene moved by offset (faces, their extents and the centre)
+Scene shifted(const Scene &s, const Eigen::Vector3d &offset);
+
 // a point on face f at in-plane coordinates (u, v) in [0, 1], moved by jitter along the face normal
 Eigen::Vector3d face_point(const Face &f, double u, double v, double jitter);
 
