@@ -97,3 +97,28 @@ From the C10 snapshots on s0–s5 against C10 (and reported against G1 for attri
 - sharpness: railing and stairwell medians not worse beyond the spread;
 - at least one measure better beyond the spread; on conflict the user decides;
 - reported, not a criterion: the yaw correction in the start room (0–9 s, expected within ±0.3°: the artifact gone) and per band, the accepted loops against G1's, runtime.
+
+## G2 — candidate choice, redundancy and sibling consistency (C24, part 1)
+
+### Context (the G3 2 × 2, 2026-10-14)
+
+- One edge per segment, chosen by order (nearest first in C10, longest path first in G1), makes the outcome depend on discrete choices: longest path first always picks segment 0, whose loops are poor (0→57 says 8.5°, its siblings 1→44…1→56 0.4–2.2°), and G1 bent the start room with it.
+- After the solve, the greedy drop rule can't tell a right edge from a wrong one near its threshold: in G3b s2 the gallery loop 9→13 (twin 8→13 agrees within 3 cm / 0.4°) and the outlier 0→57 were 2 % and 0.8 % over the limit.
+- What separates them is agreement with neighbouring edges, which needs more than one edge per region.
+
+### Decisions
+
+1. **Candidates tried per segment:** the qualifying segments (G1 path rule), up to `loop_closure_candidates` of them (raised from 3 to 4): the two nearest by centre distance and the two with the longest path between, without duplicates. So the best views and the global closure are both tried.
+2. **Edges kept per segment:** up to `loop_closure_edges_per_segment` (2) of the accepted registrations, the best by overlap after the refinement (registration quality), not by order.
+3. **Sibling consistency before the solve:** two edges are siblings when their earlier and their later segments are each at most one segment apart (in the same pass: same floor or cross-floor). A loop edge's correction is a world transform; siblings see nearly the same drift, so their corrections, applied at the later segment's centre, should agree. An edge that disagrees with every sibling (by more than `loop_closure_sibling_max_m` = 0.3 m or `loop_closure_sibling_max_deg` = 1.0°) while at least two of its siblings agree with each other is removed and logged. An edge without siblings, or one with no agreeing pair to side with, is left to the drop rule after the solve.
+4. **The drop rule after the solve stays** (worst edge while above the limit); with redundancy and the sibling check it should rarely have to choose between a right and a wrong edge.
+5. Settings `loop_closure_edges_per_segment` and the two sibling limits; `loop_closure_candidates` 3 → 4 in the settings files; golden TOML files in their own commit. With `loop_closure_edges_per_segment = 1` and the sibling limits ≤ 0 G2 reduces to G1 except for the tried set (decision 1); that difference is measured, not switched.
+
+### Acceptance rule for G2 and G2 + G3 (addendum written 2026-10-14, before their runs)
+
+The G3 rule's median criterion compared with C10's chance value, which an honest loop closure can't meet. From now on:
+- **Primary:** the façade spread over the six inputs ≤ C10's (3.7°), and the median |out| / |back| not worse than the odometry alone's (4.0 / 4.4°) beyond its spread (0.8°): loop closure must not make the angle worse than the odometry, and must not widen the scatter beyond C10's.
+- **Hard:** the start room not turned (0–9 s within ±0.3° in every run).
+- **Guards against G1:** gallery out vs back ≤ 0.3° in every run; revisit worst median not worse beyond the spread; railing median not worse beyond the spread; the stairwell not worse than C10's in 5 or 6 of the six runs (a consistent regression, as G3b's); no `FAIL`.
+- **Reported:** the yaw correction per band, edges removed by the sibling check and dropped after the solve, the accepted loops against G1's, runtime.
+- Configurations: G1 + G2, G1 + G2 + G3b, G1 + G2 + G3a + G3b. The user decides between those that pass.
