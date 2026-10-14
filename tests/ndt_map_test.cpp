@@ -90,6 +90,20 @@ namespace
     }
 }
 
+TEST_CASE("ndt_cell_index: every cell has the same width, also the cells through 0")
+{
+    // the index is floor(p / b), not truncation towards zero, which made the cells with index 0 twice as wide
+    // (-0.15 .. 0.15 m instead of 0 .. 0.15 m)
+    const Eigen::Vector3d b(0.15, 0.15, 0.15);
+    const auto cell = [&](double x, double y, double z) { return ndt_cell_index(Eigen::Vector3d(x, y, z), b); };
+    CHECK(cell(-0.01, 0.05, 0.05) != cell(0.01, 0.05, 0.05));
+    CHECK(cell(0.05, -0.01, 0.05) != cell(0.05, 0.01, 0.05));
+    CHECK(cell(0.05, 0.05, -0.01) != cell(0.05, 0.05, 0.01));
+    CHECK(cell(-0.01, 0.05, 0.05) == cell(-0.14, 0.05, 0.05)); // -0.15 .. 0: one cell
+    CHECK(cell(-0.16, 0.05, 0.05) != cell(-0.14, 0.05, 0.05));
+    CHECK(cell(0.01, 0.05, 0.05) == cell(0.14, 0.05, 0.05)); // 0 .. 0.15: one cell
+}
+
 TEST_CASE("update_rgd exact: a plane inserted line by line gives the centroid and the plane normal")
 {
     SampledPlane plane = tilted_plane();

@@ -35,4 +35,5 @@
 
 ## 4. Wrap-up
 
+- [ ] 3.6 Revisit check per floor: the 11 fixed revisit pairs register all heights together and missed a misplaced ground floor in the gallery (noise floor s1 and s3 rated worst 2.3° / 1.7°, offset 0.03 / 0.11 m, while their gallery ground floor sat rotated or shifted; found visually 2026-10-14, `grid_gallery_nf_c10.png`). Add a per-floor (height band) registration of the gallery passes, or of the gallery against the start pass, so that a misplaced floor counts. Verify: noise floor s1/s3/s5 flagged, C10 s0–s5 not.
 - [ ] 4.1 Tracker rows updated (C1, C4, C7, C8 evidence); `master-reviewer` on the commits; memory. Verify: the entries exist.
