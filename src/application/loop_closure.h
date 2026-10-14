@@ -36,6 +36,26 @@ struct RevisitSegment
 // loop_closure_radius_per_path * that path) horizontally and within loop_closure_max_vertical_offset_m vertically.
 std::vector<int> same_floor_revisits(const std::vector<RevisitSegment> &segments, int j, const OdometryConfig &params);
 
+// The length walked and turned up to each window's first node: the path of path_at_windows plus
+// loop_closure_odometry_turn_m_per_deg times the rotation about the world vertical turned [deg] (summed as |angle * axis.z|
+// between the windows' first nodes, a turn and the turn back both counting)
+std::vector<double> length_at_windows(const std::vector<Window> &windows, const std::vector<double> &path, double turn_m_per_deg);
+
+// The weights of one odometry edge of the pose graph (segment k -> k + 1): translation, and rotation per Tait-Bryan angle
+// (om, fi, ka) of the relative pose
+struct OdometryEdgeWeight
+{
+    double translation = 0.0;
+    Eigen::Vector3d rotation = Eigen::Vector3d::Zero();
+};
+
+// every edge with the fixed sigmas loop_closure_odometry_sigma_m / _deg
+std::vector<OdometryEdgeWeight> equal_odometry_weights(int n_segments, const OdometryConfig &params);
+
+// G3a: the translation and yaw (ka) variances of edge k scale with lengths[k] / the mean length (at least
+// loop_closure_odometry_length_floor), roll and pitch keep the fixed sigma; equal lengths give equal_odometry_weights
+std::vector<OdometryEdgeWeight> odometry_weights_by_length(const std::vector<double> &lengths, const OdometryConfig &params);
+
 // Step 4 on its own, for tests: the segment poses, the accepted loop edges, and the check of the result.
 struct LoopClosureEdge
 {
@@ -70,7 +90,7 @@ Eigen::Matrix<double, 6, 1> loop_edge_region_sigmas(const Eigen::Affine3d &pose_
 // solved by reweighting each step with 1 / (1 + s^2 / c^2) at the current poses, starting from the plain least-squares
 // solution (from the odometry's poses every true loop would look like an outlier); odometry edges stay quadratic.
 std::vector<Eigen::Affine3d> optimize_loop_pose_graph(const std::vector<Eigen::Affine3d> &initial, const std::vector<LoopClosureEdge> &loops,
-                                                      const OdometryConfig &params);
+                                                      const OdometryConfig &params, const std::vector<OdometryEdgeWeight> &odometry_weights);
 
 // How far the optimized poses are from each loop edge's measurement: (initial_i^-1 correction initial_j)^-1 (optimized_i^-1 optimized_j).
 struct LoopEdgeResidual

@@ -120,6 +120,15 @@ struct OdometryConfig
     int loop_closure_segment_windows = 12;
     double loop_closure_min_path_m = 8.0;
     double loop_closure_radius_per_path = 0.5;
+    // odometry edges of the pose graph (change loop-closure-fixes, G3a): with loop_closure_odometry_by_length the
+    // translation and yaw variances of edge k scale with its length L_k = path walked + turn_m_per_deg * rotation about
+    // the vertical [deg], relative to the run's mean (at least loop_closure_odometry_length_floor of it), and the
+    // correction is spread onto the nodes by that length; off: every edge has the fixed sigmas below (temporary switch)
+    bool loop_closure_odometry_by_length = false;
+    double loop_closure_odometry_turn_m_per_deg = 0.1;
+    double loop_closure_odometry_length_floor = 0.1;
+    // same-floor loop edges weighted by the registration's information like the cross-floor ones (G3b; temporary switch)
+    bool loop_closure_same_floor_information = false;
     double loop_closure_search_radius_m = 8.0;
     double loop_closure_max_vertical_offset_m = 1.5;
     double loop_closure_max_correction_m = 6.0;

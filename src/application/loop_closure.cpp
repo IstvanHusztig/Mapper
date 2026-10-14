@@ -24,6 +24,7 @@ namespace
         Eigen::Vector3d center;              // mean node position
         double path_begin = 0.0;             // path walked up to the first window's first node [m]
         double path_end = 0.0;               // ... up to the next segment's first node
+        double length_begin = 0.0;           // length walked and turned up to the first window's first node (G3a)
         double t_begin = 0.0;
         double t_end = 0.0;
         std::vector<Eigen::Vector3d> points; // world coordinates, voxel-decimated
@@ -268,7 +269,7 @@ namespace
     }
 
     void add_relative_pose_edge(std::vector<Eigen::Triplet<double>> &A, Eigen::VectorXd &b, const std::vector<TaitBryanPose> &poses,
-                                int from, int to, const Eigen::Matrix<double, 6, 1> &measurement_in, double w_t, double w_r)
+                                int from, int to, const Eigen::Matrix<double, 6, 1> &measurement_in, double w_t, const Eigen::Vector3d &w_r)
     {
         const TaitBryanPose &p1 = poses[from];
         const TaitBryanPose &p2 = poses[to];
@@ -283,12 +284,12 @@ namespace
             measurement(r) -= delta(r) - std::remainder(delta(r), 2.0 * M_PI);
         Eigen::Matrix<double, 12, 12> AtPA;
         relative_pose_obs_eq_tait_bryan_wc_case1_AtPA_simplified(AtPA, p1.px, p1.py, p1.pz, p1.om, p1.fi, p1.ka,
-                                                                 p2.px, p2.py, p2.pz, p2.om, p2.fi, p2.ka, w_t, w_t, w_t, w_r, w_r, w_r);
+                                                                 p2.px, p2.py, p2.pz, p2.om, p2.fi, p2.ka, w_t, w_t, w_t, w_r(0), w_r(1), w_r(2));
         Eigen::Matrix<double, 12, 1> AtPB;
         relative_pose_obs_eq_tait_bryan_wc_case1_AtPB_simplified(AtPB, p1.px, p1.py, p1.pz, p1.om, p1.fi, p1.ka,
                                                                  p2.px, p2.py, p2.pz, p2.om, p2.fi, p2.ka,
                                                                  measurement(0), measurement(1), measurement(2),
-                                                                 measurement(3), measurement(4), measurement(5), w_t, w_t, w_t, w_r, w_r, w_r);
+                                                                 measurement(3), measurement(4), measurement(5), w_t, w_t, w_t, w_r(0), w_r(1), w_r(2));
         const int c[2] = {from * 6, to * 6};
         for (int r = 0; r < 12; r++)
         {
@@ -300,7 +301,7 @@ namespace
 
     // weighted squared error of one relative-pose edge
     double relative_pose_edge_cost(const std::vector<TaitBryanPose> &poses, int from, int to, const Eigen::Matrix<double, 6, 1> &measurement,
-                                   double w_t, double w_r)
+                                   double w_t, const Eigen::Vector3d &w_r)
     {
         const TaitBryanPose &p1 = poses[from];
         const TaitBryanPose &p2 = poses[to];
@@ -310,7 +311,7 @@ namespace
         // the angle residuals wrapped into (-pi, pi]: a pose at yaw +-180 deg must not count as 360 deg off
         for (int r = 3; r < 6; r++)
             delta(r) = std::remainder(delta(r), 2.0 * M_PI);
-        return w_t * delta.head<3>().squaredNorm() + w_r * delta.tail<3>().squaredNorm();
+        return w_t * delta.head<3>().squaredNorm() + w_r.dot(delta.tail<3>().cwiseAbs2());
     }
 
     // an information edge's residual (measurement minus the relative pose of the two poses), angles wrapped into (-pi, pi]
@@ -471,8 +472,50 @@ Eigen::Matrix<double, 6, 1> loop_edge_region_sigmas(const Eigen::Affine3d &pose_
     return s;
 }
 
+std::vector<double> length_at_windows(const std::vector<Window> &windows, const std::vector<double> &path, double turn_m_per_deg)
+{
+    std::vector<double> length(windows.size(), 0.0);
+    double turned_deg = 0.0;
+    for (size_t w = 0; w < windows.size(); w++)
+    {
+        if (w > 0 && !windows[w].poses.empty() && !windows[w - 1].poses.empty())
+        {
+            const Eigen::AngleAxisd aa(Eigen::Matrix3d(windows[w].poses.front().linear() * windows[w - 1].poses.front().linear().transpose()));
+            turned_deg += std::abs(aa.angle() * aa.axis().z()) / DEG;
+        }
+        length[w] = path[w] + turn_m_per_deg * turned_deg;
+    }
+    return length;
+}
+
+std::vector<OdometryEdgeWeight> equal_odometry_weights(int n_segments, const OdometryConfig &params)
+{
+    OdometryEdgeWeight w;
+    w.translation = 1.0 / std::pow(params.loop_closure_odometry_sigma_m, 2);
+    w.rotation = Eigen::Vector3d::Constant(1.0 / std::pow(params.loop_closure_odometry_sigma_deg * DEG, 2));
+    return std::vector<OdometryEdgeWeight>(std::max(0, n_segments - 1), w);
+}
+
+std::vector<OdometryEdgeWeight> odometry_weights_by_length(const std::vector<double> &lengths, const OdometryConfig &params)
+{
+    std::vector<OdometryEdgeWeight> weights = equal_odometry_weights(static_cast<int>(lengths.size()) + 1, params);
+    double mean = 0.0;
+    for (double l : lengths)
+        mean += l;
+    mean /= std::max<size_t>(lengths.size(), 1);
+    if (!(mean > 0.0))
+        return weights;
+    for (size_t k = 0; k < lengths.size(); k++)
+    {
+        const double share = std::max(lengths[k] / mean, params.loop_closure_odometry_length_floor);
+        weights[k].translation /= share;
+        weights[k].rotation(2) /= share; // yaw (ka); roll and pitch keep the fixed sigma, gravity bounds them
+    }
+    return weights;
+}
+
 std::vector<Eigen::Affine3d> optimize_loop_pose_graph(const std::vector<Eigen::Affine3d> &initial, const std::vector<LoopClosureEdge> &loops,
-                                                      const OdometryConfig &params)
+                                                      const OdometryConfig &params, const std::vector<OdometryEdgeWeight> &odometry_weights)
 {
     const int n = static_cast<int>(initial.size());
     std::vector<Eigen::Matrix<double, 6, 1>> odo(n > 0 ? n - 1 : 0);
@@ -482,10 +525,8 @@ std::vector<Eigen::Affine3d> optimize_loop_pose_graph(const std::vector<Eigen::A
     for (const auto &e : loops)
         loop_meas.push_back(relative_measurement(initial[e.i], e.correction * initial[e.j]));
 
-    const double w_odo_t = 1.0 / std::pow(params.loop_closure_odometry_sigma_m, 2);
-    const double w_odo_r = 1.0 / std::pow(params.loop_closure_odometry_sigma_deg * DEG, 2);
     const double w_loop_t = 1.0 / std::pow(params.loop_closure_edge_sigma_m, 2);
-    const double w_loop_r = 1.0 / std::pow(params.loop_closure_edge_sigma_deg * DEG, 2);
+    const Eigen::Vector3d w_loop_r = Eigen::Vector3d::Constant(1.0 / std::pow(params.loop_closure_edge_sigma_deg * DEG, 2));
 
     std::vector<TaitBryanPose> poses;
     for (const auto &p : initial)
@@ -523,7 +564,7 @@ std::vector<Eigen::Affine3d> optimize_loop_pose_graph(const std::vector<Eigen::A
     {
         double c = 0.0;
         for (int k = 0; k + 1 < n; k++)
-            c += relative_pose_edge_cost(ps, k, k + 1, odo[k], w_odo_t, w_odo_r);
+            c += relative_pose_edge_cost(ps, k, k + 1, odo[k], odometry_weights[k].translation, odometry_weights[k].rotation);
         for (size_t e = 0; e < loops.size(); e++)
             c += loop_edge_cost(ps, e);
         return c;
@@ -539,7 +580,7 @@ std::vector<Eigen::Affine3d> optimize_loop_pose_graph(const std::vector<Eigen::A
             std::vector<Eigen::Triplet<double>> A;
             Eigen::VectorXd b = Eigen::VectorXd::Zero(6 * n);
             for (int k = 0; k + 1 < n; k++)
-                add_relative_pose_edge(A, b, poses, k, k + 1, odo[k], w_odo_t, w_odo_r);
+                add_relative_pose_edge(A, b, poses, k, k + 1, odo[k], odometry_weights[k].translation, odometry_weights[k].rotation);
             for (size_t e = 0; e < loops.size(); e++)
             {
                 // the kernel's weight at the current poses (1 without the kernel): the reweighted quadratic bounds the robust
@@ -717,6 +758,7 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
 
     // 1. segments with their world points
     const std::vector<double> path = path_at_windows(windows);
+    const std::vector<double> length = length_at_windows(windows, path, params.loop_closure_odometry_turn_m_per_deg);
     std::vector<Segment> segments;
     for (int w0 = 0; w0 < n_windows; w0 += windows_per_segment)
     {
@@ -725,6 +767,7 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
         s.last_window = std::min(n_windows, w0 + windows_per_segment) - 1;
         s.path_begin = path[w0];
         s.path_end = path[std::min(n_windows - 1, s.last_window + 1)];
+        s.length_begin = length[w0];
         s.pose = windows[w0].poses.front();
         s.t_begin = windows[w0].timestamps.front().first;
         s.t_end = windows[s.last_window].timestamps.back().first;
@@ -896,6 +939,15 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
                                          << std::setprecision(2) << centre.x() << " " << centre.y() << " " << centre.z() << ", its move "
                                          << move.x() << " " << move.y() << " " << move.z() << " m";
                     }
+                    if (!cross_floor && params.loop_closure_same_floor_information)
+                    {
+                        // G3b: weighted by what the registration determines (height kept); a registration whose
+                        // information is unusable keeps the fixed sigmas
+                        bool ok = false;
+                        e.omega = loop_edge_information(segments[best_i].pose, segments[j].pose, e.correction, registration_information, false,
+                                                        params.loop_closure_edge_sigma_m, ok);
+                        e.information = ok;
+                    }
                     if (cross_floor)
                     {
                         // weighted by what the registration determines, without the height (a shaft fixes neither its
@@ -951,10 +1003,18 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
         initial.push_back(s.pose);
     // a loop edge the solution disagrees with by more than loop_closure_max_residual_m / _deg is a false match that bends
     // the trajectory (a ghost wall at the revisit): the worst one is dropped and the graph solved again
+    std::vector<OdometryEdgeWeight> odometry_weights = equal_odometry_weights(static_cast<int>(segments.size()), params);
+    if (params.loop_closure_odometry_by_length)
+    {
+        std::vector<double> lengths;
+        for (size_t k = 0; k + 1 < segments.size(); k++)
+            lengths.push_back(segments[k + 1].length_begin - segments[k].length_begin);
+        odometry_weights = odometry_weights_by_length(lengths, params);
+    }
     std::vector<Eigen::Affine3d> optimized;
     for (;;)
     {
-        optimized = optimize_loop_pose_graph(initial, loops, params);
+        optimized = optimize_loop_pose_graph(initial, loops, params, odometry_weights);
         const std::vector<LoopEdgeResidual> residuals = loop_edge_residuals(initial, optimized, loops);
         size_t worst = loops.size();
         double worst_ratio = 1.0;
@@ -1010,13 +1070,27 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
         const bool has_next = k + 1 < segments.size();
         const double t0 = segments[k].t_begin;
         const double t1 = has_next ? segments[k + 1].t_begin : segments[k].t_end;
+        // G3a: by the length walked and turned between the anchors (standing still takes no share of the turn); within a
+        // window, and when the segment has no length, by time
+        const double l0 = segments[k].length_begin;
+        const double l1 = has_next ? segments[k + 1].length_begin : l0;
+        const bool by_length = params.loop_closure_odometry_by_length && l1 - l0 > 1e-6;
         for (int w = segments[k].first_window; w <= segments[k].last_window; w++)
         {
             auto &tr = windows[w].poses;
             const auto &ts = windows[w].timestamps;
+            const double lw0 = length[w];
+            const double lw1 = w + 1 < n_windows ? length[w + 1] : lw0;
+            const double tw0 = ts.empty() ? 0.0 : ts.front().first;
+            const double tw1 = w + 1 < n_windows && !windows[w + 1].timestamps.empty() ? windows[w + 1].timestamps.front().first : (ts.empty() ? 0.0 : ts.back().first);
             for (size_t n = 0; n < tr.size(); n++)
             {
-                const double f = (has_next && t1 > t0) ? std::clamp((ts[n].first - t0) / (t1 - t0), 0.0, 1.0) : 0.0;
+                double f = (has_next && t1 > t0) ? std::clamp((ts[n].first - t0) / (t1 - t0), 0.0, 1.0) : 0.0;
+                if (has_next && by_length)
+                {
+                    const double in_window = tw1 > tw0 ? std::clamp((ts[n].first - tw0) / (tw1 - tw0), 0.0, 1.0) : 0.0;
+                    f = std::clamp((lw0 + in_window * (lw1 - lw0) - l0) / (l1 - l0), 0.0, 1.0);
+                }
                 const Eigen::Affine3d C = has_next ? interpolate(correction[k], correction[k + 1], f) : correction[k];
                 tr[n] = C * tr[n];
             }
