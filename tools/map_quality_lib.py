@@ -137,7 +137,8 @@ def _raster(q, c, rad, res, n):
 
 def revisit(pts, T, P, ta, tb, step=2.5, rad=7.0, res=0.05, maxrot=8.0, drot=0.2):
     """heading [deg] and offset [m] of slice B against slice A where both see the same place (2D registration of the
-    floor-0 points within rad of the place), and the peak quality (best score / best score >= 2 deg away)"""
+    floor-0 points within rad of the place), the peak quality (best score / best score >= 2 deg away), and whether the
+    heading is saturated (the best rotation at the search limit +-maxrot: the true heading is at least that)"""
     def sensor(a):
         m = (T >= a) & (T < a + step)
         return P[m, :2][::20]
@@ -177,7 +178,7 @@ def revisit(pts, T, P, ta, tb, step=2.5, rad=7.0, res=0.05, maxrot=8.0, drot=0.2
     quality = scores[i] / scores[far].max() if far.any() else np.nan
     k = shifts[i]
     offset = np.hypot((k[0] + n // 2) % n - n // 2, (k[1] + n // 2) % n - n // 2) * res
-    return -(rots[i] + fr * drot), offset, quality
+    return -(rots[i] + fr * drot), offset, quality, i == 0 or i == len(rots) - 1
 
 
 # ---- sharpness: pose jitter ------------------------------------------------------------------------------------------

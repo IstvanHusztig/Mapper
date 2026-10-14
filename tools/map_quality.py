@@ -9,10 +9,15 @@ Measures:
   global geometry  facade angle along the gallery (way out / way back) minus at the start [deg]; the plan makes them
                    parallel, so 0 is right
   consistency      revisits: heading [deg] and offset [m] between two passes of the same place (median and worst |heading|,
-                   median offset; pairs with registration quality >= 1.08)
+                   median offset; pairs with registration quality >= 1.08). `pairs` is registered / all pairs: a pair
+                   is not registered when too few points lie near the place or the peak is weak, which a badly doubled
+                   wall gives but so does poor geometry (the noise floor registers 4-6 of 11 on 44 s0-s2), so compare
+                   the count with the noise floor's; a heading at the +-8 deg search limit is shown as >=8 (saturated)
   sharpness        pose jitter (rotation over 10 nodes, p50 / p99 [deg]); with --floors the railing NN [cm] and the
                    stairwell offsets [cm]
-The last line is the spread (max - min) over the results. Needs numpy (and pymupdf for --overlay).
+A measure that recording 44 always allows but that cannot be computed (the facade not found, the stairwell not
+found) is shown as FAIL: the map is broken there. The last line is the spread (max - min) over the results. Needs
+numpy (and pymupdf for --overlay).
 """
 import os
 import re
@@ -35,15 +40,17 @@ def measure(result, overlay):
     start = fa.get("start")
     for key in ("gallery_out", "gallery_back"):
         row["facade_" + key] = fa[key][0] - start[0] if fa.get(key) and start else np.nan
-    yaws, offs = [], []
+    yaws, offs, saturated = [], [], False
     for a, b in mq.REVISIT_PAIRS:
         r = mq.revisit(pts, T, P, a, b)
         if r and r[2] >= QUALITY_MIN:
             yaws.append(abs(r[0]))
             offs.append(r[1])
-    row["revisit_n"] = len(yaws)
+            saturated = saturated or r[3]
+    row["revisit_n"] = f"{len(yaws)}/{len(mq.REVISIT_PAIRS)}"
     row["revisit_yaw_med"] = np.median(yaws) if yaws else np.nan
     row["revisit_yaw_max"] = np.max(yaws) if yaws else np.nan
+    row["revisit_saturated"] = saturated
     row["revisit_off_med"] = np.median(offs) if offs else np.nan
     row["jitter_p50"], row["jitter_p99"] = mq.jitter(Rs)
     if overlay:
@@ -88,10 +95,10 @@ def main():
         print("[floors] evaluate_floors.py ...", file=sys.stderr, flush=True)
         for label, v in floors(labelled).items():
             rows[label]["railing"] = v["railing"]
-            rows[label]["stair_max"] = np.nanmax(v["stair"])
+            rows[label]["stair_max"] = np.nanmax(v["stair"]) if np.isfinite(v["stair"]).any() else np.nan
     cols = [("facade out", "facade_gallery_out", "{:+.2f}"), ("facade back", "facade_gallery_back", "{:+.2f}"),
             ("revisit |yaw| med", "revisit_yaw_med", "{:.2f}"), ("worst", "revisit_yaw_max", "{:.2f}"),
-            ("offset med [m]", "revisit_off_med", "{:.2f}"), ("pairs", "revisit_n", "{:d}"),
+            ("offset med [m]", "revisit_off_med", "{:.2f}"), ("pairs", "revisit_n", "{}"),
             ("jitter p50", "jitter_p50", "{:.2f}"), ("p99", "jitter_p99", "{:.2f}")]
     if use_floors:
         cols += [("railing NN [cm]", "railing", "{:.1f}"), ("stair max [cm]", "stair_max", "{:.1f}")]
@@ -102,14 +109,19 @@ def main():
         cells = []
         for h, k, fmt in cols:
             v = r.get(k, np.nan)
-            s = "-" if v is None or (isinstance(v, float) and np.isnan(v)) else fmt.format(v)
+            if v is None or (isinstance(v, float) and np.isnan(v)):
+                s = "FAIL" if k in ("facade_gallery_out", "facade_gallery_back", "stair_max", "revisit_yaw_max") else "-"
+            else:
+                s = fmt.format(v)
+                if k == "revisit_yaw_max" and r.get("revisit_saturated"):
+                    s = ">=" + s
             cells.append(s.rjust(max(len(h), 7) + 2))
         print(label.ljust(width) + "".join(cells))
     if len(labelled) > 1:
         cells = []
         for h, k, fmt in cols:
             vals = [rows[l].get(k, np.nan) for l, _ in labelled]
-            vals = [float(v) for v in vals if v is not None and not (isinstance(v, float) and np.isnan(v))]
+            vals = [float(v) for v in vals if isinstance(v, (int, float)) and not np.isnan(v)]
             cells.append(("{:.2f}".format(max(vals) - min(vals)) if len(vals) > 1 else "-").rjust(max(len(h), 7) + 2))
         print("spread".ljust(width) + "".join(cells))
     print("facade: gallery minus start (0 = parallel, as on the plan); revisit: two passes of the same place (0 = no doubled "
