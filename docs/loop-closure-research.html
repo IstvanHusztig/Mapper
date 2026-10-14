@@ -146,6 +146,22 @@ show no drift. They are real accuracy against the plan, but not the result of th
 has no loop that ties the gallery's direction to the start; the global angle needs less odometry drift (changes F/E) or a constraint
 between start and gallery.</p>
 
+<h3>2.3 Which pairs are revisits: distance against path</h3>
+<p>Same-floor segment pairs on s0 (C10 odometry), centre distance and the path walked between them (summed over the windows' first
+nodes, so standing still adds nothing):</p>
+<div class="table-wrap"><table>
+<tr><th>pair</th><th class="num">distance [m]</th><th class="num">path [m]</th><th class="num">ratio</th><th>what it is</th></tr>
+<tr><td>10 → 13</td><td class="num">0.37</td><td class="num">8.74</td><td class="num">0.04</td><td>gallery out/back, same spot</td></tr>
+<tr><td>9 → 14</td><td class="num">1.11</td><td class="num">17.62</td><td class="num">0.06</td><td>gallery out/back, same spot</td></tr>
+<tr><td>22 → 25</td><td class="num">1.14</td><td class="num">8.64</td><td class="num">0.13</td><td>out-and-back on floor −1</td></tr>
+<tr><td>15 → 18</td><td class="num">4.01</td><td class="num">8.87</td><td class="num">0.45</td><td>revisit nearby</td></tr>
+<tr><td>9 → 12</td><td class="num">6.76</td><td class="num">8.61</td><td class="num">0.79</td><td>the gallery seen from its other end (accepted with the 8 s gap only because it is visible from anywhere in it)</td></tr>
+<tr><td>two segments apart</td><td class="num">1.3–7.2</td><td class="num">1.8–8.0</td><td class="num">0.6–2.1</td><td>neighbours on a walk (mostly ≈ 1)</td></tr>
+<tr><td>next segment</td><td class="num">0.4–4.9</td><td class="num">0</td><td class="num">∞</td><td>adjacent (path counted between end and begin)</td></tr>
+</table></div>
+<p>A ratio limit of 0.5 with a minimum path of 8 m keeps the true revisits and excludes standing still, neighbours and places seen
+from afar: the rule proposed for G1 (section 4).</p>
+
 <h3>2.4 G1 measured, and the reference without loop closure</h3>
 <p>G1 (path rule, candidates longest path first) from the same C10 snapshots: the gallery's out and back agree within 0.24° in every run
 and its upper-floor wall is a single line in all six (C10: doubled in s2 and s4); the façade against the start gets worse in 5 of 6 runs
@@ -163,22 +179,6 @@ variant widens it. With all odometry edges weighted equally the pose graph can't
 between loops end up in the cheapest edges, often at the start, and turn the map by a different amount in each run. C10's two passing
 runs were such a chance placement. Hence G3 (odometry edges weighted by what was walked, turned and measured) comes before judging the
 façade (decision 2026-10-14: G1 kept provisionally, G1 + G3 judged together).</div>
-
-<h3>2.3 Which pairs are revisits: distance against path</h3>
-<p>Same-floor segment pairs on s0 (C10 odometry), centre distance and the path walked between them (summed over the windows' first
-nodes, so standing still adds nothing):</p>
-<div class="table-wrap"><table>
-<tr><th>pair</th><th class="num">distance [m]</th><th class="num">path [m]</th><th class="num">ratio</th><th>what it is</th></tr>
-<tr><td>10 → 13</td><td class="num">0.37</td><td class="num">8.74</td><td class="num">0.04</td><td>gallery out/back, same spot</td></tr>
-<tr><td>9 → 14</td><td class="num">1.11</td><td class="num">17.62</td><td class="num">0.06</td><td>gallery out/back, same spot</td></tr>
-<tr><td>22 → 25</td><td class="num">1.14</td><td class="num">8.64</td><td class="num">0.13</td><td>out-and-back on floor −1</td></tr>
-<tr><td>15 → 18</td><td class="num">4.01</td><td class="num">8.87</td><td class="num">0.45</td><td>revisit nearby</td></tr>
-<tr><td>9 → 12</td><td class="num">6.76</td><td class="num">8.61</td><td class="num">0.79</td><td>the gallery seen from its other end (accepted with the 8 s gap only because it is visible from anywhere in it)</td></tr>
-<tr><td>two segments apart</td><td class="num">1.3–7.2</td><td class="num">1.8–8.0</td><td class="num">0.6–2.1</td><td>neighbours on a walk (mostly ≈ 1)</td></tr>
-<tr><td>next segment</td><td class="num">0.4–4.9</td><td class="num">0</td><td class="num">∞</td><td>adjacent (path counted between end and begin)</td></tr>
-</table></div>
-<p>A ratio limit of 0.5 with a minimum path of 8 m keeps the true revisits and excludes standing still, neighbours and places seen
-from afar: the rule proposed for G1 (section 4).</p>
 
 <h2>3. Practice in established systems</h2>
 <h3>3.1 Candidate gating</h3>
