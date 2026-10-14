@@ -27,4 +27,5 @@ Rules: `docs/code-review-tracker.md` (status per finding); `44_short` against `t
 
 ## 4. Wrap-up
 
-- [ ] 4.1 Tracker rows C7–C12, C27 updated; `master-reviewer` on the commits. Verify: entries exist.
+- [x] 4.1 Tracker rows C7–C12, C27 updated; `master-reviewer` on the commits. Verify: entries exist.
+  Done 2026-10-14: master-reviewer on origin/master..HEAD (24 commits, changes A and B): nothing to revert; follow-ups done in 5847442 (damping grows at once after a step not applied, warning texts, bias test tolerance) and 3b58039 (harness flags). New full 44 baseline 2be0c3d (old folder `44_baseline_2026-10-14`), 44_short d3d146e.
