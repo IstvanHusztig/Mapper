@@ -134,11 +134,17 @@ Pairs: registered of 11 (C10's count was printed before the harness showed the t
 register (7–10 of 11 instead of 2–6) and their median heading error halves; the façade spread shrinks from 3.7° to 2.3°: less fragile.</div>
 <div class="bad"><b>Worse</b> The gallery against the start is −2.6 … −5.0° in every run, about the odometry's drift: no run passes
 (C10: 2 of 6). The stairwell offsets grow somewhat (s0 10.8 → 14.3 cm, s4 14.9 → 19.3 cm).</div>
-<p>Reading <span class="inf">(inference, to be checked)</span>: C10's two "passing" runs were luck: without gallery loops, the cycle error of
-7→15 was spread over the gallery's segments and happened to turn them towards the right angle in some runs. With the gallery tied to
-itself, its heading follows the junction, which carries the drift accumulated on the way there. Loop closure on 44 has no loop that
-ties the gallery's direction to the start, so the global angle can only come from less odometry drift (changes F/E) or a new
-constraint between start and gallery.</p>
+<p><b>Reading, corrected by review.</b> My first reading (the gallery loops turning the gallery) does not hold: the yaw of the result
+minus the odometry's, over time, changes by 0.5° or less between the corridor before the junction (25–36 s) and the gallery (45–70 s),
+in both configurations. The difference is made earlier, at 9–16 s in the start room: C10's loop closure turns the trajectory there by
+about −3° (s0 −2.9°, s1 −3.2°, s2 −3.3° at 25–36 s), the 8 s run by only −0.6 … −1.0°. The 8 s gap admits start-room revisits
+(1→4, 2→5, 3→6 on s0) whose registrations show the start room consistent within 0.4°, which stiffens it, so the global correction can't
+turn there. It also replaced four loops of the global closure (start ↔ return, 5→50, 5→51, 6→52, 6→53) by local ones
+(47→50, 47→51, 49→52, 50→53), because the nearest accepted partner takes a segment's only slot.</p>
+<p><span class="inf">(inference)</span> C10's two passing façade angles rest on a correction placed in the start room, where its own revisits
+show no drift. They are real accuracy against the plan, but not the result of the drift being found where it happened. Loop closure on 44
+has no loop that ties the gallery's direction to the start; the global angle needs less odometry drift (changes F/E) or a constraint
+between start and gallery.</p>
 
 <h3>2.3 Which pairs are revisits: distance against path</h3>
 <p>Same-floor segment pairs on s0 (C10 odometry), centre distance and the path walked between them (summed over the windows' first
@@ -191,7 +197,7 @@ from afar: the rule proposed for G1 (section 4).</p>
 <h2>4. What follows for change G</h2>
 <p>In order; each step measured from the snapshots on s0–s5 against the current noise floor before the next one, with an acceptance rule written before its runs (<code>openspec/changes/loop-closure-fixes/design.md</code>):</p>
 <ol>
-  <li><b>G1, revisits by path (C22):</b> ≥ 8 m walked between the two segments and centre distance ≤ min(8 m, 0.5 × path); the time gap goes. Expected from the 8 s experiment: a consistent gallery and less fragility, while the façade angle stays at the odometry's drift.</li>
+  <li><b>G1, revisits by path (C22):</b> ≥ 8 m walked between the two segments (a step counted only once the position moved ≥ 0.1 m, so standing still adds nothing) and centre distance ≤ min(8 m, 0.5 × path); candidates tried longest path first, so that local revisits don't take the slot of the global closure; the time gap goes. The 8 s experiment doesn't predict its façade result (it admitted start-room pairs G1 excludes and lost four global loops).</li>
   <li><b>G2, candidate choice and redundancy (C24):</b> the best passing registration instead of the first nearest; 2–3 loop edges per segment. Expected: fewer discrete flips between near-identical inputs <span class="inf">(inference)</span>.</li>
   <li><b>G3, honest weights (C23):</b> odometry edges with translation variance σ0² + k<sub>d</sub>·distance and rotation variance σr0² + k<sub>t</sub>·Δt + k<sub>ψ</sub>·|Δψ|, inflated along the windows' weak directions; same-floor loop edges from the registration information H / σ̂², inflated by a factor calibrated from repeated registrations from perturbed starts, floored (≈ 2 cm, 0.1°), near zero along weak directions; k values calibrated from accepted loops' residuals against path length.</li>
   <li><b>G4, outliers (C24):</b> odometry-cycle and pairwise consistency checks (an exact maximum clique is cheap for ≈ 40 loops), then GNC-TLS with the odometry edges as known inliers, replacing "least squares, then kernel, then drop the worst edge". Needs G3.</li>
