@@ -146,6 +146,24 @@ show no drift. They are real accuracy against the plan, but not the result of th
 has no loop that ties the gallery's direction to the start; the global angle needs less odometry drift (changes F/E) or a constraint
 between start and gallery.</p>
 
+<h3>2.4 G1 measured, and the reference without loop closure</h3>
+<p>G1 (path rule, candidates longest path first) from the same C10 snapshots: the gallery's out and back agree within 0.24° in every run
+and its upper-floor wall is a single line in all six (C10: doubled in s2 and s4); the façade against the start gets worse in 5 of 6 runs
+(pass 2/6 → 0/6, median |out| 2.2 → 3.2°, s5 −6.9°). Longest path first pairs most late segments with the first 10 s (only 2 of C10's
+≈ 23 same-floor loops kept), and the graph turns the start itself (0–9 s) by about −1.5°.</p>
+<div class="table-wrap"><table>
+<tr><th>façade out</th><th class="num">range [°]</th><th class="num">spread [°]</th></tr>
+<tr><td>odometry only (no loop closure)</td><td class="num">−3.9 … −4.7</td><td class="num">0.8</td></tr>
+<tr><td>C10 (30 s gap)</td><td class="num">−0.7 … −4.4</td><td class="num">3.7</td></tr>
+<tr><td>8 s gap</td><td class="num">−2.6 … −5.0</td><td class="num">2.4</td></tr>
+<tr><td>G1</td><td class="num">−2.0 … −6.9</td><td class="num">5.0</td></tr>
+</table></div>
+<div class="warn"><b>Where the fragility comes from</b> The odometry alone is consistent across the six inputs (spread 0.8°); every loop-closure
+variant widens it. With all odometry edges weighted equally the pose graph can't tell where the drift happened, so small disagreements
+between loops end up in the cheapest edges, often at the start, and turn the map by a different amount in each run. C10's two passing
+runs were such a chance placement. Hence G3 (odometry edges weighted by what was walked, turned and measured) comes before judging the
+façade (decision 2026-10-14: G1 kept provisionally, G1 + G3 judged together).</div>
+
 <h3>2.3 Which pairs are revisits: distance against path</h3>
 <p>Same-floor segment pairs on s0 (C10 odometry), centre distance and the path walked between them (summed over the windows' first
 nodes, so standing still adds nothing):</p>
