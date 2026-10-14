@@ -70,6 +70,15 @@ SteppedPoses stepped_poses(const Window &window, const std::vector<double> &h_x,
     return out;
 }
 
+double next_lm_factor(double lm_factor, int iter, bool step_applied)
+{
+    if (!step_applied)
+        lm_factor *= 10.0;
+    if (iter % 10 == 0 && iter > 0)
+        lm_factor *= 10.0;
+    return lm_factor;
+}
+
 double ndt_window_cost(const std::vector<Point3Di> &intermediate_points, const std::vector<Eigen::Affine3d> &poses,
                        const NDTBucketMapType &buckets_indoor, const NDTBucketMapType &buckets_outdoor, const ScanToMapOptions &scan_to_map)
 {
@@ -113,7 +122,7 @@ double ndt_window_cost(const std::vector<Point3Di> &intermediate_points, const s
     return cost;
 }
 
-void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window &window,
+bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window &window,
                              NDTBucketMapType &buckets_indoor, NDTBucketMapType &buckets_outdoor,
                              const ScanToMapOptions &scan_to_map, const MotionModelOptions &motion_model,
                              const MotionModelRotationOptions &rotation_options,
@@ -1044,4 +1053,5 @@ void optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
     }
     else if (!solved)
         cache.steps_skipped++;
+    return solved && stepped.big_jump_nodes == 0;
 }

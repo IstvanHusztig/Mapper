@@ -160,8 +160,8 @@ namespace
         double delta = 0.0;
     };
 
-    // the iteration loop of run_lm_iterations (app/run_odometry.cpp): lm_factor starts at lm_factor_initial and grows x10
-    // after iterations 10, 20, ...; after_iteration (optional) sees the window after each iteration; returns the last delta
+    // the iteration loop of run_lm_iterations (app/run_odometry.cpp): lm_factor starts at lm_factor_initial and grows as
+    // next_lm_factor says; after_iteration (optional) sees the window after each iteration; returns the last delta
     double run_iterations(std::vector<Point3Di> &points, Window &window, Maps &maps, const Options &o, double lm_factor_initial,
                           int iterations, Logger &logger, Eigen::Matrix3d *translation_information = nullptr,
                           const std::function<void(const IterationResult &, const Window &)> &after_iteration = {},
@@ -174,13 +174,12 @@ namespace
         for (int iter = 0; iter < iterations; iter++)
         {
             delta = 100000.0;
-            optimize_lidar_odometry(points, window, maps.indoor, maps.outdoor, o.scan_to_map, o.motion_model, o.rotation,
-                                    o.translation_imu, o.velocity_prior, lm_factor, delta, acc_offset, acc_offset_cov, logger,
-                                    translation_information, nullptr, workspace);
+            const bool applied = optimize_lidar_odometry(points, window, maps.indoor, maps.outdoor, o.scan_to_map, o.motion_model,
+                                                         o.rotation, o.translation_imu, o.velocity_prior, lm_factor, delta, acc_offset,
+                                                         acc_offset_cov, logger, translation_information, nullptr, workspace);
             if (after_iteration)
                 after_iteration({iter, delta}, window);
-            if (iter % 10 == 0 && iter > 0)
-                lm_factor *= 10.0;
+            lm_factor = next_lm_factor(lm_factor, iter, applied);
         }
         return delta;
     }
@@ -315,6 +314,16 @@ TEST_CASE("scan-to-map: a node 1 m or more from its guess is a big jump, counted
     CHECK(big.big_jump_nodes == 1);
 }
 
+TEST_CASE("scan-to-map: the damping grows every 10 iterations and at once after a step that was not applied")
+{
+    // a rejected step leaves the window unchanged; with the same damping the next iteration would get the same step
+    CHECK(next_lm_factor(5.0, 0, true) == 5.0);
+    CHECK(next_lm_factor(5.0, 3, true) == 5.0);
+    CHECK(next_lm_factor(5.0, 10, true) == 50.0);
+    CHECK(next_lm_factor(5.0, 3, false) == 50.0);
+    CHECK(next_lm_factor(5.0, 10, false) == 500.0);
+}
+
 TEST_CASE("scan-to-map: a yaw drift is corrected")
 {
     const Options o = options_from(test_config());
@@ -362,7 +371,7 @@ TEST_CASE("scan-to-map: the gyro bias is estimated")
             end_heading_error(w.poses, truth) / deg, " deg; largest position error ", after.position * 1000.0, " mm");
     // Measured 2026-10-04: 0.038 -0.042 0.473 deg/s (0.045 -0.031 0.469 with the previous cell statistics); 2026-10-14
     // (scene at grid_offset, C10): 0.016 -0.022 0.452 deg/s
-    CHECK(b.z() == doctest::Approx(0.5).epsilon(0.1));
+    CHECK(std::abs(b.z() - 0.5) < 0.075); // within 15 % (the former Approx(0.5).epsilon(0.1) allowed 0.15 through its scale of 1)
     CHECK(std::abs(b.x()) < 0.05);
     CHECK(std::abs(b.y()) < 0.05);
 }

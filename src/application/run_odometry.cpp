@@ -434,7 +434,8 @@ namespace
     constexpr double convergence_fast_delta = 1e-2;
 
     // Levenberg-Marquardt iterations of optimize_lidar_odometry: until the update falls below convergence_delta_threshold,
-    // nr_iter iterations ran, or the window took longer than real_time_threshold_seconds; the damping grows every 10 iterations
+    // nr_iter iterations ran, or the window took longer than real_time_threshold_seconds; the damping grows every 10
+    // iterations and after a step that was not applied (next_lm_factor)
     WindowOptimization run_lm_iterations(std::vector<Point3Di> &intermediate_points, Window &window, OdometryState &state,
                                          const OdometryRunSetup &setup, AccTerm &acc_term, const MotionModelRotationOptions &window_rotation_options,
                                          const VelocityPrior &velocity_prior, Eigen::Vector3d &acc_offset, Eigen::Matrix3d &lidar_translation_information,
@@ -457,7 +458,7 @@ namespace
         {
             iter_end = iter;
             delta = 100000.0;
-            optimize_lidar_odometry(intermediate_points, window, state.buckets_indoor, state.buckets_outdoor,
+            const bool applied = optimize_lidar_odometry(intermediate_points, window, state.buckets_indoor, state.buckets_outdoor,
                                     setup.scan_to_map, acc_term.motion_model, window_rotation_options, acc_term.options,
                                     velocity_prior, lm_factor, delta, acc_offset, acc_term.offset_cov, logger,
                                     setup.acc_gated || params.log_window_diagnostics ? &lidar_translation_information : nullptr, timing, &workspace);
@@ -469,13 +470,10 @@ namespace
             if (delta < params.convergence_delta_threshold)
                 break;
 
-            if (iter % 10 == 0 && iter > 0)
-            {
-                if (debugMsg)
-                    log_debug(logger) << "\nlm_factor " << lm_factor << ", delta " << std::setprecision(10) << delta << "\n";
-
-                lm_factor *= 10.0;
-            }
+            const double next_factor = next_lm_factor(lm_factor, iter, applied);
+            if (debugMsg && next_factor != lm_factor)
+                log_debug(logger) << "\nlm_factor " << lm_factor << ", delta " << std::setprecision(10) << delta << "\n";
+            lm_factor = next_factor;
 
             end = std::chrono::system_clock::now();
             std::chrono::duration<double> elapsed_seconds = end - start;
@@ -991,7 +989,7 @@ namespace
         if (params.rotation_sigma_inflation_k_turn > 0.0)
             log_info(logger) << "turn windows (gyro trusted more): " << carry.turn_windows << " of " << windows.size();
         log_info(logger) << "silent events: map rebuilds " << carry.map_rebuilds << ", solver steps skipped " << workspace.steps_skipped
-                         << ", big-jump node updates not applied " << workspace.big_jump_nodes;
+                         << ", big-jump nodes (their steps not applied) " << workspace.big_jump_nodes;
         if (params.log_iteration_convergence && !carry.convergence.empty())
             log_convergence_summary(carry.convergence, logger);
         if (params.log_stage_timing)
@@ -1115,10 +1113,10 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
             lm_timer.stop();
             if (workspace.steps_skipped > steps_skipped_before)
                 log_warning(logger) << "window " << i + 1 << ": " << workspace.steps_skipped - steps_skipped_before
-                                    << " solver step(s) skipped (the solution had fewer entries than unknowns)";
+                                    << " solver step(s) not applied (the solve failed)";
             if (workspace.big_jump_nodes > big_jump_nodes_before)
                 log_warning(logger) << "window " << i + 1 << ": " << workspace.big_jump_nodes - big_jump_nodes_before
-                                    << " node update(s) not applied (step > 1 m, big jump)";
+                                    << " node(s) would have moved 1 m or more from their guess: those steps were not applied (big jump)";
 
             const std::chrono::duration<double> window_seconds = std::chrono::system_clock::now() - window_start;
             log_window_result(i, windows.size(), optimization, carry.acc_distance, window_seconds.count(), params, logger);
