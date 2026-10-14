@@ -1,20 +1,20 @@
 {
   "dataset": "44_short",
   "params": "settings/lidar-vertical.toml",
-  "commit": "95a1226",
+  "commit": "c22d79a",
   "hd_cpu_optimization": "AUTO",
-  "created": "2026-10-13",
+  "created": "2026-10-14",
   "files": {
     "dMapper_params_0.1.0_<DATETIME>.toml": "280af4edaafd3ebee2437b506e9f9d7df5359b0cebb892c24251791f4344da2a",
-    "dMapper_results_0.1.0_<DATETIME>.json": "5ac5afa4a8b3d93096d5356e0869603deeb89f34052b882ded2bc24f636cabbd",
+    "dMapper_results_0.1.0_<DATETIME>.json": "ef2279de94cf4e6a227e4d0d5b8fb49fb71edd0a7988beb4e52b84e04b15d081",
     "point_sizes_per_chunk.json": "a8173d4d9ba530d097d0941bf88e4a5965e1ab491162039f8dd3c6bb47aadb6c",
-    "scan_lio_0.laz": "10d8df57f346596d8e7a711916e3d425e7ee7e3bd20e9d48ed62961ff3547513",
-    "scan_lio_1.laz": "8201d4466358dbe7e7f7a5466ddaf744d984d4c655211dd68316d8e529270bfa",
-    "scan_lio_merged.laz": "fc6111dad31a08ce67c2fa028e44e54e3c11eaf912ff8f7e8bb78a219d3d7883",
-    "session.mjs": "4e626dbac4a9938ad1dab21f8e986fd408f82e1d532c787f026214ec8fcc5e90",
-    "session_ini_poses.mri": "f9216c6b8e08305845004d8d5cab2e76020863e02760a94c22016d327c818494",
-    "session_poses.mrp": "f9216c6b8e08305845004d8d5cab2e76020863e02760a94c22016d327c818494",
-    "trajectory_lio_0.csv": "61d70bc1472f4c8949193d58bdf0f34432614cead2758663d88d026b882f0391",
-    "trajectory_lio_1.csv": "9ee32c6548a795b7c76eac8006a7b3996512d20dd5cef2315416438ddb3053ad"
+    "scan_lio_0.laz": "b68ed0f9527ab8142a9600d3c8a7a27d6af7d472a6b310569b5b53865a5cd9ff",
+    "scan_lio_1.laz": "e158732e2b4c496552988ad34bd126ce20a7a0f4ac7b6daf406840611fc6cd1c",
+    "scan_lio_merged.laz": "5729367f4419352d7931e1fc9eb8f7da9b055212fabd15b008b15b4993472621",
+    "session.mjs": "3372e09ff91158688e240f968107e0690294f1a59c92f04e687b200a4843c042",
+    "session_ini_poses.mri": "2b462302bcb4e10afa72c450022a788433df199a6da1689c271b06e4f4ee493a",
+    "session_poses.mrp": "2b462302bcb4e10afa72c450022a788433df199a6da1689c271b06e4f4ee493a",
+    "trajectory_lio_0.csv": "1d14536e22ea9d71aba4fed473334c39fa050b24ceb81cbd28b40c833ee64b29",
+    "trajectory_lio_1.csv": "70ed31548a460c2a4ef57802c7597e88d40c7a6b1f848402c5f55d13a6f02490"
   }
 }
