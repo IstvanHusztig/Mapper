@@ -22,10 +22,23 @@ namespace
         int last_window = 0;                 // inclusive
         Eigen::Affine3d pose;                // world pose of the first node
         Eigen::Vector3d center;              // mean node position
+        double path_begin = 0.0;             // path walked up to the first window's first node [m]
+        double path_end = 0.0;               // ... up to the next segment's first node
         double t_begin = 0.0;
         double t_end = 0.0;
         std::vector<Eigen::Vector3d> points; // world coordinates, voxel-decimated
     };
+
+    // the path walked between two segments and their horizontal centre distance, for the candidate log line
+    std::string path_note(const Segment &earlier, const Segment &later)
+    {
+        const double walked = later.path_begin - earlier.path_end;
+        const double distance = (later.center - earlier.center).head<2>().norm();
+        std::ostringstream s;
+        s << std::fixed << std::setprecision(1) << ", path " << walked << " m, distance " << distance << " m, ratio " << std::setprecision(2)
+          << (walked > 0.0 ? distance / walked : 0.0);
+        return s.str();
+    }
 
     uint64_t voxel_key(const Eigen::Vector3d &p, double r)
     {
@@ -643,6 +656,57 @@ bool loop_pose_graph_plausible(const std::vector<Eigen::Affine3d> &initial, cons
     return finite && max_shift_m <= params.loop_closure_max_correction_m + largest_edge;
 }
 
+std::vector<double> path_at_windows(const std::vector<Window> &windows)
+{
+    constexpr double min_step_m = 0.1;
+    std::vector<double> path(windows.size(), 0.0);
+    double walked = 0.0;
+    Eigen::Vector3d last = Eigen::Vector3d::Zero();
+    bool have_last = false;
+    for (size_t w = 0; w < windows.size(); w++)
+    {
+        if (!windows[w].poses.empty())
+        {
+            const Eigen::Vector3d p = windows[w].poses.front().translation();
+            if (!have_last)
+            {
+                last = p;
+                have_last = true;
+            }
+            else if ((p - last).norm() >= min_step_m)
+            {
+                walked += (p - last).norm();
+                last = p;
+            }
+        }
+        path[w] = walked;
+    }
+    return path;
+}
+
+std::vector<int> same_floor_revisits(const std::vector<RevisitSegment> &segments, int j, const OdometryConfig &params)
+{
+    std::vector<std::pair<double, int>> qualifying; // (path between, i)
+    for (int i = 0; i < j; i++)
+    {
+        const double path = segments[j].path_begin - segments[i].path_end;
+        if (path < params.loop_closure_min_path_m)
+            continue;
+        const Eigen::Vector3d d = segments[j].center - segments[i].center;
+        if (std::abs(d.z()) > params.loop_closure_max_vertical_offset_m)
+            continue;
+        if (d.head<2>().norm() > std::min(params.loop_closure_search_radius_m, params.loop_closure_radius_per_path * path))
+            continue;
+        qualifying.emplace_back(path, i);
+    }
+    // longest path first; equal paths by the earlier segment (deterministic)
+    std::sort(qualifying.begin(), qualifying.end(), [](const auto &a, const auto &b) { return a.first != b.first ? a.first > b.first : a.second < b.second; });
+    std::vector<int> out;
+    for (const auto &[path, i] : qualifying)
+        out.push_back(i);
+    return out;
+}
+
 int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params, PointStore &point_store, Logger &logger)
 {
     const int windows_per_segment = std::max(1, params.loop_closure_segment_windows);
@@ -652,12 +716,15 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
     log_info(logger) << "loop closure START";
 
     // 1. segments with their world points
+    const std::vector<double> path = path_at_windows(windows);
     std::vector<Segment> segments;
     for (int w0 = 0; w0 < n_windows; w0 += windows_per_segment)
     {
         Segment s;
         s.first_window = w0;
         s.last_window = std::min(n_windows, w0 + windows_per_segment) - 1;
+        s.path_begin = path[w0];
+        s.path_end = path[std::min(n_windows - 1, s.last_window + 1)];
         s.pose = windows[w0].poses.front();
         s.t_begin = windows[w0].timestamps.front().first;
         s.t_end = windows[s.last_window].timestamps.back().first;
@@ -716,37 +783,45 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
     };
     int cross_floor_tries = 0;
     int cross_floor_accepted = 0;
+    std::vector<RevisitSegment> revisit_segments;
+    for (const auto &s : segments)
+        revisit_segments.push_back({s.center, s.path_begin, s.path_end});
     for (int j = 0; j < static_cast<int>(segments.size()); j++)
     {
-        // earlier segments within the search radius, nearest first; when a registration is rejected the next one is tried
-        // (the nearest centre is not always the same view: a short last segment can pick a wrong partner).
-        // Pass 0: the same floor. Pass 1 (cross-floor loops): the floors above and below, as one more edge
+        // the earlier segments that qualify; when a registration is rejected the next one is tried.
+        // Pass 0: the same floor, longest path between first (same_floor_revisits). Pass 1 (cross-floor loops): the floors
+        // above and below, nearest first, as one more edge
         for (int pass = 0; pass < (use_cross_floor ? 2 : 1); pass++)
         {
             const bool cross_floor = pass == 1;
-            std::vector<std::pair<double, int>> candidates;
-            for (int i = 0; i < j; i++)
+            std::vector<int> candidates;
+            if (!cross_floor)
+                candidates = same_floor_revisits(revisit_segments, j, params);
+            else
             {
-                const double min_gap = cross_floor ? params.loop_closure_cross_floor_min_time_gap_s : params.loop_closure_min_time_gap_s;
-                if (segments[j].t_begin - segments[i].t_end < min_gap)
-                    continue;
-                const Eigen::Vector3d d = segments[j].center - segments[i].center;
-                if (cross_floor && (excluded(i) || excluded(j)))
-                    continue;
-                const double dz = std::abs(d.z());
-                const bool height_fits = cross_floor ? dz > params.loop_closure_max_vertical_offset_m && dz <= params.loop_closure_cross_floor_max_vertical_m
-                                                     : dz <= params.loop_closure_max_vertical_offset_m;
-                if (!height_fits)
-                    continue;
-                const double dh = d.head<2>().norm();
-                if (dh < params.loop_closure_search_radius_m)
-                    candidates.emplace_back(dh, i);
+                std::vector<std::pair<double, int>> nearest;
+                for (int i = 0; i < j; i++)
+                {
+                    if (segments[j].t_begin - segments[i].t_end < params.loop_closure_cross_floor_min_time_gap_s)
+                        continue;
+                    if (excluded(i) || excluded(j))
+                        continue;
+                    const Eigen::Vector3d d = segments[j].center - segments[i].center;
+                    const double dz = std::abs(d.z());
+                    if (!(dz > params.loop_closure_max_vertical_offset_m && dz <= params.loop_closure_cross_floor_max_vertical_m))
+                        continue;
+                    const double dh = d.head<2>().norm();
+                    if (dh < params.loop_closure_search_radius_m)
+                        nearest.emplace_back(dh, i);
+                }
+                std::sort(nearest.begin(), nearest.end());
+                for (const auto &[dh, i] : nearest)
+                    candidates.push_back(i);
             }
-            std::sort(candidates.begin(), candidates.end());
             const int tries = std::min(static_cast<int>(candidates.size()), std::max(1, params.loop_closure_candidates));
             for (int c = 0; c < tries; c++)
             {
-                const int best_i = candidates[c].second;
+                const int best_i = candidates[c];
 
                 // target: the earlier segment with its neighbours
                 std::vector<Eigen::Vector3d> target;
@@ -794,7 +869,7 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
                                  << std::fixed << std::setprecision(1) << segments[best_i].t_begin - segments[0].t_begin << " s / "
                                  << segments[j].t_begin - segments[0].t_begin << " s): overlap " << std::setprecision(2) << before << " -> "
                                  << after << ", correction " << shift << " m " << std::setprecision(1) << angle << " deg"
-                                 << (cross_floor ? ", information ratio " + std::to_string(info_ratio) : std::string())
+                                 << (cross_floor ? ", information ratio " + std::to_string(info_ratio) : path_note(segments[best_i], segments[j]))
                                  << (accepted ? " ACCEPTED" : " rejected");
                 if (accepted)
                 {

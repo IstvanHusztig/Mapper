@@ -9,13 +9,32 @@
 
 // Automatic loop closure on the finished odometry (before the consistency pass and the export):
 //  1. the windows are grouped into segments of loop_closure_segment_windows windows,
-//  2. revisits are segment pairs far apart in time but close in space,
+//  2. revisits are segment pairs with a long path walked between them but close in space,
 //  3. each revisit is registered against the map around the earlier visit (coarse voxel search,
 //     then point-to-distribution refinement) and accepted only if the overlap is high,
 //  4. a pose graph over the segment poses (odometry edges + accepted loop edges) is optimized,
 //  5. the correction is interpolated onto every trajectory node of every window.
 // Returns the number of accepted loop edges.
 int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params, PointStore &point_store, Logger &logger);
+
+// Step 2, the path walked: for each window, the path [m] from the first window to its first node, summed over the
+// windows' first nodes; a step counts only once the position has moved at least 0.1 m from the last counted one, so that
+// the pose jitter of a person standing still adds nothing
+std::vector<double> path_at_windows(const std::vector<Window> &windows);
+
+// A segment as step 2 sees it: its mean node position and the path walked up to its begin and its end
+struct RevisitSegment
+{
+    Eigen::Vector3d center = Eigen::Vector3d::Zero();
+    double path_begin = 0.0;
+    double path_end = 0.0;
+};
+
+// Step 2 on the same floor: the earlier segments that qualify as revisits of segment j, longest path between first (so
+// that a near revisit does not take the place of a far one). A segment i qualifies when at least loop_closure_min_path_m
+// was walked from its end to j's begin, its centre lies within min(loop_closure_search_radius_m,
+// loop_closure_radius_per_path * that path) horizontally and within loop_closure_max_vertical_offset_m vertically.
+std::vector<int> same_floor_revisits(const std::vector<RevisitSegment> &segments, int j, const OdometryConfig &params);
 
 // Step 4 on its own, for tests: the segment poses, the accepted loop edges, and the check of the result.
 struct LoopClosureEdge

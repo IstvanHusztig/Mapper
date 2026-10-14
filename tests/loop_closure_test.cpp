@@ -27,7 +27,8 @@ namespace
         OdometryConfig c;
         c.use_loop_closure = true;
         c.loop_closure_segment_windows = 4;   // 4 s per segment (shipped: 12)
-        c.loop_closure_min_time_gap_s = 10.0; // (shipped: 30)
+        c.loop_closure_min_path_m = 8.0;      // (shipped)
+        c.loop_closure_radius_per_path = 0.5; // (shipped)
         c.loop_closure_search_radius_m = 8.0;
         c.loop_closure_max_vertical_offset_m = 1.5;
         c.loop_closure_max_correction_m = 6.0;
@@ -162,6 +163,81 @@ namespace
         p.linear() = Eigen::AngleAxisd(yaw_deg * DEG_TO_RAD, Eigen::Vector3d::UnitZ()).toRotationMatrix();
         return p;
     }
+}
+
+namespace
+{
+    // windows whose first nodes lie at the given positions (one node per window is enough for the path)
+    std::vector<Window> windows_at(const std::vector<Eigen::Vector3d> &positions)
+    {
+        std::vector<Window> windows;
+        for (const auto &p : positions)
+        {
+            Window w;
+            Eigen::Affine3d m = Eigen::Affine3d::Identity();
+            m.translation() = p;
+            w.poses.push_back(m);
+            windows.push_back(w);
+        }
+        return windows;
+    }
+
+    RevisitSegment segment_at(double x, double y, double path_begin, double path_end)
+    {
+        return {Eigen::Vector3d(x, y, 0.0), path_begin, path_end};
+    }
+}
+
+TEST_CASE("loop closure revisits: the path walked ignores standing still and counts walking")
+{
+    std::vector<Eigen::Vector3d> positions;
+    for (int k = 0; k < 300; k++) // 2 min standing, 4 mm pose jitter per window
+        positions.emplace_back(0.004 * ((k % 3) - 1), 0.004 * ((k % 2) * 2 - 1), 0.0);
+    for (int k = 1; k <= 20; k++) // then 10 m along x in 0.5 m steps
+        positions.emplace_back(0.5 * k, 0.0, 0.0);
+    const std::vector<double> path = path_at_windows(windows_at(positions));
+    CHECK(path[299] == 0.0);
+    CHECK(path.back() == doctest::Approx(10.0).epsilon(0.01));
+}
+
+TEST_CASE("loop closure revisits: out and back qualifies, neighbours, standing still and a place seen from afar don't")
+{
+    OdometryConfig c;
+    c.loop_closure_min_path_m = 8.0;
+    c.loop_closure_radius_per_path = 0.5;
+    c.loop_closure_search_radius_m = 8.0;
+    c.loop_closure_max_vertical_offset_m = 1.5;
+    // a dead end walked out and back: segment 3 returns to segment 0's place after 9 m (gallery 10 -> 13 on 44)
+    const std::vector<RevisitSegment> out_and_back = {segment_at(0.0, 0.0, 0.0, 4.5), segment_at(4.0, 0.0, 4.5, 9.0),
+                                                      segment_at(4.5, 0.4, 9.0, 13.5), segment_at(0.4, 0.0, 13.5, 18.0)};
+    CHECK(same_floor_revisits(out_and_back, 3, c) == std::vector<int>{0});
+    // walking on: the next-but-one segment is about as far as the path between them (ratio about 1)
+    const std::vector<RevisitSegment> straight = {segment_at(0.0, 0.0, 0.0, 4.5), segment_at(4.5, 0.0, 4.5, 9.0),
+                                                  segment_at(9.0, 0.0, 9.0, 13.5), segment_at(13.5, 0.0, 13.5, 18.0)};
+    CHECK(same_floor_revisits(straight, 3, c).empty());
+    // standing still: no path between, however long the time
+    const std::vector<RevisitSegment> standing = {segment_at(0.0, 0.0, 0.0, 0.0), segment_at(0.1, 0.0, 0.0, 0.0), segment_at(0.0, 0.1, 0.0, 0.0)};
+    CHECK(same_floor_revisits(standing, 2, c).empty());
+    // a place seen from 6.8 m after 8.6 m of path (gallery 9 -> 12 on 44: ratio 0.79)
+    const std::vector<RevisitSegment> afar = {segment_at(0.0, 0.0, 0.0, 0.0), segment_at(6.8, 0.0, 8.6, 13.0)};
+    CHECK(same_floor_revisits(afar, 1, c).empty());
+    // another floor: not a same-floor revisit
+    std::vector<RevisitSegment> upstairs = out_and_back;
+    upstairs[3].center.z() = 2.8;
+    CHECK(same_floor_revisits(upstairs, 3, c).empty());
+}
+
+TEST_CASE("loop closure revisits: a far revisit is tried before a near one")
+{
+    // segment 3 is back at the start after a round of 40 m (segment 0) and also near segment 2, walked 9 m earlier
+    OdometryConfig c;
+    c.loop_closure_min_path_m = 8.0;
+    c.loop_closure_radius_per_path = 0.5;
+    c.loop_closure_search_radius_m = 8.0;
+    c.loop_closure_max_vertical_offset_m = 1.5;
+    const std::vector<RevisitSegment> segments = {segment_at(0.0, 0.0, 0.0, 4.5), segment_at(20.0, 0.0, 4.5, 25.0),
+                                                  segment_at(1.5, 0.0, 31.0, 35.5), segment_at(0.5, 0.0, 44.5, 49.0)};
+    CHECK(same_floor_revisits(segments, 3, c) == std::vector<int>{0, 2});
 }
 
 TEST_CASE("loop closure pose graph: a loop edge removes the drift and the result is plausible")

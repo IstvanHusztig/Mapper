@@ -37,10 +37,11 @@ handoff_tail_nodes = 30
 use_gyro_bias_estimation = true
 
 [loop_closure]
-# revisits (>= 30 s apart, within 8 m) are registered and closed with a pose graph before the export
+# revisits (>= 8 m walked in between, within min(8 m, 0.5 x that path)) are registered and closed with a pose graph before the export
 use_loop_closure = true
 loop_closure_segment_windows = 12
-loop_closure_min_time_gap_s = 30.0
+loop_closure_min_path_m = 8.0
+loop_closure_radius_per_path = 0.5
 loop_closure_search_radius_m = 8.0
 loop_closure_max_vertical_offset_m = 1.5
 loop_closure_max_correction_m = 6.0

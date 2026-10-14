@@ -109,15 +109,17 @@ struct OdometryConfig
     double turn_rate_threshold_deg_s = 30.0;
 
     // loop closure after the odometry (see loop_closure.h): segments of loop_closure_segment_windows windows,
-    // revisits = segments at least loop_closure_min_time_gap_s apart in time and within loop_closure_search_radius_m
-    // horizontally (loop_closure_max_vertical_offset_m vertically); registered revisits with an overlap of at least
+    // revisits (same floor) = segments with at least loop_closure_min_path_m walked between them and centres within
+    // min(loop_closure_search_radius_m, loop_closure_radius_per_path * that path) horizontally
+    // (loop_closure_max_vertical_offset_m vertically); registered revisits with an overlap of at least
     // loop_closure_min_fitness become pose-graph edges
     // export: also write all chunks into one scan_lio_merged.laz in world coordinates
     bool export_merged_laz = false;
 
     bool use_loop_closure = false;
     int loop_closure_segment_windows = 12;
-    double loop_closure_min_time_gap_s = 30.0;
+    double loop_closure_min_path_m = 8.0;
+    double loop_closure_radius_per_path = 0.5;
     double loop_closure_search_radius_m = 8.0;
     double loop_closure_max_vertical_offset_m = 1.5;
     double loop_closure_max_correction_m = 6.0;
@@ -145,7 +147,7 @@ struct OdometryConfig
     double loop_closure_cross_floor_min_fitness = 0.3;
     double loop_closure_cross_floor_max_angle_deg = 1.5;
     // a cross-floor pair needs only this time gap (there is always a staircase between two floors, so even a short gap
-    // spans the drift of the way down; loop_closure_min_time_gap_s would exclude the view of the shaft from the floor
+    // spans the drift of the way down; the same-floor path rule would exclude the view of the shaft from the floor
     // just above), and is registered on the footprint both segments share (the shaft), searched within this range
     double loop_closure_cross_floor_min_time_gap_s = 5.0;
     double loop_closure_cross_floor_search_m = 1.0;
