@@ -331,6 +331,57 @@ TEST_CASE("loop closure odometry weights: a loop's yaw correction goes mostly in
     CHECK(by_length > 0.3);
 }
 
+TEST_CASE("loop closure drop order: leave one out drops the false edge, not the strained right one")
+{
+    // 14 segment anchors 6 m apart along x (truth straight). The odometry turned 1.5 deg too much between anchors 6 and 7.
+    // Right loop edges hold the chain (0 -> 6, 7 -> 13, and across the drift 5 -> 9 with its twin 4 -> 9); a false long
+    // edge 0 -> 13 claims a further 4 deg. Alone, a long false edge would be absorbed by the chain unnoticed (13 odometry
+    // edges at 0.5 deg against 0.3 deg); held by the right edges it strains them, the twin pair most.
+    OdometryConfig c;
+    c.loop_closure_odometry_sigma_m = 0.1;
+    c.loop_closure_odometry_sigma_deg = 0.5;
+    c.loop_closure_edge_sigma_m = 0.05;
+    c.loop_closure_edge_sigma_deg = 0.3;
+    c.loop_closure_max_residual_m = 0.15;
+    c.loop_closure_max_residual_deg = 2.0;
+    c.loop_closure_kernel_scale = 0.0;
+    std::vector<Eigen::Affine3d> truth, initial;
+    for (int k = 0; k < 14; k++)
+    {
+        truth.push_back(pose(Eigen::Vector3d(6.0 * k, 0.0, 0.0), 0.0));
+        initial.push_back(k <= 6 ? truth[k] : truth[6] * pose(Eigen::Vector3d::Zero(), 1.5 * deg) * pose(Eigen::Vector3d(6.0 * (k - 6), 0.0, 0.0), 0.0));
+    }
+    const auto edge = [&](int i, int j, double extra_deg)
+    {
+        LoopClosureEdge e;
+        e.i = i;
+        e.j = j;
+        // the correction that moves j onto where the truth (plus a false extra turn about i) puts it
+        const Eigen::Affine3d target = truth[i] * pose(Eigen::Vector3d::Zero(), extra_deg * deg) * truth[i].inverse() * truth[j];
+        e.correction = target * initial[j].inverse();
+        return e;
+    };
+    const std::vector<LoopClosureEdge> loops = {edge(0, 6, 0.0), edge(7, 13, 0.0), edge(5, 9, 0.0), edge(4, 9, 0.0), edge(0, 13, 4.0)};
+    const std::vector<OdometryEdgeWeight> w = equal_odometry_weights(14, c);
+    const std::vector<Eigen::Affine3d> optimized = optimize_loop_pose_graph(initial, loops, c, w);
+    const std::vector<LoopEdgeResidual> r = loop_edge_residuals(initial, optimized, loops);
+    size_t worst_ratio = loops.size();
+    double largest = 1.0;
+    for (size_t e = 0; e < loops.size(); e++)
+    {
+        const double ratio = loop_edge_drop_ratio(loops[e], r[e], c);
+        MESSAGE("edge ", loops[e].i, " -> ", loops[e].j, ": residual ", r[e].translation_m, " m / ", r[e].angle_deg, " deg, ratio ", ratio);
+        if (ratio > largest)
+        {
+            largest = ratio;
+            worst_ratio = e;
+        }
+    }
+    const size_t left_out = loop_edge_to_drop(initial, optimized, loops, c, w);
+    MESSAGE("largest ratio drops edge ", worst_ratio, ", leave one out drops edge ", left_out);
+    CHECK(left_out == 4);
+}
+
 TEST_CASE("loop closure pose graph: a loop edge removes the drift and the result is plausible")
 {
     OdometryConfig c = loop_closure_config();

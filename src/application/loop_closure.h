@@ -107,6 +107,20 @@ std::vector<LoopEdgeResidual> loop_edge_residuals(const std::vector<Eigen::Affin
 // (free directions don't count).
 double loop_edge_drop_ratio(const LoopClosureEdge &edge, const LoopEdgeResidual &residual, const OdometryConfig &params);
 
+// The least-squares cost of a pose-graph solution (odometry edges with their weights, loop edges with their fixed sigmas
+// or information; no robust kernel)
+double loop_pose_graph_cost(const std::vector<Eigen::Affine3d> &initial, const std::vector<Eigen::Affine3d> &optimized,
+                            const std::vector<LoopClosureEdge> &loops, const OdometryConfig &params,
+                            const std::vector<OdometryEdgeWeight> &odometry_weights);
+
+// Which loop edge to drop after a solve (change loop-closure-fixes, G2a): of the edges beyond the drop limits
+// (loop_edge_drop_ratio > 1), the one whose removal lowers the cost of the re-solved graph the most (leave one out); a
+// false edge strains the others, so removing it frees the most cost, while a right edge near the limit leaves the
+// strain in place. Returns loops.size() when no edge is beyond the limits.
+size_t loop_edge_to_drop(const std::vector<Eigen::Affine3d> &initial, const std::vector<Eigen::Affine3d> &optimized,
+                         const std::vector<LoopClosureEdge> &loops, const OdometryConfig &params,
+                         const std::vector<OdometryEdgeWeight> &odometry_weights);
+
 // The optimized poses may be applied: all finite, and no segment moved further than loop_closure_max_correction_m plus
 // the largest accepted loop correction (a pose graph that ran away). max_shift_m receives the largest segment correction.
 bool loop_pose_graph_plausible(const std::vector<Eigen::Affine3d> &initial, const std::vector<Eigen::Affine3d> &optimized,

@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <iomanip>
+#include <limits>
 #include <cstdio>
 #include <sstream>
 #include <string>
@@ -669,6 +670,63 @@ std::vector<LoopEdgeResidual> loop_edge_residuals(const std::vector<Eigen::Affin
     return out;
 }
 
+double loop_pose_graph_cost(const std::vector<Eigen::Affine3d> &initial, const std::vector<Eigen::Affine3d> &optimized,
+                            const std::vector<LoopClosureEdge> &loops, const OdometryConfig &params,
+                            const std::vector<OdometryEdgeWeight> &odometry_weights)
+{
+    std::vector<TaitBryanPose> ps;
+    for (const auto &p : optimized)
+        ps.push_back(pose_tait_bryan_from_affine_matrix(p));
+    double cost = 0.0;
+    for (size_t k = 0; k + 1 < initial.size() && k < odometry_weights.size(); k++)
+        cost += relative_pose_edge_cost(ps, static_cast<int>(k), static_cast<int>(k + 1), relative_measurement(initial[k], initial[k + 1]),
+                                        odometry_weights[k].translation, odometry_weights[k].rotation);
+    const double w_loop_t = 1.0 / std::pow(params.loop_closure_edge_sigma_m, 2);
+    const Eigen::Vector3d w_loop_r = Eigen::Vector3d::Constant(1.0 / std::pow(params.loop_closure_edge_sigma_deg * DEG, 2));
+    for (const auto &e : loops)
+    {
+        const Eigen::Matrix<double, 6, 1> m = relative_measurement(initial[e.i], e.correction * initial[e.j]);
+        if (e.information)
+        {
+            const Eigen::Matrix<double, 6, 1> d = information_edge_residual(ps[e.i], ps[e.j], m);
+            cost += d.dot(e.omega * d);
+        }
+        else
+            cost += relative_pose_edge_cost(ps, e.i, e.j, m, w_loop_t, w_loop_r);
+    }
+    return cost;
+}
+
+size_t loop_edge_to_drop(const std::vector<Eigen::Affine3d> &initial, const std::vector<Eigen::Affine3d> &optimized,
+                         const std::vector<LoopClosureEdge> &loops, const OdometryConfig &params,
+                         const std::vector<OdometryEdgeWeight> &odometry_weights)
+{
+    const std::vector<LoopEdgeResidual> residuals = loop_edge_residuals(initial, optimized, loops);
+    std::vector<size_t> beyond;
+    for (size_t e = 0; e < loops.size(); e++)
+        if (loop_edge_drop_ratio(loops[e], residuals[e], params) > 1.0)
+            beyond.push_back(e);
+    if (beyond.empty())
+        return loops.size();
+    if (beyond.size() == 1)
+        return beyond.front();
+    size_t best = beyond.front();
+    double best_cost = std::numeric_limits<double>::infinity();
+    for (const size_t e : beyond)
+    {
+        std::vector<LoopClosureEdge> without = loops;
+        without.erase(without.begin() + static_cast<std::ptrdiff_t>(e));
+        const double cost = loop_pose_graph_cost(initial, optimize_loop_pose_graph(initial, without, params, odometry_weights), without, params,
+                                                 odometry_weights);
+        if (cost < best_cost) // ties keep the earlier edge (deterministic)
+        {
+            best_cost = cost;
+            best = e;
+        }
+    }
+    return best;
+}
+
 double loop_edge_drop_ratio(const LoopClosureEdge &edge, const LoopEdgeResidual &residual, const OdometryConfig &params)
 {
     if (edge.information)
@@ -1016,17 +1074,7 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
     {
         optimized = optimize_loop_pose_graph(initial, loops, params, odometry_weights);
         const std::vector<LoopEdgeResidual> residuals = loop_edge_residuals(initial, optimized, loops);
-        size_t worst = loops.size();
-        double worst_ratio = 1.0;
-        for (size_t e = 0; e < loops.size(); e++)
-        {
-            const double ratio = loop_edge_drop_ratio(loops[e], residuals[e], params);
-            if (ratio > worst_ratio)
-            {
-                worst_ratio = ratio;
-                worst = e;
-            }
-        }
+        const size_t worst = loop_edge_to_drop(initial, optimized, loops, params, odometry_weights);
         if (worst == loops.size())
         {
             auto line = log_info(logger);
