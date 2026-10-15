@@ -120,7 +120,7 @@ struct OdometryConfig
     int loop_closure_segment_windows = 6;
     double loop_closure_min_path_m = 8.0;
     double loop_closure_radius_per_path = 0.5;
-    // same-floor loop edges kept per segment: 2 = the best near and the best far revisit, 1 = the best one
+    // same-floor loop edges kept per segment: 2 = the best near and the best far revisit, 1 (or less) = the best one
     int loop_closure_edges_per_segment = 2;
     double loop_closure_search_radius_m = 8.0;
     double loop_closure_max_vertical_offset_m = 1.5;
@@ -130,8 +130,8 @@ struct OdometryConfig
     double loop_closure_odometry_sigma_deg = 0.5;
     double loop_closure_edge_sigma_m = 0.05;
     double loop_closure_edge_sigma_deg = 0.3;
-    // registrations tried per segment (the next nearest earlier segment when one is rejected), and the largest disagreement
-    // between the solved pose graph and a loop edge before that edge is dropped as a false match
+    // same-floor registrations per segment (revisit_tries in loop_closure.h), and the largest disagreement between the
+    // solved pose graph and a loop edge before that edge is dropped as a false match
     int loop_closure_candidates = 4;
     double loop_closure_max_residual_m = 0.15;
     double loop_closure_max_residual_deg = 2.0;

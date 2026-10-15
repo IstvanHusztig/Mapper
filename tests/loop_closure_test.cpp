@@ -258,13 +258,14 @@ TEST_CASE("loop closure revisits: the tries are the nearest and the longest-path
     const std::vector<RevisitTry> tries = revisit_tries(segments, 8, c);
     REQUIRE(tries.size() == 3);
     CHECK((tries[0].i == 6 && tries[0].near && !tries[0].far));
-    CHECK((tries[1].i == 3 && tries[1].near && tries[1].far));
-    CHECK((tries[2].i == 0 && !tries[2].near && tries[2].far));
+    CHECK((tries[1].i == 0 && !tries[1].near && tries[1].far));
+    CHECK((tries[2].i == 3 && tries[2].near && tries[2].far));
+    // a cap of 2 keeps the nearest and the longest-path one: a near revisit doesn't take the place of a far one
     c.loop_closure_candidates = 2;
     const std::vector<RevisitTry> two = revisit_tries(segments, 8, c);
     REQUIRE(two.size() == 2);
     CHECK(two[0].i == 6);
-    CHECK(two[1].i == 3);
+    CHECK(two[1].i == 0);
 }
 
 TEST_CASE("loop closure revisits: two slots keep the best near and the best far edge when their sources are apart, else the best one")
@@ -343,8 +344,14 @@ TEST_CASE("loop closure drop order: leave one out drops the false edge, not the 
             worst_ratio = e;
         }
     }
+    int beyond = 0;
+    for (size_t e = 0; e < loops.size(); e++)
+        beyond += loop_edge_drop_ratio(loops[e], r[e], c) > 1.0 ? 1 : 0;
     const size_t left_out = loop_edge_to_drop(initial, optimized, loops, c);
     MESSAGE("largest ratio drops edge ", worst_ratio, ", leave one out drops edge ", left_out);
+    // a choice among several edges beyond the limits, where the largest ratio would drop a right edge
+    REQUIRE(beyond >= 2);
+    CHECK(worst_ratio != 4);
     CHECK(left_out == 4);
 }
 

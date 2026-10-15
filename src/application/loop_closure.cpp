@@ -796,10 +796,16 @@ std::vector<RevisitTry> revisit_tries(const std::vector<RevisitSegment> &segment
         (near ? t.near : t.far) = true;
         tries.push_back(t);
     };
-    for (const int i : two_apart(by_distance))
-        add(i, true);
-    for (const int i : two_apart(by_path))
-        add(i, false);
+    // interleaved (nearest, longest path, second nearest, second longest path), so that a cap below 4 keeps both classes
+    const std::vector<int> near = two_apart(by_distance);
+    const std::vector<int> far = two_apart(by_path);
+    for (size_t k = 0; k < 2; k++)
+    {
+        if (k < near.size())
+            add(near[k], true);
+        if (k < far.size())
+            add(far[k], false);
+    }
     if (static_cast<int>(tries.size()) > std::max(1, params.loop_closure_candidates))
         tries.resize(static_cast<size_t>(std::max(1, params.loop_closure_candidates)));
     return tries;
@@ -908,9 +914,9 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
         revisit_segments.push_back({s.center, s.path_begin, s.path_end});
     for (int j = 0; j < static_cast<int>(segments.size()); j++)
     {
-        // the earlier segments that qualify; when a registration is rejected the next one is tried.
-        // Pass 0: the same floor, longest path between first (same_floor_revisits). Pass 1 (cross-floor loops): the floors
-        // above and below, nearest first, as one more edge
+        // the earlier segments that qualify. Pass 0: the same floor, every try of revisit_tries registered and the edges
+        // chosen afterwards (revisit_slots). Pass 1 (cross-floor loops): the floors above and below, nearest first, the
+        // next one tried when a registration is rejected, as one more edge
         for (int pass = 0; pass < (use_cross_floor ? 2 : 1); pass++)
         {
             const bool cross_floor = pass == 1;

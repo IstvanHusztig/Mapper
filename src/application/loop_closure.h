@@ -36,9 +36,10 @@ struct RevisitSegment
 // loop_closure_radius_per_path * that path) horizontally and within loop_closure_max_vertical_offset_m vertically.
 std::vector<int> same_floor_revisits(const std::vector<RevisitSegment> &segments, int j, const OdometryConfig &params);
 
-// G2b, the same-floor revisits registered for segment j: of the qualifying ones (same_floor_revisits), the nearest, the
-// nearest at least 3 segments away from it, the longest-path one, and the longest-path one at least 3 segments away from
-// it; distinct, at most loop_closure_candidates. near / far: chosen as one of the two nearest / longest-path ones.
+// The same-floor revisits registered for segment j: of the qualifying ones (same_floor_revisits), in this order, the
+// nearest, the longest-path one, the nearest at least 3 segments away from the nearest, and the longest-path one at
+// least 3 segments away from the longest-path one; distinct, the first loop_closure_candidates of them (a cap below 4
+// keeps both classes). near / far: chosen as one of the two nearest / longest-path ones.
 struct RevisitTry
 {
     int i = 0;
