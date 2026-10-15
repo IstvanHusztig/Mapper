@@ -19,6 +19,7 @@ int main(int argc, char *argv[])
             return run_cli(argc, argv);
         return run_gui(argc, argv);
     }
+    // a run that ended in an exception exits with 1, so that scripts see it failed
     catch (const std::bad_alloc& e)
     {
         std::cerr << "System is out of memory : " << e.what() << std::endl;
@@ -26,12 +27,11 @@ int main(int argc, char *argv[])
     }
     catch (const std::exception& e)
     {
-        std::cout << e.what();
+        std::cerr << "Fatal error: " << e.what() << std::endl;
     }
     catch (...)
     {
         std::cerr << "Unknown fatal error occurred." << std::endl;
     }
-
-    return 0;
+    return 1;
 }
