@@ -25,6 +25,44 @@ Along dMapper's path the byte stays intact. dMapper reads LAS `intensity` into `
 
 The same range and angle questions can also be answered retroactively on existing cave recordings. Bin the revisits of one homogeneous wall patch by range at fixed α and fit the slope. Because `ring` = 1, a per-beam Levinson curve cannot be fitted. The beam direction in the sensor frame (azimuth/elevation of the non-repetitive pattern) is the only proxy for a channel *(inference)*.
 
+## Update: what dLidar records, and what recording 0001 already shows
+
+The dLidar code and one recording (0001, 11.3 M points, 190 s) answer part of test 1 and change the plan. Facts are from the dLidar session's answers (`research_notes/.../dlidar_recording_format.md`); the interpretation below is mine and marked as such.
+
+**Facts from the dLidar code.**
+- LAZ `intensity` is the raw byte, unscaled (5..255).
+- `user_data` is the constant ring = 1; `classification`, `point_source_ID` and `return_number` are all 0. There is no channel or sample id anywhere in the file.
+- Points are written in the L2's own sensor frame (remapped for vertical mounting) with no lever arm. So **range and beam direction can be computed from the raw LAZ coordinates in dMapper before `load_data` shifts them by the lever arm.**
+  - |xyz| is close to the measured range, but not exactly: the SDK's `a_axis_dist`/`b_axis_dist` offsets move the point origin. Their size is not yet known.
+- dLidar **drops points with intensity < 5**, so the darkest returns are censored at the low end as well.
+- Per packet, the sensor sends `apd_temperature`, `apd_voltage`, `laser_voltage` and `dirty_index`, and dLidar discards them all. The firmware version is not logged.
+
+**Measured on recording 0001.**
+- **37.8 % of all points are exactly 255**, and 49 % are in 240–255. Between 1.5 and 5 m, the range where most cave data lies, 51–62 % are clipped.
+- There are 251 distinct values, so the mapping has no gaps or coarse steps.
+- Mean intensity rises from 145 at 0.1–0.3 m to about 230 at 1.5–3 m, with no clipping below 1 m. Beyond 3 m it falls only slowly: 192 at 30–45 m, still with 8 % clipped.
+
+**What this means (inference).**
+1. **The byte is not linear raw power.** Under 1/R², the power from the same surfaces would drop about 100× from 2.5 m to 25 m. The byte drops by about 13 %, and 19 % of points still clip at 20–30 m. Losing dark surfaces at long range explains part of that, but not a 100× gap. So the value is either range-compensated in firmware (Livox style) or strongly compressed (logarithmic or gain-controlled). Applying 1/R² to it would be the double-correction error. Test 2, the walk up to a wall, still has to tell compensated from log-compressed, because a mixed scene can't.
+2. **Below about 1.5 m the response falls off.** This looks like the classic near-field loss (receiver overlap). It matters a lot: 20 % of the points are under 1 m. Part of it may also be the scene (floor, the operator's body, the handle), so it needs the controlled test before g(R) is fitted.
+3. **Saturation, not noise, is the main problem.** If a moderately bright surface already reaches 255 at 2 m, bright carbonate walls will be clipped in most views. Then:
+   - 255 must be treated as a **censored value** ("≥ ceiling"), never averaged as 255. The per-cell estimate needs a censored fit (Tobit-style), and the curves are fitted from unclipped observations only.
+   - A clipped wall can still be measured from its oblique views. At larger incidence angles ρ·h(α) drops below the ceiling, so if h(α) is known, the unclipped oblique hits give ρ. This makes the angle curve more important than in the literature, which assumes no clipping.
+   - A new bench question, "which reflectance clips at which range", becomes test 6. With panels of about 10/25/50/90 % walked from 0.3 to 10 m, it shows the usable dynamic range directly. If a 25 % panel already clips at 2 m, a reflectivity product of the L2 can resolve only dark surfaces at mid range: the iron-stained, wet and dark ones.
+4. **APD voltage and temperature are the gain.** An avalanche photodiode's gain depends steeply on its bias voltage and temperature. If the firmware adjusts the bias voltage (temperature compensation, automatic gain), the intensity scale moves with it. Logging these per packet makes test 4 (gain stability) and test 5 (warm-up drift) answerable from every recording, not only on the bench. `dirty_index` is a direct flag for window contamination and condensation.
+5. **Unexplained 2:1 timing.** A packet spans 2.32 ms but packets arrive every 4.64 ms. This could mean two interleaved sample streams (possibly two emitters, see the hard-coded `ring = 1`) or every other sample dropped. With the packet sequence number stored per point, a difference in intensity between even and odd packets would show it.
+
+**Requests to dLidar, in order of value to the correction.**
+
+| # | Change | Why | Cost |
+|---|---|---|---|
+| 1 | A per-packet sidecar CSV (stamp, seq, apd_temperature, apd_voltage, laser_voltage, imu_temperature, dirty_index); the firmware version and the `a_axis_dist`/`b_axis_dist`, `range_scale`/`range_bias` values in `timingNNNN.json` | Gain and drift become visible in every recording; the exact origin geometry becomes known | Small, no LAZ change |
+| 2 | Packet seq in `point_source_ID`; LAS extra bytes for the corrected range (mm) and the sample index j | Exact range; tests for interleaved streams and for intensity dependence on position within a packet | About a day (dLidar's estimate) |
+| 3 | Keep points with intensity < 5, flagged instead of dropped (or make the threshold a setting) | Removes the low-end censoring of dark and wet rock | Small |
+| 4 | The scan angles alpha/theta as extra bytes | Only needed if 1–2 show that the origin offsets matter for the incidence angle | Small once 2 exists |
+
+Side notes for dMapper outside this task: the IMU runs at about 1000 Hz in the recording, not the 500 Hz in `settings/lidar-hardware-specs.md`. dLidar fixed the IMU timestamp lag in commit d68191b (2026-10-10), so recordings made before that keep the lag.
+
 ## Range correction must be empirical, because caves live in the near field
 
 For an extended Lambertian target that fills the footprint, the LiDAR range equation P_r = P_t·D_r²·η_sys·η_atm·σ/(4πR⁴β_t²), with σ = πρR²β_t²cos α, reduces to **P_r ∝ ρ·cos α·η_atm/R²**. The textbook correction to a reference range and normal incidence is I_c = I_raw·(R/R_ref)²/cos α. These are standard forms from Höfle & Pfeifer (2007) and Kashani et al. (2015), with symbols not verified ([Höfle & Pfeifer record](https://heibib.ub.uni-heidelberg.de/search/Record/1885638124), [Kashani et al.](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4701271/)). Targets smaller than the footprint do not follow 1/R². Edges, straws and thin stalactites fall off as 1/R⁴ (point) or 1/R³ (linear), so they must not enter a calibration.
@@ -107,11 +145,11 @@ The scale ambiguity is fixed by setting median ρ = 1, or by a panel in the scen
 
 ## Implementing it in dMapper: off by default, after consistency, validated against panels
 
-The step belongs **after `post_process`** (loop closure, then consistency) and before `save`, because only then are the poses final. It changes no pose, so with `use_radiometric_correction = false` as the default, `44_short` and the full 44 stay bit-identical with their manifests. One detail needs checking in the code: `load_data` shifts points by the lever arm, so range and beam direction must be computed from the LiDAR origin, not from the IMU origin. The output change is required in every scenario, because `save_result` today writes only world xyz, intensity and timestamp.
+The step belongs **after `post_process`** (loop closure, then consistency) and before `save`, because only then are the poses final. It changes no pose, so with `use_radiometric_correction = false` as the default, `44_short` and the full 44 stay bit-identical with their manifests. Range and beam direction must be computed from the LiDAR origin, not from the IMU origin. dLidar writes points in the sensor frame without a lever arm, and dMapper shifts them by the lever arm when loading (`src/infrastructure/recording_folder_source.cpp` l.196). So the range is |p| of the point as read, taken before that shift, and the beam direction is p/|p| rotated by the window pose. Clipped values (255) are carried as censored observations through every step. The output change is required in every scenario, because `save_result` today writes only world xyz, intensity and timestamp.
 
 | Step | Work (layer) | Validation / pass criterion |
 |---|---|---|
-| 1 | `tools/intensity_probe.py`: histogram, 255 share, range-bin median for a picked patch, per-window median (needs numpy; ask the user to install it) | Decide raw / compensated / AGC; first R_min estimate |
+| 1 | Partly done on recording 0001 (histogram, 255 share, range bins: not raw power, heavy clipping). Remaining: `tools/intensity_probe.py` for a picked patch's range and angle bins and the per-window median, and, once dLidar logs it, intensity against APD voltage and temperature (needs numpy; ask the user to install it) | Decide compensated / log / AGC; first R_min estimate; clip level |
 | 2 | Bench tests 1–5 and the panel grid with the L2 recorded through dLidar | Measured g(R), h(α), G, warm-up drift; repeatability between days < 3 % |
 | 3 | `src/domain/radiometry.{h,cpp}`: surface-cell grid (5–10 cm) from final points, PCA normals, filters, the alternating log-space fit, aggregation (Eigen only) | Unit test on `tests/synthetic_recording` with known per-patch ρ, injected g(R) with a near-field dip, cos^n, k(t) jump, edges: recovered curves and ρ within 1 % |
 | 4 | Use case in `src/application` called after `post_process`; settings in a new `[radiometry]` section (`TomlIO::POINTERS` + `CATEGORIES`, golden TOML regenerated in its own commit) | Off: `44_short` bit-identical. On: `ctest` passes; time cost reported |
