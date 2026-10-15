@@ -117,7 +117,7 @@ save_calibration_validation = false
 save_odometry_snapshot = false
 
 [loop_closure]
-loop_closure_candidates = 3
+loop_closure_candidates = 4
 loop_closure_cross_floor_exclude_segments = ''
 loop_closure_cross_floor_max_angle_deg = 1.5
 loop_closure_cross_floor_max_vertical_m = 0.0
@@ -128,7 +128,7 @@ loop_closure_cross_floor_only_near = ''
 loop_closure_cross_floor_search_m = 1.0
 loop_closure_edge_sigma_deg = 0.3
 loop_closure_edge_sigma_m = 0.05
-loop_closure_edges_per_segment = 1
+loop_closure_edges_per_segment = 2
 loop_closure_kernel_scale = 0.0
 loop_closure_max_correction_m = 6.0
 loop_closure_max_residual_deg = 2.0
@@ -136,15 +136,11 @@ loop_closure_max_residual_m = 0.15
 loop_closure_max_vertical_offset_m = 1.5
 loop_closure_min_fitness = 0.5
 loop_closure_min_path_m = 8.0
-loop_closure_odometry_by_length = false
-loop_closure_odometry_length_floor = 0.1
 loop_closure_odometry_sigma_deg = 0.5
 loop_closure_odometry_sigma_m = 0.1
-loop_closure_odometry_turn_m_per_deg = 0.1
 loop_closure_radius_per_path = 0.5
-loop_closure_same_floor_information = false
 loop_closure_search_radius_m = 8.0
-loop_closure_segment_windows = 12
+loop_closure_segment_windows = 6
 use_loop_closure = false
 
 [madgwick_filter]
