@@ -197,6 +197,15 @@ façade (decision 2026-10-14: G1 kept provisionally, G1 + G3 judged together).</
   <li>No configuration meets the pre-registered rule; its criterion "median not worse than C10" compared with C10's chance value and is replaced for G2 by "not worse than the odometry alone" (dated addendum in the design).</li>
 </ul>
 
+<h3>2.6 Shorter segments and the decision (2026-10-15)</h3>
+<ul>
+  <li>With 4.8 s segments, G3b + G2b twisted the gallery of s2 (way out vs way back 2.4°). Not the cross-floor edges (switched off, the twist stayed and the stairwell went to 23–84 cm: they are essential), but the segment model: the turn of the path lay inside one rigid segment. With 2.4 s segments the twist is gone in all six inputs (≤ 0.11°).</li>
+  <li>Information-weighted edges are soft in yaw (0.85–1.7° on 44, against 0.3° fixed and 0.5° per odometry edge), so the graph keeps the odometry's angle: no invented turns, façade spread 0.88° (C10 3.7°), but the façade stays at about −3.2° (odometry −4.0°).</li>
+  <li>Ablation at 2.4 s, by a rule written before the runs: fixed sigmas (A) turn the start room (and in s2 bend the way back by 7°), so G3b stays; without G2b the railing is worse in 5 of 6 inputs, so G2b stays; G3a adds nothing and was removed.</li>
+  <li>The façade error of the odometry lies in the gallery stretch (−4 … −5.7° there, back near 0° on the way out of it): way out and way back pass the same place, so loops cannot place this error. It belongs to the odometry (change F/E).</li>
+  <li>Open for G4: three start ↔ end edges per run are kept with 2–6° rotation residual under the weighted limit; shorter segments bring more gross false registrations (all dropped on 44).</li>
+</ul>
+
 <h2>3. Practice in established systems</h2>
 <h3>3.1 Candidate gating</h3>
 <ul>
