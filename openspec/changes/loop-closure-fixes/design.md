@@ -129,3 +129,19 @@ The G3 rule's median criterion compared with C10's chance value, which an honest
 - **Reported:** the yaw correction per band, edges removed by the sibling check and dropped after the solve, the accepted loops against G1's, runtime.
 - Configurations: G1 + G2a, G1 + G2a + G2b, and with G3b (and G3a + G3b) on the best of them. The user decides between those that pass.
 - **Added after the review (2026-10-14, before the runs):** a positive consistency criterion against the odometry alone (revisit worst median not worse than its 1.7°, revisit offset median well below its ≈ 1.2 m); paired per-run comparison of the façade against G1 (worse in at most 3 of 6); G2-specific checks: in s2 the gallery loop 9→13 is kept and 0→57 is dropped, and the set of accepted loops is similar across s0–s5 (most loops present in at least 4 of the 6 runs).
+
+## Segments of 2.4 s and the ablation (2026-10-15)
+
+### What was measured before this rule was written
+
+- G3b + G2b at 4.8 s twisted the gallery in s2 (out − back 2.4°); the cross-floor edges are not the cause (off: twist unchanged, stairwell 23–84 cm, railing 16–39 cm, so they are essential). Information-weighted edges have yaw sigmas 0.85–1.7° (fixed edges 0.3°, odometry edges 0.5° per segment).
+- Halving the segments (`loop_closure_segment_windows` 12 → 6, a setting) removed the twist. Candidate C* = G1 + G2a + G2b + G3b at 2.4 s: façade out −2.84 … −3.72 (spread 0.88, median |out| / |back| 3.2 / 3.2), gallery out − back ≤ 0.11° in all six, start room +0.05 … +0.08°, revisit worst median 1.77°, railing median 4.4 cm, stair median 9.5 cm (worse than C10 in 6 of 6 by 0.2–3.3 cm), loop closure 517–572 s per run (259 s at 4.8 s).
+- By the G2 rule C* fails the stair guard and misses the positive consistency criterion (1.77 > 1.7°); the halving was chosen after the 4.8 s configurations failed, on the same inputs, and the s2 checks had to be remapped (start loop 0 → 36 at 2.4 s). The user decided (2026-10-15) to run the ablation below before deciding.
+
+### Ablation rule (written 2026-10-15, before the runs)
+
+- Runs at 2.4 s from the C10 snapshots, s0–s5, one at a time: (A) G1 + G2a with fixed sigmas (one edge per segment, G1's tried order; the build before G2b), (B) G1 + G2a + G3b (the build before G2b), (C) C* + G3a.
+- **Paired test:** configuration X is worse than Y on a measure when it is worse in at least 5 of the 6 inputs; measures: |façade out|, gallery out − back, revisit worst, railing, stair max; plus the façade spread (worse by more than 0.5°) and the hard criteria (start room within ±0.3°, gallery out − back ≤ 0.3° in every input).
+- **G3b stays** only if A is worse than B on at least one measure or fails a hard criterion; **G2b stays** only if B is worse than C* on at least one measure or fails a hard criterion; **G3a is added** only if C is better than C* on at least one measure and worse on none. Otherwise the simpler configuration is chosen and the unused code is removed after the user's OK.
+- G2a is not ablated: it changed nothing on 44 and is kept as a correctness fix with its unit test, unless the user decides otherwise.
+- **Also measured:** the stairwell of the odometry alone (floors check on the C10 odometry-only results); false registrations: the gross drops (residual > 1 m) and the largest residuals among the kept edges, for the chosen configuration; recording 45f with the chosen configuration if the recording is available.
