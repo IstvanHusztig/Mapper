@@ -154,7 +154,7 @@ The G3 rule's median criterion compared with C10's chance value, which an honest
 | A: G1 + G2a, fixed sigmas | −0.25 … −2.61 | 2.65 | −0.26 … −0.73 (5 of 6 outside ±0.3) | ≤ 0.16 | 1.5 | 6.4 | 7.5 |
 | B: G1 + G2a + G3b | −2.07 … −3.92 | 1.85 | −0.25 … +0.12 | ≤ 0.15 | 1.5 | 6.8 | 7.8 |
 | C*: G1 + G2a + G2b + G3b | −2.84 … −3.72 | 0.88 | +0.05 … +0.08 | ≤ 0.11 | 1.77 | 4.4 | 9.5 |
-| C: C* + G3a | −2.86 … −3.73 | 0.87 | +0.05 … +0.09 | ≤ 0.15 | 1.9 | 4.3 | 8.9 |
+| C: C* + G3a | −2.86 … −3.73 | 0.87 | +0.05 … +0.09 | ≤ 0.15 | 1.9 | 4.3 | 9.2 |
 | odometry alone | −3.88 … −4.67 | 0.79 | – | ≤ 0.34 | 1.7 | 18 | 142 |
 
 - By the rule: A fails the hard criterion, so G3b stays; B is worse than C* on the railing (5 of 6), the façade spread (+0.97°) and the gallery (5 of 6, by 0.02–0.1° only), so G2b stays; C is better than C* on no measure, so G3a is not added.
