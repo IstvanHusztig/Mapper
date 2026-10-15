@@ -59,7 +59,7 @@
 <body>
 <main>
 <h1>Loop closure: diagnosis and practice</h1>
-<p class="lead">Research notes for change G (<code>openspec/changes/loop-closure-fixes</code>), October 2026. What dMapper's loop
+<p class="lead">Research notes for change G (<code>openspec/changes/archive/2026-10-15-loop-closure-fixes</code>), October 2026. What dMapper's loop
 closure does, why its result on recording 44 is fragile, what established LiDAR SLAM systems do, and what follows for the fixes
 C22–C25 of <code>docs/code-review-tracker.md</code>. Statements marked <span class="inf">(inference)</span> are reasoning, not taken from a source.</p>
 
@@ -239,7 +239,7 @@ façade (decision 2026-10-14: G1 kept provisionally, G1 + G3 judged together).</
 </ul>
 
 <h2>4. What follows for change G</h2>
-<p>In order; each step measured from the snapshots on s0–s5 against the current noise floor before the next one, with an acceptance rule written before its runs (<code>openspec/changes/loop-closure-fixes/design.md</code>):</p>
+<p>In order; each step measured from the snapshots on s0–s5 against the current noise floor before the next one, with an acceptance rule written before its runs (<code>openspec/changes/archive/2026-10-15-loop-closure-fixes/design.md</code>):</p>
 <ol>
   <li><b>G1, revisits by path (C22):</b> ≥ 8 m walked between the two segments (a step counted only once the position moved ≥ 0.1 m, so standing still adds nothing) and centre distance ≤ min(8 m, 0.5 × path); candidates tried longest path first, so that local revisits don't take the slot of the global closure; the time gap goes. The 8 s experiment doesn't predict its façade result (it admitted start-room pairs G1 excludes and lost four global loops).</li>
   <li><b>G2, candidate choice, redundancy and sibling consistency (C24):</b> the two nearest and the two longest-path candidates tried, up to two edges per segment kept by registration quality, and an edge that disagrees with its agreeing neighbours removed before the solve. Next after the 2 × 2 (decision 2026-10-14), then G3b again.</li>
