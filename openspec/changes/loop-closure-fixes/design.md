@@ -146,3 +146,18 @@ The G3 rule's median criterion compared with C10's chance value, which an honest
 - G2a is not ablated: it changed nothing on 44 and is kept as a correctness fix with its unit test, unless the user decides otherwise.
 - **Also measured:** the stairwell of the odometry alone (floors check on the C10 odometry-only results); false registrations: the gross drops (residual > 1 m) and the largest residuals among the kept edges, for the chosen configuration; recording 45f with the chosen configuration if the recording is available.
 - 45f (restored by the user on 2026-10-15, which ends the one-time exception granted the same day): master's build and settings run it with a snapshot; the chosen configuration runs from that snapshot; compared by the log (loops accepted and dropped, corrections), map sharpness (`eval_odometry.py` occupied cells) and a top view.
+
+### Ablation result (2026-10-15) and decision
+
+| configuration (2.4 s) | façade out | spread | start room 0–9 s | gallery out − back | revisit worst median | railing median | stair median |
+|---|---|---|---|---|---|---|---|
+| A: G1 + G2a, fixed sigmas | −0.25 … −2.61 | 2.65 | −0.26 … −0.73 (5 of 6 outside ±0.3) | ≤ 0.16 | 1.5 | 6.4 | 7.5 |
+| B: G1 + G2a + G3b | −2.07 … −3.92 | 1.85 | −0.25 … +0.12 | ≤ 0.15 | 1.5 | 6.8 | 7.8 |
+| C*: G1 + G2a + G2b + G3b | −2.84 … −3.72 | 0.88 | +0.05 … +0.08 | ≤ 0.11 | 1.77 | 4.4 | 9.5 |
+| C: C* + G3a | −2.86 … −3.73 | 0.87 | +0.05 … +0.09 | ≤ 0.15 | 1.9 | 4.3 | 8.9 |
+| odometry alone | −3.88 … −4.67 | 0.79 | – | ≤ 0.34 | 1.7 | 18 | 142 |
+
+- By the rule: A fails the hard criterion, so G3b stays; B is worse than C* on the railing (5 of 6), the façade spread (+0.97°) and the gallery (5 of 6, by 0.02–0.1° only), so G2b stays; C is better than C* on no measure, so G3a is not added.
+- Reported: A puts a −3° turn at 9 s; in s0 its whole façade lies on the plan (start, gallery and the way back at 71–85 s within 1°), in s2 its way back is 7° off. The odometry's façade error lies in the gallery stretch (−4 … −5.7° there, −0.8° on the way back at 71–85 s in s2); the candidate leaves the gallery about 2° off the same wall seen on the way back. Loop closure cannot locate this error (way out and way back pass the same place); it is the odometry's (change F/E).
+- False registrations at 2.4 s: 2–4 gross ones per run (1.2–5.9 m, up to 11°), all dropped; three start ↔ end edges (3 → 113/114, 4 → 112) are kept with 2–6° rotation residual under the weighted limit (0.08–0.14 of 0.15): G4 (consistency between edges) is the next fix for caves.
+- Decision (user, 2026-10-15): ship C*; G3a's code removed; G3b permanent (switch removed, fixed sigmas only as the fallback); defaults `loop_closure_segment_windows` 6, `loop_closure_candidates` 4, `loop_closure_edges_per_segment` 2. The shipped build reproduces C* on 44_s2 exactly (max difference 0.000 m, same loops).
