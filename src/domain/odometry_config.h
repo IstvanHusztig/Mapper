@@ -117,20 +117,11 @@ struct OdometryConfig
     bool export_merged_laz = false;
 
     bool use_loop_closure = false;
-    int loop_closure_segment_windows = 12;
+    int loop_closure_segment_windows = 6;
     double loop_closure_min_path_m = 8.0;
     double loop_closure_radius_per_path = 0.5;
-    // odometry edges of the pose graph (change loop-closure-fixes, G3a): with loop_closure_odometry_by_length the
-    // translation and yaw variances of edge k scale with its length L_k = path walked + turn_m_per_deg * rotation about
-    // the vertical [deg], relative to the run's mean (at least loop_closure_odometry_length_floor of it), and the
-    // correction is spread onto the nodes by that length; off: every edge has the fixed sigmas below (temporary switch)
-    bool loop_closure_odometry_by_length = false;
-    double loop_closure_odometry_turn_m_per_deg = 0.1;
-    double loop_closure_odometry_length_floor = 0.1;
-    // same-floor loop edges kept per segment (G2b): 2 = the best near and the best far revisit, 1 = the best one
-    int loop_closure_edges_per_segment = 1;
-    // same-floor loop edges weighted by the registration's information like the cross-floor ones (G3b; temporary switch)
-    bool loop_closure_same_floor_information = false;
+    // same-floor loop edges kept per segment: 2 = the best near and the best far revisit, 1 = the best one
+    int loop_closure_edges_per_segment = 2;
     double loop_closure_search_radius_m = 8.0;
     double loop_closure_max_vertical_offset_m = 1.5;
     double loop_closure_max_correction_m = 6.0;
@@ -141,7 +132,7 @@ struct OdometryConfig
     double loop_closure_edge_sigma_deg = 0.3;
     // registrations tried per segment (the next nearest earlier segment when one is rejected), and the largest disagreement
     // between the solved pose graph and a loop edge before that edge is dropped as a false match
-    int loop_closure_candidates = 3;
+    int loop_closure_candidates = 4;
     double loop_closure_max_residual_m = 0.15;
     double loop_closure_max_residual_deg = 2.0;
     // robust kernel on the loop edges of the pose graph: Cauchy with this scale, in units of the edge's sigmas (a loop

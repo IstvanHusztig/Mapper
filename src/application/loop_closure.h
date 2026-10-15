@@ -36,26 +36,6 @@ struct RevisitSegment
 // loop_closure_radius_per_path * that path) horizontally and within loop_closure_max_vertical_offset_m vertically.
 std::vector<int> same_floor_revisits(const std::vector<RevisitSegment> &segments, int j, const OdometryConfig &params);
 
-// The length walked and turned up to each window's first node: the path of path_at_windows plus
-// loop_closure_odometry_turn_m_per_deg times the rotation about the world vertical turned [deg] (summed as |angle * axis.z|
-// between the windows' first nodes, a turn and the turn back both counting)
-std::vector<double> length_at_windows(const std::vector<Window> &windows, const std::vector<double> &path, double turn_m_per_deg);
-
-// The weights of one odometry edge of the pose graph (segment k -> k + 1): translation, and rotation per Tait-Bryan angle
-// (om, fi, ka) of the relative pose
-struct OdometryEdgeWeight
-{
-    double translation = 0.0;
-    Eigen::Vector3d rotation = Eigen::Vector3d::Zero();
-};
-
-// every edge with the fixed sigmas loop_closure_odometry_sigma_m / _deg
-std::vector<OdometryEdgeWeight> equal_odometry_weights(int n_segments, const OdometryConfig &params);
-
-// G3a: the translation and yaw (ka) variances of edge k scale with lengths[k] / the mean length (at least
-// loop_closure_odometry_length_floor), roll and pitch keep the fixed sigma; equal lengths give equal_odometry_weights
-std::vector<OdometryEdgeWeight> odometry_weights_by_length(const std::vector<double> &lengths, const OdometryConfig &params);
-
 // G2b, the same-floor revisits registered for segment j: of the qualifying ones (same_floor_revisits), the nearest, the
 // nearest at least 3 segments away from it, the longest-path one, and the longest-path one at least 3 segments away from
 // it; distinct, at most loop_closure_candidates. near / far: chosen as one of the two nearest / longest-path ones.
@@ -112,7 +92,7 @@ std::vector<LoopClosureEdge> revisit_slots(const std::vector<AcceptedRevisit> &a
 // solved by reweighting each step with 1 / (1 + s^2 / c^2) at the current poses, starting from the plain least-squares
 // solution (from the odometry's poses every true loop would look like an outlier); odometry edges stay quadratic.
 std::vector<Eigen::Affine3d> optimize_loop_pose_graph(const std::vector<Eigen::Affine3d> &initial, const std::vector<LoopClosureEdge> &loops,
-                                                      const OdometryConfig &params, const std::vector<OdometryEdgeWeight> &odometry_weights);
+                                                      const OdometryConfig &params);
 
 // How far the optimized poses are from each loop edge's measurement: (initial_i^-1 correction initial_j)^-1 (optimized_i^-1 optimized_j).
 struct LoopEdgeResidual
@@ -129,19 +109,17 @@ std::vector<LoopEdgeResidual> loop_edge_residuals(const std::vector<Eigen::Affin
 // (free directions don't count).
 double loop_edge_drop_ratio(const LoopClosureEdge &edge, const LoopEdgeResidual &residual, const OdometryConfig &params);
 
-// The least-squares cost of a pose-graph solution (odometry edges with their weights, loop edges with their fixed sigmas
-// or information; no robust kernel)
+// The least-squares cost of a pose-graph solution (odometry edges with the fixed sigmas, loop edges with their fixed
+// sigmas or information; no robust kernel)
 double loop_pose_graph_cost(const std::vector<Eigen::Affine3d> &initial, const std::vector<Eigen::Affine3d> &optimized,
-                            const std::vector<LoopClosureEdge> &loops, const OdometryConfig &params,
-                            const std::vector<OdometryEdgeWeight> &odometry_weights);
+                            const std::vector<LoopClosureEdge> &loops, const OdometryConfig &params);
 
 // Which loop edge to drop after a solve (change loop-closure-fixes, G2a): of the edges beyond the drop limits
 // (loop_edge_drop_ratio > 1), the one whose removal lowers the cost of the re-solved graph the most (leave one out); a
 // false edge strains the others, so removing it frees the most cost, while a right edge near the limit leaves the
 // strain in place. Returns loops.size() when no edge is beyond the limits.
 size_t loop_edge_to_drop(const std::vector<Eigen::Affine3d> &initial, const std::vector<Eigen::Affine3d> &optimized,
-                         const std::vector<LoopClosureEdge> &loops, const OdometryConfig &params,
-                         const std::vector<OdometryEdgeWeight> &odometry_weights);
+                         const std::vector<LoopClosureEdge> &loops, const OdometryConfig &params);
 
 // The optimized poses may be applied: all finite, and no segment moved further than loop_closure_max_correction_m plus
 // the largest accepted loop correction (a pose graph that ran away). max_shift_m receives the largest segment correction.

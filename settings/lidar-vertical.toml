@@ -39,7 +39,7 @@ use_gyro_bias_estimation = true
 [loop_closure]
 # revisits (>= 8 m walked in between, within min(8 m, 0.5 x that path)) are registered and closed with a pose graph before the export
 use_loop_closure = true
-loop_closure_segment_windows = 12
+loop_closure_segment_windows = 6
 loop_closure_min_path_m = 8.0
 loop_closure_radius_per_path = 0.5
 loop_closure_search_radius_m = 8.0

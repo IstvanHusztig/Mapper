@@ -22,18 +22,11 @@ namespace
 {
     const double deg = DEG_TO_RAD;
 
-    // the pose graph with every odometry edge at the fixed sigmas (equal_odometry_weights)
-    std::vector<Eigen::Affine3d> solve_graph(const std::vector<Eigen::Affine3d> &initial, const std::vector<LoopClosureEdge> &loops,
-                                             const OdometryConfig &params)
-    {
-        return optimize_loop_pose_graph(initial, loops, params, equal_odometry_weights(static_cast<int>(initial.size()), params));
-    }
-
     OdometryConfig loop_closure_config()
     {
         OdometryConfig c;
         c.use_loop_closure = true;
-        c.loop_closure_segment_windows = 4;   // 4 s per segment (shipped: 12)
+        c.loop_closure_segment_windows = 4;   // 4 s per segment (shipped: 6)
         c.loop_closure_min_path_m = 8.0;      // (shipped)
         c.loop_closure_radius_per_path = 0.5; // (shipped)
         c.loop_closure_search_radius_m = 8.0;
@@ -305,90 +298,6 @@ TEST_CASE("loop closure revisits: two slots keep the best near and the best far 
     CHECK(revisit_slots({}, 2).empty());
 }
 
-TEST_CASE("loop closure odometry weights: equal lengths give the fixed sigmas, a short edge is stiffer, roll and pitch stay")
-{
-    OdometryConfig c;
-    c.loop_closure_odometry_sigma_m = 0.1;
-    c.loop_closure_odometry_sigma_deg = 0.5;
-    c.loop_closure_odometry_length_floor = 0.1;
-    const std::vector<OdometryEdgeWeight> fixed = equal_odometry_weights(4, c);
-    const std::vector<OdometryEdgeWeight> equal = odometry_weights_by_length({8.0, 8.0, 8.0}, c);
-    REQUIRE(equal.size() == 3);
-    for (size_t k = 0; k < 3; k++)
-    {
-        CHECK(equal[k].translation == doctest::Approx(fixed[k].translation));
-        CHECK(equal[k].rotation.isApprox(fixed[k].rotation));
-    }
-    // mean 6 m: the 0 m edge is floored at 0.1 of the mean (10x the weight), the 12 m edge gets half the weight
-    const std::vector<OdometryEdgeWeight> w = odometry_weights_by_length({0.0, 6.0, 12.0}, c);
-    CHECK(w[0].translation == doctest::Approx(10.0 * fixed[0].translation));
-    CHECK(w[0].rotation(2) == doctest::Approx(10.0 * fixed[0].rotation(2)));
-    CHECK(w[2].rotation(2) == doctest::Approx(0.5 * fixed[0].rotation(2)));
-    CHECK(w[0].rotation(0) == doctest::Approx(fixed[0].rotation(0))); // roll and pitch: fixed
-    CHECK(w[2].rotation(1) == doctest::Approx(fixed[0].rotation(1)));
-}
-
-TEST_CASE("loop closure odometry weights: a turn on the spot counts as length, about the vertical")
-{
-    // 18 windows turning 5 deg each about z at one place: 90 deg, no path
-    std::vector<Window> windows;
-    for (int k = 0; k < 19; k++)
-    {
-        Window w;
-        w.poses.push_back(pose(Eigen::Vector3d::Zero(), 5.0 * deg * k));
-        windows.push_back(w);
-    }
-    const std::vector<double> path = path_at_windows(windows);
-    const std::vector<double> length = length_at_windows(windows, path, 0.1);
-    CHECK(path.back() == 0.0);
-    CHECK(length.back() == doctest::Approx(9.0).epsilon(1e-6));
-}
-
-TEST_CASE("loop closure odometry weights: a loop's yaw correction goes mostly into the longest edge")
-{
-    // 10 segment anchors 6 m apart along x; the odometry turned 2 deg too much across edge 5, which was walked 5x as long
-    // as the others; a loop edge 0 -> 9 knows the truth. Equal weights spread the correction evenly (1/9 per edge),
-    // weights by length put most of it into edge 5
-    OdometryConfig c;
-    c.loop_closure_odometry_sigma_m = 0.1;
-    c.loop_closure_odometry_sigma_deg = 0.5;
-    c.loop_closure_edge_sigma_m = 0.05;
-    c.loop_closure_edge_sigma_deg = 0.3;
-    c.loop_closure_odometry_length_floor = 0.1;
-    c.loop_closure_kernel_scale = 0.0;
-    std::vector<Eigen::Affine3d> truth, initial;
-    for (int k = 0; k < 10; k++)
-    {
-        truth.push_back(pose(Eigen::Vector3d(6.0 * k, 0.0, 0.0), 0.0));
-        initial.push_back(k <= 5 ? truth[k] : pose(Eigen::Vector3d(30.0, 0.0, 0.0), 0.0) * pose(Eigen::Vector3d::Zero(), 2.0 * deg) *
-                                                   pose(Eigen::Vector3d(6.0 * (k - 5), 0.0, 0.0), 0.0));
-    }
-    LoopClosureEdge loop;
-    loop.i = 0;
-    loop.j = 9;
-    loop.correction = truth[9] * initial[9].inverse();
-    const std::vector<double> lengths = {6, 6, 6, 6, 6, 30, 6, 6, 6};
-    const auto yaw_share_of_edge_5 = [&](const std::vector<Eigen::Affine3d> &optimized)
-    {
-        double total = 0.0, edge5 = 0.0;
-        for (int k = 0; k + 1 < 10; k++)
-        {
-            const Eigen::Matrix3d before = initial[k].linear().transpose() * initial[k + 1].linear();
-            const Eigen::Matrix3d after = optimized[k].linear().transpose() * optimized[k + 1].linear();
-            const double change = std::abs(std::atan2(after(1, 0), after(0, 0)) - std::atan2(before(1, 0), before(0, 0)));
-            total += change;
-            if (k == 5)
-                edge5 = change;
-        }
-        return edge5 / total;
-    };
-    const double equal = yaw_share_of_edge_5(optimize_loop_pose_graph(initial, {loop}, c, equal_odometry_weights(10, c)));
-    const double by_length = yaw_share_of_edge_5(optimize_loop_pose_graph(initial, {loop}, c, odometry_weights_by_length(lengths, c)));
-    MESSAGE("share of the yaw correction in the long edge: equal weights ", equal, ", by length ", by_length);
-    CHECK(equal == doctest::Approx(1.0 / 9.0).epsilon(0.1));
-    CHECK(by_length > 0.3);
-}
-
 TEST_CASE("loop closure drop order: leave one out drops the false edge, not the strained right one")
 {
     // 14 segment anchors 6 m apart along x (truth straight). The odometry turned 1.5 deg too much between anchors 6 and 7.
@@ -420,8 +329,7 @@ TEST_CASE("loop closure drop order: leave one out drops the false edge, not the 
         return e;
     };
     const std::vector<LoopClosureEdge> loops = {edge(0, 6, 0.0), edge(7, 13, 0.0), edge(5, 9, 0.0), edge(4, 9, 0.0), edge(0, 13, 4.0)};
-    const std::vector<OdometryEdgeWeight> w = equal_odometry_weights(14, c);
-    const std::vector<Eigen::Affine3d> optimized = optimize_loop_pose_graph(initial, loops, c, w);
+    const std::vector<Eigen::Affine3d> optimized = optimize_loop_pose_graph(initial, loops, c);
     const std::vector<LoopEdgeResidual> r = loop_edge_residuals(initial, optimized, loops);
     size_t worst_ratio = loops.size();
     double largest = 1.0;
@@ -435,7 +343,7 @@ TEST_CASE("loop closure drop order: leave one out drops the false edge, not the 
             worst_ratio = e;
         }
     }
-    const size_t left_out = loop_edge_to_drop(initial, optimized, loops, c, w);
+    const size_t left_out = loop_edge_to_drop(initial, optimized, loops, c);
     MESSAGE("largest ratio drops edge ", worst_ratio, ", leave one out drops edge ", left_out);
     CHECK(left_out == 4);
 }
@@ -459,7 +367,7 @@ TEST_CASE("loop closure pose graph: a loop edge removes the drift and the result
     e.correction = (initial[0] * truth[0].inverse() * truth[7]) * initial[7].inverse();
     const std::vector<LoopClosureEdge> loops{e};
 
-    const std::vector<Eigen::Affine3d> optimized = solve_graph(initial, loops, c);
+    const std::vector<Eigen::Affine3d> optimized = optimize_loop_pose_graph(initial, loops, c);
     REQUIRE(optimized.size() == initial.size());
     const double before = (initial[7].translation() - truth[7].translation()).norm();
     const double after = (optimized[7].translation() - truth[7].translation()).norm();
@@ -519,12 +427,12 @@ TEST_CASE("loop closure pose graph: a false loop edge stands out by its residual
     // over the good edges too, but it keeps the largest residual, so dropping the worst edge first removes it
     std::vector<LoopClosureEdge> loops{edge(0, 7, Eigen::Vector3d::Zero()), edge(1, 6, Eigen::Vector3d::Zero()),
                                        edge(2, 5, Eigen::Vector3d(1.0, 0.0, 0.0))};
-    const std::vector<LoopEdgeResidual> r = loop_edge_residuals(initial, solve_graph(initial, loops, c), loops);
+    const std::vector<LoopEdgeResidual> r = loop_edge_residuals(initial, optimize_loop_pose_graph(initial, loops, c), loops);
     REQUIRE(r.size() == 3);
     CHECK(r[2].translation_m > c.loop_closure_max_residual_m);
     CHECK(r[2].translation_m > std::max(r[0].translation_m, r[1].translation_m));
     loops.pop_back();
-    for (const LoopEdgeResidual &good : loop_edge_residuals(initial, solve_graph(initial, loops, c), loops))
+    for (const LoopEdgeResidual &good : loop_edge_residuals(initial, optimize_loop_pose_graph(initial, loops, c), loops))
         CHECK(good.translation_m < 0.02);
 }
 
@@ -585,9 +493,9 @@ TEST_CASE("loop closure pose graph: the kernel weakens a slightly wrong edge")
     const TwoLaps s;
     // one revisit 15 cm off, below the drop limit: without the kernel it counts in full
     const auto loops = s.loops(3, 0.15);
-    const double e_plain = s.largest_error(solve_graph(s.initial, loops, with_kernel(0.0)));
-    const double e_robust = s.largest_error(solve_graph(s.initial, loops, with_kernel(0.5)));
-    const double e_truth = s.largest_error(solve_graph(s.initial, s.loops(), with_kernel(0.0)));
+    const double e_plain = s.largest_error(optimize_loop_pose_graph(s.initial, loops, with_kernel(0.0)));
+    const double e_robust = s.largest_error(optimize_loop_pose_graph(s.initial, loops, with_kernel(0.5)));
+    const double e_truth = s.largest_error(optimize_loop_pose_graph(s.initial, s.loops(), with_kernel(0.0)));
     MESSAGE("largest position error: plain ", e_plain, " m, kernel 0.5 ", e_robust, " m, all edges right ", e_truth, " m");
     CHECK(e_robust < 0.75 * e_plain);
     CHECK(e_robust < e_truth + 0.005);
@@ -596,8 +504,8 @@ TEST_CASE("loop closure pose graph: the kernel weakens a slightly wrong edge")
 TEST_CASE("loop closure pose graph: consistent edges give the same solution with and without the kernel")
 {
     const TwoLaps s;
-    const auto a = solve_graph(s.initial, s.loops(), with_kernel(0.0));
-    const auto b = solve_graph(s.initial, s.loops(), with_kernel(0.5));
+    const auto a = optimize_loop_pose_graph(s.initial, s.loops(), with_kernel(0.0));
+    const auto b = optimize_loop_pose_graph(s.initial, s.loops(), with_kernel(0.5));
     REQUIRE(a.size() == b.size());
     double largest = 0.0;
     for (size_t k = 0; k < a.size(); k++)
@@ -611,7 +519,7 @@ TEST_CASE("loop closure pose graph: with the kernel a false edge still stands ou
     const TwoLaps s;
     const OdometryConfig c = with_kernel(0.5);
     const auto loops = s.loops(3, 1.0);
-    const std::vector<LoopEdgeResidual> r = loop_edge_residuals(s.initial, solve_graph(s.initial, loops, c), loops);
+    const std::vector<LoopEdgeResidual> r = loop_edge_residuals(s.initial, optimize_loop_pose_graph(s.initial, loops, c), loops);
     REQUIRE(r.size() == 8);
     CHECK(r[3].translation_m > c.loop_closure_max_residual_m);
     for (int k = 0; k < 8; k++)
@@ -775,7 +683,7 @@ TEST_CASE("loop closure information edges: with the fixed sigmas as information 
     const TwoLaps s;
     const OdometryConfig c = with_kernel(0.0);
     const auto loops = s.loops();
-    const auto reference = solve_graph(s.initial, loops, c);
+    const auto reference = optimize_loop_pose_graph(s.initial, loops, c);
     auto weighted = loops;
     const double wt = 1.0 / std::pow(c.loop_closure_edge_sigma_m, 2), wr = 1.0 / std::pow(c.loop_closure_edge_sigma_deg * DEG_TO_RAD, 2);
     for (auto &e : weighted)
@@ -784,7 +692,7 @@ TEST_CASE("loop closure information edges: with the fixed sigmas as information 
         e.omega.setZero();
         e.omega.diagonal() << wt, wt, wt, wr, wr, wr;
     }
-    const auto solved = solve_graph(s.initial, weighted, c);
+    const auto solved = optimize_loop_pose_graph(s.initial, weighted, c);
     REQUIRE(solved.size() == reference.size());
     double largest = 0.0;
     for (size_t k = 0; k < solved.size(); k++)
@@ -826,7 +734,7 @@ TEST_CASE("loop closure information edges: a shaft ties the floors horizontally 
     CHECK(sig(4) < 10.0);
 
     const std::vector<LoopClosureEdge> loops{e};
-    const auto p = solve_graph(initial, loops, c);
+    const auto p = optimize_loop_pose_graph(initial, loops, c);
     REQUIRE(p.size() == 3);
     // where segment 2 puts the shaft's axis, against the truth (segment 0's view)
     const Eigen::Vector3d axis_in_2 = initial[2] * (truth[2].inverse() * axis_point);
@@ -874,7 +782,7 @@ TEST_CASE("loop closure information edges: a box-shaped region also ties the tur
     MESSAGE("box edge sigmas: x ", sig(0), " y ", sig(1), " z ", sig(2), " m, roll ", sig(3), " pitch ", sig(4), " yaw ", sig(5), " deg");
     CHECK(sig(2) > 10.0);
     CHECK(sig(5) < 10.0);
-    const auto p = solve_graph(initial, std::vector<LoopClosureEdge>{e}, c);
+    const auto p = optimize_loop_pose_graph(initial, std::vector<LoopClosureEdge>{e}, c);
     const double yaw_before = relative_angle_about(initial[0], initial[2], Eigen::Vector3d::UnitZ());
     const double yaw_after = relative_angle_about(p[0], p[2], Eigen::Vector3d::UnitZ());
     MESSAGE("box edge: relative yaw ", yaw_before, " -> ", yaw_after, " deg");
