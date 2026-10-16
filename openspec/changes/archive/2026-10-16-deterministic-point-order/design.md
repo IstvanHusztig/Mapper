@@ -22,3 +22,10 @@ Found 2026-10-15 while building a 95 s test bed for change F/E: master's odometr
 3. **45f:** no loss of sharpness (`eval_odometry.py` jitter within 5 %), a top view against master's.
 4. Runtime reported.
 5. Then new 44 and 44_short baselines (own commit), the user's visual check, push with the user's go.
+
+## Result (2026-10-16): rejected, the cause was the cut tool
+
+- With the stable sorts the 95 s cut still differed from the full run (> 5 cm from 5.7 s, 0.74 m at 88.5 s). The raw points of window 0 already differed: `cut_recording` measures the range from the first IMU sample and drops the LiDAR points recorded before it (about 3 900 on 44), which the full run keeps, so the initial map's 60 000 points and every window boundary shift.
+- Cut from −10 s (`cut_recording 44_s0 44c95b_s0 -10 105`), the cut reproduces the full run exactly (largest difference 0.000 m), with and without the stable sorts. The unstable sort was never the cause; the earlier change from 1.7 to 5.7 s was a different point order, not a fix.
+- The change has no demonstrated benefit and alters the numbers (another representative point per voxel): reverted (cc6481f) after the user's OK, archived as rejected; spec not synced. C14 stays reported in the tracker.
+

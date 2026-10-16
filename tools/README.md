@@ -272,6 +272,7 @@ out/build/x64-Release/bin/cut_recording.exe "<raw data>/44" "<raw data>/44_short
 - Arguments: `<in_folder> <out_folder> <start_s> <duration_s>`, measured from the first IMU sample. It cuts every `.laz`/`.las` and `.csv` of the input folder and keeps their names.
 - Kept points are unchanged: the input header (point format, scale, offset) is reused, so the stored coordinates and every attribute are identical. After writing, every kept point is re-read and compared. IMU lines and the header line are copied byte for byte.
 - It refuses an output folder that already holds `.laz`, `.las` or `.csv` files. The input folder is never modified.
+- The range starts at the first IMU sample, and LiDAR points recorded before it are dropped (about 3 900 on 44). The full run keeps them, so a cut from 0 s builds a different initial map and shifts every window. For a cut that reproduces the full run's windows exactly, start before the first sample: `cut_recording "<raw data>/44_s0" "<raw data>/44c95b_s0" -10 105` (checked 2026-10-16: identical trajectory up to the cut's end).
 
 ## rename_identifiers.py
 
