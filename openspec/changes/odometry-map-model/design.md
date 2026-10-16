@@ -31,3 +31,13 @@ Plus **V4b** `threshold_initial_points` = 120 000 (dose-response for V4) and **V
 ## Phase 2 (designed after the screening)
 
 For each mechanism that moves the angle: a fix in the code where the setting was only a probe (for example a down-weighted or hierarchical coarse grid instead of none, a consistent degenerate projection, motion-compensated initial points), its own acceptance rule written before its runs, full runs on s0–s5 with loop closure and consistency, `map_quality.py --floors` against master's results (global geometry, consistency, sharpness, equal weight), 45f, the user's visual check, baselines, push with the user's go.
+
+## Research (agent, 2026-10-16; sources in the session report, summarised)
+
+- Incidence-angle range bias bends straight tunnels and causes drift; correcting it reduced the drift (Laconte et al., ICRA 2019, up to 20 cm at high incidence). Ouster self-calibration from map consistency improved corridor orientation by ≈ 0.15° (Agishev et al.). Remedies in use: drop near-grazing points (Loam_livox), an incidence term σ = d·σ_ω·tan α in each point's covariance (LOG-LIO2).
+- In a corridor, yaw information grows with the square of the distance along it: yaw is pinned by far wall points at grazing angles, where 44's façade bends 0.5–0.7° inside single scans. A bearing error of ≈ 0.4° there would suffice; the L2 manual gives no calibration data (inference).
+- NDT practice: a cell's distribution from more than 5 points, near-singular covariances inflated (Magnusson; PCL ≥ 6 points, eigenvalue floor); no source uses the first point as the mean. Multi-resolution runs coarse to fine in sequence, not both grids at equal weight at once. Discretisation biases rotation (Gupta et al., ECMR 2023).
+- Degeneracy remapping depends on thresholds and frames and can misalign rotation (X-ICP, Tuna et al. 2024).
+- No source on a systematic first-frame yaw bias.
+- Phase-2 candidates added by the research: an incidence-dependent point covariance, and a sensor self-calibration from map consistency (plane thickness).
+
