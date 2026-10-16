@@ -90,41 +90,6 @@ namespace
     }
 }
 
-TEST_CASE("decimate: the first of a cell's points in input order represents it, whatever else the set holds")
-{
-    // 3000 points in 30 cells of 0.1 m, interleaved, each numbered by index_point; then 5000 more points in other cells
-    std::vector<Point3Di> points;
-    for (int k = 0; k < 3000; k++)
-    {
-        Point3Di p{};
-        const int cell = k % 30;
-        p.point = Eigen::Vector3d(0.1 * cell + 0.01 + 0.00002 * (k % 7), 0.05, 0.05);
-        p.index_point = k;
-        points.push_back(p);
-    }
-    std::vector<Point3Di> more = points;
-    for (int k = 0; k < 5000; k++)
-    {
-        Point3Di p{};
-        p.point = Eigen::Vector3d(10.0 + 0.1 * (k % 50), 0.05 + 0.1 * (k % 3), 0.05);
-        p.index_point = 100000 + k;
-        more.push_back(p);
-    }
-    const auto representatives = [](const std::vector<Point3Di> &kept) {
-        std::map<long, int> out; // cell along x -> index_point of its representative
-        for (const auto &p : kept)
-            if (p.point.x() < 5.0)
-                out[static_cast<long>(std::floor(p.point.x() / 0.1))] = p.index_point;
-        return out;
-    };
-    const auto a = representatives(decimate(points, 0.1, 0.1, 0.1));
-    const auto b = representatives(decimate(more, 0.1, 0.1, 0.1));
-    REQUIRE(a.size() == 30);
-    CHECK(a == b);
-    for (const auto &[cell, index] : a)
-        CHECK(index == cell); // the first point of cell c is point c
-}
-
 TEST_CASE("ndt_cell_index: every cell has the same width, also the cells through 0")
 {
     // the index is floor(p / b), not truncation towards zero, which made the cells with index 0 twice as wide

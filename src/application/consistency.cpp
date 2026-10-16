@@ -568,7 +568,7 @@ void Consistency2(std::vector<Window> &windows, const OdometryConfig &params, Po
         auto index_of_bucket = ndt_cell_index(points_global[i].point, b);
         index_pairs.emplace_back(index_of_bucket, i);
     }
-    std::stable_sort(index_pairs.begin(), index_pairs.end(),
+    std::sort(index_pairs.begin(), index_pairs.end(),
               [](const std::pair<unsigned long long int, unsigned int> &a, const std::pair<unsigned long long int, unsigned int> &b)
               { return a.first < b.first; });
 

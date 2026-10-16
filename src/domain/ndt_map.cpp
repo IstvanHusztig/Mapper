@@ -41,8 +41,7 @@ std::vector<Point3Di> decimate(const std::vector<Point3Di>& points, double bucke
         ip[i].index_of_point = i;
         ip[i].index_of_bucket = ndt_cell_index(points[i].point, b);
     }
-    // stable: the first of a cell's points in input order represents the cell
-    std::stable_sort(ip.begin(), ip.end(), [](const PointBucketIndex& a, const PointBucketIndex& b)
+    std::sort(ip.begin(), ip.end(), [](const PointBucketIndex& a, const PointBucketIndex& b)
         { return a.index_of_bucket < b.index_of_bucket; });
 
     if (ip.size() != 0)

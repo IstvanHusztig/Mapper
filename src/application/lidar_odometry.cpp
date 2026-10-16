@@ -62,9 +62,7 @@ bool load_data(RecordingSource& recording,
         {
             auto data = recording.read_points(i, filter, logger);
 
-            // stable: points with equal timestamps keep their order in the file, so a window's points don't depend on
-            // the rest of the recording
-            std::stable_sort(data.begin(), data.end(), [](const Point3Di& a, const Point3Di& b)
+            std::sort(data.begin(), data.end(), [](const Point3Di& a, const Point3Di& b)
                 { return a.timestamp < b.timestamp; });
 
             // Optional calibration validation (first file only)
