@@ -3,7 +3,7 @@
 Branch: `claude/epic-meitner-plfjh8`. Run locally on Windows (GPU, the datasets, CloudCompare for checks). This is a feature in three phases. When it is picked up, turn it into an OpenSpec change (`/opsx:propose`) with this file as the input.
 
 ## Builds on
-This feature comes after the radiometry chain on the research branch `claude/busy-ride-bsd230`:
+This feature comes after the radiometry chain (both in this branch: `docs/tasks/read-recording-format-2.md`, `reports/`, `research_notes/`):
 1. `docs/tasks/read-recording-format-2.md`: dMapper reads dLidar format 2 and, with `[radiometry] export_beam_geometry = true`, writes range, sensor position P0 and beam direction D per output point as LAS extra bytes.
 2. The probe tool and the self-calibrated range/angle correction (`reports/Unitree L2 reflectivity correction.md`, steps 1–5): per-point ρ_corr, per-cell ρ_p with MAD, n_obs, the fitted angular exponent n and a validity flag, kept in the run and written as extra bytes.
 

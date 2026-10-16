@@ -1,6 +1,6 @@
 # Task: read dLidar recording format 2 in dMapper (no correction yet)
 
-Branch: `claude/busy-ride-bsd230`. Run locally on Windows, where CMake 4, the `x64-Release`/`x64-Debug` presets, the datasets and the dLidar format samples are.
+Branch: `claude/epic-meitner-plfjh8`. Run locally on Windows, where CMake 4, the `x64-Release`/`x64-Debug` presets, the datasets and the dLidar format samples are.
 
 ## Why
 dLidar now writes recording format 2 (`docs/dlidar-recording-format-2.md`). It adds per-point LAS extra bytes (corrected range, raw range, sample index, packet seq, scan angles alpha/theta) and a per-packet `packetstateNNNN.tsv` (calibration and angle parameters, APD voltage and temperature, laser voltage, `dirty_index`). The standard LAZ fields and the IMU CSV are unchanged.
