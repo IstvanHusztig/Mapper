@@ -209,6 +209,19 @@ python tools/map_quality.py [--floors] [--overlay] [label=]result_folder ...
 - The placed points are cached in `<result>/map_quality_cache/points.npy`. The constants of recording 44 (room angle, façade bands, revisit pairs, plan anchor) are at the top of `map_quality_lib.py`.
 - Reference (2026-10-13): shipped final `44_wd_s0` façade −0.40 / −0.73°, revisit 1.33° / 2.29° / 0.11 m (4 pairs), jitter 0.94 / 4.49°; odometry only `44_odo_h0_s0` −3.87 / −4.19°, 0.18° / 1.52° / 1.00 m (10 pairs), 0.40 / 1.29°.
 
+## plan_fit.py
+
+Fits the top floor of a result of recording 44 onto the building plan (`haus47_LG_plan.pdf`, scale 1:50 fixed) and draws the map over it. Needs numpy, scipy, laspy (with lazrs) and pymupdf; reads `scan_lio_merged.laz` directly (no CloudCompare export).
+
+```
+python tools/plan_fit.py <result_folder> [out_prefix]
+```
+
+- The walls (world z −0.5…1.5 m, 5 cm cells with ≥ 8 points) are placed by the 2D rotation and shift that bring them closest to the plan's drawn lines; the start is `map_quality_lib`'s plan anchor.
+- Prints the whole-floor fit (rotation, mean distance to the plan, share within 10 / 25 cm) and the start room (0–15 s) and the gallery (49–71 s) fitted on their own, with their rotation against the whole fit.
+- Writes `<out_prefix>_whole_fit.png`, `_start_fit.png` (placed by the start room's own fit), `_full_sheet.png`, `_zoom_gallery.png`, `_zoom_core.png`; default prefix `<result>/map_quality_cache/plan_fit`. Red the whole floor, green the start room, blue the gallery.
+- Reference (2026-10-17): `44_baseline` (master 2026-10-15) whole floor 256.80°, 6.9 cm, 68 % / 88 %; start room −2.18°, gallery −0.84° against it.
+
 ## Regression baseline (compare_baseline.py, cut_recording)
 
 Refactors must reproduce `44_short` and the full 44 bit for bit (see `docs/ARCHITECTURE.md`). Two reference datasets live next to the raw data, outside git:
