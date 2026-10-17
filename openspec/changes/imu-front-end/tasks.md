@@ -1,8 +1,15 @@
 ## 1. Preparation
 
 - [x] 1.1 Rule reviewed by Sonnet (done 2026-10-16, corrections folded in); the user's go for the implementation (medium effort).
-- [ ] 1.2 Red tests: D3 (≥ 3 chained windows with a carried bias ≠ 0: the estimate settles near half), D5 (chained windows lose 1/N of a constant yaw rate; a `compute_step_1` fixture for the points between windows).
-- [ ] 1.3 D2 pre-measurement: fraction of IMU samples the ±0.1 g gate sets to gain 0 on 44 and 45f.
+- [x] 1.2 Red tests: D3 (≥ 3 chained windows with a carried bias ≠ 0: the estimate settles near half), D5 (chained windows lose 1/N of a constant yaw rate; a `compute_step_1` fixture for the points between windows).
+  - D3 (`scan_to_map_test.cpp`): six chained windows, 2.0 °/s injected: 0.98–0.99 before, 1.96 after.
+  - D1 (`orientation_test.cpp`, Fusion adapter): 3.5 s at 10 °/s from the reset: yaw 5.0° before (start-up zeroed), 35.0° after.
+  - D5 (`window_cut_test.cpp`, the first test of `compute_step_1`): 6 chained windows at 1 rad/s lose 0.005 rad before, 1e-16 after; 500 points between windows in no window before, all kept after (the last window also keeps the points up to the next IMU sample).
+- [x] 1.3 D2 pre-measurement: fraction of IMU samples the ±0.1 g gate sets to gain 0 on 44 and 45f.
+  - 44: 44.5 % of the samples (walking; |acc| p1/p99 0.77/1.31 g), 3407 gated runs, median 4.5 ms, p90 114 ms, max 289 ms.
+  - 45f: 11.7 %, median run 3.0 ms, p90 43 ms, max 301 ms.
+  - So variant a would switch the tilt correction off for almost half of 44, in short bursts.
+  - Latent today (`d2_ramp.py`): the ramp ends at the first sample with `rampedGain < settings.gain`, and after it the gain never changes again. With `ahrs_gain` 0.05 the ramp passes 0.05 at 3.14 s; a gated stretch of ≥ 16 ms at that moment would end it with gain 0, i.e. a gyro-only AHRS for the rest of the run. 44 and 45f are at rest then (0 % gated in 3.0–3.3 s), so they are not hit; a recording that starts walking could be. With variant a the gain follows the settings again after the ramp.
 
 ## 2. Fixes (one commit each, test bed s0–s2 per fix)
 

@@ -32,7 +32,10 @@ void FusionOrientationEstimator::update(const Eigen::Vector3f &gyro_deg_s, const
 {
     const FusionVector gyroscope = {gyro_deg_s.x(), gyro_deg_s.y(), gyro_deg_s.z()};
     const FusionVector accelerometer = {acc_g.x(), acc_g.y(), acc_g.z()};
-    FusionAhrsUpdateNoMagnetometer(&ahrs_, gyroscope, accelerometer, dt_s);
+    // FusionAhrsUpdateNoMagnetometer without its heading reset during the start-up ramp: a turn made then stays in the
+    // orientation (the windows start inside the ramp)
+    const FusionVector no_magnetometer = {0.0f, 0.0f, 0.0f}; // FUSION_VECTOR_ZERO is a C compound literal
+    FusionAhrsUpdate(&ahrs_, gyroscope, accelerometer, no_magnetometer, dt_s);
 }
 
 Eigen::Quaternionf FusionOrientationEstimator::orientation() const

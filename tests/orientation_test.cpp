@@ -1,9 +1,11 @@
 #include <doctest/doctest.h>
 
 #include "lidar_odometry.h"
+#include "run_services.h"
 #include "serial_executor.h"
 #include "synthetic_recording.h"
 
+#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -169,4 +171,24 @@ TEST_CASE("serial executor: every index once, in order")
     CHECK(seen == std::vector<std::size_t>{0, 1, 2, 3, 4});
     executor.for_each_index(0, [&](std::size_t) { seen.push_back(99); });
     CHECK(seen.size() == 5);
+}
+
+TEST_CASE("orientation, Fusion adapter: a turn during the filter's start-up is integrated, not zeroed")
+{
+    // Fusion ramps its gain from 10 down over the first 3 s. FusionAhrsUpdateNoMagnetometer also zeroes the heading on
+    // every update of that period, so a turn made then was lost from the trajectory (finding C2); the windows of a
+    // recording start inside it. The adapter keeps the ramp but not the heading reset.
+    RunServices services = make_run_services();
+    REQUIRE(services.orientation);
+    OrientationEstimator &ahrs = *services.orientation;
+    ahrs.reset(AxesConvention::Nwu, 0.5f);
+    // 3.5 s at 1 kHz, level (1 g along z), turning at 10 deg/s about z
+    for (int i = 0; i < 3500; i++)
+        ahrs.update(Eigen::Vector3f(0.0f, 0.0f, 10.0f), Eigen::Vector3f(0.0f, 0.0f, 1.0f), 0.001f);
+    const Eigen::Matrix3f r = ahrs.orientation().toRotationMatrix();
+    const double yaw_deg = std::atan2(r(1, 0), r(0, 0)) * rad_to_deg;
+    const double tilt_deg = std::acos(std::clamp(static_cast<double>(r(2, 2)), -1.0, 1.0)) * rad_to_deg;
+    MESSAGE("yaw after 3.5 s at 10 deg/s: ", yaw_deg, " deg (tilt ", tilt_deg, " deg)");
+    CHECK(yaw_deg == doctest::Approx(35.0).epsilon(0.01));
+    CHECK(tilt_deg < 0.01);
 }
