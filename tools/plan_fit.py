@@ -2,10 +2,12 @@
 
 The walls of the map (merged cloud, world z in Z_BAND, 5 cm cells with enough points) are placed on the plan
 (haus47_LG_plan.pdf at 150 dpi, scale 1:50 fixed) by the 2D rotation and shift that bring them closest to drawn lines
-(squared distance to the nearest dark pixel, capped at TRUNC). The start comes from the plan anchor of map_quality_lib
-(rotation, stairwell centre), searched coarsely over +-3 deg / +-1 m and then refined. The start room and the gallery
-(PARTS) are also fitted on their own, starting from the whole fit, so their rotations against it show which part of the
-map is turned. Needs numpy, scipy, laspy (with lazrs) and pymupdf.
+(squared distance to the nearest dark pixel, interpolated, capped at TRUNC). The start comes from the plan anchor of
+map_quality_lib (rotation, stairwell centre); the map is turned about the stairwell over +-6 deg and shifted over +-1 m
+in a coarse search, then refined (the anchor predates D1, which turned the world frame of 44 by about 3 deg). The start
+room and the gallery (PARTS) are also fitted on their own, turned about their own centre starting from the whole fit, so
+their rotations against it show which part of the map is turned; differences below about 0.05 deg are noise. Needs
+numpy, scipy, laspy (with lazrs) and pymupdf.
 
 Usage: plan_fit.py <result_folder> [out_prefix]
 Writes <out_prefix>_whole_fit.png, _start_fit.png, _full_sheet.png, _zoom_gallery.png, _zoom_core.png (default prefix
@@ -48,10 +50,9 @@ def plan_px(q):
 
 
 def residuals(q):
+    """distance to the nearest drawn line, interpolated between pixel centres so that the fit's cost is continuous"""
     c, r = plan_px(q)
-    c = np.clip(c.astype(int), 0, A.shape[1] - 1)
-    r = np.clip(r.astype(int), 0, A.shape[0] - 1)
-    return dist[r, c]
+    return ndimage.map_coordinates(dist, [r - 0.5, c - 0.5], order=1, mode="nearest")
 
 
 def cost(p, xy, w):
@@ -74,12 +75,16 @@ def wall_cells(sel, min_pts=8):
     return (u[keep] + 0.5) * CELL, np.sqrt(n[keep]).astype(float)
 
 
-def fit(xy, w, p_init, span=(3.0, 1.0)):
+def fit(xy, w, p_init, pivot, span=(6.0, 1.0)):
+    """coarse search turning the map about pivot (a map point, kept where p_init places it) and shifting it, then refined"""
+    q0 = to_plan(np.asarray(pivot, float)[None], p_init)[0]
     best = None
     for dth in np.arange(-span[0], span[0] + 1e-9, 0.5):
+        th = p_init[0] + dth
+        base = q0 - to_plan(np.asarray(pivot, float)[None], [th, 0.0, 0.0])[0]
         for dx in np.arange(-span[1], span[1] + 1e-9, 0.25):
             for dy in np.arange(-span[1], span[1] + 1e-9, 0.25):
-                p = p_init + [dth, dx, dy]
+                p = np.r_[th, base + [dx, dy]]
                 c = cost(p, xy, w)
                 if best is None or c < best[0]:
                     best = (c, p)
@@ -88,9 +93,9 @@ def fit(xy, w, p_init, span=(3.0, 1.0)):
 
 
 def stats(xy, w, p):
-    """mean distance to the plan (capped at 1 m), share within 10 cm, share within 25 cm"""
+    """mean distance to the plan (capped at 1 m), share within 10 cm, share within 25 cm, all weighted like the fit"""
     d = residuals(to_plan(xy, p))
-    return np.average(np.minimum(d, 1.0), weights=w), np.mean(d < 0.10), np.mean(d < 0.25)
+    return np.average(np.minimum(d, 1.0), weights=w), np.average(d < 0.10, weights=w), np.average(d < 0.25, weights=w)
 
 
 xy_all, w_all = wall_cells(np.ones_like(t, bool))
@@ -98,14 +103,14 @@ th0 = np.radians(PLAN_ROTATION_DEG)
 R0 = np.array([[np.cos(th0), -np.sin(th0)], [np.sin(th0), np.cos(th0)]])
 p0 = np.r_[PLAN_ROTATION_DEG, np.array([PLAN_SHAFT_PX[0], H - PLAN_SHAFT_PX[1]]) / PLAN_PX_PER_M - R0 @ np.array(MAP_SHAFT)]
 
-p_all = fit(xy_all, w_all, p0)
+p_all = fit(xy_all, w_all, p0, MAP_SHAFT)
 s_all = stats(xy_all, w_all, p_all)
 print(f"whole floor fit: rotation {p_all[0]:.2f} deg, mean |d| {s_all[0]:.3f} m, within 10 cm {s_all[1]:.0%}, "
       f"within 25 cm {s_all[2]:.0%}")
 part_fits = {}
 for name, (a, b) in PARTS.items():
     xy, w = wall_cells((t >= a) & (t < b), 3)
-    p = fit(xy, w, p_all, (2.0, 0.5))
+    p = fit(xy, w, p_all, np.average(xy, axis=0, weights=w), (2.0, 0.5))
     part_fits[name] = p
     s_own, s_glob = stats(xy, w, p), stats(xy, w, p_all)
     print(f"{name}: own-fit rotation {p[0]:.2f} deg ({p[0] - p_all[0]:+.2f} vs whole), mean |d| own {s_own[0]:.3f} m / "

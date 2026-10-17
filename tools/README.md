@@ -220,7 +220,7 @@ python tools/plan_fit.py <result_folder> [out_prefix]
 - The walls (world z −0.5…1.5 m, 5 cm cells with ≥ 8 points) are placed by the 2D rotation and shift that bring them closest to the plan's drawn lines; the start is `map_quality_lib`'s plan anchor.
 - Prints the whole-floor fit (rotation, mean distance to the plan, share within 10 / 25 cm) and the start room (0–15 s) and the gallery (49–71 s) fitted on their own, with their rotation against the whole fit.
 - Writes `<out_prefix>_whole_fit.png`, `_start_fit.png` (placed by the start room's own fit), `_full_sheet.png`, `_zoom_gallery.png`, `_zoom_core.png`; default prefix `<result>/map_quality_cache/plan_fit`. Red the whole floor, green the start room, blue the gallery.
-- Reference (2026-10-17): `44_baseline` (after D4, D3, D1, D5) whole floor 256.30°, 9.9 cm, 62 % / 86 %; start room +0.88°, gallery +0.53° against it (gallery − start −0.35°). The previous `44_baseline_2026-10-15`: 256.80°, 6.9 cm; start room −2.18°, gallery −0.84° (+1.34°).
+- Reference (2026-10-18): `44_baseline` (after D4, D3, D1, D5) whole floor 256.34°, 9.9 cm, 71 % / 89 %; start room +0.93°, gallery +0.47° against it (gallery − start −0.46°). The previous `44_baseline_2026-10-15`: 256.78°, 6.9 cm, 80 % / 94 %; start room +0.55°, gallery +0.50° (−0.04°). The first version of the tool (cost in whole pixels, turned about the map origin) gave that map's start room −2.18°, a wrong local fit.
 
 ## Regression baseline (compare_baseline.py, cut_recording)
 
