@@ -85,3 +85,21 @@
   - D4 also runs on s3–s5, as the paired reference for the later fixes there. Its six-input mean is checked against the same criterion; if it fails, D4 goes back to the user before D3.
   - D3, D1, D2 and D5 each run on s0–s5 against the previous accepted state; the per-fix criterion uses the six-input mean.
   - The cumulative paired sum over all accepted fixes (s0–s5) stays binding as written.
+
+## D3 results (2026-10-17; reviewed by Sonnet)
+
+Runs `44c95bo_d3_s0..s5` (`bin_d3` = 48734fc), reference D4. Readings in the job folder: `fe_read_d3.txt`, `rule_d3.txt` (`d_rule.py`), `d_read_d3.txt`, `sanity_d3.txt`, `mq_cuts_d3.txt`.
+
+- **Accepted.** No rule reading is worse beyond the noise floor:
+  - gal−A mean −4.39 (master M −4.31, range [−4.71, −4.02]);
+  - gal−B −3.40 ([−3.83, −3.05]);
+  - A−B +0.98 ([+0.89, +1.00]; three inputs at 1.01–1.03, just above master's largest);
+  - jitter p99 1.28–1.34° (master 1.30–1.36, D4 1.29–1.32);
+  - sanity: 0 big jumps, 231/231 windows at 100 iterations, route within 0.7 %, worst 10 s stretch 7.6 %, end ≤ 1.55 m off master.
+- **Prediction met:** the z bias estimate averaged over 30–85 s is −0.76 … −0.83 °/s on all six inputs (−0.82 ± 0.15); master and D4 were −0.42 … −0.45. The hand-eye value was fitted to master's own trajectory, so this checks the estimate's meaning, not the physical bias (the static recording 43 would be the independent check). x and y doubled too (x 0.40 → 0.79, y 0.18 → 0.41; not comparable by the rule).
+- **Paired against D4:** gal−A +0.13 (sd 0.41), gal−B +0.17 (sd 0.40), A−B +0.03 (sd 0.04). The gallery doesn't move measurably (no change beyond about ± 0.35°, 2 SE); the paired +0.13 is mostly s1, D4's own excursion (−4.99), which D3 doesn't repeat. Against master: gal−A −0.07, gal−B −0.04. A moves by +0.03 … +0.05 on five of six inputs (D4 left A exactly unchanged): a real but negligible shift.
+- **Why so little changes:**
+  - Before the fix, the window body removed b₀ + b from the gyro increments. With b settling near half the bias, that was about the full bias. Derived from the logged estimates (not measured on the trajectory), the z removal over 30–85 s went from about −0.86 (master, D4) to −0.81 (D3); at 10 s it went from about −0.67 to −0.49.
+  - The tail re-propagation (`repropagate_window_tail`) integrates `motion_model_poses` (b₀ removed) plus b − b₀, so it removed b in total: about −0.43 before against −0.86 in the window body, a mismatch at every hand-off. Now both remove about −0.81. The update b − b₀ is ≈ 0 before and after.
+  - The trajectory's yaw is set by the LiDAR. The yaw-residual slopes, paired D3 − D4, are 0.000 ± 0.006 °/s over 0–10 s (where the correction changed by 0.18 °/s), +0.005 over 10–30 s and −0.008 ± 0.028 over 30–71 s.
+- **For the gallery:** the halved bias estimate is not a cause of the 4° bend.

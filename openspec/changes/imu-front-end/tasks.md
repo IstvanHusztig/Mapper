@@ -14,7 +14,7 @@
 ## 2. Fixes (one commit each, test bed s0–s2 per fix)
 
 - [x] 2.1 D4: Cauchy factor removed, rotation sigmas × √π in settings, defaults, docs (index.html, hu/index.html), the motion-model spec (delta spec) and test fixtures; golden TOML regenerated (own commit); ≈ identical to master. Not identical (the (1 + x²) factor is amplified at the gallery entry); accepted narrowly on s0–s2, rule amendment 2026-10-17 (design.md): D4 also on s3–s5, the later fixes on s0–s5.
-- [ ] 2.2 D3: bias measurement subtracts only the update; test green; readings by the rule.
+- [x] 2.2 D3: bias measurement subtracts only the update; test green; readings by the rule. Accepted on s0–s5 (design.md "D3 results"): bias estimate now −0.81 (z), gallery unchanged.
 - [ ] 2.3 D1: no heading reset during Fusion's initialisation; unit test; readings (differences only; positions after a start-yaw alignment).
 - [ ] 2.4 D2: variant a (dynamic gain through Fusion's settings API, own settings copy, unit test, readings + tilt reading); variant b (removal, bit-identical) only with the user's decision.
 - [ ] 2.5 D5: the pinned first node advanced by the IMU's motion between the two samples, the points between windows kept; tests green; Release + Debug ctest; loop closure and consistency on `44_short`; readings.
