@@ -29,3 +29,8 @@
 
 - [ ] 4.1 Full 44 s0–s5 + 45f, `map_quality.py --floors`; verdict by the rule (high effort, Sonnet review).
 - [ ] 4.2 The user's visual check (plan overlays, folders); full-44 baseline and manifest (old folders dated); `docs/PIPELINE.md`; tracker C2, C3, C5, C6, C15; master-reviewer; push with the user's go.
+
+## Parked (2026-10-17, user's decision: the corridor bend first, change corridor-heading)
+
+- D1 measured on s0–s5 (`fe_read_d1.txt`, gal−A mean −4.30, no verdict written); D2 variant a coded and tested (red 12.6° → green 0°), not committed: job-tmp patch `d2a_final.patch`, its runs stopped after s1. D5 committed, Debug ctest green, not measured on its own (it is part of the corridor-heading reference build, HEAD b97e2e1).
+- Open: D1 verdict, D2a runs and decision, D5 reading, P1 / P2, the cumulative and full validation (3.1–4.2).
