@@ -1,12 +1,12 @@
 ## 1. Preparation
 
-- [ ] 1.1 Rule reviewed by Sonnet (done 2026-10-16, corrections folded in); the user's go for the implementation (medium effort).
+- [x] 1.1 Rule reviewed by Sonnet (done 2026-10-16, corrections folded in); the user's go for the implementation (medium effort).
 - [ ] 1.2 Red tests: D3 (≥ 3 chained windows with a carried bias ≠ 0: the estimate settles near half), D5 (chained windows lose 1/N of a constant yaw rate; a `compute_step_1` fixture for the points between windows).
 - [ ] 1.3 D2 pre-measurement: fraction of IMU samples the ±0.1 g gate sets to gain 0 on 44 and 45f.
 
 ## 2. Fixes (one commit each, test bed s0–s2 per fix)
 
-- [ ] 2.1 D4: Cauchy factor removed, rotation sigmas × √π in settings, defaults, docs (index.html, hu/index.html), the motion-model spec (delta spec) and test fixtures; golden TOML regenerated (own commit); ≈ identical to master.
+- [x] 2.1 D4: Cauchy factor removed, rotation sigmas × √π in settings, defaults, docs (index.html, hu/index.html), the motion-model spec (delta spec) and test fixtures; golden TOML regenerated (own commit); ≈ identical to master. Not identical (the (1 + x²) factor is amplified at the gallery entry); accepted narrowly on s0–s2, rule amendment 2026-10-17 (design.md): D4 also on s3–s5, the later fixes on s0–s5.
 - [ ] 2.2 D3: bias measurement subtracts only the update; test green; readings by the rule.
 - [ ] 2.3 D1: no heading reset during Fusion's initialisation; unit test; readings (differences only; positions after a start-yaw alignment).
 - [ ] 2.4 D2: variant a (dynamic gain through Fusion's settings API, own settings copy, unit test, readings + tilt reading); variant b (removal, bit-identical) only with the user's decision.

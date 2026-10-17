@@ -2,6 +2,7 @@
 
 #include "angle_units.h"
 #include "scan_to_map.h"
+#include "window_steps.h"
 #include <transformations.h>
 #include "synthetic_recording.h"
 
@@ -372,6 +373,52 @@ TEST_CASE("scan-to-map: the gyro bias is estimated")
     // Measured 2026-10-04: 0.038 -0.042 0.473 deg/s (0.045 -0.031 0.469 with the previous cell statistics); 2026-10-14
     // (scene at grid_offset, C10): 0.016 -0.022 0.452 deg/s
     CHECK(std::abs(b.z() - 0.5) < 0.075); // within 15 % (the former Approx(0.5).epsilon(0.1) allowed 0.15 through its scale of 1)
+    CHECK(std::abs(b.x()) < 0.05);
+    CHECK(std::abs(b.y()) < 0.05);
+}
+
+TEST_CASE("scan-to-map: a gyro bias carried from window to window is removed once")
+{
+    // The window loop's bias chain (optimize_windows): apply_gyro_bias_prior removes the carried bias b0 from the guess and
+    // from motion_model_poses, the optimizer estimates the window's bias b, and b (with its covariance) is carried on. Each
+    // window's guess is the true trajectory with the gyro's yaw drift bias * t from its first node. With b0 = 0 (a single
+    // window) the measurement is right either way; from the second window on it must subtract only b - b0, since b0 is
+    // already out of the increments. Subtracting the full b made the chain settle near half the bias (finding C6).
+    OdometryConfig c = test_config();
+    c.use_gyro_bias_estimation = true;
+    c.gyro_bias_rw_deg_s_sqrt_s = 0.005; // settings/lidar-vertical.toml
+    Options o = options_from(c);
+    const Scene s = room();
+    Maps maps = build_maps(s, o.scan_to_map);
+    NullLogger logger;
+
+    const double bias = 2.0 * deg;
+    constexpr int n_windows = 6;
+    GyroBiasState carried;
+    carried.covariance = o.rotation.bias_prior_cov;
+    std::vector<double> estimates;
+    for (int j = 0; j < n_windows; j++)
+    {
+        // window j continues the trajectory of true_poses: from x = -1 + 0.5 j m at 1 m/s, yawing at 20 deg/s
+        std::vector<Eigen::Affine3d> truth;
+        for (int k = 0; k < n_nodes; k++)
+        {
+            const double t = (j * n_nodes + k) * node_dt;
+            truth.push_back(pose(Eigen::Vector3d(-1.0 + 1.0 * t, 0.0, 1.5) + grid_offset, 20.0 * deg * t));
+        }
+        std::vector<Point3Di> points = observe(s, truth);
+        Window w = make_window(drifting_guess(truth, bias));
+        const GyroBiasState prior = apply_gyro_bias_prior(w, carried, c.gyro_bias_rw_deg_s_sqrt_s * deg);
+        o.rotation.bias_prior_mean = prior.mean;
+        o.rotation.bias_prior_cov = prior.covariance;
+        run_iterations(points, w, maps, o, 5.0, 30, logger);
+        carried = w.gyro_bias;
+        estimates.push_back(w.gyro_bias.mean.z() / deg);
+    }
+    const Eigen::Vector3d b = carried.mean / deg;
+    MESSAGE("chained bias estimates (z, deg/s, injected 2.0): ", estimates[0], " ", estimates[1], " ", estimates[2], " ",
+            estimates[3], " ", estimates[4], " ", estimates[5], "; last window x ", b.x(), " y ", b.y());
+    CHECK(std::abs(b.z() - 2.0) < 0.1); // within 5 %
     CHECK(std::abs(b.x()) < 0.05);
     CHECK(std::abs(b.y()) < 0.05);
 }

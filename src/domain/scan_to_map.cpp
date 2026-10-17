@@ -532,10 +532,12 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
 
         if (estimate_bias)
         {
-            // the IMU increment contains bias * dt (body frame of node i, small angle)
-            relative_pose_measurement_odo(3, 0) -= window.gyro_bias.mean.x() * dt_i;
-            relative_pose_measurement_odo(4, 0) -= window.gyro_bias.mean.y() * dt_i;
-            relative_pose_measurement_odo(5, 0) -= window.gyro_bias.mean.z() * dt_i;
+            // the IMU increment contains bias * dt (body frame of node i, small angle); apply_gyro_bias_prior already
+            // removed the carried bias (the prior mean) from motion_model_poses, so only the update is subtracted here
+            const Eigen::Vector3d bias_update = window.gyro_bias.mean - rotation_options.bias_prior_mean;
+            relative_pose_measurement_odo(3, 0) -= bias_update.x() * dt_i;
+            relative_pose_measurement_odo(4, 0) -= bias_update.y() * dt_i;
+            relative_pose_measurement_odo(5, 0) -= bias_update.z() * dt_i;
         }
 
         const double w_om_c = w_om_i;
@@ -612,7 +614,7 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
 
         if (estimate_bias)
         {
-            // rotation rows of delta = (m - b*dt) - f(pose_1, pose_2): d(delta)/d(pose) = J, d(delta)/d(b) = -dt * I
+            // rotation rows of delta = (m - (b - b0)*dt) - f(pose_1, pose_2): d(delta)/d(pose) = J, d(delta)/d(b) = -dt * I
             Eigen::Matrix<double, 6, 12, Eigen::RowMajor> J;
             relative_pose_obs_eq_tait_bryan_wc_case1_jacobian_simplified_1(J,
                                                                            poses[odo_edges[i].first].px, poses[odo_edges[i].first].py, poses[odo_edges[i].first].pz,
