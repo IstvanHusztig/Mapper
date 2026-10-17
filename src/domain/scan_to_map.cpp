@@ -4,7 +4,6 @@
 #include <transformations.h>
 #include <python-scripts/point-to-point-metrics/point_to_point_source_to_target_tait_bryan_wc_jacobian_simplified.h>
 #include <python-scripts/constraints/relative_pose_tait_bryan_wc_jacobian.h>
-#include <common/include/cauchy.h>
 
 #include "angle_units.h"
 #include "normal_equations.h"
@@ -539,9 +538,9 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
             relative_pose_measurement_odo(5, 0) -= window.gyro_bias.mean.z() * dt_i;
         }
 
-        const double w_om_c = w_om_i * cauchy(relative_pose_measurement_odo(3, 0), 1);
-        const double w_fi_c = w_fi_i * cauchy(relative_pose_measurement_odo(4, 0), 1);
-        const double w_ka_c = w_ka_i * cauchy(relative_pose_measurement_odo(5, 0), 1);
+        const double w_om_c = w_om_i;
+        const double w_fi_c = w_fi_i;
+        const double w_ka_c = w_ka_i;
 
         Eigen::Matrix<double, 12, 12>
             AtPAodo;

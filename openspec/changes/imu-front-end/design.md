@@ -74,3 +74,14 @@
   - 45f: loops ≥ 90 % of master's, no runaway (route on a 1 s grid);
   - runtime and peak memory reported.
 - **Order:** D4 (≈ no-op) → D3 → D1 → D2 → D5, each on its own commit with a red / green test where testable. `44_short` new baseline after each accepted numeric fix (own commit); the full-44 manifest and the dated folder renames once at the end. P1 / P2 after the cumulative test-bed run. `docs/PIPELINE.md` updated (hand-off, AHRS start). The user's visual check before the push.
+
+## Rule amendment (2026-10-17, after D4's readings on s0–s2, before any run of D3)
+
+- **D4 on s0–s2** (`44c95bo_d4_s0..s2` against `44c95bo_master_s0..s2`):
+  - gal−A −4.62 / −4.99 / −4.60 against −4.18 / −4.17 / −4.71: paired −0.44 / −0.82 / +0.11, mean −4.74, just outside master's range but 0.43° from M, so accepted by the letter, narrowly. gal−B is 0.44° worse, also below the 0.5° threshold.
+  - A, B and A−B moved ≤ 0.02°. Sanity: 0 jumps, every window 100 iterations, the route within ± 1.5 %, end ≤ 1.55 m off master.
+  - The prediction "≈ identical" missed. The dropped (1 + x²) factor (a weight change of ≈ 1e-5) gives differences that grow smoothly to ≈ 3 cm by 48 s. Window 119 (48.3 s, the gallery entry, weak horizontal direction, information ratio ≈ 0.7; window 121 on s2) then amplifies them 3–10× on all three inputs. Keeping (1 + x²) and dropping only 1/π gives 0.000 m on `44_short`, so the √π rescale itself is exact.
+- **Consequence:** numerical noise alone moves a gallery reading by ≈ 0.5° on one input, so three inputs per fix are too few:
+  - D4 also runs on s3–s5, as the paired reference for the later fixes there. Its six-input mean is checked against the same criterion; if it fails, D4 goes back to the user before D3.
+  - D3, D1, D2 and D5 each run on s0–s5 against the previous accepted state; the per-fix criterion uses the six-input mean.
+  - The cumulative paired sum over all accepted fixes (s0–s5) stays binding as written.

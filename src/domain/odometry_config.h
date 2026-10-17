@@ -84,9 +84,9 @@ struct OdometryConfig
     double lidar_odometry_motion_model_y_1_sigma_m = 0.0001;
     double lidar_odometry_motion_model_z_1_sigma_m = 0.0001;
 
-    double lidar_odometry_motion_model_om_1_sigma_deg = 0.3;
-    double lidar_odometry_motion_model_fi_1_sigma_deg = 0.3;
-    double lidar_odometry_motion_model_ka_1_sigma_deg = 0.3;
+    double lidar_odometry_motion_model_om_1_sigma_deg = 0.53173616;
+    double lidar_odometry_motion_model_fi_1_sigma_deg = 0.53173616;
+    double lidar_odometry_motion_model_ka_1_sigma_deg = 0.53173616;
 
     // velocity-continuity prior: world-frame acceleration sigma [m/s^2] between consecutive nodes,
     // also applied across window boundaries (removes velocity kinks every threshold_nr_poses); 0 = disabled
@@ -100,8 +100,8 @@ struct OdometryConfig
     double gyro_arw_x_deg_sqrt_s = 0.028;      // gyro angle random walk [deg/sqrt(s)], Unitree L2 static recording (43/static)
     double gyro_arw_y_deg_sqrt_s = 0.042;
     double gyro_arw_z_deg_sqrt_s = 0.057;
-    double rotation_sigma_inflation_k = 4.0;   // covers model error beyond white gyro noise (timestamp jitter, vibration); tuned on datasets 42/43
-    double rotation_sigma_floor_deg = 0.002;   // lower bound for near-zero dt
+    double rotation_sigma_inflation_k = 7.0898154; // covers model error beyond white gyro noise (timestamp jitter, vibration); tuned (as 4.0 before the prior lost its 1/pi Cauchy factor, so x sqrt(pi)) on datasets 42/43
+    double rotation_sigma_floor_deg = 0.0035449077; // lower bound for near-zero dt (0.002 x sqrt(pi))
     // in windows that turn faster than turn_rate_threshold_deg_s about the vertical (mean over the window, from the IMU),
     // rotation_sigma_inflation_k_turn replaces rotation_sigma_inflation_k: tight turns (stairwells) trust the gyro more,
     // since the LiDAR matching is weakest there; 0 = off

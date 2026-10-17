@@ -113,9 +113,9 @@ namespace
         c.ablation_study_use_view_point_and_normal_vectors = true;
         c.motion_model_correction = TaitBryanPose{};
         c.lidar_odometry_motion_model_x_1_sigma_m = c.lidar_odometry_motion_model_y_1_sigma_m = c.lidar_odometry_motion_model_z_1_sigma_m = 1e-4;
-        c.lidar_odometry_motion_model_om_1_sigma_deg = 0.1;
-        c.lidar_odometry_motion_model_fi_1_sigma_deg = 0.1;
-        c.lidar_odometry_motion_model_ka_1_sigma_deg = 0.15;
+        c.lidar_odometry_motion_model_om_1_sigma_deg = 0.17724539;
+        c.lidar_odometry_motion_model_fi_1_sigma_deg = 0.17724539;
+        c.lidar_odometry_motion_model_ka_1_sigma_deg = 0.26586808;
         c.lidar_odometry_motion_model_fix_origin_x_1_sigma_m = c.lidar_odometry_motion_model_fix_origin_y_1_sigma_m =
             c.lidar_odometry_motion_model_fix_origin_z_1_sigma_m = 1e-6;
         c.lidar_odometry_motion_model_fix_origin_om_1_sigma_deg = c.lidar_odometry_motion_model_fix_origin_fi_1_sigma_deg =
@@ -125,8 +125,8 @@ namespace
         c.gyro_arw_x_deg_sqrt_s = 0.028;
         c.gyro_arw_y_deg_sqrt_s = 0.042;
         c.gyro_arw_z_deg_sqrt_s = 0.057;
-        c.rotation_sigma_inflation_k = 4.0;
-        c.rotation_sigma_floor_deg = 0.002;
+        c.rotation_sigma_inflation_k = 7.0898154;
+        c.rotation_sigma_floor_deg = 0.0035449077;
         c.use_gyro_bias_estimation = false; // the bias test switches it on
         c.gyro_bias_max_deg_s = 20.0;
         c.lm_factor_initial = 5.0;
@@ -837,7 +837,7 @@ TEST_CASE("scan-to-map, imu always on: a tilt drift is corrected in the attitude
     k.world_acceleration.assign(n_nodes, Eigen::Vector3d::Zero());
     k.points = false;
     k.translation_sigma_m = 1e-4;
-    k.rotation_sigma_deg = 1.0;
+    k.rotation_sigma_deg = 1.7724539;
     const Window w = run_always_on(room(), k);
     const PoseError before = max_error(k.guess, k.truth), after = max_error(w.poses, k.truth);
     MESSAGE("tilt drift: largest rotation error ", before.rotation / deg, " -> ", after.rotation / deg, " deg, largest position error ",

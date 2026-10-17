@@ -159,19 +159,19 @@ lidar_odometry_motion_model_fix_origin_y_1_sigma_m = 1e-06
 lidar_odometry_motion_model_fix_origin_z_1_sigma_m = 1e-06
 
 [motion_model_uncertainty]
-lidar_odometry_motion_model_fi_1_sigma_deg = 0.1
-lidar_odometry_motion_model_ka_1_sigma_deg = 0.15
+lidar_odometry_motion_model_fi_1_sigma_deg = 0.17724539
+lidar_odometry_motion_model_ka_1_sigma_deg = 0.26586808
 lidar_odometry_motion_model_acc_1_sigma_mps2 = 1.0
 max_prior_velocity_mps = 5.0
-lidar_odometry_motion_model_om_1_sigma_deg = 0.1
+lidar_odometry_motion_model_om_1_sigma_deg = 0.17724539
 lidar_odometry_motion_model_x_1_sigma_m = 1e-04
 lidar_odometry_motion_model_y_1_sigma_m = 1e-04
 lidar_odometry_motion_model_z_1_sigma_m = 1e-04
 gyro_arw_x_deg_sqrt_s = 0.028
 gyro_arw_y_deg_sqrt_s = 0.042
 gyro_arw_z_deg_sqrt_s = 0.057
-rotation_sigma_floor_deg = 0.002
-rotation_sigma_inflation_k = 4.0
+rotation_sigma_floor_deg = 0.0035449077
+rotation_sigma_inflation_k = 7.0898154
 use_time_scaled_rotation_sigma = true
 
 [paths]
