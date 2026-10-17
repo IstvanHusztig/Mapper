@@ -45,9 +45,10 @@ struct PosePrediction
     bool mean_shift_dropped = false; // the mean-shift fallback was implausible (> 1 m per node) and set to zero
 };
 
-// initial guess of window: its relative poses chained from previous's last node; the translations come from
-// IMU integration (or rest), else constant velocity, else the mean shift between before_previous and previous
-// (before_previous may be null); poses and motion_model_poses are both set to the guess
+// initial guess of window: its relative poses chained from previous's last node advanced by
+// window.imu_motion_from_previous; the translations come from IMU integration (or rest), else constant velocity, else the
+// mean shift between before_previous and previous (before_previous may be null); IMU integration and constant velocity
+// also over the time from previous's last node to window's first; poses and motion_model_poses are both set to the guess
 PosePrediction predict_window_poses(Window &window, const Window &previous, const Window *before_previous,
                                     const Eigen::Vector3d &prev_velocity, const PosePredictionOptions &options);
 

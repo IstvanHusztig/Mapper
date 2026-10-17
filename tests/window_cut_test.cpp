@@ -88,6 +88,32 @@ TEST_CASE("window hand-off: chained windows keep the rotation between one window
     CHECK(worst < 1e-6);
 }
 
+TEST_CASE("window hand-off: the predicted guess of the next window keeps the motion between the two samples")
+{
+    // optimize_windows predicts each window's guess with predict_window_poses (use_motion_from_previous_step), which
+    // rebuilds it from the previous window's last node: that is where the hand-off was lost again after D5 fixed
+    // place_window_after. Here at a constant yaw rate and a constant velocity, without IMU translation.
+    Cut c;
+    cut(c);
+    const Eigen::Vector3d velocity(0.8, -0.3, 0.1); // [m/s]
+    PosePredictionOptions options;
+    options.constant_velocity = true;
+    double worst_yaw = 0.0, worst_position = 0.0;
+    for (size_t i = 1; i < c.windows.size(); i++)
+    {
+        predict_window_poses(c.windows[i], c.windows[i - 1], nullptr, velocity, options);
+        const Window &w = c.windows[i];
+        const Window &prev = c.windows[i - 1];
+        for (size_t k = 0; k < w.poses.size(); k++)
+            worst_yaw = std::max(worst_yaw, std::abs(yaw_of(w.poses[k]) - yaw_rate * w.timestamps[k].first));
+        const Eigen::Vector3d expected = prev.poses.back().translation() + velocity * (w.timestamps[0].first - prev.timestamps.back().first);
+        worst_position = std::max(worst_position, (w.poses[0].translation() - expected).norm());
+    }
+    MESSAGE("predicted windows: largest yaw error ", worst_yaw, " rad, largest first-node position error ", worst_position, " m");
+    CHECK(worst_yaw < 1e-6);
+    CHECK(worst_position < 1e-9);
+}
+
 TEST_CASE("window hand-off: the points between two windows belong to the earlier window's last node")
 {
     Cut c;

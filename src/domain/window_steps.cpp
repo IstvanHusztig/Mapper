@@ -75,9 +75,14 @@ PosePrediction predict_window_poses(Window &window, const Window &previous, cons
         mean_shift = Eigen::Vector3d(0.0, 0.0, 0.0);
     }
 
+    // the window starts after the IMU's motion since the previous window's last node (one sample interval); its first
+    // position follows the prediction over that time too
     std::vector<Eigen::Affine3d> new_trajectory;
-    Eigen::Affine3d current_node = previous.poses[previous.poses.size() - 1];
+    Eigen::Affine3d current_node = previous.poses[previous.poses.size() - 1] * window.imu_motion_from_previous;
     new_trajectory.push_back(current_node);
+    const double gap_s = !window.timestamps.empty() && !previous.timestamps.empty()
+                             ? std::max(window.timestamps[0].first - previous.timestamps.back().first, 0.0)
+                             : 0.0;
 
     for (int tr = 1; tr < window.poses.size(); tr++)
     {
@@ -108,7 +113,8 @@ PosePrediction predict_window_poses(Window &window, const Window &previous, cons
         // integrate the accelerometer from the previous window's final velocity;
         // a window at rest (zero-velocity detection) is predicted without motion
         Eigen::Vector3d v = r.stationary ? Eigen::Vector3d::Zero() : prev_velocity;
-        Eigen::Vector3d p = new_trajectory[0].translation();
+        Eigen::Vector3d p = new_trajectory[0].translation() + v * gap_s;
+        new_trajectory[0].translation() = p;
         for (size_t tr = 1; tr < new_trajectory.size(); tr++)
         {
             const double dt = std::max(ts[tr].first - ts[tr - 1].first, 0.0);
@@ -122,7 +128,7 @@ PosePrediction predict_window_poses(Window &window, const Window &previous, cons
     {
         // timestamp-aware constant-velocity prediction from the previous window's final velocity
         for (int tr = 0; tr < new_trajectory.size(); tr++)
-            new_trajectory[tr].translation() += prev_velocity * (ts[tr].first - ts[0].first);
+            new_trajectory[tr].translation() += prev_velocity * (ts[tr].first - ts[0].first + gap_s);
     }
     else
     {
