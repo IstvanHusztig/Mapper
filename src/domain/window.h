@@ -34,6 +34,9 @@ struct Window
     std::vector<Eigen::Vector3d> imu_acc;              // raw accelerometer of each node [g], body frame (empty if unknown)
     GyroBiasState gyro_bias;                           // estimated gyro bias of this window
     VelocityState velocity;                            // start and end velocity (imu_always_on)
+    // the IMU's motion from the previous window's last node to this window's first node (one sample interval, or more
+    // after a dropped window); identity for the first window
+    Eigen::Affine3d imu_motion_from_previous = Eigen::Affine3d::Identity();
 };
 
 // AHRS orientation track: IMU timestamp -> (pose matrix, unix timestamp)

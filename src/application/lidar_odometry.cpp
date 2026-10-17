@@ -8,6 +8,7 @@
 #include <transformations.h>
 #include "consistency.h"
 #include <mutex>
+#include <optional>
 
 namespace fs = std::filesystem;
 
@@ -310,6 +311,8 @@ bool compute_step_1(
     int threshold = params.threshold_nr_poses;
 
     const int n_iter = poses.size() / threshold;
+    // index of the last node of the last window kept: the next window starts after the IMU's motion since then
+    std::optional<size_t> previous_last_idx;
     windows.clear();
     windows.reserve(n_iter);
 
@@ -326,6 +329,8 @@ bool compute_step_1(
 
         const size_t start_idx = i * threshold;
         const size_t end_idx = (i + 1) * threshold;
+        if (previous_last_idx)
+            wd.imu_motion_from_previous = poses[*previous_last_idx].inverse() * poses[start_idx];
 
         for (size_t idx = start_idx; idx < end_idx; idx++)
         {
@@ -342,6 +347,8 @@ bool compute_step_1(
 
         std::vector<Point3Di> points;
 
+        // the points up to the next window's first node: those after this window's last node belong to that node
+        const double points_end = end_idx < timestamps.size() ? timestamps[end_idx].first : wd.timestamps.back().first;
         for (size_t index = 0; index < pointsPerFile.size(); index++)
         {
             auto lower = std::lower_bound(
@@ -353,7 +360,7 @@ bool compute_step_1(
                 });
             auto upper = std::lower_bound(
                 pointsPerFile[index].begin(), pointsPerFile[index].end(),
-                wd.timestamps[wd.timestamps.size() - 1].first,
+                points_end,
                 [](const Point3Di& point, double timestamp)
                 {
                     return point.timestamp < timestamp;
@@ -391,6 +398,7 @@ bool compute_step_1(
         }
         else
         {
+            previous_last_idx = end_idx - 1;
             std::vector<Point3Di> intermediate_points;
 
             if (params.decimation > 0.0 && points.size() > 1000)

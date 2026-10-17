@@ -6,7 +6,7 @@
 
 void place_window_after(Window &window, const Eigen::Affine3d &start)
 {
-    Eigen::Affine3d m_last = start;
+    Eigen::Affine3d m_last = start * window.imu_motion_from_previous;
     auto tmp = window.poses;
 
     window.poses[0] = m_last;

@@ -5,7 +5,8 @@
 
 #include "window.h"
 
-// re-chain the window's poses so that its first node lies at start, keeping every relative pose
+// re-chain the window's poses so that its first node lies at start advanced by window.imu_motion_from_previous (start
+// is the previous window's last node), keeping every relative pose
 void place_window_after(Window &window, const Eigen::Affine3d &start);
 
 // place windows[first], windows[first + 1], ... in order, each after the last node of the window before it;
