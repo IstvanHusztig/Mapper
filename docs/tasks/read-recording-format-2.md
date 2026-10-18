@@ -34,7 +34,16 @@ dMapper should read and carry this data as the groundwork for the intensity norm
 - `44_short` bit-identical with `tools/baseline/44_short.manifest.json` on every intermediate commit, and the full 44 with `tools/baseline/44.manifest.json` once, both with the new setting off.
 - `format1_old` and `format2_new` give bit-identical dMapper results.
 - The unit tests pass in x64-Release. Also build x64-Debug and run `ctest`, because the change touches struct layout, uninitialized memory and new containers.
-- With the setting on: CloudCompare or laspy shows the new attributes; on `format2_new`, the range differs from |raw xyz| by at most hypot(a, b) (about 8 mm).
+- With the setting on: laspy reads the new attributes by name, and the range on `format2_new` differs from |raw xyz| by at most hypot(a, b) (about 8 mm). Do not rely on a CloudCompare ASCII export here, because it may not carry the extra bytes in a usable form.
+
+## Python libraries (tools/)
+The Python tools so far use numpy only and read LAZ through a CloudCompare ASCII export. The radiometry and rendering tools read LAZ directly. The libraries are chosen once for all of them:
+- **`laspy[lazrs]`**: read and write LAZ with the extra bytes by name. Used by the checks of this task, `tools/intensity_probe.py` and `tools/render_cave.py`.
+- **`numpy`, `scipy`**: arrays, `cKDTree` for surface cells and neighbours, `scipy.optimize` / `scipy.sparse` for the range and angle fit.
+- **`open3d`**: only in `tools/render_cave.py` (Poisson mesh, offscreen render, PLY). PyMeshLab is the fallback if its meshes need better cleaning.
+- **Not used:** PDAL (conda-only on Windows; reconsider for COPC or web viewers), PyVista, MeshLib, Pyntcloud.
+
+Install: `python -m pip install --user "laspy[lazrs]" numpy scipy open3d`. Each tool checks its imports at startup and prints this command when one is missing. Moving `map_quality_lib.py` and `spot_check.py` from the CloudCompare export to laspy is a separate change.
 
 ## Not in this task
 The probe tool (intensity against range, angle and APD voltage per surface cell, 255 censored) and the self-calibrated range/angle correction. Each is a later task, which needs the first real format-2 recording.

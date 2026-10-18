@@ -59,7 +59,13 @@ For what the app does not do: Poisson meshes and input for Blender Cycles or Unr
 - Vertices farther than `--max-gap` (default 0.05 m) from any measured point are coloured neutral grey or dropped, so invented surface is visible as such.
 - Writes `.ply` with vertex colours and a headlamp-lit Open3D preview.
 - Takes its albedo and normals from a scene file that the app exports (Render → Export scene…), so the Python tool does not reimplement Phase 1.
-- **Dependencies:** this tool is the deliberate exception to pure-Python `tools/`. It needs `open3d`, `laspy[lazrs]`, `numpy` and `scipy` (`python -m pip install --user open3d "laspy[lazrs]" numpy scipy`). It checks for them at startup and prints that command when one is missing.
+- **Libraries** (the shared choice for the Python tools, in `docs/tasks/read-recording-format-2.md`, section "Python libraries"):
+  - `open3d` for Poisson, normals, the offscreen render and PLY;
+  - `laspy[lazrs]` to read the LAZ with its extra bytes;
+  - `numpy`, `scipy` (`cKDTree` for the gap distances);
+  - PyMeshLab only if Open3D's meshes need better cleaning.
+
+  Install with `python -m pip install --user "laspy[lazrs]" numpy scipy open3d`. The tool checks its imports at startup and prints this command when one is missing. Open3D's Windows wheels can lag the newest Python, so check the supported versions first.
 
 ## Pass criteria
 - Phase 1–2 change no processing: `44_short` stays bit-identical with its manifest, and the unit tests pass in x64-Release. Also run x64-Debug with `ctest`, because of the new containers and the worker thread.
