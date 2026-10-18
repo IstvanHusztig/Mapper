@@ -80,7 +80,7 @@ namespace
         OdometryTiming timing;                         // with log_stage_timing
     };
 
-    OdometryRunSetup prepare_run(const std::vector<Window> &windows, const OdometryConfig &params, Logger &logger)
+    OdometryRunSetup prepare_run(const std::vector<Window> &windows, const OdometryConfig &params, bool startup_bias_accepted, Logger &logger)
     {
         OdometryRunSetup s;
         s.rotation_options = get_motion_model_rotation_options(params);
@@ -92,7 +92,8 @@ namespace
             s.rotation_options.estimate_bias = false;
         }
         s.bias_rw_rad = params.gyro_bias_rw_deg_s_sqrt_s * DEG_TO_RAD;
-        s.bias_sigma0_rad = params.gyro_bias_initial_sigma_deg_s * DEG_TO_RAD;
+        // the AHRS already removed an accepted start-up bias: the first window's estimate starts close to it
+        s.bias_sigma0_rad = (startup_bias_accepted ? params.gyro_bias_startup_sigma_deg_s : params.gyro_bias_initial_sigma_deg_s) * DEG_TO_RAD;
 
         // IMU-aided translation prediction: raw accelerometer and AHRS orientation of every node are needed
         s.have_acc = !windows.empty() && windows[0].imu_acc.size() == windows[0].poses.size() &&
@@ -1012,7 +1013,7 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
         windows[0].motion_model_poses = windows[0].poses;
         seed_map(state, params);
 
-        OdometryRunSetup setup = prepare_run(windows, params, logger);
+        OdometryRunSetup setup = prepare_run(windows, params, state.startup_gyro_bias_accepted, logger);
         WindowLoopCarry carry = start_carry(setup, windows);
         ScanToMapWorkspace workspace; // the Cholesky analyses, kept from window to window
 

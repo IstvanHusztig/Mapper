@@ -176,6 +176,7 @@ struct OdometryConfig
     bool use_gyro_bias_estimation = true;          // validated against a static recording (43/static)
     double gyro_bias_rw_deg_s_sqrt_s = 0.05;       // bias random walk: prior sigma grows by rw * sqrt(window duration)
     double gyro_bias_initial_sigma_deg_s = 10.0;   // prior sigma of the bias in the first window
+    double gyro_bias_startup_sigma_deg_s = 0.5;    // instead, when the start-up bias was accepted (removed by the AHRS)
     double gyro_bias_max_deg_s = 20.0;             // per-axis clamp of the estimated bias
 
     // window hand-off: the last handoff_tail_nodes nodes of each window are re-propagated from the IMU
@@ -266,6 +267,13 @@ struct OdometryConfig
     double rgd_sf_sigma_ka_deg = 0.01;
 
     bool use_remove_imu_bias_from_first_stationary_scan = true;
+    // the start-up bias (startup_gyro_bias.h): median of the first imu_startup_bias_window_s, accepted when the quarter
+    // medians agree within max_spread, gravity turns by at most max_tilt and the scatter is within max_noise_ratio x the
+    // sensor noise (gyro ARW x sqrt(rate)); hand-held starts measure <= 1.74 deg/s, 0.68 deg, 1.91 x
+    double imu_startup_bias_window_s = 1.0;
+    double imu_startup_bias_max_spread_deg_s = 3.0;
+    double imu_startup_bias_max_tilt_deg = 2.0;
+    double imu_startup_bias_max_noise_ratio = 3.0;
 
     //ablation study
     bool ablation_study_use_planarity = false;

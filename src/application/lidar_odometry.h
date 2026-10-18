@@ -7,11 +7,13 @@
 #include "input_ports.h"
 #include "output_ports.h"
 #include "service_ports.h"
+#include "startup_gyro_bias.h"
 
 
 bool load_data(RecordingSource &recording, PreviewSink &preview, const OdometryConfig &params, std::vector<std::vector<Point3Di>> &pointsPerFile, Imu &imu_data, bool debugMsg, ParallelExecutor &parallel, Logger &logger);
-void calculate_trajectory(
-    ImuTrajectory &trajectory, Imu &imu_data, bool fusionConventionNwu, bool fusionConventionEnu, bool fusionConventionNed, double ahrs_gain, bool debugMsg, bool use_removie_imu_bias_from_first_stationary_scan, OrientationEstimator &ahrs, Logger &logger);
+// returns the start-up gyro bias it removed (accepted = false: none, see startup_gyro_bias.h)
+StartupBias calculate_trajectory(
+    ImuTrajectory &trajectory, Imu &imu_data, bool fusionConventionNwu, bool fusionConventionEnu, bool fusionConventionNed, double ahrs_gain, bool debugMsg, bool use_removie_imu_bias_from_first_stationary_scan, const StartupBiasOptions &startup, OrientationEstimator &ahrs, Logger &logger);
 bool compute_step_1(
     std::vector<std::vector<Point3Di>> &pointsPerFile, const OdometryConfig &params, OdometryState &state,
     ImuTrajectory &trajectory, std::vector<Window> &windows, PointStore &point_store, Logger &logger, ProgressReporter &progress, const Imu *imu_data = nullptr);
