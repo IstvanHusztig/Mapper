@@ -13,6 +13,10 @@ noise floor is s1/s2); several statements rest on tens of visit pairs without an
   noise floor `half_split_m` (~1.1 cm). The first version's max-minus-min "visit spread" overstated the disagreement
   (5.7 cm, growing to 8.5 cm with 4–5 visits); it is replaced.
 - Repeat-run spread of `pair_diff_m` p50: 2.2 (s1) – 3.0 cm (s0 = baseline, s2 2.9).
+- Correction (post-push review, consistency-gyro-term 1.1): `half_split_m` comes from a piece's longest visit, so it is
+  not the floor of a typical pair. The pair-matched noise (`pair_excess_m`: difference minus 1.25 √(s₁²/n₁ + s₂²/n₂))
+  is only 0.4–0.6 cm on 44_baseline, and the excess over it is 2.1–2.5 cm from 10 s apart on: the disagreement in F1 and
+  F6 is not the medians' noise. Where along a piece two visits looked explains little of it (Spearman +0.06).
 
 ## F1. Loop closure brings repeat visits together; consistency adds little to that
 
@@ -51,9 +55,9 @@ constrain each other. Section lines differ between variants (416 / 285 / 437 / 2
 ## F4. The damping dependence is chain amplification, not per-window non-convergence
 
 On 44_short, solving each window twice from the identical state with λ0 = 5 and 0.5 differs by p50 0.0006 mm (max
-0.026 mm); the chained runs differ at their windows' first node by p50 0.65 mm (windows 1–35) → 4.2 mm (36–70). A stop rule
-in physical units doesn't remove it (and would cut LM iterations ~45 %). Every window still runs all 100 iterations
-(the stop rule never fires). Which carried state amplifies it is untested; the map effect was not measured in numbers.
+0.026 mm); the chained runs differ at their windows' first node by p50 0.65 mm (windows 1–35) → 4.2 mm (36–70). The
+shipped code's only stop rule (delta < 1e-12) never fires, so every window runs all 100 iterations; a stop rule in
+physical units, tested in the experiment, doesn't remove the dependence (and would cut LM iterations ~45 %). Which carried state amplifies it is untested; the map effect was not measured in numbers.
 
 ## F5. Code findings (verified in the code; effects not measured)
 

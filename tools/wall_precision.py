@@ -43,6 +43,8 @@ ap.add_argument("--height", type=float, default=0.0, help="world z of the sectio
 ap.add_argument("--half-thickness", type=float, default=0.05, help="points within this of the height [m]")
 ap.add_argument("--threshold", type=float, default=0.03, help="section line threshold (as plan_section.py)")
 ap.add_argument("--min-length", type=float, default=0.5, help="shortest piece of section line kept [m]")
+ap.add_argument("--cell", type=float, default=0.02, help="density grid cell of the section line [m] (as plan_section.py)")
+ap.add_argument("--sigma", type=float, default=3.0, help="smoothing of the density [cells] (as plan_section.py)")
 ap.add_argument("--piece", type=float, default=0.5, help="size of the squares the line is cut into [m]")
 ap.add_argument("--across", type=float, default=0.2, help="points within this of the piece's line [m]")
 ap.add_argument("--gap", type=float, default=2.0, help="a pause in a piece's point times longer than this starts a new visit [s]")
@@ -57,13 +59,20 @@ m = np.abs(z_all - a.height) <= a.half_thickness
 P = np.column_stack([np.asarray(f.x)[m], np.asarray(f.y)[m], z_all[m]])
 t = np.asarray(f.gps_time)[m] * 1e-9
 print(f"slice z = {a.height:+.2f} +- {a.half_thickness:.2f} m: {len(P)} points")
-sec = Section(P[:, 0], P[:, 1])
+sec = Section(P[:, 0], P[:, 1], a.cell, a.sigma)
 ridge = sec.ridge_cells(a.threshold, a.min_length)
 T, _, pos = trajectory(a.result)
 sensor = np.column_stack([np.interp(t, T, pos[:, k]) for k in range(3)])
-results = [fn for fn in os.listdir(a.result) if fn.startswith("dMapper_results") and fn.endswith(".json")]
-with open(os.path.join(a.result, results[0])) as fp:
-    window_start = np.array([w["t_start_s"] for w in json.load(fp)["gyro_bias_per_window"]])
+# window start times: gyro_bias_per_window of the newest results JSON (written only with gyro-bias estimation; without
+# it the windows column stays empty)
+results = sorted((fn for fn in os.listdir(a.result) if fn.startswith("dMapper_results") and fn.endswith(".json")),
+                 key=lambda fn: os.path.getmtime(os.path.join(a.result, fn)))
+window_start = np.array([])
+if results:
+    with open(os.path.join(a.result, results[-1])) as fp:
+        window_start = np.array([w["t_start_s"] for w in json.load(fp).get("gyro_bias_per_window", [])])
+if len(window_start) == 0:
+    print("no gyro_bias_per_window in the results JSON: the windows column stays empty")
 tree = spatial.cKDTree(P[:, :2])
 
 # ---- pieces ---------------------------------------------------------------------------------------------------------
@@ -78,6 +87,8 @@ piece_of_cell = piece_of_cell.ravel()
 def runs(ws):
     """window indices as 'a-b;c' """
     ws = np.unique(ws)
+    if len(ws) == 0:
+        return ""
     out, s = [], ws[0]
     for p, q in zip(ws, np.r_[ws[1:], -10]):
         if q != p + 1:
@@ -89,19 +100,21 @@ def runs(ws):
 rows, all_pairs = [], []  # all_pairs: (piece, offset difference, time between the visits) over all pieces
 for k in range(piece_of_cell.max() + 1):
     cells = cxy[piece_of_cell == k]
-    if len(cells) * sec.cell < 0.2:
-        continue
     c = cells.mean(0)
     _, _, vt = np.linalg.svd(cells - c, full_matrices=False)
     d, n = vt[0], np.array([-vt[0][1], vt[0][0]])
-    half = np.abs((cells - c) @ d).max() + sec.cell / 2
+    u = (cells - c) @ d
+    length = u.max() - u.min() + sec.cell  # the line's extent: a diagonal line has fewer cells per metre
+    if length < 0.2:
+        continue
+    half = np.abs(u).max() + sec.cell / 2
     idx = np.array(tree.query_ball_point(c, np.hypot(half, a.across)), int)
     if len(idx) == 0:
         continue
     rel = P[idx, :2] - c
     off, along = rel @ n, rel @ d
     keep = (np.abs(along) <= half) & (np.abs(off) <= a.across)
-    idx, off = idx[keep], off[keep]
+    idx, off, along = idx[keep], off[keep], along[keep]
     if len(idx) < a.min_visit_points:
         continue
     # the side of the line the sensor was on: a wall seen from both sides shows two faces, which is not an error, so
@@ -113,36 +126,45 @@ for k in range(piece_of_cell.max() + 1):
     off = off - np.array([side_median[s_] for s_ in side])
     core = np.abs(off) <= a.across
     thickness = 1.4826 * np.median(np.abs(off[core]))
-    visits, half_split, longest = [], np.nan, 0  # visits: (first time, last time, median offset, points, side)
+    # visits: (first time, last time, median offset, points, side, robust scatter of its offsets, median position along)
+    visits, half_split, longest = [], np.nan, 0
     for s_ in sides:
         sel = np.flatnonzero(side == s_)
         o = sel[np.argsort(t[idx][sel])]
-        ts_, offs_ = t[idx][o], off[o]
+        ts_, offs_, along_ = t[idx][o], off[o], along[o]
         cuts = np.flatnonzero(np.diff(ts_) > a.gap) + 1
         for s, e in zip(np.r_[0, cuts], np.r_[cuts, len(ts_)]):
             if e - s >= a.min_visit_points:
-                visits.append((ts_[s], ts_[e - 1], np.median(offs_[s:e]), e - s, s_))
+                med = np.median(offs_[s:e])
+                visits.append((ts_[s], ts_[e - 1], med, e - s, s_, 1.4826 * np.median(np.abs(offs_[s:e] - med)),
+                               np.median(along_[s:e])))
             if e - s >= 2 * a.min_visit_points and e - s > longest:
                 # the longest visit's first half against its second half: the measure's own noise, no drift between visits
                 h = (s + e) // 2
                 half_split, longest = abs(np.median(offs_[s:h]) - np.median(offs_[h:e])), e - s
     visits.sort(key=lambda v: v[0])
-    # every pair of visits from the same side: the difference of their offsets and the time between their middles
-    pairs = [(abs(v[2] - w[2]), abs(v[0] + v[1] - w[0] - w[1]) / 2)
+    # every pair of visits from the same side: the difference of their offsets, the time between their middles, the
+    # difference the two medians' own noise would give (1.25 x the standard error of a median difference, i.e. its
+    # expected |value| for two noisy medians, ~1.2533 sqrt(s1^2/n1 + s2^2/n2) x 1.25 / 1.2533) and how far apart along the
+    # piece the two visits' points lie (a corner or a second surface in the piece shifts the offset of a visit that saw
+    # another stretch of it)
+    pairs = [(abs(v[2] - w[2]), abs(v[0] + v[1] - w[0] - w[1]) / 2,
+              1.25 * np.sqrt(v[5] ** 2 / v[3] + w[5] ** 2 / w[3]), abs(v[6] - w[6]))
              for i, v in enumerate(visits) for w in visits[i + 1:] if v[4] == w[4]]
-    all_pairs += [(len(rows), dv, dt) for dv, dt in pairs]
+    all_pairs += [(len(rows), dv, dt, noise, dal) for dv, dt, noise, dal in pairs]
     spread = [max(v[2] for v in visits if v[4] == s_) - min(v[2] for v in visits if v[4] == s_) for s_ in sides
               if sum(v[4] == s_ for v in visits) > 1]
     ts = np.sort(t[idx])
-    ray = P[idx, :2] - sensor[idx, :2]
-    rng = np.linalg.norm(P[idx] - sensor[idx], axis=1)
-    inc = np.degrees(np.arccos(np.clip(np.abs(ray @ n) / (np.linalg.norm(ray, axis=1) + 1e-12), 0, 1)))
+    ray = P[idx] - sensor[idx]  # 3D: a wall seen from above or below is grazed even if the horizontal ray hits it head-on
+    rng = np.linalg.norm(ray, axis=1)
+    inc = np.degrees(np.arccos(np.clip(np.abs(ray[:, :2] @ n) / (rng + 1e-12), 0, 1)))
     win = np.searchsorted(window_start, ts, side="right") - 1
     rows.append({
         "piece": len(rows), "x": c[0], "y": c[1], "dir_deg": np.degrees(np.arctan2(d[1], d[0])) % 180,
-        "length_m": len(cells) * sec.cell, "points": len(idx), "thickness_m": thickness,
+        "length_m": length, "points": len(idx), "thickness_m": thickness,
         "sides": len(sides), "faces_m": faces, "visits": len(visits), "pairs": len(pairs),
         "pair_diff_m": np.median([p[0] for p in pairs]) if pairs else np.nan,
+        "pair_excess_m": np.median([p[0] - p[2] for p in pairs]) if pairs else np.nan,
         "visit_spread_m": max(spread) if spread else np.nan, "half_split_m": half_split,
         "visit_offsets_m": ";".join(f"{v[2]:+.3f}" for v in visits), "visit_sides": ";".join(f"{v[4]:+d}" for v in visits),
         "visit_times_s": ";".join(f"{v[0]:.1f}-{v[1]:.1f}" for v in visits),
@@ -150,6 +172,8 @@ for k in range(piece_of_cell.max() + 1):
         "windows": runs(win), "t_first_s": ts[0], "t_last_s": ts[-1], "_cells": cells,
     })
 print(f"pieces: {len(rows)} ({sum(r['length_m'] for r in rows):.0f} m of line), visit pairs (same side): {len(all_pairs)}")
+if not rows:
+    raise SystemExit("no pieces of section line at this height: nothing to measure (try another --height or --threshold)")
 
 # ---- plan distance (optional) ---------------------------------------------------------------------------------------
 if a.plan:
@@ -185,7 +209,7 @@ def col(name):
 
 
 L = col("length_m")
-for name in ("thickness_m", "pair_diff_m", "half_split_m", "visit_spread_m", "faces_m", "plan_dist_m", "seen_s", "range_m", "incidence_deg", "visits"):
+for name in ("thickness_m", "pair_diff_m", "pair_excess_m", "half_split_m", "visit_spread_m", "faces_m", "plan_dist_m", "seen_s", "range_m", "incidence_deg", "visits"):
     if name in rows[0]:
         v = col(name)
         ok = np.isfinite(v)
@@ -193,13 +217,27 @@ for name in ("thickness_m", "pair_diff_m", "half_split_m", "visit_spread_m", "fa
               f"p90 {np.percentile(v[ok], 90):7.3f}  ({ok.sum()} pieces)")
 # visit pairs pooled over all pieces, by the time between the two visits: a precise map gives the noise floor
 # (half_split_m) at every time separation; drift between visits grows with it
-P_ = np.array(all_pairs)
-print("visit pairs (same side) by time between the visits: |offset difference| p50 / p90 [m]")
-for lo_, hi_ in ((0, 10), (10, 30), (30, 100), (100, 1e9)):
-    sel = (P_[:, 2] >= lo_) & (P_[:, 2] < hi_)
-    if sel.any():
-        print(f"  {lo_:4.0f}-{hi_ if hi_ < 1e9 else np.inf:<5} s: {sel.sum():5d} pairs  p50 {np.median(P_[sel, 1]):.3f}"
-              f"  p90 {np.percentile(P_[sel, 1], 90):.3f}")
+if all_pairs:
+    P_ = np.array(all_pairs)  # piece, |difference|, time between, expected noise, |difference of position along|
+    print("visit pairs (same side) by time between the visits: |offset difference| p50 / p90, the pairs' own noise p50,"
+          " difference minus noise p50 [m]")
+    for lo_, hi_ in ((0, 10), (10, 30), (30, 100), (100, 1e9)):
+        sel = (P_[:, 2] >= lo_) & (P_[:, 2] < hi_)
+        if sel.any():
+            print(f"  {lo_:4.0f}-{hi_ if hi_ < 1e9 else np.inf:<5} s: {sel.sum():5d} pairs  p50 {np.median(P_[sel, 1]):.3f}"
+                  f"  p90 {np.percentile(P_[sel, 1], 90):.3f}  noise {np.median(P_[sel, 3]):.3f}"
+                  f"  excess {np.median(P_[sel, 1] - P_[sel, 3]):+.3f}")
+    print(f"  |offset difference| vs |difference of position along the piece|: Spearman "
+          f"{stats.spearmanr(P_[:, 1], P_[:, 4])[0]:+.2f} (positive: part of the difference is the piece's shape, not pose)")
+else:
+    print("no two visits of a piece from the same side: no visit pairs")
+if "plan_dist_m" in rows[0]:
+    for ns in (1, 2):
+        v = np.array([r["plan_dist_m"] for r in rows if r["sides"] == ns])
+        if len(v):
+            print(f"plan_dist_m, pieces seen from {ns} side{'s' if ns == 2 else ''}: p50 {np.median(v):.3f} p90 "
+                  f"{np.percentile(v, 90):.3f} ({len(v)} pieces; a wall drawn as two strokes puts a two-sided ridge "
+                  f"between them)")
 print("Spearman rank correlation (pieces with both values):")
 targets = [n for n in ("thickness_m", "pair_diff_m", "plan_dist_m") if n in rows[0]]
 for tgt in targets:
@@ -241,7 +279,7 @@ for name, png in (("thickness_m", "_thickness.png"), ("pair_diff_m", "_visits.pn
     limits = CLASSES[name]
     for r in rows:
         v = r[name]
-        colour = GREY if not np.isfinite(v) else PALETTE[np.searchsorted(limits, v)]
+        colour = GREY if not np.isfinite(v) else PALETTE[np.searchsorted(limits, v, side="right")]
         c_, r_ = (np.asarray(p).astype(int) for p in to_px(r["_cells"]))
         ok = (c_ >= 0) & (c_ < img.shape[1]) & (r_ >= 0) & (r_ < img.shape[0])
         img[r_[ok], c_[ok]] = colour

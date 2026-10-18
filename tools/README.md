@@ -250,11 +250,28 @@ python tools/wall_precision.py <result_folder> [--height 0.0] [--threshold 0.03]
   - `visits`, `visit_times_s`, `visit_offsets_m`, `visit_sides`: per side, the point times split at gaps over `--gap` (2 s), each visit's median offset.
   - `pair_diff_m`: the median, over the pairs of visits from the same side, of the difference of their offsets: how far two visits typically disagree. Use it rather than `visit_spread_m` (largest minus smallest offset per side), which grows with the number of visits.
   - `half_split_m`: the longest visit's two halves against each other, the noise floor of the visit offsets.
-  - The summary also prints the visit pairs of all pieces by the time between the two visits: drift between visits shows as a difference that grows with that time.
+  - `pair_excess_m`: the median over the pairs of their difference minus the noise their two medians alone would give (1.25 √(s₁²/n₁ + s₂²/n₂)); what is left is the pose (or scene) part.
+  - `incidence_deg` uses the 3D ray; `length_m` is the line's extent (a zigzag or diagonal ridge has a cell count that doesn't match its length).
+  - The summary also prints the visit pairs of all pieces by the time between the two visits (with the pairs' own noise and the excess over it): drift between visits shows as a difference that grows with that time; the correlation of a pair's difference with how far apart along the piece its two visits lie (the piece's shape); and `plan_dist_m` by the number of sides.
+- `--cell` / `--sigma` set the section line's grid (as `plan_section.py`). Without gyro-bias estimation the results JSON has no window times and the `windows` column stays empty.
   - `seen_s`, `points`, `range_m`, `incidence_deg` (0 head-on, 90 grazing), `windows` (odometry windows from the results JSON), and with `--plan` `plan_dist_m`.
 - Images `_thickness.png` and `_visits.png` (`pair_diff_m`): each piece's line in 1 px, blue / green / orange / red by the class limits printed (grey = no two visits from the same side); on the plan with `--plan` (after `plan_fit.py`), else on a map canvas with a 1 m grid.
 - Prints quantiles and Spearman correlations of thickness, pair difference and plan distance against seen time, points, visits, range and incidence.
 - Reference (2026-10-18, `44_baseline`, H = 0): 295 pieces; thickness p50 2.6 cm; pair difference p50 3.0 cm against a noise floor (`half_split_m`) of 1.1 cm; by time between the visits 1.3 cm (< 10 s), 2.7 cm (10–30 s), 2.9 cm (30–100 s), 3.0 cm (> 100 s); by same-side visit count 2.1 / 4.0 / 4.1 / 3.1 / 2.4 cm for 2–6 visits (the max-minus-min spread grows 2.1 → 8.5 cm).
+
+## holdout_sharpness.py
+
+Map sharpness on the points no stage ever fitted. Results made with the hold-out mode (`[evaluation] holdout_block_s` > 0) leave the points of odd time blocks out of the odometry's, the loop closure's and the consistency pass's maps and point terms, but save them; this tool measures only those. Sharpness on all points rewards a stage that fits its own points without placing the walls better (overfitting); on held-out points that shows as worse.
+
+```
+python tools/holdout_sharpness.py [--block 0.01] <reference> <result> [<result> ...]
+python tools/holdout_sharpness.py [--block 0.01] --sets <ref_s0>,<res_s0> <ref_s1>,<res_s1> <ref_s2>,<res_s2>
+```
+
+- Planar spots (PCA within `--r` 0.12 m, at least 12 neighbours) of the held-out points, chosen on the reference and kept for all results; thickness `sqrt(smallest eigenvalue)` all-time (the whole map at the spot) and within ±0.05 s (slice: node-to-node jitter), paired spot by spot [mm], with a bootstrap interval over the spots.
+- `--sets`: one pair per repeat run; prints each set and the mean, with an interval from the lowest to the highest set's bound (the spot bootstrap alone misses the run-to-run spread). `--fitted` measures the even blocks instead.
+- All results of a set must hold the same points (same recording and hold-out), else it stops.
+- Reference (2026-10-18, 44_short at `holdout_block_s` 0.01, research runs): consistency +1.85 mm all-time against odometry only, the scratch gyro term (s = 3) −0.87 mm.
 
 ## Regression baseline (compare_baseline.py, cut_recording)
 
