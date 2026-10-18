@@ -22,9 +22,9 @@
 
 ## 4. Evaluation on recording 44
 
-- [ ] 4.1 Gate check: the term on 44_baseline's snapshot (`raw data/44_snap_full/odometry_snapshot.bin`) with the gate at 3°: count of gated windows, whether windows 629–639 (the gyro fault, C38) are gated, and the rotation over 255.8–259.9 s against the odometry result (must stay within 1°). Verify: numbers written into the change's `results.md`.
-- [ ] 4.2 Hold-out runs: s0/s1/s2 odometry with `holdout_block_s = 0.01` and a snapshot each (3 × ~25 min), then from each snapshot loop closure + consistency with the term off and on (s = 2, 3, 5). Verify: `holdout_sharpness.py` table (paired against the term off, interval including the s0/s1/s2 spread) in `results.md`.
-- [ ] 4.3 Full-density runs: s0/s1/s2 from their existing snapshots (or full runs) with the term off and at the chosen s; `map_quality.py` (geometry, revisits, jitter, `--floors`), `wall_precision.py` (`pair_diff_m`, `pair_excess_m`, thickness), jitter per IMU sample, consistency time. Verify: table in `results.md`; differences judged only beyond the s0/s1/s2 spread.
+- [x] 4.1 Gate check: the term on 44_baseline's snapshot (`raw data/44_snap_full/odometry_snapshot.bin`) with the gate at 3°: count of gated windows, whether windows 629–639 (the gyro fault, C38) are gated, and the rotation over 255.8–259.9 s against the odometry result (must stay within 1°). Verify: numbers written into the change's `results.md`.
+- [x] 4.2 Hold-out runs: s0/s1/s2 odometry with `holdout_block_s = 0.01` and a snapshot each (3 × ~25 min), then from each snapshot loop closure + consistency with the term off and on (s = 2, 3, 5). Verify: `holdout_sharpness.py` table (paired against the term off, interval including the s0/s1/s2 spread) in `results.md`.
+- [x] 4.3 Full-density runs: s0/s1/s2 from their existing snapshots (or full runs) with the term off and at the chosen s; `map_quality.py` (geometry, revisits, jitter, `--floors`), `wall_precision.py` (`pair_diff_m`, `pair_excess_m`, thickness), jitter per IMU sample, consistency time. Verify: table in `results.md`; differences judged only beyond the s0/s1/s2 spread.
 - [ ] 4.4 Have the conclusions reviewed (Sonnet subagent), then show the numbers and before/after images (plan_section overlay, wall_precision images) to the user and ask whether to ship. Verify: the user has answered.
 
 ## 5. Ship (only if the user accepts in 4.4)
