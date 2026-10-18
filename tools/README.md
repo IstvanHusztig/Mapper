@@ -222,6 +222,40 @@ python tools/plan_fit.py <result_folder> [out_prefix]
 - Writes `<out_prefix>_whole_fit.png`, `_start_fit.png` (placed by the start room's own fit), `_full_sheet.png`, `_zoom_gallery.png`, `_zoom_core.png`; default prefix `<result>/map_quality_cache/plan_fit`. Red the whole floor, green the start room, blue the gallery.
 - Reference (2026-10-18): `44_baseline` (after D4, D3, D1, D5) whole floor 256.34°, 9.9 cm, 71 % / 89 %; start room +0.93°, gallery +0.47° against it (gallery − start −0.46°). The previous `44_baseline_2026-10-15`: 256.78°, 6.9 cm, 80 % / 94 %; start room +0.55°, gallery +0.50° (−0.04°). The first version of the tool (cost in whole pixels, turned about the map origin) gave that map's start room −2.18°, a wrong local fit.
 
+## plan_section.py
+
+A horizontal cross-section of a result of 44 at world height H, drawn as lines over the building plan: the points within ±`--half-thickness` (default 5 cm) of H are counted in 2 cm cells, smoothed, and a line is drawn along the ridge of highest density across each wall. The lines are placed with the whole-floor fit that `plan_fit.py` saves to `<result>/map_quality_cache/plan_fit.json` (run it first).
+
+```
+python tools/plan_section.py <result_folder> [--height 0.0] [--threshold 0.03] [--half-thickness 0.05]
+```
+
+- `--height` is the world z of the section [m]; the top floor's slab of 44 is at about −1.1 m, so the default 0 cuts it about 1.1 m above the floor.
+- `--threshold` is the lowest density drawn, as a share of the 99th percentile of the density (default 0.03; at 0.15 the walls seen only from far away disappear).
+- One 1-pixel line per wall (smoothing `--sigma` 3 cells merges a wall's faces); pieces spanning less than `--min-length` (0.5 m) are dropped.
+- Writes `<result>/map_quality_cache/plan_section_<H>_t<T>.png` (top floor) and `_sheet.png` (whole plan sheet).
+- `--threshold` takes up to 5 values (e.g. `--threshold 0.01 0.03 0.1 0.3`): one image per value, plus `plan_section_<H>_sweep.png` (and `_sheet`) with each line in the colour of the highest threshold it survives: red (only the lowest: a faint wall, seen briefly or from far away), orange, green, blue, purple.
+
+## wall_precision.py
+
+How precise each wall of a result is at height H, from the map and the trajectory alone (no plan needed; caves). The section line (`section_lib.py`, shared with `plan_section.py`) is cut into ~0.5 m pieces, and for each piece the slice points near its line are measured.
+
+```
+python tools/wall_precision.py <result_folder> [--height 0.0] [--threshold 0.03] [--plan]
+```
+
+- Columns of `<result>/map_quality_cache/wall_precision_<H>.csv`, one row per piece:
+  - `sides`, `faces_m`: the side of the line the sensor was on. A wall seen from both sides shows two faces (`faces_m` apart), which is not an error, so each side is centred on its own median and visits are compared only within a side.
+  - `thickness_m`: the wall's spread across the line (1.4826 MAD); a precise wall is about the sensor noise.
+  - `visits`, `visit_times_s`, `visit_offsets_m`, `visit_sides`: per side, the point times split at gaps over `--gap` (2 s), each visit's median offset.
+  - `pair_diff_m`: the median, over the pairs of visits from the same side, of the difference of their offsets: how far two visits typically disagree. Use it rather than `visit_spread_m` (largest minus smallest offset per side), which grows with the number of visits.
+  - `half_split_m`: the longest visit's two halves against each other, the noise floor of the visit offsets.
+  - The summary also prints the visit pairs of all pieces by the time between the two visits: drift between visits shows as a difference that grows with that time.
+  - `seen_s`, `points`, `range_m`, `incidence_deg` (0 head-on, 90 grazing), `windows` (odometry windows from the results JSON), and with `--plan` `plan_dist_m`.
+- Images `_thickness.png` and `_visits.png` (`pair_diff_m`): each piece's line in 1 px, blue / green / orange / red by the class limits printed (grey = no two visits from the same side); on the plan with `--plan` (after `plan_fit.py`), else on a map canvas with a 1 m grid.
+- Prints quantiles and Spearman correlations of thickness, pair difference and plan distance against seen time, points, visits, range and incidence.
+- Reference (2026-10-18, `44_baseline`, H = 0): 295 pieces; thickness p50 2.6 cm; pair difference p50 3.0 cm against a noise floor (`half_split_m`) of 1.1 cm; by time between the visits 1.3 cm (< 10 s), 2.7 cm (10–30 s), 2.9 cm (30–100 s), 3.0 cm (> 100 s); by same-side visit count 2.1 / 4.0 / 4.1 / 3.1 / 2.4 cm for 2–6 visits (the max-minus-min spread grows 2.1 → 8.5 cm).
+
 ## Regression baseline (compare_baseline.py, cut_recording)
 
 Refactors must reproduce `44_short` and the full 44 bit for bit (see `docs/ARCHITECTURE.md`). Two reference datasets live next to the raw data, outside git:

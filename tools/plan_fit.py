@@ -11,8 +11,10 @@ numpy, scipy, laspy (with lazrs) and pymupdf.
 
 Usage: plan_fit.py <result_folder> [out_prefix]
 Writes <out_prefix>_whole_fit.png, _start_fit.png, _full_sheet.png, _zoom_gallery.png, _zoom_core.png (default prefix
-<result>/map_quality_cache/plan_fit): red the whole floor, green the start room, blue the gallery.
+<result>/map_quality_cache/plan_fit): red the whole floor, green the start room, blue the gallery. The whole-floor fit
+goes to <result>/map_quality_cache/plan_fit.json (used by plan_section.py).
 """
+import json
 import os
 import sys
 
@@ -107,6 +109,8 @@ p_all = fit(xy_all, w_all, p0, MAP_SHAFT)
 s_all = stats(xy_all, w_all, p_all)
 print(f"whole floor fit: rotation {p_all[0]:.2f} deg, mean |d| {s_all[0]:.3f} m, within 10 cm {s_all[1]:.0%}, "
       f"within 25 cm {s_all[2]:.0%}")
+with open(os.path.join(cache_dir(result), "plan_fit.json"), "w") as fp:
+    json.dump({"rotation_deg": p_all[0], "shift_m": list(p_all[1:3])}, fp)  # read by plan_section.py
 part_fits = {}
 for name, (a, b) in PARTS.items():
     xy, w = wall_cells((t >= a) & (t < b), 3)

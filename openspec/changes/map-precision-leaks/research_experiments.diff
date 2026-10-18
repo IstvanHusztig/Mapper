@@ -1,0 +1,427 @@
+diff --git a/src/application/consistency.cpp b/src/application/consistency.cpp
+index 178d365..d759a90 100644
+--- a/src/application/consistency.cpp
++++ b/src/application/consistency.cpp
+@@ -5,6 +5,12 @@
+ #include <transformations.h>
+ #include <python-scripts/point-to-point-metrics/point_to_point_source_to_target_tait_bryan_wc_jacobian.h>
+ #include <python-scripts/constraints/smoothness_tait_bryan_wc_jacobian.h>
++#include <python-scripts/constraints/relative_pose_tait_bryan_wc_jacobian.h>
++#include "imu_kinematics.h"
++#include <cstdlib>
++#include <cmath>
++#include <algorithm>
++#include <iomanip>
+ 
+ #include "angle_units.h"
+ #include <mutex>
+@@ -106,7 +112,14 @@ void Consistency(std::vector<Window> &windows, const OdometryConfig &params, Poi
+     for (size_t i = 0; i < trajectory.size(); i++)
+         poses.push_back(pose_tait_bryan_from_affine_matrix(trajectory[i]));
+ 
+-    double angle = 0.1 * DEG_TO_RAD;
++    // RESEARCH switches (environment): DM_CONS_ROT_SIGMA_DEG replaces the 0.1 deg smoothness rotation sigma; DM_CONS_GYRO=1
++    // adds a relative-rotation term between consecutive nodes from the IMU (AHRS increments minus the window's gyro bias),
++    // sigma max(k * ARW * sqrt(dt), floor) as the odometry; DM_CONS_LOG=1 logs the weights and the step of each pass
++    static const double research_rot_sigma_deg = [] { const char *e = std::getenv("DM_CONS_ROT_SIGMA_DEG"); return e ? std::atof(e) : 0.1; }();
++    static const bool research_gyro = [] { const char *e = std::getenv("DM_CONS_GYRO"); return e && std::atoi(e) != 0; }();
++    static const double research_gyro_scale = [] { const char *e = std::getenv("DM_CONS_GYRO_SCALE"); return e ? std::atof(e) : 1.0; }();
++    static const bool research_log = [] { const char *e = std::getenv("DM_CONS_LOG"); return e && std::atoi(e) != 0; }();
++    double angle = research_rot_sigma_deg * DEG_TO_RAD;
+     double wangle = 1.0 / (angle * angle);
+ 
+     // The normal equations are accumulated directly: every term has the form A^T P A and A^T P B with A = -J. A point's
+@@ -176,6 +189,66 @@ void Consistency(std::vector<Window> &windows, const OdometryConfig &params, Poi
+     for (int k = 0; k < 6; k++)
+         normal.add(k, k, 1000000);
+ 
++    std::vector<double> research_gyro_w; // RESEARCH: rotation weights of the gyro edges (om), for the log
++    if (research_gyro)
++    {
++        std::vector<int> window_of_node;
++        std::vector<Eigen::Vector3d> imu_angles;
++        for (int i = 0; i < windows.size(); i++)
++            for (size_t j = 0; j < windows[i].poses.size(); j++)
++            {
++                window_of_node.push_back(i);
++                imu_angles.push_back(j < windows[i].imu_angles.size() ? windows[i].imu_angles[j] : Eigen::Vector3d::Zero());
++            }
++        const auto imu_pose = [&](int k)
++        {
++            TaitBryanPose p{};
++            p.om = imu_angles[k].x();
++            p.fi = imu_angles[k].y();
++            p.ka = imu_angles[k].z();
++            return affine_matrix_from_pose_tait_bryan(p);
++        };
++        const Eigen::Vector3d arw(params.gyro_arw_x_deg_sqrt_s * DEG_TO_RAD, params.gyro_arw_y_deg_sqrt_s * DEG_TO_RAD,
++                                  params.gyro_arw_z_deg_sqrt_s * DEG_TO_RAD);
++        const double floor_rad = params.rotation_sigma_floor_deg * DEG_TO_RAD;
++        for (int k = 0; k + 1 < n_nodes; k++)
++        {
++            const double dt = std::max(timestamps[k + 1].first - timestamps[k].first, 0.0);
++            const Eigen::Vector3d &bias = windows[window_of_node[k + 1]].gyro_bias.mean;
++            const Eigen::Quaterniond q = relative_rotation(imu_pose(k), imu_pose(k + 1)) * Eigen::Quaterniond(exp_so3(-bias * dt));
++            Eigen::Affine3d rel = Eigen::Affine3d::Identity();
++            rel.linear() = q.normalized().toRotationMatrix();
++            const TaitBryanPose m = pose_tait_bryan_from_affine_matrix(rel);
++            double w[3];
++            for (int a = 0; a < 3; a++)
++            {
++                const double s = research_gyro_scale * std::max(params.rotation_sigma_inflation_k * arw(a) * std::sqrt(dt), floor_rad);
++                w[a] = 1.0 / (s * s);
++            }
++            research_gyro_w.push_back(w[0]);
++            const TaitBryanPose &p1 = poses[k], &p2 = poses[k + 1];
++            Eigen::Matrix<double, 12, 12> AtPA;
++            relative_pose_obs_eq_tait_bryan_wc_case1_AtPA_simplified(AtPA, p1.px, p1.py, p1.pz, p1.om, p1.fi, p1.ka, p2.px, p2.py, p2.pz, p2.om,
++                                                                     p2.fi, p2.ka, 0.0, 0.0, 0.0, w[0], w[1], w[2]);
++            Eigen::Matrix<double, 12, 1> AtPB;
++            relative_pose_obs_eq_tait_bryan_wc_case1_AtPB_simplified(AtPB, p1.px, p1.py, p1.pz, p1.om, p1.fi, p1.ka, p2.px, p2.py, p2.pz, p2.om,
++                                                                     p2.fi, p2.ka, 0.0, 0.0, 0.0, m.om, m.fi, m.ka, 0.0, 0.0, 0.0, w[0], w[1], w[2]);
++            const int i1 = k * 6, i2 = (k + 1) * 6;
++            for (int row = 0; row < 6; row++)
++            {
++                for (int col = 0; col < 6; col++)
++                {
++                    normal.add(i1 + row, i1 + col, AtPA(row, col));
++                    normal.add(i1 + row, i2 + col, AtPA(row, col + 6));
++                    normal.add(i2 + row, i1 + col, AtPA(row + 6, col));
++                    normal.add(i2 + row, i2 + col, AtPA(row + 6, col + 6));
++                }
++                rhs(i1 + row) -= AtPB(row);
++                rhs(i2 + row) -= AtPB(row + 6);
++            }
++        }
++    }
++
+     smoothness_timer.stop();
+ 
+     // ndt: the chunks are independent (each has its own map), so they are computed in parallel, a bounded number at a time,
+@@ -205,6 +278,21 @@ void Consistency(std::vector<Window> &windows, const OdometryConfig &params, Poi
+             pl.point = trajectory[pl.index_pose] * pl.point;
+             points_global[i - begin] = pl;
+         }
++        // RESEARCH DM_CONS_HOLDOUT=1: points with an odd microsecond timestamp are left out of the map and the point terms
++        // DM_CONS_HOLDOUT=2: instead, the points of odd time blocks of DM_CONS_BLOCK_S seconds (whole nodes) are left out
++        static const int research_holdout = [] { const char *e = std::getenv("DM_CONS_HOLDOUT"); return e ? std::atoi(e) : 0; }();
++        static const double research_block_s = [] { const char *e = std::getenv("DM_CONS_BLOCK_S"); return e ? std::atof(e) : 0.01; }();
++        const auto held_out = [](double t)
++        {
++            if (research_holdout == 1)
++                return static_cast<long long>(std::floor(t * 1e6)) % 2 == 1;
++            if (research_holdout == 2)
++                return static_cast<long long>(std::floor(t / research_block_s)) % 2 == 1;
++            return false;
++        };
++        if (research_holdout)
++            points_global.erase(std::remove_if(points_global.begin(), points_global.end(), [&](const Point3Di &p) { return held_out(p.timestamp); }),
++                                points_global.end());
+         out.first_node = first_node;
+         out.n_nodes = last_node - first_node + 1;
+         out.blocks.assign(static_cast<size_t>(out.n_nodes) * 36, 0.0);
+@@ -224,6 +312,8 @@ void Consistency(std::vector<Window> &windows, const OdometryConfig &params, Poi
+             const Point3Di &intermediate_points_i = data.points[index];
+             if (intermediate_points_i.point.norm() < 1.0)
+                 continue;
++            if (research_holdout && held_out(intermediate_points_i.timestamp))
++                continue;
+ 
+             Eigen::Vector3d point_global = trajectory[intermediate_points_i.index_pose] * intermediate_points_i.point;
+             auto index_of_bucket = ndt_cell_index(point_global, b);
+@@ -301,6 +391,41 @@ void Consistency(std::vector<Window> &windows, const OdometryConfig &params, Poi
+         }
+     }
+     log_info(logger) << "NDT observations FINISHED";
++    if (research_log)
++    {
++        std::vector<double> rot_info[3], trans_info, n_points, info6_min, info6_2, info6_3;
++        std::vector<int> count(n_nodes, 0);
++        for (const Point3Di &p : data.points)
++            if (p.point.norm() >= 1.0)
++                count[p.index_pose]++;
++        for (size_t c = 0; c < n_chunks; c++)
++        {
++            const ChunkTerms &out = chunk_terms[c];
++            for (int k = 0; k < out.n_nodes; k++)
++            {
++                const double *blk = &out.blocks[static_cast<size_t>(k) * 36];
++                // eigenvalues (ascending) of the node's rotation block, instead of the diagonal
++                const Eigen::Map<const Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> B(blk);
++                const Eigen::Matrix3d Br = B.block<3, 3>(3, 3);
++                const Eigen::Vector3d ev = Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d>(Br).eigenvalues();
++                for (int a = 0; a < 3; a++)
++                    rot_info[a].push_back(ev(a));
++                const Eigen::Matrix<double, 6, 6> B6 = B;
++                const Eigen::Matrix<double, 6, 1> ev6 = Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double, 6, 6>>(B6).eigenvalues();
++                info6_min.push_back(ev6(0));
++                info6_2.push_back(ev6(1));
++                info6_3.push_back(ev6(2));
++                trans_info.push_back(blk[0] + blk[7] + blk[14]);
++                n_points.push_back(count[out.first_node + k]);
++            }
++        }
++        const auto med = [](std::vector<double> v) { if (v.empty()) return 0.0; std::nth_element(v.begin(), v.begin() + v.size() / 2, v.end()); return v[v.size() / 2]; };
++        log_info(logger) << std::scientific << std::setprecision(3) << "research consistency: nodes " << n_nodes << ", points per node p50 " << med(n_points)
++                         << ", NDT rotation-block eigenvalues per node p50 " << med(rot_info[0]) << " " << med(rot_info[1]) << " " << med(rot_info[2])
++                         << " [1/rad^2], 6x6 smallest three eigenvalues p50 " << med(info6_min) << " " << med(info6_2) << " " << med(info6_3)
++                         << ", translation trace p50 " << med(trans_info) << " [1/m^2]; smoothness rotation weight " << wangle
++                         << ", gyro edge weight (om) p50 " << med(research_gyro_w);
++    }
+ 
+     PhaseTimer assemble_timer(phase(&ConsistencyTiming::assemble));
+     Eigen::SparseMatrix<double> AtPA = normal.to_sparse();
+@@ -315,6 +440,20 @@ void Consistency(std::vector<Window> &windows, const OdometryConfig &params, Poi
+     solve_timer.stop();
+ 
+     PhaseTimer apply_timer(phase(&ConsistencyTiming::apply));
++    if (solved && research_log)
++    {
++        std::vector<double> step_rot, step_m;
++        for (int k = 0; k < n_nodes; k++)
++        {
++            step_m.push_back(Eigen::Vector3d(h_x[6 * k], h_x[6 * k + 1], h_x[6 * k + 2]).norm());
++            step_rot.push_back(Eigen::Vector3d(h_x[6 * k + 3], h_x[6 * k + 4], h_x[6 * k + 5]).norm() / DEG_TO_RAD);
++        }
++        std::sort(step_rot.begin(), step_rot.end());
++        std::sort(step_m.begin(), step_m.end());
++        log_info(logger) << std::scientific << std::setprecision(3) << "research consistency step: rotation p50 " << step_rot[step_rot.size() / 2]
++                         << " p90 " << step_rot[step_rot.size() * 9 / 10] << " deg, translation p50 " << step_m[step_m.size() / 2] << " p90 "
++                         << step_m[step_m.size() * 9 / 10] << " m";
++    }
+     if (solved)
+     {
+         int counter = 0;
+diff --git a/src/application/run_odometry.cpp b/src/application/run_odometry.cpp
+index c38bdb0..fd337b5 100644
+--- a/src/application/run_odometry.cpp
++++ b/src/application/run_odometry.cpp
+@@ -13,6 +13,7 @@
+ 
+ #include <algorithm>
+ #include <cmath>
++#include <cstdlib>
+ #include <sstream>
+ #include <string>
+ 
+@@ -442,6 +443,49 @@ namespace
+                                          const OdometryConfig &params, bool debugMsg, Logger &logger, ScanToMapTiming *timing,
+                                          ScanToMapWorkspace &workspace)
+     {
++        // RESEARCH DM_TWIN_LM=<lm>: first run the same iterations from the same state with lm_factor_initial = <lm>, keep only
++        // its poses, restore the state, then run as usual and log how far the two results are apart (the chain continues from
++        // the usual result, so the run is unchanged)
++        static const double research_twin_lm = [] { const char *e = std::getenv("DM_TWIN_LM"); return e ? std::atof(e) : 0.0; }();
++        static const int research_twin_mode = [] { const char *e = std::getenv("DM_LM_MODE"); return e ? std::atoi(e) : 0; }();
++        static const double research_twin_stop_m = [] { const char *e = std::getenv("DM_STOP_M"); return e ? std::atof(e) : 1e-5; }();
++        static const double research_twin_stop_rad = [] { const char *e = std::getenv("DM_STOP_RAD"); return e ? std::atof(e) : 1e-6; }();
++        std::vector<Eigen::Affine3d> twin_poses;
++        int twin_iterations = 0;
++        if (research_twin_lm > 0.0)
++        {
++            const Window saved_window = window;
++            const Eigen::Vector3d saved_acc_offset = acc_offset;
++            const Eigen::Matrix3d saved_offset_cov = acc_term.offset_cov;
++            const Eigen::Matrix3d saved_information = lidar_translation_information;
++            const int saved_skipped = workspace.steps_skipped, saved_big = workspace.big_jump_nodes;
++            double lm = research_twin_lm, d = 0.0;
++            const auto t0 = std::chrono::system_clock::now();
++            for (int iter = 0; iter < params.nr_iter; iter++)
++            {
++                twin_iterations = iter + 1;
++                const bool applied = optimize_lidar_odometry(intermediate_points, window, state.buckets_indoor, state.buckets_outdoor,
++                                        setup.scan_to_map, acc_term.motion_model, window_rotation_options, acc_term.options,
++                                        velocity_prior, lm, d, acc_offset, acc_term.offset_cov, logger,
++                                        setup.acc_gated || params.log_window_diagnostics ? &lidar_translation_information : nullptr, nullptr, &workspace);
++                if (d < params.convergence_delta_threshold)
++                    break;
++                if (research_twin_mode >= 1 && applied && workspace.last_max_step_m >= 0.0 && workspace.last_max_step_m < research_twin_stop_m &&
++                    workspace.last_max_step_rad < research_twin_stop_rad)
++                    break;
++                lm = research_twin_mode == 2 ? (applied ? lm : lm * 10.0) : next_lm_factor(lm, iter, applied);
++                if (std::chrono::duration<double>(std::chrono::system_clock::now() - t0).count() > params.real_time_threshold_seconds)
++                    break;
++            }
++            twin_poses = window.poses;
++            window = saved_window;
++            acc_offset = saved_acc_offset;
++            acc_term.offset_cov = saved_offset_cov;
++            lidar_translation_information = saved_information;
++            workspace.steps_skipped = saved_skipped;
++            workspace.big_jump_nodes = saved_big;
++        }
++
+         double delta = 100000.0;
+         double lm_factor = params.lm_factor_initial;
+ 
+@@ -454,6 +498,13 @@ namespace
+         std::vector<std::vector<Eigen::Affine3d>> poses_after;
+         std::vector<double> deltas;
+ 
++        // RESEARCH switches (environment): DM_LM_MODE 0 = original; 1 = also stop when the largest node update is below
++        // DM_STOP_M [m] and DM_STOP_RAD [rad]; 2 = as 1, and the damping stays at lm_factor_initial (x10 only after a step
++        // that was not applied). DM_LOG_STEPS=1 logs every iteration's largest node update.
++        static const int research_mode = [] { const char *e = std::getenv("DM_LM_MODE"); return e ? std::atoi(e) : 0; }();
++        static const double research_stop_m = [] { const char *e = std::getenv("DM_STOP_M"); return e ? std::atof(e) : 1e-5; }();
++        static const double research_stop_rad = [] { const char *e = std::getenv("DM_STOP_RAD"); return e ? std::atof(e) : 1e-6; }();
++        static const bool research_log_steps = [] { const char *e = std::getenv("DM_LOG_STEPS"); return e && std::atoi(e) != 0; }();
+         for (int iter = 0; iter < params.nr_iter; iter++)
+         {
+             iter_end = iter;
+@@ -462,6 +513,10 @@ namespace
+                                     setup.scan_to_map, acc_term.motion_model, window_rotation_options, acc_term.options,
+                                     velocity_prior, lm_factor, delta, acc_offset, acc_term.offset_cov, logger,
+                                     setup.acc_gated || params.log_window_diagnostics ? &lidar_translation_information : nullptr, timing, &workspace);
++            if (research_log_steps)
++                log_info(logger) << "research step " << iter << " lm " << std::scientific << std::setprecision(2) << lm_factor << " max_m "
++                                 << workspace.last_max_step_m << " max_rad " << workspace.last_max_step_rad << " delta " << delta << " node " << workspace.last_max_rot_node
++                                 << " axis " << workspace.last_max_rot_axis << " signed " << workspace.last_max_rot_signed << " of " << window.poses.size();
+             if (params.log_iteration_convergence)
+             {
+                 poses_after.push_back(window.poses);
+@@ -469,8 +524,11 @@ namespace
+             }
+             if (delta < params.convergence_delta_threshold)
+                 break;
++            if (research_mode >= 1 && applied && workspace.last_max_step_m >= 0.0 && workspace.last_max_step_m < research_stop_m &&
++                workspace.last_max_step_rad < research_stop_rad)
++                break;
+ 
+-            const double next_factor = next_lm_factor(lm_factor, iter, applied);
++            const double next_factor = research_mode == 2 ? (applied ? lm_factor : lm_factor * 10.0) : next_lm_factor(lm_factor, iter, applied);
+             if (debugMsg && next_factor != lm_factor)
+                 log_debug(logger) << "\nlm_factor " << lm_factor << ", delta " << std::setprecision(10) << delta << "\n";
+             lm_factor = next_factor;
+@@ -482,6 +540,20 @@ namespace
+                 break;
+         }
+ 
++        if (!twin_poses.empty())
++        {
++            double max_m = 0.0, max_deg = 0.0;
++            for (size_t k = 0; k < twin_poses.size(); k++)
++            {
++                max_m = std::max(max_m, (twin_poses[k].translation() - window.poses[k].translation()).norm());
++                max_deg = std::max(max_deg, Eigen::AngleAxisd(Eigen::Matrix3d(twin_poses[k].linear().transpose() * window.poses[k].linear())).angle() / DEG_TO_RAD);
++            }
++            const Eigen::Affine3d &a = twin_poses.back(), &b = window.poses.back();
++            log_info(logger) << "research twin: iterations " << twin_iterations << " vs " << iter_end + 1 << ", max node difference " << std::fixed
++                             << std::setprecision(4) << max_m * 1000.0 << " mm " << max_deg << " deg, last node " << (a.translation() - b.translation()).norm() * 1000.0
++                             << " mm " << Eigen::AngleAxisd(Eigen::Matrix3d(a.linear().transpose() * b.linear())).angle() / DEG_TO_RAD << " deg";
++        }
++
+         WindowOptimization result;
+         result.last_iteration = iter_end;
+         result.delta = delta;
+@@ -774,6 +846,7 @@ namespace
+         auto pp = state.initial_points;
+         for (int i = 0; i < pp.size(); i++)
+             pp[i].point = state.m_g * pp[i].point;
++        pp.erase(std::remove_if(pp.begin(), pp.end(), [](const Point3Di &p) { return research_odometry_held_out(p.timestamp); }), pp.end());
+ 
+         update_rgd(params.in_out_params_indoor, state.buckets_indoor, pp, state.m_g.translation(), params.use_exact_ndt_bucket_statistics);
+ 
+@@ -826,6 +899,8 @@ namespace
+     {
+         for (int j = 0; j < intermediate_points.size(); j++)
+         {
++            if (research_odometry_held_out(intermediate_points[j].timestamp))
++                continue;
+             Point3Di pp = intermediate_points[j];
+             pp.point = window.poses[intermediate_points[j].index_pose] * pp.point;
+             carry.points_global.push_back(pp);
+@@ -865,6 +940,8 @@ namespace
+             std::vector<Point3Di> pg;
+             for (int j = 0; j < intermediate_points.size(); j++)
+             {
++                if (research_odometry_held_out(intermediate_points[j].timestamp))
++                    continue;
+                 Point3Di pp = intermediate_points[j];
+                 pp.point = window.poses[intermediate_points[j].index_pose] * pp.point;
+                 pg.push_back(pp);
+diff --git a/src/domain/scan_to_map.cpp b/src/domain/scan_to_map.cpp
+index ca86679..f020485 100644
+--- a/src/domain/scan_to_map.cpp
++++ b/src/domain/scan_to_map.cpp
+@@ -209,6 +209,8 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window
+     {
+         if (intermediate_points_i.point.norm() < scan_to_map.min_distance || intermediate_points_i.point.norm() > scan_to_map.max_distance)
+             return;
++        if (research_odometry_held_out(intermediate_points_i.timestamp))
++            return;
+ 
+         Eigen::Vector3d point_global = window.poses[intermediate_points_i.index_pose] * intermediate_points_i.point;
+         auto index_of_bucket = ndt_cell_index(point_global, b_indoor);
+@@ -344,6 +346,8 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window
+ 
+         const auto hessian_fun_outdoor = [&](const Point3Di &intermediate_points_i, const TaitBryanPose &pose_s)
+         {
++            if (research_odometry_held_out(intermediate_points_i.timestamp))
++                return;
+             if (intermediate_points_i.point.norm() < scan_to_map.min_distance_outdoor_grid ||
+                 intermediate_points_i.point.norm() > scan_to_map.max_distance)
+                 return;
+@@ -1051,8 +1055,27 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window
+         delta = 0.0;
+         for (int i = 0; i < h_x.size(); i++)
+             delta += sqrt(h_x[i] * h_x[i]);
++        cache.last_max_step_m = 0.0;
++        cache.last_max_step_rad = 0.0;
++        for (int i = 0; i < n_pose_params; i++)
++        {
++            if (i % 6 < 3)
++                cache.last_max_step_m = std::max(cache.last_max_step_m, std::abs(h_x[i]));
++            else if (std::abs(h_x[i]) > cache.last_max_step_rad)
++            {
++                cache.last_max_step_rad = std::abs(h_x[i]);
++                cache.last_max_rot_node = i / 6;
++                cache.last_max_rot_axis = i % 6 - 3;
++                cache.last_max_rot_signed = h_x[i];
++            }
++        }
++    }
++    else
++    {
++        cache.last_max_step_m = -1.0;
++        cache.last_max_step_rad = -1.0;
++        if (!solved)
++            cache.steps_skipped++;
+     }
+-    else if (!solved)
+-        cache.steps_skipped++;
+     return solved && stepped.big_jump_nodes == 0;
+ }
+diff --git a/src/domain/scan_to_map.h b/src/domain/scan_to_map.h
+index dbf8825..7162523 100644
+--- a/src/domain/scan_to_map.h
++++ b/src/domain/scan_to_map.h
+@@ -14,6 +14,16 @@
+ 
+ // What the optimizer keeps from one call to the next: the symbolic analysis of its two Cholesky factorizations (the
+ // covariance of the extra unknowns, and the damped solve), repeated only when the sparsity pattern changes. One per run.
++#include <cmath>
++#include <cstdlib>
++// RESEARCH DM_ODO_HOLDOUT_BLOCK_S=<s>: the odometry leaves the points of odd time blocks of s seconds out of its point terms
++// and its map (a hold-out set no stage has fitted)
++inline bool research_odometry_held_out(double t)
++{
++    static const double block_s = [] { const char *e = std::getenv("DM_ODO_HOLDOUT_BLOCK_S"); return e ? std::atof(e) : 0.0; }();
++    return block_s > 0.0 && static_cast<long long>(std::floor(t / block_s)) % 2 == 1;
++}
++
+ struct ScanToMapWorkspace
+ {
+     PatternCachedCholesky covariance;
+@@ -22,6 +32,12 @@ struct ScanToMapWorkspace
+     // entry per unknown, so the step was not applied; nodes not moved because their step exceeded 1 m ("big jump")
+     int steps_skipped = 0;
+     int big_jump_nodes = 0;
++    // RESEARCH: the largest node update of the last call (translation [m], rotation [rad]); -1 when no step was applied
++    double last_max_step_m = -1.0;
++    double last_max_step_rad = -1.0;
++    int last_max_rot_node = -1; // node and signed value of the largest rotation update
++    int last_max_rot_axis = -1;
++    double last_max_rot_signed = 0.0;
+ };
+ 
+ // The NDT cost of a window at the given node poses, as the point terms of optimize_lidar_odometry weigh it: the sum over the
