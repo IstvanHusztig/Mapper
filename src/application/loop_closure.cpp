@@ -1,4 +1,5 @@
 #include "loop_closure.h"
+#include "holdout.h"
 #include "ndt_map.h"
 #include <transformations.h>
 #include <python-scripts/point-to-point-metrics/point_to_point_source_to_target_tait_bryan_wc_jacobian_simplified.h>
@@ -868,6 +869,7 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
             std::vector<Point3Di> window_points;
             if (!point_store.load(PointSet::WindowIntermediate, w, window_points))
                 continue;
+            remove_held_out(window_points, params.holdout_block_s);
             for (const auto &p : window_points)
             {
                 const double r = p.point.norm();

@@ -159,6 +159,9 @@ std::uint64_t odometry_settings_hash(const OdometryConfig &config)
     {
         if (excluded.count(name))
             continue;
+        // the hold-out mode changes the odometry, but off it adds nothing, so snapshots made before it existed still match
+        if (name == "holdout_block_s" && config.holdout_block_s == 0.0)
+            continue;
         h.text(name);
         std::visit(
             [&](auto pointer)

@@ -43,7 +43,7 @@ feature.
 
 #### Scenario: Snapshot with another hold-out
 - **WHEN** a snapshot made with one `holdout_block_s` is reprocessed with another
-- **THEN** the reprocessing is refused with a message naming `holdout_block_s`
+- **THEN** the reprocessing is refused as made with other odometry settings, and a snapshot made before the mode existed is still accepted with the mode off
 
 #### Scenario: Mode off
 - **WHEN** `holdout_block_s = 0`

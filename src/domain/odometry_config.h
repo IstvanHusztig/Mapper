@@ -78,6 +78,16 @@ struct OdometryConfig
     int num_constistency_iter = 10;
     bool use_mutliple_gaussian = false;
     double consistency_min_distance = 0.4; // points closer (3D norm) are skipped in Consistency2 (masks the operator's body)
+    // gyro rotation term in Consistency: consecutive nodes of a window keep the IMU's relative rotation (orientation
+    // increments minus the window's gyro bias), sigma = consistency_gyro_sigma_scale x the odometry's time-scaled rotation
+    // sigma; a window whose IMU rotation differs from its odometry result by more than consistency_gyro_gate_deg gets none
+    bool consistency_gyro_rotation_term = false;
+    double consistency_gyro_sigma_scale = 3.0;
+    double consistency_gyro_gate_deg = 3.0;
+
+    // evaluation: points in odd time blocks of holdout_block_s seconds are left out of every map and point term
+    // (odometry, loop closure, consistency) but saved, for tools/holdout_sharpness.py (holdout.h); 0 = off
+    double holdout_block_s = 0.0;
 
     // motion_model uncertainty
     double lidar_odometry_motion_model_x_1_sigma_m = 0.0001;

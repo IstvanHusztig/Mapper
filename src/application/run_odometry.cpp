@@ -3,6 +3,7 @@
 #include "odometry_state.h"
 
 #include "angle_units.h"
+#include "holdout.h"
 #include "imu_kinematics.h"
 #include "optimizer_options.h"
 #include "phase_timing.h"
@@ -772,6 +773,7 @@ namespace
     void seed_map(OdometryState &state, const OdometryConfig &params)
     {
         auto pp = state.initial_points;
+        remove_held_out(pp, params.holdout_block_s);
         for (int i = 0; i < pp.size(); i++)
             pp[i].point = state.m_g * pp[i].point;
 
@@ -1023,6 +1025,7 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
             std::vector<Point3Di> intermediate_points;
             PhaseTimer point_load_timer(timed(carry.timing.point_load));
             point_store.load(PointSet::WindowIntermediate, i, intermediate_points);
+            remove_held_out(intermediate_points, params.holdout_block_s); // also out of the map update below
             point_load_timer.stop();
 
             progress.checkpoint();

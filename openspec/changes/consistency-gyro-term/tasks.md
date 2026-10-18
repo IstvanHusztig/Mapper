@@ -8,16 +8,16 @@
 
 ## 2. Hold-out evaluation mode
 
-- [ ] 2.1 `holdout_block_s` in `OdometryConfig` and a new `[evaluation]` TOML section (`TomlIO::POINTERS`, `CATEGORIES`), default 0; snapshot settings check covers it. Verify: unit test that a snapshot with another `holdout_block_s` is refused.
-- [ ] 2.2 Domain predicate `is_held_out(t, block_s)` and its use where points enter a map or a point term (design 6: odometry initial map, window map update and rebuild, `optimize_lidar_odometry` point loop, loop closure segment registration, consistency chunk map and point loop); saving untouched. Verify: unit test on synthetic points (odd blocks excluded, even kept, 0 = all kept); a 44_short run with 0.01 writes as many points as one without.
-- [ ] 2.3 Golden TOML files regenerated (`LO_UPDATE_GOLDEN=1`) in their own commit. Verify: `ctest` passes in Release.
-- [ ] 2.4 Bit-identity with the mode off. Verify: `compare_baseline.py` on 44_short IDENTICAL against the manifest (parameters file aside).
+- [x] 2.1 `holdout_block_s` in `OdometryConfig` and a new `[evaluation]` TOML section (`TomlIO::POINTERS`, `CATEGORIES`), default 0; snapshot settings check covers it. Verify: unit test that a snapshot with another `holdout_block_s` is refused.
+- [x] 2.2 Domain predicate `is_held_out(t, block_s)` and its use where points enter a map or a point term (design 6: odometry initial map, window map update and rebuild, `optimize_lidar_odometry` point loop, loop closure segment registration, consistency chunk map and point loop); saving untouched. Verify: unit test on synthetic points (odd blocks excluded, even kept, 0 = all kept); a 44_short run with 0.01 writes as many points as one without.
+- [x] 2.3 Golden TOML files regenerated (`LO_UPDATE_GOLDEN=1`) in their own commit. Verify: `ctest` passes in Release.
+- [x] 2.4 Bit-identity with the mode off. Verify: `compare_baseline.py` on 44_short IDENTICAL against the manifest (parameters file aside).
 
 ## 3. Gyro rotation term in consistency
 
-- [ ] 3.1 Settings `consistency_gyro_rotation_term` (false), `consistency_gyro_sigma_scale` (3.0), `consistency_gyro_gate_deg` (3.0) in `[consistency]`; `settings/default_settings.toml` and `lidar-vertical.toml` get them off; golden TOML files again in their own commit. Verify: `ctest` passes.
-- [ ] 3.2 The term in `Consistency` (design 1–5): edges inside each window, sigma from the odometry's rule × scale, per-window gate with a log line counting gated windows, assembled in node order into the band. Verify: unit test on the synthetic loop recording (`tests/synthetic_recording`): with the term the node-to-node rotation error against the truth is smaller than without; repeatable bit for bit; if the `should_fail` case "Consistency leaves a trajectory that is already right" starts to pass, its marker goes.
-- [ ] 3.3 Bit-identity with the term off. Verify: 44_short IDENTICAL against the manifest; Debug build + `ctest` (new banded-matrix indices: out-of-bounds checks).
+- [x] 3.1 Settings `consistency_gyro_rotation_term` (false), `consistency_gyro_sigma_scale` (3.0), `consistency_gyro_gate_deg` (3.0) in `[consistency]`; `settings/default_settings.toml` and `lidar-vertical.toml` get them off; golden TOML files again in their own commit. Verify: `ctest` passes.
+- [x] 3.2 The term in `Consistency` (design 1–5): edges inside each window, sigma from the odometry's rule × scale, per-window gate with a log line counting gated windows, assembled in node order into the band. Verify: unit test on the synthetic loop recording (`tests/synthetic_recording`): with the term the node-to-node rotation error against the truth is smaller than without; repeatable bit for bit; if the `should_fail` case "Consistency leaves a trajectory that is already right" starts to pass, its marker goes.
+- [x] 3.3 Bit-identity with the term off. Verify: 44_short IDENTICAL against the manifest. (The Debug build + `ctest` moved to 5.1: user, 2026-10-18, to save tokens; low risk, the band drops out-of-band writes.)
 - [ ] 3.4 Reproduce the experiment with the real implementation: 44_short odometry with `holdout_block_s = 0.01` and a snapshot, consistency from it with the term off / s = 2 / 3 / 5. Verify: `holdout_sharpness.py` gives the same sign and size as the experiment (−0.7 to −0.9 mm at s = 2–5 against odometry only) within 0.2 mm.
 
 ## 4. Evaluation on recording 44
@@ -29,5 +29,5 @@
 
 ## 5. Ship (only if the user accepts in 4.4)
 
-- [ ] 5.1 `settings/lidar-vertical.toml`: the term on with the chosen scale and gate; tracker C1 → fixed with the evidence; CLAUDE.md and `docs/PERFORMANCE.md` (consistency time) updated. Verify: the diff.
+- [ ] 5.1 Debug build + `ctest` (moved from 3.3); `settings/lidar-vertical.toml`: the term on with the chosen scale and gate; tracker C1 → fixed with the evidence; CLAUDE.md and `docs/PERFORMANCE.md` (consistency time) updated. Verify: the diff.
 - [ ] 5.2 New 44 and 44_short baselines in their own commit (folders renamed with a date suffix, manifests rewritten). Verify: `compare_baseline.py` IDENTICAL on both new manifests; master-reviewer after the push.

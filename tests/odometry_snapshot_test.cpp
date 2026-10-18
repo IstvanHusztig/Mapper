@@ -116,6 +116,9 @@ TEST_CASE("odometry snapshot: refused for other odometry settings, accepted for 
     OdometryConfig grid = config;
     grid.in_out_params_indoor.resolution_X += 0.01;
     CHECK_FALSE(read_odometry_snapshot(file.path, grid, read, why));
+    OdometryConfig holdout = config;
+    holdout.holdout_block_s = 0.01; // the hold-out mode changes the odometry
+    CHECK_FALSE(read_odometry_snapshot(file.path, holdout, read, why));
 
     OdometryConfig post = config;
     post.use_loop_closure = !post.use_loop_closure;
