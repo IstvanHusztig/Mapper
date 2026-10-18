@@ -173,8 +173,7 @@ add_library(lo_application STATIC
   src/application/lidar_odometry.cpp
   src/application/run_odometry.cpp
   src/application/loop_closure.cpp
-  src/application/consistency.cpp
-  src/application/startup_gyro_bias.cpp)
+  src/application/consistency.cpp)
 target_include_directories(lo_application PUBLIC src/application)
 target_link_libraries(lo_application PUBLIC lo_domain)
 

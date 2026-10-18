@@ -59,11 +59,8 @@ bool OdometryPipeline::load()
     }
     {
         StepTiming timing(params, *logger_, "calculate_trajectory");
-        const StartupBias startup = calculate_trajectory(imu_trajectory, imu, params.fusionConventionNwu, params.fusionConventionEnu,
-                                                         params.fusionConventionNed, params.ahrs_gain, debug_,
-                                                         params.use_remove_imu_bias_from_first_stationary_scan,
-                                                         get_startup_bias_options(params), *services_.orientation, *logger_);
-        state.startup_gyro_bias_accepted = startup.accepted;
+        calculate_trajectory(imu_trajectory, imu, params.fusionConventionNwu, params.fusionConventionEnu, params.fusionConventionNed,
+                             params.ahrs_gain, debug_, params.use_remove_imu_bias_from_first_stationary_scan, *services_.orientation, *logger_);
     }
     StepTiming timing(params, *logger_, "compute_step_1");
     compute_step_1(points_per_file, params, state, imu_trajectory, windows, *inputs_.points, *logger_, *progress_, &imu);

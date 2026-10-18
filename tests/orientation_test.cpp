@@ -63,7 +63,7 @@ namespace
     {
         RecordingEstimator estimator;
         synthetic::NullLogger logger;
-        calculate_trajectory(trajectory, imu, f.nwu, f.enu, f.ned, gain, false, f.remove_bias, StartupBiasOptions{}, estimator, logger);
+        calculate_trajectory(trajectory, imu, f.nwu, f.enu, f.ned, gain, false, f.remove_bias, estimator, logger);
         return estimator;
     }
 }
@@ -104,7 +104,7 @@ TEST_CASE("orientation: the gyroscope goes in degrees, with the bias of the firs
         for (int k = 0; k < 3; k++)
             CHECK(e.updates.back().gyro_deg_s[k] == doctest::Approx(bias[k] * rad_to_deg).epsilon(1e-6));
     }
-    SUBCASE("at rest: the median of the first second is removed")
+    SUBCASE("at rest: the median of the first 1000 samples is removed")
     {
         Imu imu = still_imu(1200, bias);
         ImuTrajectory trajectory;
@@ -114,7 +114,7 @@ TEST_CASE("orientation: the gyroscope goes in degrees, with the bias of the firs
         for (const Update &u : e.updates)
             CHECK(u.gyro_deg_s.norm() < 1e-6f);
     }
-    SUBCASE("moving: no bias is removed when the first second shows motion")
+    SUBCASE("moving: no bias is removed when the first 1000 samples vary too much")
     {
         Imu imu = still_imu(1200, bias);
         for (int i = 0; i < 1000; i += 2)

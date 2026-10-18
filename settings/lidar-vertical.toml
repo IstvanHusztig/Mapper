@@ -37,7 +37,6 @@ threshould_output_filter = 0.4
 
 [gyro_bias_estimation]
 gyro_bias_initial_sigma_deg_s = 10.0
-gyro_bias_startup_sigma_deg_s = 0.5
 gyro_bias_max_deg_s = 20.0
 gyro_bias_rw_deg_s_sqrt_s = 0.005
 handoff_tail_nodes = 30
@@ -148,10 +147,6 @@ fusionConventionEnu = false
 fusionConventionNed = false
 fusionConventionNwu = true
 use_remove_imu_bias_from_first_stationary_scan = true
-imu_startup_bias_window_s = 1.0
-imu_startup_bias_max_spread_deg_s = 3.0
-imu_startup_bias_max_tilt_deg = 2.0
-imu_startup_bias_max_noise_ratio = 3.0
 
 [misc]
 clear_color = [ 0.44999998807907104, 0.550000011920929, 0.6000000238418579, 1.0 ]

@@ -15,7 +15,6 @@ struct OdometryState
     double consecutive_distance = 0.0;
     std::vector<Point3Di> reference_points;
     NDTBucketMapType reference_buckets;
-    bool startup_gyro_bias_accepted = false; // calculate_trajectory removed an accepted start-up bias
     double total_length_of_calculated_trajectory = 0.0;
     NDTBucketMapType buckets_indoor;
     NDTBucketMapType buckets_outdoor;
