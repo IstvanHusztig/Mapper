@@ -1,6 +1,8 @@
 #include <doctest/doctest.h>
 
+#include "laz_export.h"
 #include "recording_files.h"
+#include "recording_folder_source.h"
 
 #include <filesystem>
 #include <string>
@@ -76,4 +78,18 @@ TEST_CASE("pair_recording_files needs at least two files and an existing folder"
     CHECK_FALSE(pair_recording_files({}, files, logger));
     const fs::path missing = folder / "does_not_exist";
     CHECK_FALSE(pair_recording_files(names(missing, {"lidar0001.laz", "imu0001.csv"}), files, logger));
+}
+
+TEST_CASE("loading points: the xy filter drops points without a return, written as (0, 0, 0)")
+{
+    // some sensors write a missing return as a point at the origin; the inner xy filter must reject it
+    const fs::path file = test_folder() / "origin_points.laz";
+    const std::vector<Eigen::Vector3d> points = {{0.0, 0.0, 0.0}, {1.0, 0.5, 0.2}, {0.0, 0.0, 0.0}, {0.1, 0.1, 2.0}, {30.0, 0.0, 0.0}};
+    REQUIRE(exportLaz(file.string(), points, {10, 20, 30, 40, 50}, {1.0, 1.1, 1.2, 1.3, 1.4}));
+    NullLogger logger;
+    const std::vector<Point3Di> loaded = load_point_cloud(file.string(), false, 0.35, 25.0, Eigen::Vector3d::Zero(), logger);
+    REQUIRE(loaded.size() == 1); // only (1, 0.5, 0.2): the origin and (0.1, 0.1) are inside 0.35 m, (30, 0) is beyond 25 m
+    CHECK(loaded[0].point.x() == doctest::Approx(1.0).epsilon(1e-3));
+    CHECK(loaded[0].point.y() == doctest::Approx(0.5).epsilon(1e-3));
+    fs::remove(file);
 }

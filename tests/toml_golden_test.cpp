@@ -58,3 +58,13 @@ TEST_CASE("settings/l2-vertical.toml is saved as the golden TOML")
     REQUIRE(toml_io.LoadParametersFromTomlFile((repo_dir / "settings" / "l2-vertical.toml").string(), params, paths, gui));
     check_golden(params, paths, gui, "l2_vertical.golden.toml");
 }
+
+TEST_CASE("settings/livox-vertical.toml is saved as the golden TOML")
+{
+    OdometryConfig params;
+    RunPaths paths;
+    GuiPreferences gui;
+    TomlIO toml_io;
+    REQUIRE(toml_io.LoadParametersFromTomlFile((repo_dir / "settings" / "livox-vertical.toml").string(), params, paths, gui));
+    check_golden(params, paths, gui, "livox_vertical.golden.toml");
+}
