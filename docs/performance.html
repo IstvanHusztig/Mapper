@@ -71,7 +71,7 @@
 <p style="text-align:right;font-size:13px;margin:0 0 8px"><a href="hu/performance.html" hreflang="hu" lang="hu">Magyar nyelven</a> · <a href="index.html">User guide</a></p>
 
 <h1>Performance: how the full recording got 2.2 times faster</h1>
-<p class="lead">Between 2026-10-05 and 2026-10-08 the processing of the full reference recording (<code>44</code>: about 5 minutes of data, 690 windows, 16.5 million points) went from 33 to 10 minutes, and its odometry from 26 to 8 minutes. This page shows what was measured, what each step changed, and what is left.</p>
+<p class="lead">Between 2026-10-05 and 2026-10-08 the processing of a full reference recording (about 5 minutes of data, 690 windows, 16.5 million points) went from 33 to 10 minutes, and its odometry from 26 to 8 minutes. This page shows what was measured, what each step changed, and what is left.</p>
 
 <div class="tldr">
   <div class="card"><div class="big">1990 → 622 s</div><div class="lbl">whole run, wall-clock (−69 %, 3.2× faster)</div></div>
@@ -109,7 +109,7 @@
   <rect x="204" y="290" width="12" height="9" fill="var(--accent)"/><text class="muted" x="222" y="299" font-size="12.5">odometry</text>
   <rect x="400" y="290" width="12" height="9" fill="var(--node-line)"/><text class="muted" x="418" y="299" font-size="12.5">rest of the run (load, loop closure, consistency, save)</text>
 </svg>
-<figcaption>Full recording <code>44</code>, Release build, <code>settings/l2-vertical.toml</code>, 16 logical cores. The bars are wall-clock seconds of the whole run; the blue part is the odometry.</figcaption>
+<figcaption>Full reference recording, Release build, <code>settings/l2-vertical.toml</code>, 16 logical cores. The bars are wall-clock seconds of the whole run; the blue part is the odometry.</figcaption>
 </figure>
 
 <div class="table-wrap"><table>
@@ -120,7 +120,7 @@
 <tr><td>Fixed Cholesky pattern, <code>/fp:precise</code></td><td class="num">509.8 s</td><td class="num">907 s</td><td>The symbolic analysis of the two sparse Cholesky solves is done 57 + 58 times in 138,000 solves instead of every time. One floating-point mode everywhere, at no speed cost.</td></tr>
 <tr><td>Faster consistency</td><td class="num">516.7 s</td><td class="num">647 s</td><td>The normal equations of the consistency passes (10) are accumulated directly into a banded matrix instead of sparse products; the points and the Cholesky analysis are kept between passes; the 1M-point chunks are built in parallel and merged in order. Consistency: 363.6 → 44.7 s.</td></tr>
 <tr><td>Stored NDT cell inverses</td><td class="num">490.5 s</td><td class="num">622 s</td><td>The inverse covariance of every NDT cell (and its usable flag) is stored once when the map is updated, instead of being inverted again by every point in every iteration; the node pose is converted once per node instead of once per point. The result is bit-identical.</td></tr>
-<tr><td>Reprocessing from an odometry snapshot</td><td>2026-10-11</td><td>for loop-closure experiments: 178 s on the full 44 instead of 1338 s for a full run (18 s instead of 179 s on <code>44_short</code>); bit-identical</td></tr>
+<tr><td>Reprocessing from an odometry snapshot</td><td>2026-10-11</td><td>for loop-closure experiments: 178 s on the full reference recording instead of 1338 s for a full run (18 s instead of 179 s on a 30-second cut of it); bit-identical</td></tr>
 </table></div>
 
 <h2>What was slow</h2>
@@ -142,10 +142,10 @@
 <tr><th>Fix</th><th>Date</th><th>Result</th></tr>
 <tr><td>Sparse band of the normal matrix</td><td>2026-09-30</td><td>about 35 % less time per window, bit-identical</td></tr>
 <tr><td>Release build by default (presets)</td><td>2026-10-01</td><td>hours → about 30 min on the full recording</td></tr>
-<tr><td>GUI frame-rate cap</td><td>2026-10-02</td><td><code>44_short</code> in the GUI: 510–570 s → 195 s, equal to the command line</td></tr>
+<tr><td>GUI frame-rate cap</td><td>2026-10-02</td><td>the 30-second test recording in the GUI: 510–570 s → 195 s, equal to the command line</td></tr>
 <tr><td>Place only the next window</td><td>2026-10-03</td><td>237,705 → 689 window placements; it grows with the square of the recording length (<a href="window-chaining.html">details</a>)</td></tr>
 <tr><td>Deterministic multithreading</td><td>2026-10-05</td><td>odometry −33 %, bit-identical; the <code>useMultithread</code> setting is gone, it is always on</td></tr>
-<tr><td>Banded normal matrix</td><td>2026-10-08</td><td>odometry −35 %, bit-identical on <code>44_short</code></td></tr>
+<tr><td>Banded normal matrix</td><td>2026-10-08</td><td>odometry −35 %, bit-identical on the 30-second test recording</td></tr>
 <tr><td>Fixed Cholesky pattern</td><td>2026-10-08</td><td>odometry −26 %, results within 1e-10</td></tr>
 <tr><td>One floating-point mode (<code>/fp:precise</code>)</td><td>2026-10-08</td><td>no speed difference; results moved (below)</td></tr>
 <tr><td>Faster consistency</td><td>2026-10-08</td><td>consistency 363.6 → 44.7 s (−88 %), processing time 888 → 628 s; results within 1e-10</td></tr>
@@ -153,9 +153,9 @@
 </table></div>
 
 <h2>Did the results change?</h2>
-<p>Multithreading and the banded matrix did not change a single bit on the 30-second test recording <code>44_short</code>, and the fixed pattern moved it by at most 1e-10 m. The floating-point mode did change the numbers, by more than expected:</p>
+<p>Multithreading and the banded matrix did not change a single bit on the 30-second test recording, and the fixed pattern moved it by at most 1e-10 m. The floating-point mode did change the numbers, by more than expected:</p>
 <div class="warn"><b>/fp:fast → /fp:precise</b>
-On <code>44_short</code> the two baselines differ by up to 2 cm in position. On the full recording the calculated route is 215.46 m long instead of 216.06 m, and some per-window gyro-bias estimates differ by up to 0.19 °/s. The quality metrics of <code>tools/eval_odometry.py</code> are equal or slightly better with precise (window yaw difference 1.37 → 1.33 °, spikes above 3 °: 6 → 4, final yaw −126.4 → −126.0 ° against the gyro's −136.9 → −136.8 °). Without ground truth neither mode can be called closer to the truth. The switch was made because <code>/fp:fast</code> bought only 0–2 % speed while making the result depend on how the compiler ordered sums, which needed a second build and a tolerance rule for every check. The old baselines are kept as dated folders.</div>
+On the 30-second test recording the two baselines differ by up to 2 cm in position. On the full recording the calculated route is 215.46 m long instead of 216.06 m, and some per-window gyro-bias estimates differ by up to 0.19 °/s. The quality metrics of <code>tools/eval_odometry.py</code> are equal or slightly better with precise (window yaw difference 1.37 → 1.33 °, spikes above 3 °: 6 → 4, final yaw −126.4 → −126.0 ° against the gyro's −136.9 → −136.8 °). Without ground truth neither mode can be called closer to the truth. The switch was made because <code>/fp:fast</code> bought only 0–2 % speed while making the result depend on how the compiler ordered sums, which needed a second build and a tolerance rule for every check. The old baselines are kept as dated folders.</div>
 
 <h2>What is left</h2>
 <p>The whole run of 622 s now consists of (approximately):</p>

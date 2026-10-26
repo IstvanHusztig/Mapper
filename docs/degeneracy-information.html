@@ -152,8 +152,8 @@ the accelerometer works in every window, weighted by its noise and a vibration f
 <h3>Measured values</h3>
 <div class="table-wrap"><table>
   <tr><th>Where</th><th class="num">Ratio</th></tr>
-  <tr><td>Rooms (recording b1)</td><td class="num">0.36–0.86</td></tr>
-  <tr><td>Corridor turnaround, stair climb (b1)</td><td class="num">0.16–0.30</td></tr>
+  <tr><td>Rooms (real recording)</td><td class="num">0.36–0.86</td></tr>
+  <tr><td>Corridor turnaround, stair climb (real recording)</td><td class="num">0.16–0.30</td></tr>
   <tr><td>Synthetic closed room (unit test)</td><td class="num">0.48 (eigenvalues 677, 740, 1419)</td></tr>
 </table></div>
 
@@ -188,10 +188,10 @@ opposite of the truth.</div>
   <tr><td>in grid order (along lines)</td><td class="num">60 % (15,193 of 25,370)</td><td class="num">925 / 155</td></tr>
   <tr><td>in random order</td><td class="num">12 % (3,120 of 25,370)</td><td class="num">175 / 1046</td></tr>
 </table></div>
-<p>On real data the ratio is therefore noisy. Degenerate stretches were still detected on b1 (0.16–0.30 against 0.36 and more
+<p>On real data the ratio is therefore noisy. Degenerate stretches were still detected (0.16–0.30 against 0.36 and more
 in rooms), but the wrong normals eat into that margin, and the reported weakest direction can be off. The same wrong normals
 make the view-point check in the scan-to-map optimization skip good cells.</p>
-<p><b>Status (2026-10-04): a fix exists, but it is off.</b> Change <code>ndt-bucket-statistics</code> added exact cell
+<p><b>Status: a fix exists, but it is off.</b> Change <code>ndt-bucket-statistics</code> added exact cell
 statistics behind the setting <code>use_exact_ndt_bucket_statistics</code> (<code>[lidar_odometry_control]</code>, default
 <code>false</code>):</p>
 <ul>
@@ -203,31 +203,17 @@ statistics behind the setting <code>use_exact_ndt_bucket_statistics</code> (<cod
   <tr><th></th><th class="num">Previous statistics (default)</th><th class="num">Exact statistics</th></tr>
   <tr><td>Synthetic corridor: information along / across</td><td class="num">925 / 155</td><td class="num">1.7 / 987</td></tr>
   <tr><td>Synthetic room, perfect guess: position error</td><td class="num">1.5 mm</td><td class="num">0.37 mm</td></tr>
-  <tr><td>Recording 44: windows with ratio &lt; 0.3</td><td class="num">95 of 690</td><td class="num">439 of 690</td></tr>
-  <tr><td>Recording 44: median ratio</td><td class="num">0.48</td><td class="num">0.23</td></tr>
-  <tr><td>Recording 44: occupied 3 cm cells (first ~51 windows)</td><td class="num">24,044</td><td class="num">25,309 (+5.3 %)</td></tr>
 </table></div>
 <p>With correct normals, the ratios on real data are much lower, and the threshold of 0.3, tuned on the wrong normals, then
-marks most of recording 44 as degenerate and switches the accelerometer term on in 411 windows. The map came out less sharp,
-but that mixes the new statistics with the much more frequent accelerometer term. The switch stays off for now (decision of
-2026-10-04). The next step would be a run with <code>imu_degenerate_information_ratio</code> lowered until about as many
+marks most windows of a real recording as degenerate and switches the accelerometer term on far more often. The map came out less sharp,
+but that mixes the new statistics with the much more frequent accelerometer term. The switch stays off for now.
+The next step would be a run with <code>imu_degenerate_information_ratio</code> lowered until about as many
 windows count as degenerate as before (roughly 0.1–0.15). The test suite already runs on the exact statistics, so the corridor
 test is a normal passing test.</p>
 
-<h2>5b. The ghost wall of 2026-10-08 and the degeneracy-aware NDT terms</h2>
-<p>On recording 44 the <code>/fp:precise</code> build drew a doubled wall in the first room (change <code>odometry-stall-fix</code>). The
-wall was made earlier, at t ≈ 123–126 s, in a passage blind along its axis: the accelerometer gate decides by the previous window's
-ratio below 0.3, and the same stretch gave 0.19 in one build and 0.38 in the other. Without the term the precise build fell 70 cm
-behind along the passage, because the NDT map holds the points where earlier scans put them (the small Gaussians constrain sliding
-along a flat wall, the false stiffness described above), and the 70 cm snapped back when the path re-entered the first room.</p>
-<p>The fix is the established one for this (solution remapping, Zhang, Kaess, Singh 2016, with a soft ramp): along a direction whose
-share of Σ n·nᵀ is below <code>degenerate_projection_ratio</code> (0.1) the NDT terms carry no translation information, so the motion
-model alone places the window there; up to <code>degenerate_projection_ratio_full</code> (0.2) the information is scaled linearly. On the full
-44 the fast and precise builds then differ by at most 0.31 m instead of 1.03 m, both stay within 0.36 m of the clean result, and the
-ghost wall is gone in both (visual check). Tried and rejected on the same recording: the exact cell statistics with the threshold
-lowered to 0.10–0.15 (loop closure corrections of 4–12 m), a continuous accelerometer weight up to 0.5 (the term ran in a third of the
-windows and drifted by metres), and planar cells regularized to 0.3 m in the plane (less stable). The literature survey behind this
-is in <code>openspec/changes/archive/*odometry-stall-fix/research.md</code>.</p>
+<h2>5b. Ghost walls in blind passages and the degeneracy-aware NDT terms</h2>
+<p>In a passage blind along its axis, a fragile decision can leave a doubled wall (change <code>odometry-stall-fix</code>): the accelerometer gate decides by the previous window's ratio below 0.3, and the same stretch could give 0.19 in a <code>/fp:precise</code> build and 0.38 in a <code>/fp:fast</code> one. Without the term the window fell behind along the passage by tens of centimetres, because the NDT map holds the points where earlier scans put them (the small Gaussians constrain sliding along a flat wall, the false stiffness described above), and the offset snapped back when the path re-entered a room mapped before, leaving a ghost wall.</p>
+<p>The fix is the established one for this (solution remapping, Zhang, Kaess, Singh 2016, with a soft ramp): along a direction whose share of Σ n·nᵀ is below <code>degenerate_projection_ratio</code> (0.1) the NDT terms carry no translation information, so the motion model alone places the window there; up to <code>degenerate_projection_ratio_full</code> (0.2) the information is scaled linearly. The fast and precise builds then stay much closer to each other, and the ghost wall is gone in both. Tried and rejected: the exact cell statistics with the threshold lowered to 0.10–0.15 (loop closure corrections of metres), a continuous accelerometer weight up to 0.5 (the term ran in a third of the windows and drifted by metres), and planar cells regularized to 0.3 m in the plane (less stable). The literature survey behind this is in <code>openspec/changes/archive/*odometry-stall-fix/research.md</code>.</p>
 
 <h2>6. Where to find it</h2>
 <ul>

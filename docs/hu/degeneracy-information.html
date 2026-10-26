@@ -152,8 +152,8 @@ a gyorsulásmérő minden ablakban dolgozik, a zajával és egy rezgési padlóv
 <h3>Mért értékek</h3>
 <div class="table-wrap"><table>
   <tr><th>Hol</th><th class="num">Arány</th></tr>
-  <tr><td>Szobák (b1 felvétel)</td><td class="num">0.36–0.86</td></tr>
-  <tr><td>Folyosói visszafordulás, lépcsőmászás (b1)</td><td class="num">0.16–0.30</td></tr>
+  <tr><td>Szobák (valódi felvétel)</td><td class="num">0.36–0.86</td></tr>
+  <tr><td>Folyosói visszafordulás, lépcsőmászás (valódi felvétel)</td><td class="num">0.16–0.30</td></tr>
   <tr><td>Szintetikus zárt szoba (egységteszt)</td><td class="num">0.48 (sajátértékek 677, 740, 1419)</td></tr>
 </table></div>
 
@@ -188,10 +188,10 @@ igazság ellentéte.</div>
   <tr><td>rácsrendben (vonalak mentén)</td><td class="num">60 % (15,193 a 25,370-ből)</td><td class="num">925 / 155</td></tr>
   <tr><td>véletlen sorrendben</td><td class="num">12 % (3,120 a 25,370-ből)</td><td class="num">175 / 1046</td></tr>
 </table></div>
-<p>Valós adatokon az arány ezért zajos. A degenerált szakaszokat a b1-en így is észleltük (0.16–0.30, szemben a szobákban mért 0.36-tal és
+<p>Valós adatokon az arány ezért zajos. A degenerált szakaszokat így is észleltük (0.16–0.30, szemben a szobákban mért 0.36-tal és
 többel), de a rossz normálisok csökkentik ezt a különbséget, és a jelentett leggyengébb irány pontatlan lehet. Ugyanezek a rossz normálisok
 a scan-to-map optimalizálás nézőpont-ellenőrzését is arra késztetik, hogy kihagyjon jó cellákat.</p>
-<p><b>Állapot (2026-10-04): van javítás, de ki van kapcsolva.</b> Az <code>ndt-bucket-statistics</code> változtatás pontos cellastatisztikát
+<p><b>Állapot: van javítás, de ki van kapcsolva.</b> Az <code>ndt-bucket-statistics</code> változtatás pontos cellastatisztikát
 adott hozzá a <code>use_exact_ndt_bucket_statistics</code> beállítás mögé (<code>[lidar_odometry_control]</code>, alapértelmezett
 <code>false</code>):</p>
 <ul>
@@ -203,31 +203,17 @@ adott hozzá a <code>use_exact_ndt_bucket_statistics</code> beállítás mögé 
   <tr><th></th><th class="num">Korábbi statisztika (alapértelmezett)</th><th class="num">Pontos statisztika</th></tr>
   <tr><td>Szintetikus folyosó: információ mentén / keresztben</td><td class="num">925 / 155</td><td class="num">1.7 / 987</td></tr>
   <tr><td>Szintetikus szoba, tökéletes kezdeti becslés: pozícióhiba</td><td class="num">1.5 mm</td><td class="num">0.37 mm</td></tr>
-  <tr><td>44-es felvétel: 0.3-nál kisebb arányú ablakok</td><td class="num">95 a 690-ből</td><td class="num">439 a 690-ből</td></tr>
-  <tr><td>44-es felvétel: medián arány</td><td class="num">0.48</td><td class="num">0.23</td></tr>
-  <tr><td>44-es felvétel: foglalt 3 cm-es cellák (az első ~51 ablak)</td><td class="num">24,044</td><td class="num">25,309 (+5.3 %)</td></tr>
 </table></div>
-<p>Helyes normálisokkal a valós adatokon az arányok sokkal alacsonyabbak, és a hibás normálisokon hangolt 0.3-as küszöb a 44-es felvétel
-nagy részét degeneráltnak jelöli, és 411 ablakban kapcsolja be a gyorsulásmérő-tagot. A térkép kevésbé lett éles, de ez az új statisztikát
-a sokkal gyakoribb gyorsulásmérő-taggal keveri össze. A kapcsoló egyelőre kikapcsolva marad (a 2026-10-04-i döntés). A következő lépés egy olyan futás
+<p>Helyes normálisokkal a valós adatokon az arányok sokkal alacsonyabbak, és a hibás normálisokon hangolt 0.3-as küszöb egy valódi felvétel
+ablakainak nagy részét degeneráltnak jelöli, és sokkal gyakrabban kapcsolja be a gyorsulásmérő-tagot. A térkép kevésbé lett éles, de ez az új statisztikát
+a sokkal gyakoribb gyorsulásmérő-taggal keveri össze. A kapcsoló egyelőre kikapcsolva marad. A következő lépés egy olyan futás
 lenne, amelyben az <code>imu_degenerate_information_ratio</code> értékét addig csökkentjük, amíg nagyjából annyi ablak számít
 degeneráltnak, mint korábban (nagyjából 0.1–0.15). A tesztcsomag már a pontos statisztikán fut, így a folyosóteszt
 normál, sikeres teszt.</p>
 
-<h2>5b. A 2026-10-08-i szellemfal és a degenerációt figyelembe vevő NDT-tagok</h2>
-<p>A 44-es felvételen a <code>/fp:precise</code> build megkettőzött falat rajzolt az első szobába (<code>odometry-stall-fix</code> változás). A fal
-korábban keletkezett, t ≈ 123–126 s-nál, egy a tengelye mentén vak járatban: a gyorsulásmérő-kapcsoló az előző ablak 0,3 alatti arányából
-dönt, és ugyanez a szakasz az egyik buildben 0,19, a másikban 0,38 arányt adott. A tag nélkül a precise build 70 cm-rel lemaradt a járat
-mentén, mert az NDT-térkép ott tartja a pontokat, ahová a korábbi szkennelések tették (a kis Gauss-eloszlások a sík fal menti elcsúszást is
-akadályozzák: a fent leírt hamis merevség), és a 70 cm visszaugrott, amikor az út újra belépett az első szobába.</p>
-<p>A javítás az erre bevett módszer (solution remapping, Zhang, Kaess, Singh 2016, lágy átmenettel): abban az irányban, amelynek részesedése
-Σ n·nᵀ-ből a <code>degenerate_projection_ratio</code> (0,1) alatt van, az NDT-tagok nem hordoznak transzlációs információt, így ott egyedül a
-mozgásmodell helyezi el az ablakot; a <code>degenerate_projection_ratio_full</code> (0,2) értékig az információt lineárisan skálázzuk. A teljes 44-en
-a fast és a precise build így legfeljebb 0,31 m-rel tér el egymástól 1,03 m helyett, mindkettő 0,36 m-en belül marad a tiszta eredménytől, és a
-szellemfal mindkettőből eltűnt (szemrevételezés). Ugyanezen a felvételen kipróbálva és elvetve: a pontos cellastatisztika 0,10–0,15-re csökkentett
-küszöbbel (4–12 m-es hurokzárási korrekciók), a 0,5-ig terjedő folytonos gyorsulásmérő-súly (a tag az ablakok harmadában futott és métereket
-sodródott), valamint a síkbeli irányban 0,3 m-re regularizált sík cellák (kevésbé stabil). A mögötte álló szakirodalmi áttekintés:
-<code>openspec/changes/archive/*odometry-stall-fix/research.md</code>.</p>
+<h2>5b. Szellemfalak vak járatokban és a degenerációt figyelembe vevő NDT-tagok</h2>
+<p>Egy a tengelye mentén vak járatban egy törékeny döntés megkettőzött falat hagyhat (<code>odometry-stall-fix</code> változás): a gyorsulásmérő-kapcsoló az előző ablak 0,3 alatti arányából dönt, és ugyanez a szakasz egy <code>/fp:precise</code> buildben 0,19, egy <code>/fp:fast</code> buildben 0,38 arányt adhatott. A tag nélkül az ablak több tíz centiméterrel lemaradt a járat mentén, mert az NDT-térkép ott tartja a pontokat, ahová a korábbi szkennelések tették (a kis Gauss-eloszlások a sík fal menti elcsúszást is akadályozzák: a fent leírt hamis merevség), és az eltérés visszaugrott, amikor az út újra belépett egy korábban feltérképezett szobába, szellemfalat hagyva.</p>
+<p>A javítás az erre bevett módszer (solution remapping, Zhang, Kaess, Singh 2016, lágy átmenettel): abban az irányban, amelynek részesedése Σ n·nᵀ-ből a <code>degenerate_projection_ratio</code> (0,1) alatt van, az NDT-tagok nem hordoznak transzlációs információt, így ott egyedül a mozgásmodell helyezi el az ablakot; a <code>degenerate_projection_ratio_full</code> (0,2) értékig az információt lineárisan skálázzuk. A fast és a precise build így sokkal közelebb marad egymáshoz, és a szellemfal mindkettőből eltűnik. Kipróbálva és elvetve: a pontos cellastatisztika 0,10–0,15-re csökkentett küszöbbel (méteres hurokzárási korrekciók), a 0,5-ig terjedő folytonos gyorsulásmérő-súly (a tag az ablakok harmadában futott és métereket sodródott), valamint a síkbeli irányban 0,3 m-re regularizált sík cellák (kevésbé stabil). A mögötte álló szakirodalmi áttekintés: <code>openspec/changes/archive/*odometry-stall-fix/research.md</code>.</p>
 
 <h2>6. Hol található</h2>
 <ul>

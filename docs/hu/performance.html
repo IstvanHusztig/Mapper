@@ -71,7 +71,7 @@
 <p style="text-align:right;font-size:13px;margin:0 0 8px"><a href="../performance.html" hreflang="en" lang="en">English version</a> · <a href="index.html">Felhasználói útmutató</a></p>
 
 <h1>Teljesítmény: hogyan lett a teljes felvétel feldolgozása 2,2-szer gyorsabb</h1>
-<p class="lead">2026-10-05 és 2026-10-08 között a teljes referenciafelvétel (<code>44</code>: kb. 5 perc adat, 690 ablak, 16,5 millió pont) feldolgozása 33 percről 10 percre, az odometria pedig 26 percről 8 percre gyorsult. Ez az oldal megmutatja, mit mértünk, mit változtatott az egyes lépés, és mi maradt hátra.</p>
+<p class="lead">2026-10-05 és 2026-10-08 között egy teljes referenciafelvétel (kb. 5 perc adat, 690 ablak, 16,5 millió pont) feldolgozása 33 percről 10 percre, az odometria pedig 26 percről 8 percre gyorsult. Ez az oldal megmutatja, mit mértünk, mit változtatott az egyes lépés, és mi maradt hátra.</p>
 
 <div class="tldr">
   <div class="card"><div class="big">1990 → 622 s</div><div class="lbl">teljes futás, falióra szerint (−69 %, 3,2-szer gyorsabb)</div></div>
@@ -109,7 +109,7 @@
   <rect x="204" y="290" width="12" height="9" fill="var(--accent)"/><text class="muted" x="222" y="299" font-size="12.5">odometria</text>
   <rect x="400" y="290" width="12" height="9" fill="var(--node-line)"/><text class="muted" x="418" y="299" font-size="12.5">a futás többi része (betöltés, hurokzárás, konzisztencia, mentés)</text>
 </svg>
-<figcaption>A teljes <code>44</code> felvétel, Release build, <code>settings/l2-vertical.toml</code>, 16 logikai mag. Az oszlopok a teljes futás falióra szerinti másodpercei; a kék rész az odometria.</figcaption>
+<figcaption>A teljes referenciafelvétel, Release build, <code>settings/l2-vertical.toml</code>, 16 logikai mag. Az oszlopok a teljes futás falióra szerinti másodpercei; a kék rész az odometria.</figcaption>
 </figure>
 
 <div class="table-wrap"><table>
@@ -120,7 +120,7 @@
 <tr><td>Rögzített Cholesky-minta, <code>/fp:precise</code></td><td class="num">509,8 s</td><td class="num">907 s</td><td>A két ritka Cholesky-megoldás szimbolikus elemzése 138 000 megoldásból csak 57 + 58-szor fut le, nem minden alkalommal. Mindenhol egyetlen lebegőpontos mód, sebességveszteség nélkül.</td></tr>
 <tr><td>Gyorsabb konzisztencia</td><td class="num">516,7 s</td><td class="num">647 s</td><td>A konzisztencia (10 menet) normálegyenleteit közvetlenül, sávos mátrixba gyűjtjük a ritka szorzatok helyett; a pontok és a Cholesky-elemzés menetek között megmarad; az 1 M pontos darabok párhuzamosan készülnek és sorrendben egyesülnek. Konzisztencia: 363,6 → 44,7 s.</td></tr>
 <tr><td>Tárolt NDT-cellainverzek</td><td class="num">490,5 s</td><td class="num">622 s</td><td>Minden NDT-cella inverz kovarianciáját (és a használhatósági jelzőt) a térképfrissítés egyszer tárolja, ahelyett hogy minden pont minden iterációban újra invertálná; a csomópont pózát is csomópontonként egyszer alakítjuk át pontonként helyett. Az eredmény bitazonos.</td></tr>
-<tr><td>Újrafeldolgozás odometria-pillanatképből</td><td>2026-10-11</td><td>hurokzárási kísérletekhez: 178 s a teljes 44-esen a teljes futás 1338 s-a helyett (18 s a <code>44_short</code>-on 179 s helyett); bitazonos</td></tr>
+<tr><td>Újrafeldolgozás odometria-pillanatképből</td><td>2026-10-11</td><td>hurokzárási kísérletekhez: 178 s a teljes referenciafelvételen a teljes futás 1338 s-a helyett (18 s a 30 másodperces kivágatán 179 s helyett); bitazonos</td></tr>
 </table></div>
 
 <h2>Mi volt lassú</h2>
@@ -142,10 +142,10 @@
 <tr><th>Javítás</th><th>Dátum</th><th>Eredmény</th></tr>
 <tr><td>A normálmátrix sávja ritka mátrixként</td><td>2026-09-30</td><td>kb. 35 %-kal kevesebb idő ablakonként, bitazonos</td></tr>
 <tr><td>Alapértelmezett Release build (presetek)</td><td>2026-10-01</td><td>órák → kb. 30 perc a teljes felvételen</td></tr>
-<tr><td>A GUI képkockasebességének korlátja</td><td>2026-10-02</td><td><code>44_short</code> a GUI-ban: 510–570 s → 195 s, megegyezik a parancssorral</td></tr>
+<tr><td>A GUI képkockasebességének korlátja</td><td>2026-10-02</td><td>a 30 másodperces tesztfelvétel a GUI-ban: 510–570 s → 195 s, megegyezik a parancssorral</td></tr>
 <tr><td>Csak a következő ablak elhelyezése</td><td>2026-10-03</td><td>237 705 → 689 ablakelhelyezés; a felvétel hosszának négyzetével nő (<a href="window-chaining.html">részletek</a>)</td></tr>
 <tr><td>Determinisztikus többszálúság</td><td>2026-10-05</td><td>odometria −33 %, bitazonos; a <code>useMultithread</code> beállítás megszűnt, mindig be van kapcsolva</td></tr>
-<tr><td>Sávos normálmátrix</td><td>2026-10-08</td><td>odometria −35 %, bitazonos a <code>44_short</code>-on</td></tr>
+<tr><td>Sávos normálmátrix</td><td>2026-10-08</td><td>odometria −35 %, bitazonos a 30 másodperces tesztfelvételen</td></tr>
 <tr><td>Rögzített Cholesky-minta</td><td>2026-10-08</td><td>odometria −26 %, az eredmények 1e-10-en belül</td></tr>
 <tr><td>Egyetlen lebegőpontos mód (<code>/fp:precise</code>)</td><td>2026-10-08</td><td>nincs sebességkülönbség; az eredmények elmozdultak (lent)</td></tr>
 <tr><td>Gyorsabb konzisztencia</td><td>2026-10-08</td><td>konzisztencia 363,6 → 44,7 s (−88 %), a teljes feldolgozási idő 888 → 628 s; az eredmények 1e-10-en belül</td></tr>
@@ -153,9 +153,9 @@
 </table></div>
 
 <h2>Változtak az eredmények?</h2>
-<p>A többszálúság és a sávos mátrix a 30 másodperces <code>44_short</code> tesztfelvételen egyetlen bitet sem változtatott, a rögzített minta legfeljebb 1e-10 m-rel mozdította el. A lebegőpontos mód viszont megváltoztatta a számokat, a vártnál nagyobb mértékben:</p>
+<p>A többszálúság és a sávos mátrix a 30 másodperces tesztfelvételen egyetlen bitet sem változtatott, a rögzített minta legfeljebb 1e-10 m-rel mozdította el. A lebegőpontos mód viszont megváltoztatta a számokat, a vártnál nagyobb mértékben:</p>
 <div class="warn"><b>/fp:fast → /fp:precise</b>
-A <code>44_short</code>-on a két alapeset (baseline) legfeljebb 2 cm-rel tér el pozícióban. A teljes felvételen a számított útvonal 215,46 m hosszú 216,06 m helyett, és néhány ablakonkénti giroszkóp-bias becslés legfeljebb 0,19 °/s-mal tér el. A <code>tools/eval_odometry.py</code> minőségi mutatói a precise móddal egyenlők vagy kissé jobbak (az ablakonkénti yaw-különbség 1,37 → 1,33 °, a 3 ° feletti kiugrások 6 → 4, a végső yaw −126,4 → −126,0 ° a giroszkóp −136,9 → −136,8 °-ához képest). Valós referencia (ground truth) nélkül egyik módról sem mondható, hogy közelebb van az igazsághoz. Az átállást az indokolta, hogy a <code>/fp:fast</code> csak 0–2 % sebességet hozott, miközben az eredmény attól függött, hogyan rendezte a fordító az összegeket, ami második buildet és minden ellenőrzéshez tűrési szabályt igényelt. A régi alapesetek dátumozott mappákban megmaradtak.</div>
+A 30 másodperces tesztfelvételen a két alapeset (baseline) legfeljebb 2 cm-rel tér el pozícióban. A teljes felvételen a számított útvonal 215,46 m hosszú 216,06 m helyett, és néhány ablakonkénti giroszkóp-bias becslés legfeljebb 0,19 °/s-mal tér el. A <code>tools/eval_odometry.py</code> minőségi mutatói a precise móddal egyenlők vagy kissé jobbak (az ablakonkénti yaw-különbség 1,37 → 1,33 °, a 3 ° feletti kiugrások 6 → 4, a végső yaw −126,4 → −126,0 ° a giroszkóp −136,9 → −136,8 °-ához képest). Valós referencia (ground truth) nélkül egyik módról sem mondható, hogy közelebb van az igazsághoz. Az átállást az indokolta, hogy a <code>/fp:fast</code> csak 0–2 % sebességet hozott, miközben az eredmény attól függött, hogyan rendezte a fordító az összegeket, ami második buildet és minden ellenőrzéshez tűrési szabályt igényelt. A régi alapesetek dátumozott mappákban megmaradtak.</div>
 
 <h2>Mi maradt hátra</h2>
 <p>A 622 s-os teljes futás (megközelítőleg) ezekből áll:</p>
