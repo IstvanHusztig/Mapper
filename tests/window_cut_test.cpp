@@ -76,7 +76,7 @@ namespace
 TEST_CASE("window hand-off: chained windows keep the rotation between one window's last sample and the next one's first")
 {
     // place_windows_after starts each window after its predecessor's last node. Starting it at that node's pose lost the
-    // IMU rotation of one sample interval per window (1/20 of the rotation here, 1/360 with lidar-vertical.toml).
+    // IMU rotation of one sample interval per window (1/20 of the rotation here, 1/360 with l2-vertical.toml).
     Cut c;
     cut(c);
     place_windows_after(c.windows, 1);

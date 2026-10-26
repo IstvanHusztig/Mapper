@@ -5,7 +5,7 @@ A run is cut into short consecutive pieces of the recording, called **windows**.
 ## What a `Window` is
 
 A `Window` (`src/domain/window.h`) holds `threshold_nr_poses` consecutive **trajectory nodes**, one per IMU sample:
-- That is 360 nodes with `settings/lidar-vertical.toml`, about 0.4 s of recording.
+- That is 360 nodes with `settings/l2-vertical.toml`, about 0.4 s of recording.
 - `44_short` has 70 windows, and the full 44 recording has 690.
 
 | Field | What it holds |

@@ -6,7 +6,7 @@ Files are compared bit for bit after normalizing only the values that change fro
 (see NORMALIZE_* below). Exit code: 0 identical, 1 different, 2 usage or input error.
 
     python tools/compare_baseline.py <new_out> <baseline_dir | manifest.json>
-    python tools/compare_baseline.py --write-manifest <out_dir> <manifest.json> --dataset 44 --params settings/lidar-vertical.toml
+    python tools/compare_baseline.py --write-manifest <out_dir> <manifest.json> --dataset 44 --params settings/l2-vertical.toml
     python tools/compare_baseline.py --tolerance 1e-6 <new_out> <baseline_dir>
 
 --tolerance (needs a baseline folder, not a manifest) accepts text files that differ only in numbers

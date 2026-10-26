@@ -145,7 +145,7 @@ accelerometer. So the accelerometer is a poor position sensor, and it is used on
   so they are ready for the next blind stretch.</li>
 </ol>
 <p>This needs <code>use_imu_acceleration_term = true</code> and <code>imu_acceleration_only_when_degenerate = true</code>;
-both are set in <code>settings/lidar-vertical.toml</code>. There, however, <code>imu_always_on = true</code> replaces this gate:
+both are set in <code>settings/l2-vertical.toml</code>. There, however, <code>imu_always_on = true</code> replaces this gate:
 the accelerometer works in every window, weighted by its noise and a vibration floor, so the ratio no longer switches it
 (see <a href="index.html#p-imu">[imu_translation]</a>). The ratio still drives the degeneracy-aware NDT terms (section 5b).</p>
 

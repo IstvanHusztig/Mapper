@@ -12,7 +12,7 @@
 #include <string>
 
 // run_consistency (Consistency, and Consistency2 with use_mutliple_gaussian) on the loop recording (see
-// synthetic_recording.h) against its true trajectory. The options are those of settings/lidar-vertical.toml, except the
+// synthetic_recording.h) against its true trajectory. The options are those of settings/l2-vertical.toml, except the
 // number of passes; they are set here, so tuning the shipped file doesn't change the tests.
 
 using namespace synthetic;

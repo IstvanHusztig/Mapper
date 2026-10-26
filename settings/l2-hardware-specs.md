@@ -1,6 +1,6 @@
 # Unitree L2: SLAM Tuning Reference
 
-Reference data for tuning the SLAM algorithm's `settings/lidar-vertical.toml` to the Unitree L2 as recorded by dLidar. It collects the sensor specs, the operating environment, the parameters we want to tune, and how dLidar's output matches up with them.
+Reference data for tuning the SLAM algorithm's `settings/l2-vertical.toml` to the Unitree L2 as recorded by dLidar. It collects the sensor specs, the operating environment, the parameters we want to tune, and how dLidar's output matches up with them.
 
 ## Hardware Specifications (Unitree L2)
 
@@ -32,7 +32,7 @@ Reference data for tuning the SLAM algorithm's `settings/lidar-vertical.toml` to
 - Correctly compensate motion distortion (deskewing).
 - Produce a clean map.
 
-## Parameters to Tune in `lidar-vertical.toml`
+## Parameters to Tune in `l2-vertical.toml`
 
 1. **VoxelGrid / downsampling**
    - Leaf sizes for feature extraction and feature matching, chosen from the 64k pts/s density and the 0.05 m close-range capability.

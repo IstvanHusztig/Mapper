@@ -18,7 +18,7 @@ When time-scaled rotation sigma is enabled, the rotation uncertainty allowed bet
 - **THEN** the rotation sigma equals `sigma_floor` and the optimization completes without numerical failure
 
 #### Scenario: Map quality at least matches the tuned constant sigma
-- **WHEN** datasets 43 and 42 (repaired IMU timestamps) are processed with `settings/lidar-vertical.toml` (default time-scaled sigma, k = 4)
+- **WHEN** datasets 43 and 42 (repaired IMU timestamps) are processed with `settings/l2-vertical.toml` (default time-scaled sigma, k = 4)
 - **THEN** on each dataset the median node-to-node yaw change is at most 0.03°, no window has an end-of-window yaw spike above 3°, and the occupied 3 cm cells in the Z section [-0.3, 0.7] m do not exceed the constant-sigma-0.02 baseline (43: 15,945, 42: 6,872)
 
 ### Requirement: Online gyro bias estimation

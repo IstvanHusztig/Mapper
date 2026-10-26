@@ -1,6 +1,6 @@
 {
   "dataset": "44_short",
-  "params": "settings/lidar-vertical.toml",
+  "params": "settings/l2-vertical.toml",
   "commit": "f8ce5e0",
   "hd_cpu_optimization": "AUTO",
   "created": "2026-10-18",

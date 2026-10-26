@@ -2,7 +2,7 @@
 
 This page lists the changes that made dMapper faster or kept it from becoming slower: what was slow, what changed, what it gained, and how the result was checked. It also lists the settings that trade speed for accuracy or reproducibility, and the open performance findings.
 
-Times are for the reference recordings in `raw data/`, with the Release build and `settings/lidar-vertical.toml`:
+Times are for the reference recordings in `raw data/`, with the Release build and `settings/l2-vertical.toml`:
 - `44` is the full recording, 690 windows, about 10 min (30 min before the performance fixes);
 - `44_short` is its first 30 s, 70 windows, about 1.5 min (3.5 min before).
 
@@ -208,7 +208,7 @@ OpenSpec change `ndt-lookup-cache`.
 
 ## 13. IMU always on (a cost)
 
-Not a speed fix: a precision change that costs time, recorded here so the time is explained. `imu_always_on` (on in `settings/lidar-vertical.toml`, changes `imu-always-on` and `loop-closure-gating`) puts the accelerometer term into every window, with rotation coupling and velocity unknowns. On the synchronized 44 it removed the stalls in blind passages; with the loop-closure fix the ghost walls fell from up to 112 cm to at most 16–25 cm horizontally. Precision comes before speed (see `CLAUDE.md`), so the cost is accepted.
+Not a speed fix: a precision change that costs time, recorded here so the time is explained. `imu_always_on` (on in `settings/l2-vertical.toml`, changes `imu-always-on` and `loop-closure-gating`) puts the accelerometer term into every window, with rotation coupling and velocity unknowns. On the synchronized 44 it removed the stalls in blind passages; with the loop-closure fix the ghost walls fell from up to 112 cm to at most 16–25 cm horizontally. Precision comes before speed (see `CLAUDE.md`), so the cost is accepted.
 
 **Cost** (Release, `/fp:precise`, one run at a time on the same machine): full 44 processing time 714.9 s (the previous settings on the corrected recording) → 1249.4 s (1.75×); `44_short` 75.6 → 120.2 s (1.6×). The window optimizer does the extra work: about 36 accelerometer triples per window, each now with a rotation Jacobian block for every node it spans, which widens the band of the normal matrix (the rotations of the anchor nodes enter the same rows), plus 9 more unknowns. Loop closure may run up to three registrations per segment instead of one where the first is rejected; on 44 that is a few extra registrations, not measurable in the total.
 
@@ -279,7 +279,7 @@ A code review of the processing path; the measured profile that followed it is [
 
 ### Measured profile (2026-10-05)
 
-The debug setting `log_stage_timing` (`[lidar_odometry_debug_info]`, off by default; change `stage-timing`) logs the time of each pipeline step and, at the end of the odometry, where the window loop spent it. The results are bit-identical with the setting on. These runs used the Release (`/fp:fast`) build with `settings/lidar-vertical.toml` and nothing else running; the machine has 16 logical cores, and the run uses one of them.
+The debug setting `log_stage_timing` (`[lidar_odometry_debug_info]`, off by default; change `stage-timing`) logs the time of each pipeline step and, at the end of the odometry, where the window loop spent it. The results are bit-identical with the setting on. These runs used the Release (`/fp:fast`) build with `settings/l2-vertical.toml` and nothing else running; the machine has 16 logical cores, and the run uses one of them.
 
 **Pipeline steps:**
 
@@ -339,4 +339,4 @@ Result-changing levers come later, each judged with `eval_odometry.py`: a conver
 - **Two suspected bugs found in the 2026-10-05 review** (not fixed; each changes results, so each is its own change with an evaluation):
   - `Consistency2` sets `index_end_exclusive = i` (`src/application/consistency.cpp`), which looks like it drops the last point of every cell;
   - `ndt_cell_index` uses `static_cast<int16_t>(p / b)`, which truncates toward zero, so cell 0 is twice as wide on every axis (`src/domain/ndt_map.cpp`).
-- **Results depend on machine load through `real_time_threshold_seconds`** (2026-10-02). One slow GUI run differed by 1–2 mm; a repeat was identical. The value was not changed. A higher limit in `settings/lidar-vertical.toml` would make runs reproducible under load, but it is a decision still to be made.
+- **Results depend on machine load through `real_time_threshold_seconds`** (2026-10-02). One slow GUI run differed by 1–2 mm; a repeat was identical. The value was not changed. A higher limit in `settings/l2-vertical.toml` would make runs reproducible under load, but it is a decision still to be made.

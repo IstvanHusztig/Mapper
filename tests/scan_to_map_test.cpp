@@ -15,7 +15,7 @@
 
 // optimize_lidar_odometry on synthetic scenes with a known true trajectory: a closed box room (and an open corridor),
 // both NDT maps built with the app's update_rgd (exact cell statistics), and a window of nodes 10 ms apart moving through it. The options are
-// the values of settings/lidar-vertical.toml, set here so that tuning the shipped file doesn't change these tests.
+// the values of settings/l2-vertical.toml, set here so that tuning the shipped file doesn't change these tests.
 
 namespace
 {
@@ -99,7 +99,7 @@ namespace
         return w;
     }
 
-    // the settings of settings/lidar-vertical.toml that the optimizer reads
+    // the settings of settings/l2-vertical.toml that the optimizer reads
     OdometryConfig test_config()
     {
         OdometryConfig c;
@@ -386,7 +386,7 @@ TEST_CASE("scan-to-map: a gyro bias carried from window to window is removed onc
     // already out of the increments. Subtracting the full b made the chain settle near half the bias (finding C6).
     OdometryConfig c = test_config();
     c.use_gyro_bias_estimation = true;
-    c.gyro_bias_rw_deg_s_sqrt_s = 0.005; // settings/lidar-vertical.toml
+    c.gyro_bias_rw_deg_s_sqrt_s = 0.005; // settings/l2-vertical.toml
     Options o = options_from(c);
     const Scene s = room();
     Maps maps = build_maps(s, o.scan_to_map);

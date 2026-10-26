@@ -282,10 +282,10 @@ Refactors must reproduce `44_short` and the full 44 bit for bit (see `docs/ARCHI
 | `raw data/44_short` | first 30 s of 44, made with `cut_recording` | about 1.5 min | `tools/baseline/44_short.manifest.json` |
 | `raw data/44` | the full recording (loops on every floor) | about 10 min | `tools/baseline/44.manifest.json` |
 
-Workflow: check **every intermediate commit on `44_short`**, and run the **full 44 once at the end of each change** (only the full recording exercises loop closure). Always run with the Release build and `settings/lidar-vertical.toml`, into a new output folder outside the input folder. Never run two jobs on the same input folder at the same time: they share its `cache/`. A stale `cache/` from an older build is harmless (every run rewrites it).
+Workflow: check **every intermediate commit on `44_short`**, and run the **full 44 once at the end of each change** (only the full recording exercises loop closure). Always run with the Release build and `settings/l2-vertical.toml`, into a new output folder outside the input folder. Never run two jobs on the same input folder at the same time: they share its `cache/`. A stale `cache/` from an older build is harmless (every run rewrites it).
 
 ```
-out/build/x64-Release/bin/dMapper.exe "<raw data>/44_short" settings/lidar-vertical.toml "<raw data>/44_short_check"
+out/build/x64-Release/bin/dMapper.exe "<raw data>/44_short" settings/l2-vertical.toml "<raw data>/44_short_check"
 python tools/compare_baseline.py "<raw data>/44_short_check" tools/baseline/44_short.manifest.json
 ```
 
@@ -302,7 +302,7 @@ The folders `raw data/44_baseline` and `raw data/44_short_baseline` hold the out
 python tools/compare_baseline.py --tolerance 1e-6 "<raw data>/44_check" "<raw data>/44_baseline"
 ```
 
-To set new baselines after such a change: rename the two folders with a date suffix, move the new output folders in their place, and write the manifests from them with `compare_baseline.py --write-manifest <out> <manifest> --dataset <44|44_short> --params settings/lidar-vertical.toml`.
+To set new baselines after such a change: rename the two folders with a date suffix, move the new output folders in their place, and write the manifests from them with `compare_baseline.py --write-manifest <out> <manifest> --dataset <44|44_short> --params settings/l2-vertical.toml`.
 
 There is one build and one floating-point mode (`/fp:precise`), so an exact refactor is bit-identical on both datasets; no second "precise" build is needed.
 
@@ -312,7 +312,7 @@ Compares an output folder with a baseline output folder or a manifest. Pure Pyth
 
 ```
 python tools/compare_baseline.py <new_out> <baseline_dir | manifest.json> [--verbose]
-python tools/compare_baseline.py --write-manifest <out_dir> <manifest.json> --dataset 44 --params settings/lidar-vertical.toml
+python tools/compare_baseline.py --write-manifest <out_dir> <manifest.json> --dataset 44 --params settings/l2-vertical.toml
 ```
 
 - Every file is compared by SHA-256. The only things normalized are the values that change on every run:

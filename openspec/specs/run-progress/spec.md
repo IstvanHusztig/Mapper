@@ -54,5 +54,5 @@ A run SHALL NOT write its log messages to a file, and SHALL NOT add any file to 
 Progress reporting, pausing and log output SHALL NOT change what a run computes. A refactor that changes only how a run reports SHALL reproduce the `44_short` baseline bit for bit, and the full `44` baseline within the tolerance of `regression-baseline`.
 
 #### Scenario: Baseline after the reporting change
-- **WHEN** the CLI processes `44_short` and then `44` with `settings/lidar-vertical.toml`
+- **WHEN** the CLI processes `44_short` and then `44` with `settings/l2-vertical.toml`
 - **THEN** `tools/compare_baseline.py` reports `44_short` identical with its manifest, and `44` identical or within tolerance 1e-6 of the baseline folder

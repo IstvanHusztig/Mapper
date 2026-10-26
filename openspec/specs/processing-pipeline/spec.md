@@ -32,7 +32,7 @@ The command line and every GUI path that produces a result SHALL use this same s
 For the same input folder and the same settings, a result saved by the GUI's "Load data and process" SHALL be identical to the CLI's output. The comparison ignores only the run-dependent fields listed in `regression-baseline`.
 
 #### Scenario: GUI run of the short reference dataset
-- **WHEN** the GUI processes `44_short` with `settings/lidar-vertical.toml` loaded and saves the result
+- **WHEN** the GUI processes `44_short` with `settings/l2-vertical.toml` loaded and saves the result
 - **THEN** every output file compares identical with `44_short_baseline`
 
 ### Requirement: CLI settings come only from the given file
@@ -42,7 +42,7 @@ If the given file cannot be read or parsed, the CLI SHALL exit with a non-zero s
 processing.
 
 #### Scenario: Started from another directory
-- **WHEN** the CLI processes `44_short` with `settings/lidar-vertical.toml` while the working directory contains a different `default_settings.toml`
+- **WHEN** the CLI processes `44_short` with `settings/l2-vertical.toml` while the working directory contains a different `default_settings.toml`
 - **THEN** the output is identical to `44_short_baseline`
 
 #### Scenario: Unreadable parameter file
@@ -68,7 +68,7 @@ The GUI SHALL NOT offer an action that runs the consistency pass on its own. Con
 A run's output folder SHALL contain its parameters as `dMapper_params_<version>_<date-time>.toml` and its processing report as `dMapper_results_<version>_<date-time>.json`, where `<version>` is the version dMapper was built with (major.minor.patch, set in the top-level `CMakeLists.txt`). Both files SHALL record that version (`software_version`; the report's `lidar_odometry_version` as "v" + version). The version stamp in a loaded parameter file SHALL NOT change the version a run records; it is only compared with the build's version, and a different major or minor version gives a warning.
 
 #### Scenario: A run with the shipped settings
-- **WHEN** the CLI processes `44_short` with `settings/lidar-vertical.toml`
+- **WHEN** the CLI processes `44_short` with `settings/l2-vertical.toml`
 - **THEN** the output folder contains `dMapper_params_0.1.0_<date-time>.toml` and `dMapper_results_0.1.0_<date-time>.json`, and both record version 0.1.0
 
 #### Scenario: A parameter file from another version

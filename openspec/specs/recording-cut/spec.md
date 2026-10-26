@@ -36,7 +36,7 @@ The pipeline SHALL accept the cut folder as a normal input folder, and the cut t
 an output folder that already contains `.laz`, `.las` or `.csv` files.
 
 #### Scenario: Process the short cut
-- **WHEN** the Release CLI is run on the cut folder with `settings/lidar-vertical.toml`
+- **WHEN** the Release CLI is run on the cut folder with `settings/l2-vertical.toml`
 - **THEN** it completes and writes a normal output folder
 
 #### Scenario: Non-empty output folder

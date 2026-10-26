@@ -238,7 +238,7 @@ Steps 8–11 were added on 2026-10-03. They cover the goals that steps 0–7 sti
   dMapper used lives in the layers, and new code doesn't take anything from HDMapping's `core` again.
 - **Test framework: doctest**, vendored under `3rdparty/` (single header, fast to compile).
 - **Baseline: `raw data/44`.** The validated scan (loops on every floor) with
-  `settings/lidar-vertical.toml` is the golden reference.
+  `settings/l2-vertical.toml` is the golden reference.
 - **Short cut for intermediate checks.** `44_short` (the first 30 s of 44, about 2.5 min to
   process) has its own manifest and checks every intermediate commit. The full 44 (about 25 min)
   runs once at the end of each change, because only it exercises loop closure.

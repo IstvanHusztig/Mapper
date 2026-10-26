@@ -49,12 +49,12 @@ TEST_CASE("default parameters are saved as the golden TOML")
     check_golden(params, RunPaths{}, GuiPreferences{}, "default_params.golden.toml");
 }
 
-TEST_CASE("settings/lidar-vertical.toml is saved as the golden TOML")
+TEST_CASE("settings/l2-vertical.toml is saved as the golden TOML")
 {
     OdometryConfig params;
     RunPaths paths;
     GuiPreferences gui;
     TomlIO toml_io;
-    REQUIRE(toml_io.LoadParametersFromTomlFile((repo_dir / "settings" / "lidar-vertical.toml").string(), params, paths, gui));
-    check_golden(params, paths, gui, "lidar_vertical.golden.toml");
+    REQUIRE(toml_io.LoadParametersFromTomlFile((repo_dir / "settings" / "l2-vertical.toml").string(), params, paths, gui));
+    check_golden(params, paths, gui, "l2_vertical.golden.toml");
 }

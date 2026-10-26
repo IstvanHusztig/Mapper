@@ -53,7 +53,7 @@ TEST_CASE("gui view-model: default settings, and their source")
     }
     SUBCASE("a default file is loaded and named")
     {
-        const fs::path file = repo_dir / "tests" / "data" / "lidar_vertical.golden.toml";
+        const fs::path file = repo_dir / "tests" / "data" / "l2_vertical.golden.toml";
         model.load_default_parameters(file);
         CHECK(model.active_parameters() == file.string());
         CHECK(model.config().use_loop_closure);
@@ -65,7 +65,7 @@ TEST_CASE("gui view-model: Load parameters")
 {
     RecordingNotifier notifier;
     GuiViewModel model(notifier);
-    const std::string file = (repo_dir / "tests" / "data" / "lidar_vertical.golden.toml").string();
+    const std::string file = (repo_dir / "tests" / "data" / "l2_vertical.golden.toml").string();
     REQUIRE(model.load_parameters(file));
     CHECK(model.active_parameters() == file);
     CHECK(model.config().use_consistency);
@@ -92,7 +92,7 @@ TEST_CASE("gui view-model: a run on an empty folder fails to load")
     TemporaryFolder folder;
     RecordingNotifier notifier;
     GuiViewModel model(notifier);
-    const std::string file = (repo_dir / "tests" / "data" / "lidar_vertical.golden.toml").string();
+    const std::string file = (repo_dir / "tests" / "data" / "l2_vertical.golden.toml").string();
     REQUIRE(model.load_parameters(file));
 
     REQUIRE(model.start_run(folder.path.string()));

@@ -10,7 +10,7 @@
 #include <limits>
 
 // run_loop_closure on the loop recording (two laps around a block, see synthetic_recording.h) against its true
-// trajectory. The options are those of settings/lidar-vertical.toml, except the segment length and the time gap,
+// trajectory. The options are those of settings/l2-vertical.toml, except the segment length and the time gap,
 // which are shortened to fit the 44 s recording; they are set here, so tuning the shipped file doesn't change the tests.
 //
 // Skipped in the regular run (ctest): each case takes about 20 s in Release and more than 15 minutes in Debug. To run them,

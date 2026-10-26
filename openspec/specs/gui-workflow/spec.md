@@ -13,7 +13,7 @@ The GUI SHALL offer a Start menu with two actions, in this order:
 Processing SHALL be possible without loading parameters first, using the start-up settings. The GUI SHALL NOT offer another way to start processing.
 
 #### Scenario: Parameters, then data
-- **WHEN** the user loads `settings/lidar-vertical.toml` through Start → Load parameters, then processes `44_short` through Start → Load data and process
+- **WHEN** the user loads `settings/l2-vertical.toml` through Start → Load parameters, then processes `44_short` through Start → Load data and process
 - **THEN** the result folder is identical to the CLI's result for `44_short` with that file
 
 #### Scenario: No step-by-step processing
@@ -31,8 +31,8 @@ The GUI SHALL NOT offer widgets, menus or presets that change processing setting
 The GUI SHALL show which parameter file the current settings came from, in the Start menu and in the progress window while a run is going. It SHALL show the start-up `default_settings.toml` if no other file was loaded, the last loaded file after Load parameters, or "built-in defaults" if no file was loaded at all.
 
 #### Scenario: After loading a file
-- **WHEN** the user loads `lidar-vertical.toml` and then starts processing
-- **THEN** the Start menu and the progress window both name `lidar-vertical.toml`
+- **WHEN** the user loads `l2-vertical.toml` and then starts processing
+- **THEN** the Start menu and the progress window both name `l2-vertical.toml`
 
 ### Requirement: No georeferencing in the GUI
 The GUI SHALL NOT offer loading reference point clouds, placing the start pose by hand, or aligning the recording to a reference. Georeferencing is left to a separate post-processing step on result folders.
@@ -76,7 +76,7 @@ The application SHALL be named dMapper. The executable SHALL be `dMapper` (`dMap
 The GUI SHALL limit how often it redraws the window: about 10 times per second while a run is going, and about 60 times per second otherwise. Mouse dragging MAY redraw more often. Processing in the GUI SHALL therefore take about as long as the same run through the CLI, and its result SHALL be identical to the CLI's.
 
 #### Scenario: GUI run of the short reference dataset
-- **WHEN** the GUI processes `44_short` with `settings/lidar-vertical.toml` loaded, on an otherwise idle computer
+- **WHEN** the GUI processes `44_short` with `settings/l2-vertical.toml` loaded, on an otherwise idle computer
 - **THEN** the elapsed time recorded in the results JSON is at most 1.3 times the CLI's elapsed time for the same run, and every output file compares identical with the `44_short` manifest
 
 #### Scenario: Idle window
@@ -95,7 +95,7 @@ While a run's odometry is going, the GUI SHALL show a thinned point cloud of eve
 - **THEN** the preview is rebuilt from the corrected trajectory
 
 #### Scenario: Results unaffected
-- **WHEN** the GUI processes `44_short` with `settings/lidar-vertical.toml` with the preview shown
+- **WHEN** the GUI processes `44_short` with `settings/l2-vertical.toml` with the preview shown
 - **THEN** every output file compares identical with the `44_short` manifest, and the run time stays within 1.3 times the CLI's
 
 ### Requirement: Trajectory shown during a run
@@ -110,5 +110,5 @@ While a run's odometry is going, the GUI SHALL draw the trajectory of the window
 - **THEN** the drawn trajectory is the corrected one, as saved
 
 #### Scenario: Results unaffected
-- **WHEN** the GUI processes `44_short` with `settings/lidar-vertical.toml`
+- **WHEN** the GUI processes `44_short` with `settings/l2-vertical.toml`
 - **THEN** every output file compares identical with the `44_short` manifest
