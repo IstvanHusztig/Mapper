@@ -98,7 +98,8 @@ namespace
 }
 
 void calculate_trajectory(
-    ImuTrajectory& trajectory, Imu& imu_data, bool fusionConventionNwu, bool fusionConventionEnu, bool fusionConventionNed, double ahrs_gain, bool debugMsg, bool use_remove_imu_bias_from_first_stationary_scan, OrientationEstimator& ahrs, Logger& logger)
+    ImuTrajectory& trajectory, Imu& imu_data, bool fusionConventionNwu, bool fusionConventionEnu, bool fusionConventionNed, double ahrs_gain, bool debugMsg, bool use_remove_imu_bias_from_first_stationary_scan,
+    int startup_gyro_bias_nr_samples, double startup_gyro_bias_max_variance_deg2_s2, OrientationEstimator& ahrs, Logger& logger)
 {
     // the first convention set, else north-west-up (the filter's default)
     AxesConvention convention = AxesConvention::Nwu;
@@ -122,13 +123,14 @@ void calculate_trajectory(
 
     if (use_remove_imu_bias_from_first_stationary_scan)
     {
-        if (imu_data.size() > 1000)
+        const size_t n = static_cast<size_t>(std::max(startup_gyro_bias_nr_samples, 0));
+        if (n > 0 && imu_data.size() > n)
         {
             std::vector<double> gyr_x;
             std::vector<double> gyr_y;
             std::vector<double> gyr_z;
 
-            for (int i = 0; i < 1000; i++)
+            for (size_t i = 0; i < n; i++)
             {
                 const auto& [timestamp_pair, gyr, acc] = imu_data[i];
 
@@ -138,26 +140,26 @@ void calculate_trajectory(
             }
 
             double mean_x = 0, mean_y = 0, mean_z = 0;
-            for (int i = 0; i < 1000; i++)
+            for (size_t i = 0; i < n; i++)
             {
                 mean_x += gyr_x[i];
                 mean_y += gyr_y[i];
                 mean_z += gyr_z[i];
             }
-            mean_x /= 1000.0;
-            mean_y /= 1000.0;
-            mean_z /= 1000.0;
+            mean_x /= static_cast<double>(n);
+            mean_y /= static_cast<double>(n);
+            mean_z /= static_cast<double>(n);
 
             double var_x = 0, var_y = 0, var_z = 0;
-            for (int i = 0; i < 1000; i++)
+            for (size_t i = 0; i < n; i++)
             {
                 var_x += (gyr_x[i] - mean_x) * (gyr_x[i] - mean_x);
                 var_y += (gyr_y[i] - mean_y) * (gyr_y[i] - mean_y);
                 var_z += (gyr_z[i] - mean_z) * (gyr_z[i] - mean_z);
             }
-            double total_variance = (var_x + var_y + var_z) / 1000.0;
+            double total_variance = (var_x + var_y + var_z) / static_cast<double>(n);
 
-            if (total_variance > 5.0)
+            if (total_variance > startup_gyro_bias_max_variance_deg2_s2)
             {
                 log_info(logger) << "WARNING: Excessive movement detected (" << total_variance << "). Bias set to 0.";
                 bias_gyr_x = 0.0;
@@ -166,12 +168,12 @@ void calculate_trajectory(
             }
             else
             {
-                std::nth_element(gyr_x.begin(), gyr_x.begin() + 500, gyr_x.end());
-                std::nth_element(gyr_y.begin(), gyr_y.begin() + 500, gyr_y.end());
-                std::nth_element(gyr_z.begin(), gyr_z.begin() + 500, gyr_z.end());
-                bias_gyr_x = gyr_x[500];
-                bias_gyr_y = gyr_y[500];
-                bias_gyr_z = gyr_z[500];
+                std::nth_element(gyr_x.begin(), gyr_x.begin() + n / 2, gyr_x.end());
+                std::nth_element(gyr_y.begin(), gyr_y.begin() + n / 2, gyr_y.end());
+                std::nth_element(gyr_z.begin(), gyr_z.begin() + n / 2, gyr_z.end());
+                bias_gyr_x = gyr_x[n / 2];
+                bias_gyr_y = gyr_y[n / 2];
+                bias_gyr_z = gyr_z[n / 2];
             }
         }
 

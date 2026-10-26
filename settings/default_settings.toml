@@ -98,6 +98,8 @@ ahrs_gain = 0.05
 fusionConventionEnu = false
 fusionConventionNed = false
 fusionConventionNwu = true
+startup_gyro_bias_max_variance_deg2_s2 = 5.0
+startup_gyro_bias_nr_samples = 1000
 use_remove_imu_bias_from_first_stationary_scan = true
 
 [misc]

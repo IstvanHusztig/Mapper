@@ -57,13 +57,15 @@ namespace
     {
         bool nwu = true, enu = false, ned = false;
         bool remove_bias = false;
+        int bias_samples = 1000;   // startup_gyro_bias_nr_samples
+        double bias_gate = 5.0;    // startup_gyro_bias_max_variance_deg2_s2
     };
 
     RecordingEstimator run(Imu &imu, ImuTrajectory &trajectory, const Flags &f = {}, double gain = 0.5)
     {
         RecordingEstimator estimator;
         synthetic::NullLogger logger;
-        calculate_trajectory(trajectory, imu, f.nwu, f.enu, f.ned, gain, false, f.remove_bias, estimator, logger);
+        calculate_trajectory(trajectory, imu, f.nwu, f.enu, f.ned, gain, false, f.remove_bias, f.bias_samples, f.bias_gate, estimator, logger);
         return estimator;
     }
 }
@@ -124,6 +126,48 @@ TEST_CASE("orientation: the gyroscope goes in degrees, with the bias of the firs
         f.remove_bias = true;
         const RecordingEstimator e = run(imu, trajectory, f);
         CHECK(e.updates.back().gyro_deg_s.y() == doctest::Approx(bias.y() * rad_to_deg).epsilon(1e-6));
+    }
+    SUBCASE("a window of 200 samples (1 s at a 200 Hz IMU): only those samples set the bias")
+    {
+        Imu imu = still_imu(400, bias);
+        for (int i = 200; i < 400; i++)
+            imu[i].gyro = Eigen::Vector3f::Zero(); // after the window: must not change the bias
+        ImuTrajectory trajectory;
+        Flags f;
+        f.remove_bias = true;
+        f.bias_samples = 200;
+        const RecordingEstimator e = run(imu, trajectory, f);
+        CHECK(e.updates.front().gyro_deg_s.norm() < 1e-6f);
+        for (int k = 0; k < 3; k++)
+            CHECK(e.updates.back().gyro_deg_s[k] == doctest::Approx(-bias[k] * rad_to_deg).epsilon(1e-6));
+    }
+    SUBCASE("a gate below the samples' variance rejects the bias as movement")
+    {
+        Imu imu = still_imu(400, bias);
+        for (int i = 0; i < 200; i += 2)
+            imu[i].gyro.z() += 0.05f; // +2.9 deg/s every other sample: summed variance about 2
+        ImuTrajectory trajectory;
+        Flags f;
+        f.remove_bias = true;
+        f.bias_samples = 200;
+        f.bias_gate = 1.0;
+        const RecordingEstimator e = run(imu, trajectory, f);
+        CHECK(e.updates.back().gyro_deg_s.x() == doctest::Approx(bias.x() * rad_to_deg).epsilon(1e-6));
+        f.bias_gate = 5.0; // the same samples pass the default gate
+        ImuTrajectory trajectory2;
+        Imu imu2 = imu;
+        const RecordingEstimator e2 = run(imu2, trajectory2, f);
+        CHECK(std::abs(e2.updates.back().gyro_deg_s.x()) < 1e-6f);
+    }
+    SUBCASE("no more samples than the window: no bias is removed")
+    {
+        Imu imu = still_imu(200, bias);
+        ImuTrajectory trajectory;
+        Flags f;
+        f.remove_bias = true;
+        f.bias_samples = 200;
+        const RecordingEstimator e = run(imu, trajectory, f);
+        CHECK(e.updates.back().gyro_deg_s.z() == doctest::Approx(bias.z() * rad_to_deg).epsilon(1e-6));
     }
 }
 

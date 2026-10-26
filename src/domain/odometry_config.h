@@ -266,6 +266,10 @@ struct OdometryConfig
     double rgd_sf_sigma_ka_deg = 0.01;
 
     bool use_remove_imu_bias_from_first_stationary_scan = true;
+    // start-up gyro bias: the per-axis median of the first N IMU samples (set N for the sensor's IMU rate, about 1 s of
+    // data); rejected as movement (bias 0) when the summed per-axis variance of those samples is above the gate
+    int startup_gyro_bias_nr_samples = 1000;
+    double startup_gyro_bias_max_variance_deg2_s2 = 5.0;
 
     //ablation study
     bool ablation_study_use_planarity = false;
