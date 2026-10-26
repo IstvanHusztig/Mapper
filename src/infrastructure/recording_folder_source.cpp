@@ -189,9 +189,8 @@ std::vector<Point3Di> load_point_cloud(const std::string &lazFile, bool ommit_po
         Point3Di p;
         int id = point->user_data;
 
-        // Apply the mapped Unitree L2 IMU lever arm offset for standard NWU frame
-        // Original Native: X=-0.007698 (Down), Y=-0.014655 (Left), Z=0.00667 (Front)
-        // Mapped NWU: X=Front, Y=Left, Z=Up
+        // shift by the LiDAR-IMU lever arm from the settings (the IMU position in the point frame, in the NWU output axes:
+        // X front, Y left, Z up)
         Eigen::Affine3d calibration = Eigen::Affine3d::Identity();
         calibration.translation() = lever_arm;
 

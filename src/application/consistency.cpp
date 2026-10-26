@@ -45,7 +45,7 @@ namespace
     // to the IMU's (orientation increment, corrected by exp(-bias * dt) with the window's gyro bias), rotation weights only,
     // sigma per axis = scale x max(inflation_k x ARW x sqrt(dt), floor) as the odometry's rotation prior. A window whose
     // IMU rotation over the window differs from its odometry result by more than the gate gets no terms (a stretch where
-    // the gyro is wrong, e.g. recording 44 at 253-259.7 s). The terms couple k and k + 1 only and are added in node order.
+    // the gyro is wrong). The terms couple k and k + 1 only and are added in node order.
     void add_gyro_rotation_terms(const std::vector<Window> &windows, const std::vector<std::pair<int, int>> &indexes,
                                  const std::vector<TaitBryanPose> &poses, const OdometryConfig &params, BandedNormalMatrix &normal,
                                  Eigen::VectorXd &rhs, Logger &logger)

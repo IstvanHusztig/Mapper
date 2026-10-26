@@ -706,7 +706,7 @@ TEST_CASE("scan-to-map: degeneracy-aware NDT terms change nothing in a closed ro
         CHECK(off[k].matrix() == on[k].matrix());
 }
 
-// change imu-always-on: the accelerometer in the window with the node rotations, noise from the sensor (Unitree L2) and the
+// change imu-always-on: the accelerometer in the window with the node rotations, noise values as in l2-vertical.toml, and the
 // start and end velocity as unknowns
 namespace
 {

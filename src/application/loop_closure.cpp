@@ -495,7 +495,7 @@ std::vector<Eigen::Affine3d> optimize_loop_pose_graph(const std::vector<Eigen::A
 
     // robust kernel on the loop edges: s2 = the edge's squared residual in sigmas. Two stages: plain least squares first,
     // then the kernel from that solution. Reweighting from the odometry's poses would treat every true loop as an outlier:
-    // before the solve each one is off by the whole drift (on 44 1-2 m, 20-40 sigmas)
+    // before the solve each one is off by the whole drift (metres on a long recording, tens of sigmas)
     const double kernel_scale2 = params.loop_closure_kernel_scale * params.loop_closure_kernel_scale;
     double kernel2 = 0.0; // the kernel of the current stage (0: plain)
     // the edge's squared residual in sigmas

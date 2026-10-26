@@ -207,7 +207,7 @@ TEST_CASE("loop closure revisits: out and back qualifies, neighbours, standing s
     c.loop_closure_radius_per_path = 0.5;
     c.loop_closure_search_radius_m = 8.0;
     c.loop_closure_max_vertical_offset_m = 1.5;
-    // a dead end walked out and back: segment 3 returns to segment 0's place after 9 m (gallery 10 -> 13 on 44)
+    // a dead end walked out and back: segment 3 returns to segment 0's place after 9 m
     const std::vector<RevisitSegment> out_and_back = {segment_at(0.0, 0.0, 0.0, 4.5), segment_at(4.0, 0.0, 4.5, 9.0),
                                                       segment_at(4.5, 0.4, 9.0, 13.5), segment_at(0.4, 0.0, 13.5, 18.0)};
     CHECK(same_floor_revisits(out_and_back, 3, c) == std::vector<int>{0});
@@ -218,7 +218,7 @@ TEST_CASE("loop closure revisits: out and back qualifies, neighbours, standing s
     // standing still: no path between, however long the time
     const std::vector<RevisitSegment> standing = {segment_at(0.0, 0.0, 0.0, 0.0), segment_at(0.1, 0.0, 0.0, 0.0), segment_at(0.0, 0.1, 0.0, 0.0)};
     CHECK(same_floor_revisits(standing, 2, c).empty());
-    // a place seen from 6.8 m after 8.6 m of path (gallery 9 -> 12 on 44: ratio 0.79)
+    // a place seen from 6.8 m after 8.6 m of path (ratio 0.79)
     const std::vector<RevisitSegment> afar = {segment_at(0.0, 0.0, 0.0, 0.0), segment_at(6.8, 0.0, 8.6, 13.0)};
     CHECK(same_floor_revisits(afar, 1, c).empty());
     // another floor: not a same-floor revisit
@@ -402,7 +402,7 @@ TEST_CASE("loop closure pose graph: a result that ran away or is not finite is r
     CHECK(max_shift == doctest::Approx(1.0));
 
     std::vector<Eigen::Affine3d> ran_away = initial;
-    ran_away[2].translation().x() += 2.2e6; // as seen on the 44 with exact statistics and the accelerometer term off
+    ran_away[2].translation().x() += 2.2e6; // a run-away window, as seen with exact statistics and the accelerometer term off
     CHECK_FALSE(loop_pose_graph_plausible(initial, ran_away, loops, c, max_shift));
 
     std::vector<Eigen::Affine3d> broken = initial;

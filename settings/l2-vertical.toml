@@ -67,7 +67,9 @@ degenerate_projection_ratio_full = 0.2
 # constrain the translation (corridor turnaround, stairwell), for at most 15 s per stretch; tested on b1/42/43
 imu_acceleration_offset_freeze_blind = false
 imu_always_on = true
+# L2 accelerometer noise density, measured at rest (static recording), largest axis
 imu_accel_noise_density_mps2_sqrt_hz = 0.0013
+# walking vibration and unmodelled effects (L2 data sheet acc_cov)
 imu_accel_floor_sigma_mps2 = 0.1
 imu_velocity_initial_sigma_mps = 1.0
 imu_zero_velocity_sigma_mps = 0.01
@@ -137,6 +139,8 @@ log_window_diagnostics = false
 save_calibration_validation = false
 
 [lidar_imu_extrinsics]
+# L2 IMU position in the point frame; native axes X = -0.007698 (down), Y = -0.014655 (left), Z = 0.00667 (front),
+# here in the vertical mount's NWU output axes (X front, Y left, Z up)
 lidar_imu_lever_arm_x_m = 0.00667
 lidar_imu_lever_arm_y_m = -0.014655
 lidar_imu_lever_arm_z_m = 0.007698
@@ -147,6 +151,7 @@ fusionConventionEnu = false
 fusionConventionNed = false
 fusionConventionNwu = true
 startup_gyro_bias_max_variance_deg2_s2 = 5.0
+# about 1 s of the L2's ~1 kHz IMU
 startup_gyro_bias_nr_samples = 1000
 use_remove_imu_bias_from_first_stationary_scan = true
 
@@ -175,6 +180,7 @@ lidar_odometry_motion_model_om_1_sigma_deg = 0.17724539
 lidar_odometry_motion_model_x_1_sigma_m = 1e-04
 lidar_odometry_motion_model_y_1_sigma_m = 1e-04
 lidar_odometry_motion_model_z_1_sigma_m = 1e-04
+# L2 gyro angle random walk per axis, measured at rest (static recording)
 gyro_arw_x_deg_sqrt_s = 0.028
 gyro_arw_y_deg_sqrt_s = 0.042
 gyro_arw_z_deg_sqrt_s = 0.057

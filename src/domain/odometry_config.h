@@ -54,7 +54,7 @@ struct OdometryConfig
     // (first point as mean, normal fixed from the first 3 points)
     bool use_exact_ndt_bucket_statistics = false;
 
-    //lidar-imu extrinsics (applied to raw points)
+    //lidar-imu extrinsics (applied to raw points): the IMU position in the point frame, in the output axes; set per sensor in its TOML
     double lidar_imu_lever_arm_x_m = 0.00667;
     double lidar_imu_lever_arm_y_m = -0.014655;
     double lidar_imu_lever_arm_z_m = 0.007698;
@@ -107,10 +107,10 @@ struct OdometryConfig
     // time-scaled rotation prior between consecutive nodes:
     // sigma_axis(dt) = max(k * gyro_arw_axis * sqrt(dt), rotation_sigma_floor_deg); replaces the constant om/fi/ka sigmas above
     bool use_time_scaled_rotation_sigma = true;
-    double gyro_arw_x_deg_sqrt_s = 0.028;      // gyro angle random walk [deg/sqrt(s)], Unitree L2 static recording (43/static)
+    double gyro_arw_x_deg_sqrt_s = 0.028;      // gyro angle random walk of the sensor's IMU [deg/sqrt(s)], measured at rest; set per sensor in its TOML
     double gyro_arw_y_deg_sqrt_s = 0.042;
     double gyro_arw_z_deg_sqrt_s = 0.057;
-    double rotation_sigma_inflation_k = 7.0898154; // covers model error beyond white gyro noise (timestamp jitter, vibration); tuned (as 4.0 before the prior lost its 1/pi Cauchy factor, so x sqrt(pi)) on datasets 42/43
+    double rotation_sigma_inflation_k = 7.0898154; // covers model error beyond white gyro noise (timestamp jitter, vibration); 4.0 x sqrt(pi), as the prior lost its 1/pi Cauchy factor
     double rotation_sigma_floor_deg = 0.0035449077; // lower bound for near-zero dt (0.002 x sqrt(pi))
     // in windows that turn faster than turn_rate_threshold_deg_s about the vertical (mean over the window, from the IMU),
     // rotation_sigma_inflation_k_turn replaces rotation_sigma_inflation_k: tight turns (stairwells) trust the gyro more,
@@ -173,7 +173,7 @@ struct OdometryConfig
     std::string loop_closure_cross_floor_only_near;
 
     // online gyro bias estimation (3 extra unknowns per window, carried across windows as a prior)
-    bool use_gyro_bias_estimation = true;          // validated against a static recording (43/static)
+    bool use_gyro_bias_estimation = true;
     double gyro_bias_rw_deg_s_sqrt_s = 0.05;       // bias random walk: prior sigma grows by rw * sqrt(window duration)
     double gyro_bias_initial_sigma_deg_s = 10.0;   // prior sigma of the bias in the first window
     double gyro_bias_max_deg_s = 20.0;             // per-axis clamp of the estimated bias
@@ -224,8 +224,8 @@ struct OdometryConfig
     // sigma^2 = density^2 / span + floor^2; the window's start and end velocities are unknowns, the start with a prior carried from
     // the previous window's end (its marginal covariance, grown over the gap); a window at rest gets a zero-velocity measurement
     bool imu_always_on = false;
-    double imu_accel_noise_density_mps2_sqrt_hz = 0.0013; // Unitree L2, measured at rest (raw data/43/static), largest axis
-    double imu_accel_floor_sigma_mps2 = 0.1;               // walking vibration and unmodelled effects (L2 data sheet acc_cov)
+    double imu_accel_noise_density_mps2_sqrt_hz = 0.0013; // the sensor's accelerometer noise density, measured at rest (largest axis); set per sensor in its TOML
+    double imu_accel_floor_sigma_mps2 = 0.1;               // walking vibration and unmodelled effects; set per sensor in its TOML
     double imu_velocity_initial_sigma_mps = 1.0;           // velocity prior of the first window with the term, if not at rest
     double imu_zero_velocity_sigma_mps = 0.01;             // velocity measurement of a window at rest
     // degeneracy-aware scan-to-map (solution remapping): along a direction whose share of the window's geometric
