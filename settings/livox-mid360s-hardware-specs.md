@@ -37,6 +37,7 @@ Reference data for `settings/livox-vertical.toml` (Livox Mid-360S, vertical hand
 | `threshold_nr_poses` | 72 | 0.36 s windows at the 200 Hz IMU |
 | `handoff_tail_nodes` | 6 | 30 ms at 200 Hz |
 | `startup_gyro_bias_nr_samples` | 200 | 1 s at 200 Hz |
+| `imu_acceleration_offset_span_nr_samples` | 4 | 20 ms at 200 Hz |
 | `filter_threshold_xy_outer` | 40 m | range at 10 % reflectivity |
 | `filter_threshold_xy_inner` | 0.35 m | the operator's body; also drops (0, 0, 0) points |
 | `lidar_imu_lever_arm_*` | TODO | the IMU position above, in the vertical mount's output axes |

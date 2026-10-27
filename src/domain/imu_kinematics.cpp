@@ -84,13 +84,14 @@ std::vector<Eigen::Vector3d> world_acceleration(const std::vector<Eigen::Affine3
 }
 
 // acceleration offset e [m/s^2] seen in an optimized window: (integral of the IMU acceleration - change of the
-// trajectory velocity) / T, both over the nodes k1..k2; the velocities are averaged over span nodes
+// trajectory velocity) / T, both over the nodes k1..k2; the velocities are averaged over span nodes (false if span < 1)
 bool observed_acceleration_offset(const std::vector<Eigen::Affine3d> &trajectory,
                                   const std::vector<std::pair<double, double>> &timestamps,
                                   const std::vector<Eigen::Vector3d> &acc, const Eigen::Vector3d &gravity,
-                                  double to_mps2, int tail_nodes, Eigen::Vector3d &offset)
+                                  double to_mps2, int tail_nodes, int span, Eigen::Vector3d &offset)
 {
-    constexpr int span = 20;
+    if (span < 1)
+        return false;
     const int n = static_cast<int>(trajectory.size());
     const int k1 = span;
     const int k2 = n - 1 - std::max(tail_nodes, 0); // tail nodes are re-propagated, not optimized

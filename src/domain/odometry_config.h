@@ -201,6 +201,9 @@ struct OdometryConfig
     double imu_acceleration_span_s = 0.01;                    // node spacing of the velocity-change terms
     double imu_acceleration_offset_initial_sigma_mps2 = 0.5;  // prior sigma of e in the first window
     double imu_acceleration_offset_rw_mps2_sqrt_s = 0.05;     // e prior sigma grows by rw * sqrt(window duration)
+    // IMU samples the trajectory velocities of the gravity calibration are averaged over (observed_acceleration_offset);
+    // counted in samples like threshold_nr_poses, so set per sensor for its IMU rate (20 = 20 ms at 1 kHz)
+    int imu_acceleration_offset_span_nr_samples = 20;
     // use the accelerometer term only where the LiDAR geometry does not constrain the translation in some direction
     // (smallest / largest eigenvalue of sum(n * n^T) over the surface normals the points are matched to, below
     // imu_degenerate_information_ratio; decided from the previous window),

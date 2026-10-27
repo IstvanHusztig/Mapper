@@ -310,7 +310,8 @@ namespace
             Eigen::Vector3d observed;
             if (!t.options.enabled && !carry.previous_window_degenerate &&
                 observed_acceleration_offset(window.poses, window.timestamps,
-                                             window.imu_acc, carry.acc_gravity, 9.80665 / carry.acc_gravity.norm(), params.handoff_tail_nodes, observed))
+                                             window.imu_acc, carry.acc_gravity, 9.80665 / carry.acc_gravity.norm(), params.handoff_tail_nodes,
+                                             params.imu_acceleration_offset_span_nr_samples, observed))
             {
                 const double alpha = 1.0 - std::exp(-t.window_duration_s / gravity_calibration_time_constant_s);
                 carry.acc_gravity += alpha * observed / (9.80665 / carry.acc_gravity.norm());

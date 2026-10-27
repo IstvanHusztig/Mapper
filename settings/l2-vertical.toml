@@ -84,6 +84,8 @@ imu_acceleration_sigma_mps2 = 0.5
 imu_acceleration_span_s = 0.01
 imu_acceleration_offset_initial_sigma_mps2 = 0.1
 imu_acceleration_offset_rw_mps2_sqrt_s = 0.0001
+# IMU samples the gravity calibration averages velocities over: 20 ms at the L2's ~1 kHz IMU
+imu_acceleration_offset_span_nr_samples = 20
 use_imu_translation_prediction = false
 use_zero_velocity_detection = false
 
