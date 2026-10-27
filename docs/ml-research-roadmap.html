@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ML Research Roadmap</title>
+<style>
+  :root {
+    --bg: #fbfbfa; --panel: #ffffff; --text: #1d2126; --muted: #5b6470; --line: #e3e5e8;
+    --accent: #1f6fb2; --accent-soft: #e8f1fa; --code-bg: #f2f3f5; --warn: #9a5b00; --warn-soft: #fff4e0;
+    --ok: #20703c; --ok-soft: #e6f4ea; --bad: #b3261e; --bad-soft: #fbe9e7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15181c; --panel: #1c2026; --text: #e4e7eb; --muted: #9aa3ae; --line: #2c323a;
+      --accent: #6cb0ec; --accent-soft: #1d2d3d; --code-bg: #242a31; --warn: #f0b35a; --warn-soft: #3a2c16;
+      --ok: #6ccf8e; --ok-soft: #1a3324; --bad: #f28b82; --bad-soft: #3a1f1d;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15181c; --panel: #1c2026; --text: #e4e7eb; --muted: #9aa3ae; --line: #2c323a;
+    --accent: #6cb0ec; --accent-soft: #1d2d3d; --code-bg: #242a31; --warn: #f0b35a; --warn-soft: #3a2c16;
+    --ok: #6ccf8e; --ok-soft: #1a3324; --bad: #f28b82; --bad-soft: #3a1f1d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 40px 16px 80px; }
+  h1 { font-size: 30px; line-height: 1.25; margin: 0 0 8px; }
+  h2 { font-size: 23px; margin: 48px 0 12px; padding-top: 8px; border-top: 1px solid var(--line); }
+  h3 { font-size: 18px; margin: 28px 0 8px; }
+  .lead { color: var(--muted); font-size: 17px; margin-top: 0; }
+  code, pre { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13.5px; }
+  code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+  pre { background: var(--code-bg); padding: 12px 14px; border-radius: 8px; overflow-x: auto; }
+  a { color: var(--accent); overflow-wrap: anywhere; }
+  .note, .warn, .good, .bad {
+    border-left: 3px solid var(--accent); background: var(--accent-soft);
+    padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 16px 0;
+  }
+  .warn { border-left-color: var(--warn); background: var(--warn-soft); }
+  .good { border-left-color: var(--ok); background: var(--ok-soft); }
+  .bad { border-left-color: var(--bad); background: var(--bad-soft); }
+  .note b, .warn b, .good b, .bad b { display: block; margin-bottom: 2px; }
+  .table-wrap { overflow-x: auto; margin: 14px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 600; color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tldr { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 22px 0; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .card .big { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .card .lbl { color: var(--muted); font-size: 13.5px; }
+  .inf { color: var(--muted); font-style: italic; }
+  .meta { color: var(--muted); font-size: 13.5px; }
+  ul.src { font-size: 14px; }
+  .phase { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px 6px; margin: 16px 0; }
+  .phase h3 { margin: 0 0 6px; }
+  .phase .tag { display: inline-block; font-size: 12px; color: var(--muted); background: var(--code-bg); border-radius: 9px; padding: 0 8px; margin-left: 6px; vertical-align: 2px; font-weight: 400; }
+  .phase dl { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 4px 12px; margin: 8px 0 10px; font-size: 15px; }
+  .phase dt { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .04em; padding-top: 2px; }
+  .phase dd { margin: 0; }
+  @media (max-width: 560px) { .phase dl { grid-template-columns: 1fr; } .phase dt { padding-top: 6px; } }
+  .flow { list-style: none; padding: 0; margin: 18px 0; counter-reset: f; }
+  .flow li { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px 10px 48px; margin: 0 0 22px; }
+  .flow li::before { counter-increment: f; content: counter(f); position: absolute; left: 14px; top: 10px; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: var(--panel); font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+  .flow li:not(:last-child)::after { content: "↓"; position: absolute; left: 50%; bottom: -21px; color: var(--muted); font-size: 16px; }
+  .flow li b { display: block; }
+  .flow li span { color: var(--muted); font-size: 14px; }
+  .flow .back { border-style: dashed; }
+</style>
+</head>
+<body>
+<main>
+<h1>Machine learning for dMapper: a research roadmap</h1>
+<p class="lead">A learning plan and research log, started 2026-10-27. It asks where small neural networks could make dMapper's maps more
+precise: per-window parameter tuning, adaptation to motion, point filtering, and a model that keeps up as the code changes. It covers what to learn first, which model fits which task, what the inputs are, and where the training data comes from. Statements marked <span class="inf">(inference)</span> are my own reasoning, not taken from a source
+or a measurement. The <a href="#journal">journal</a> at the end records what was learned and decided, session by session.</p>
+
+<div class="tldr">
+  <div class="card"><div class="big">~2</div><div class="lbl">independent real recordings to learn from today (44, 46, both buildings), with 690 windows in 44</div></div>
+  <div class="card"><div class="big">0</div><div class="lbl">cave recordings, although caves are the target; a model trained on buildings is unproven there</div></div>
+  <div class="card"><div class="big">1.5 / 20 min</div><div class="lbl">one run of <code>44_short</code> / full 44 with <code>imu_always_on</code>: every training signal that needs a run costs this</div></div>
+  <div class="card"><div class="big">0.1.0</div><div class="lbl">plus the build date: all a result says today about the code that made it. Neither commit nor recording is recorded</div></div>
+</div>
+
+<div class="note"><b>In short</b>
+Training waits; the data starts now. There is too little independent data to train anything trustworthy: two building recordings and
+no cave. A model trained today would fit those two buildings and be outdated by the next change to the numerics. But every scan and every run from now on can
+become learning data, if it is recorded with what training will need later. What cannot be recovered later is what was never recorded: how a scan was held,
+which code made a result, the odometry's own trajectory before loop closure replaced it. The direction now (<a href="#roadmap">track A</a>):
+<b>(1)</b> every result records which code and build made it (commit, build settings, numerics epoch) and from which recording, not only <code>0.1.0</code>;
+<b>(2)</b> every run writes per-window telemetry and the odometry's own window poses into the results JSON, so labels can be computed later;
+<b>(3)</b> every recording gets a card (sensor, unit, environment, how it was held, references) and a fixed role (train or test), decided when it arrives;
+<b>(4)</b> experiment folders keep their small files when the point clouds are deleted;
+<b>(5)</b> a general map-quality measure, the planned map-quality report, becomes the objective every later model is judged by.
+Models come later (<a href="#later">track B</a>), each unlocked by a data milestone, not a date: settings tuning with the cave retune, then an error predictor, a
+point weight and a window policy. Each is trained offline in Python, runs in C++ as deterministic Eigen code, is off by default, and is judged by the existing gates.</div>
+
+<h2 id="constraints">1. The ground rules that shape every choice</h2>
+<p>These come from the repository and decide more of the design than any ML textbook does.</p>
+<div class="table-wrap"><table>
+<tr><th>Constraint</th><th>Where it comes from</th><th>What it means for ML</th></tr>
+<tr><td>Precision before speed</td><td><code>CLAUDE.md</code>, cave survey use case</td><td>A learned component may only make maps <i>more precise</i>. Dropping points for speed is out of scope. Lower-quality points get lower weight; points are not removed to save time.</td></tr>
+<tr><td>Bit-identical golden baseline</td><td><code>tools/compare_baseline.py</code>, <code>/fp:precise</code></td><td>Inference must be deterministic. That takes plain scalar loops in a fixed order: Eigen's vectorisation and FMA use change with <code>HD_CPU_OPTIMIZATION</code>, so a fixed summation order alone is not enough. No GPU, and no reductions whose result depends on thread order. Weights are stored losslessly (for example hex floats), and the C++ outputs are checked bit for bit against the Python reference on the baseline build. With the model off, the results must be unchanged bit for bit.</td></tr>
+<tr><td>Vendored dependencies, no network</td><td><code>3rdparty/</code></td><td>No ONNX Runtime or LibTorch in the exe. A small MLP is a few lines of Eigen; its weights are a JSON file read with the vendored nlohmann json.</td></tr>
+<tr><td>Clean Architecture layers</td><td><code>docs/ARCHITECTURE.md</code></td><td>The network's maths lives in <code>lo_domain</code> (Eigen only), loading the weights in <code>lo_infrastructure</code>, and the choice of model behind a port. Python training never enters the build.</td></tr>
+<tr><td>Little independent data</td><td><code>raw data/</code>: 44, 46 (+ <code>A</code>, <code>static-rot</code>)</td><td>Hundreds to a few thousand windows, and neighbouring windows are near-duplicates. Big models will memorise rather than generalise. Validate across recordings or time blocks, never on randomly drawn windows.</td></tr>
+<tr><td>No ground truth</td><td>caves; 44 has only the Haus 47 plan</td><td>Labels must be self-supervised: what later stages (loop closure, consistency) corrected, and how far held-out points lie from the map.</td></tr>
+<tr><td>Domain shift to caves</td><td><code>cave-recording-task</code> (planned)</td><td>Nothing learned on 44/46 ships as default before it has been checked on a cave recording.</td></tr>
+<tr><td>Two supported sensors</td><td>Unitree L2, Livox Mid-360S (one at a time)</td><td>IMU noise, intensity scale (L2 intensity vs Livox reflectivity) and point noise differ, so models and feature normalisation are per sensor. Before training on 44 and 46, check whether they were recorded with the L2 unit whose gyro is faulty. If so, the IMU features describe that fault, not the sensor model.</td></tr>
+<tr><td><code>tools/</code> stay pure Python</td><td><code>CLAUDE.md</code> ("unless a change decides otherwise")</td><td>Training needs scikit-learn, LightGBM, Optuna and PyTorch. The ML scripts go into their own folder (for example <code>tools/ml/</code> with a <code>requirements.txt</code>), and the Phase-1 change records that departure explicitly.</td></tr>
+</table></div>
+
+<div class="good"><b>Acceptance rule for every learned component</b>
+A model ships (still off by default) only if it beats its hand-written competitor (named in each phase) by more than the s0/s1/s2 spread,
+on a recording it was not trained on, without widening that spread. Otherwise the hand-written rule ships, or nothing does. A model that
+doesn't pass after its phase is removed, not left switched off.</div>
+
+<h2 id="roadmap">2. Direction (question 1)</h2>
+<p>The learning runs as long as development does, so there is no deadline for a first model. What matters now is that the data the project produces anyway
+(new scans, test runs, experiments) is usable for training later. The work splits into two tracks:</p>
+<ul>
+<li><b>track A</b> starts now and needs no model and no new packages;</li>
+<li><b>track B</b> holds the model phases, each started only when its data exists.</li>
+</ul>
+
+<div class="good"><b>The recordings are the lasting asset</b>
+Run outputs can be regenerated. Rerunning a recording with the current build takes 1.5–20 min and gives telemetry that matches the current code,
+while telemetry from an old build describes numerics that no longer exist. So keep every recording, its original files and its card forever,
+with a backup copy. Old runs keep only their small files, as history. Regenerating is cheap for one feature table per recording, but not for
+label or variant runs: several recordings × variants × retrains is hours to days of runs, so those are planned as batches. Regenerating also
+needs to know how a run was made, which A1 records. <span class="inf">(inference)</span></div>
+
+<h3 id="track-a">Track A — now: make every scan and run count</h3>
+<div class="phase">
+<h3>A1 — Provenance <span class="tag">small code change</span></h3>
+<dl>
+<dt>Today</dt><dd>A result records <code>software_version</code> (<code>0.1.0</code>, unchanged through many baseline refreshes), a settings-schema
+version and <code>build_date</code> (<code>__DATE__</code>, to the day). It cannot say which code made it, and it cannot say which recording it came from: only the output and preview folders are recorded.</dd>
+<dt>Do</dt><dd>Add four things to the results JSON and the parameter TOML:
+<ul>
+<li><b>the code:</b> the git commit, a "modified" flag, and a short hash of the diff when the tree is modified (experiments often run from modified trees or scratch worktrees);</li>
+<li><b>the build:</b> build type, floating-point mode (<code>/fp:precise</code> or <code>/fp:fast</code>) and <code>HD_CPU_OPTIMIZATION</code>, because the numerics depend on them;</li>
+<li><b>a numerics epoch:</b> a constant raised in the same commit that resets the golden manifests, so that each run can be assigned to a generation of the numerics, and later a model to the data it was trained on;</li>
+<li><b>the recording:</b> the id from its card (A3), or a hash of the input files' names and sizes, so that runs and cards can be joined.</li>
+</ul>
+Mechanics:
+<ul>
+<li>The stamp is made at every build, not once when CMake configures, or it goes stale.</li>
+<li><code>compare_baseline.py</code> normalises the commit keys, as it does <code>build_date</code>.</li>
+<li>The golden TOML test files override them the way they set <code>build_date = "GOLDEN"</code>.</li>
+<li>A loaded TOML's values are replaced by the running build's, as <code>build_date</code> is today.</li>
+</ul></dd>
+</dl>
+</div>
+
+<div class="phase">
+<h3>A2 — Window telemetry in the results JSON <span class="tag">one OpenSpec change, numbers unchanged</span></h3>
+<dl>
+<dt>Do</dt><dd>A <code>window_telemetry</code> block next to <code>gyro_bias_per_window</code>: per window, the features of <a href="#state">section 4</a>
+and the odometry's start and end pose <i>before</i> loop closure and consistency. With these poses, the Phase-3 label (how much the window
+was corrected later) can be computed from the results JSON alone, without a snapshot reader. It stays out of the log and out of separate
+files, in keeping with "logging is console only". The odometry snapshot also holds these poses, but it is written only with
+<code>save_odometry_snapshot = true</code>, it is bound to the settings, and its format is binary. The JSON block is the portable record.</dd>
+<dt>Cost</dt><dd>The information matrix behind the info ratio is computed today only in gated mode or with diagnostics on, so it would be
+computed in every run; measure the time. If the block is on in the shipped settings, the results JSON changes once, and the baseline
+manifests are reset in their own commit, with the numbers unchanged.</dd>
+</dl>
+</div>
+
+<div class="phase">
+<h3>A3 — Recording cards and fixed roles <span class="tag">no code</span></h3>
+<dl>
+<dt>Do</dt><dd>A <code>recording.json</code> in each recording folder (dMapper ignores files that are neither LAZ/LAS nor CSV). It holds:
+<ul>
+<li>sensor, unit, and known faults (for example the L2 with the faulty gyro);</li>
+<li>environment (building, cave, outdoors), route length, and how the sensor was held;</li>
+<li>length of the static start, IMU synchronisation state, and conditions (dust, water, wet rock);</li>
+<li>references (plan, tape or disto measurements);</li>
+<li>a recording id; hashes of its files and where its backup copy lives;</li>
+<li>its timestamp history: whether the IMU was restamped, with which tool and offset, and where the original file is kept;</li>
+<li>firmware and calibration version of the unit;</li>
+<li>a role: train, validation or test.</li>
+</ul>
+These facts are lost if they are not written down when the recording arrives. The role is decided then too, before any result has been looked at.
+<b>One cave cannot be both:</b> the cave retune needs the first cave recording. That recording is therefore <i>validation</i>, split into time
+blocks, for the few settings Phase 2 tunes. The test role starts with the second recording of a new kind, and that recording is never tuned on.</dd>
+<dt>Why</dt><dd>Card fields become features (sensor, environment) and filters (faulty unit). A test role fixed in advance is the only protection against
+tuning on the test data without noticing.</dd>
+</dl>
+</div>
+
+<div class="phase">
+<h3>A4 — Recording protocol for new scans <span class="tag">no code</span></h3>
+<dl>
+<dt>Do</dt><dd>For each new scan, at little extra effort:
+<ul>
+<li>a static start of 30–50 s;</li>
+<li>at least one closed loop and deliberate revisits, since loop closure gives labels only where loops exist;</li>
+<li>a few hand-measured distances or angles;</li>
+<li>notes on the conditions;</li>
+<li>now and then a deliberately hard stretch: a narrow passage, stairs, a chamber larger than the L2's 15 m range on dark rock.</li>
+</ul>
+Variety beats repetition: a new place teaches more than the same corridor twice. Most of this is already in the planned cave-recording task.</dd>
+</dl>
+</div>
+
+<div class="phase">
+<h3>A5 — Run archive <span class="tag">one script</span></h3>
+<dl>
+<dt>Do</dt><dd>Before an experiment folder is deleted (test outputs are cleaned up regularly), copy its small files (parameter TOML, results JSON, map-quality output)
+to <code>dLidar/run_archive/&lt;recording&gt;/&lt;commit&gt;_&lt;label&gt;/</code>. The point clouds go, the record stays.</dd>
+<dt>Why</dt><dd>Every experiment becomes a (code, settings, quality) row: the warm start for settings tuning, and a record of what was tried and why it failed.</dd>
+</dl>
+</div>
+
+<div class="phase">
+<h3>A6 — A general objective <span class="tag">already planned</span></h3>
+<dl>
+<dt>Do</dt><dd>The planned map-quality report: revisits found automatically, doubled walls, surface thickness, and optional hand measurements, on any recording.</dd>
+<dt>Why</dt><dd>Every learned component needs an objective that works on any recording, and <code>map_quality.py</code> is specific to recording 44
+(the façade bands, its fixed revisit pairs, the Haus 47 plan). The objective matters more than the model. The ML track adds a reason for a feature that is already planned; it is not a new task.</dd>
+</dl>
+</div>
+
+<div class="phase">
+<h3>A7 — Learning on the existing data <span class="tag">continuous</span></h3>
+<dl>
+<dt>Do</dt><dd>Work through the Phase-0 concepts. Then explore the existing data with numpy and matplotlib, which are installed: parse
+<code>44_diag.log</code> (690 windows) and plot result − guess, iterations and info ratio along the route; check what moves together and what doesn't. Write one journal row per session.
+Learning to look at data comes before learning to fit it.</dd>
+</dl>
+</div>
+
+<div class="warn"><b>Not now</b>
+No model hooks or ports in the C++ code until a model exists to fill them (no dead code). No model files, no ML packages, no tuning runs.
+A1–A6 are the only code and process changes, and A2 is the only one that touches the odometry's files.</div>
+
+<h3 id="later">Track B — later: the model phases, unlocked by data</h3>
+<div class="table-wrap"><table>
+<tr><th>Phase</th><th>Starts when</th><th>Competitor to beat</th></tr>
+<tr><td>2 · Settings tuning (Bayesian optimization)</td><td>the cave retune (change I): at least one cave recording (validation, split into time blocks), A1, A5 and A6 in place</td><td>the current settings</td></tr>
+<tr><td>3 · Window error predictor</td><td>at least 3 independent recordings, at least one a cave, each with loops that reach most of its windows (the label exists only where loops do); a test recording assigned on its card. The telemetry is regenerated with one build.</td><td>the info ratio alone</td></tr>
+<tr><td>4 · Point weight</td><td>the incidence-angle weight has been tried as a classical change; hold-out runs of at least 2 recordings including a cave</td><td>the incidence-angle rule</td></tr>
+<tr><td>5 · Window policy</td><td>Phase 3 shows a signal on a held-out recording</td><td>the degeneracy projection</td></tr>
+<tr><td>6 · Retraining cycle</td><td>the first model is shipped</td><td>no model</td></tr>
+</table></div>
+<p class="meta">The incidence-angle weight in Phase 4 needs no machine learning. It could come at any time as an ordinary precision change,
+since grazing points account for about a fifth of 44's heading drift. If it ships, it becomes the bar a learned weight must clear.</p>
+
+<ol class="flow">
+  <li><b>Recordings + cards</b><span>44 and 46 now; each new scan with its card and its role (A3, A4)</span></li>
+  <li><b>dMapper run</b><span>telemetry and odometry poses in the results JSON (A2), stamped with the commit (A1)</span></li>
+  <li><b>Dataset</b><span>regenerated from the recordings with the current build; labels from later corrections and hold-out residuals</span></li>
+  <li><b>Offline training in Python</b><span>split by recording; the test recordings fixed by their cards</span></li>
+  <li><b>Model file</b><span>weights + normalisation + hash + the numerics identifier</span></li>
+  <li><b>dMapper inference</b><span>Eigen, deterministic, clamped outputs, fallback outside the training range; off by default</span></li>
+  <li class="back"><b>Gate, then back to step 3</b><span>off: golden baseline; on: the general objective (A6) beyond the s0/s1/s2 spread. Any change to the numerics regenerates the dataset and retrains.</span></li>
+</ol>
+
+<h3>Phase details (for when each phase starts)</h3>
+
+<div class="phase">
+<h3>Phase 0 — Foundations <span class="tag">learning only</span></h3>
+<dl>
+<dt>Learn</dt><dd>Linear and logistic regression, gradient descent, a 2-layer MLP and backpropagation (derive it by hand, then check it
+against a numerical gradient, the same central-difference trick <code>log_weak_axis_diagnostics</code> uses for the NDT stiffness);
+overfitting, regularisation (weight decay, early stopping), train/validation/test splits and <b>leakage</b>; gradient-boosted trees as a strong
+baseline on tabular data.</dd>
+<dt>Build</dt><dd>Nothing in dMapper. Train toy models on the synthetic loop recording's outputs (<code>tests/synthetic_recording</code>), where the
+true trajectory is known, to practise the plumbing.</dd>
+<dt>Tools</dt><dd>numpy, scipy, laspy are installed. Missing, to be installed when the phase needs them:
+<code>python -m pip install --user scikit-learn lightgbm optuna</code> and CPU PyTorch
+<code>python -m pip install --user torch --index-url https://download.pytorch.org/whl/cpu</code>.</dd>
+<dt>Done when</dt><dd>You can explain why a model with 0.99 validation R² on randomly drawn windows can still be useless (neighbouring windows leak into each other).</dd>
+</dl>
+</div>
+
+<div class="phase">
+<h3>Phase 1 — Telemetry dataset <span class="tag">started now as A2; the Python side later</span></h3>
+<dl>
+<dt>Learn</dt><dd>Feature engineering, normalisation, the difference between causal features (known when the window is optimized) and
+non-causal ones (known only later).</dd>
+<dt>Build</dt><dd>The C++ side is A2: the <code>window_telemetry</code> block in the results JSON, with the features of
+<a href="#state">section 4</a> and the odometry's own window poses. A setting that switches it goes into <code>TomlIO::POINTERS</code> and
+<code>CATEGORIES</code>, and the golden TOML files are regenerated in their own commit. Apart from the new block, the results must stay bit-identical.
+The Python side comes later, when Phase 3 starts: a script that joins the features with the labels. One label is the per-window
+correction between the odometry poses and the final trajectory. The other is the held-out planar thickness near each window. The script reports how far the two labels agree.</dd>
+<dt>Done when</dt><dd>A table of ~690 rows for 44 (plus 46, s0/s1/s2) exists, and plots of correction against info ratio and turn rate
+show, or fail to show, the expected relation.</dd>
+</dl>
+</div>
+
+<div class="phase">
+<h3>Phase 2 — Black-box tuning baseline <span class="tag">no neural network</span></h3>
+<dl>
+<dt>Learn</dt><dd>Bayesian optimization (a Gaussian-process or TPE surrogate plus an acquisition function), CMA-ES, multi-objective
+trade-offs, the noise of the objective (s0/s1/s2 spread).</dd>
+<dt>Build</dt><dd>An Optuna driver that writes a TOML variant, runs dMapper CLI, and scores the result with <code>map_quality.py</code> and
+<code>holdout_sharpness.py</code>. Start with 3–6 global settings, chosen from those where earlier experiments have already shown an effect.
+Search on <code>44_short</code> (~1.5 min per trial, 60 trials ≈ 1.5 h of runs), confirm the top 5 on full 44 s0/s1/s2 (~20 min each, ≈ 5 h),
+and then on 46. These times leave out scoring and any hold-out re-runs. <code>map_quality.py</code> is defined on full 44, so first check which of its
+metrics mean anything on <code>44_short</code>; a setting that is best on the short cut may not be best on the whole recording. Feed the past
+hand-tuning results (<code>openspec/changes/archive</code>) in as known trials, but only those made with matching code.</dd>
+<dt>Done when</dt><dd>Either a settings change that clears the noise floor on 44, 46 <i>and</i> the cave's validation blocks, or the finding that the current settings are already near a local optimum.
+Both are useful results. <span class="inf">(inference)</span> The second is likely for settings already tuned by hand on 44, which is exactly why this baseline matters.</dd>
+</dl>
+</div>
+
+<div class="phase">
+<h3>Phase 3 — First learned model: per-window error predictor <span class="tag">diagnostic, changes no map</span></h3>
+<dl>
+<dt>Learn</dt><dd>Regression with uncertainty (predicting a log-sigma, Gaussian negative log-likelihood), calibration plots,
+gradient-boosted trees against a small MLP, feature importance.</dd>
+<dt>Build</dt><dd>Predict from the Phase-1 features how much each window's relative motion was corrected by loop closure and consistency.
+Use it first only to flag suspect windows in a report. That fits the planned <code>map-quality-report</code>, which needs to
+answer "where is my map weak" without ground truth.
+<br><b>What the label really measures.</b> The pose graph and consistency spread accumulated drift over many windows by their weights. A
+window's correction is therefore a smoothed share of drift, not that window's own error, and a feature like "time since the last loop" may
+predict it better than any measure of a bad window. Windows with no loop get a correction near zero. That means "unobserved", not "good",
+so treat them as censored and leave them out of the training. Consistency uses the same NDT map and points, so it is not independent
+evidence. The label also changes whenever the loop-closure settings change. This is why the held-out thickness label from Phase 1 is kept alongside it.</dd>
+<dt>Done when</dt><dd>On the test recording named on its card (a recording the model never saw, and each recording in turn left out), the model ranks windows better than the best single
+hand feature (for example the info ratio alone). If it doesn't, the features are wrong or the label is too noisy; fix that before Phase 4.</dd>
+</dl>
+</div>
+
+<div class="phase">
+<h3>Phase 4 — Learned point weighting <span class="tag">changes the map, off by default</span></h3>
+<dl>
+<dt>Learn</dt><dd>Point-cloud features (eigenvalue shape features, incidence angle), heteroscedastic regression, robust losses,
+point-cloud networks (PointNet, KPConv) and why they are not the first choice here.</dd>
+<dt>Build</dt><dd>A per-point MLP that predicts the expected distance σ of a point from the true surface. dMapper multiplies its NDT term
+by a weight derived from σ (for example 1/(1 + σ²/σ₀²), clamped). Label: the distance of each <b>held-out</b> point
+(<code>holdout_block_s</code>) to a plane fitted to the final map's points around it. This is a new script; <code>holdout_sharpness.py</code>
+measures surface thickness, not a per-point distance. Held-out points are never fitted, but the label is still not clean:
+<ul>
+<li>The final map was built by the current odometry, so the distance measures the trajectory's smear as much as the point's quality.</li>
+<li>Down-weighting points far from the map pulls the map toward its majority, which can reinforce existing errors and penalise real but poorly mapped surfaces.</li>
+<li>Hold-out mode leaves half the points out of the odometry, so the run that makes the labels is not the run that will use the model.</li>
+<li>Incidence angle and distance to the matched cell depend on the current pose, so they change in every LM iteration and inherit the wrong cell normals (section 4).</li>
+</ul>
+Baseline to beat first: a hand-written weight on the incidence angle. Earlier experiments found grazing points cause about a fifth of the
+heading drift on 44, so the baseline already has a known target.</dd>
+<dt>Done when</dt><dd>Trained on 44 and tested on 46, and the reverse (never trained and judged on 44 s0/s1/s2 alone, which are the same recording):
+<code>holdout_sharpness.py</code> and <code>map_quality.py</code> improve beyond the s0/s1/s2 spread, and the learned weight beats the
+incidence-angle rule. If only the rule helps, ship the rule.</dd>
+</dl>
+</div>
+
+<div class="phase">
+<h3>Phase 5 — Per-window parameter policy <span class="tag">changes the map, off by default</span></h3>
+<dl>
+<dt>Learn</dt><dd>Contextual bandits, offline policy evaluation and its pitfalls (confounding, distribution shift), constrained outputs.</dd>
+<dt>Build</dt><dd>A small model maps a window's features to a few bounded scale factors on sigmas and weights that are already per-window in
+the code. Its inputs must be known <i>before</i> the window is optimized: IMU values of the window itself, and the geometric and optimizer
+values of the <i>previous</i> window. The existing gated rule works the same way through <code>carry.previous_window_degenerate</code>.
+The hand-written competitor is the degeneracy-aware NDT projection (<code>degenerate_projection_ratio</code> 0.1 / <code>_full</code> 0.2),
+which is active in <code>settings/l2-vertical.toml</code>. The rule that raises a degenerate window's position sigmas runs only in the gated
+mode, and <code>imu_always_on</code> switches that mode off (<code>run_odometry.cpp</code>, <code>acc_gated</code>). Possible labels: repeat
+runs with a few global variants. For each window, the variant whose local quality was best (hold-out thickness near the window, size of the
+later correction) is the target. <span class="inf">(inference)</span> These labels are confounded, because a window's result depends on
+every window before it. Treat them as noisy and confirm with full runs.</dd>
+<dt>Done when</dt><dd>It beats both the Phase-2 settings and the hand-written degeneracy rule on two recordings. It must also have been tried on a cave recording before it becomes a default.</dd>
+</dl>
+</div>
+
+<div class="phase">
+<h3>Phase 6 — Keeping the model current (idea 4) <span class="tag">process</span></h3>
+<dl>
+<dt>Learn</dt><dd>Dataset and model versioning, distribution-shift detection, why "online learning" during a mapping run conflicts with reproducibility.</dd>
+<dt>Build</dt><dd>A retraining script tied to the baseline procedure. Whenever a change sets new golden baselines, regenerate the dataset with
+the new build, retrain, and compare three versions on the gates: no model, the old model, and the retrained model. Record the model hash, the
+dataset hash and a numerics identifier in the model file and in the results JSON. The numerics identifier is the hash of the golden
+manifest (<code>tools/baseline/44.manifest.json</code>) the model was trained against. The dMapper version is not enough: it stayed 0.1.0 through many baseline refreshes.</dd>
+<dt>Done when</dt><dd>Retraining is one command, and a model trained against a different numerics identifier is refused, or at least warned about.</dd>
+</dl>
+</div>
+
+<h3>Working with Claude through the phases</h3>
+<ul>
+<li><b>Learn on this code base, not on toy data alone.</b> Ask for the concept and then for where it appears in dMapper. The NDT cost is
+a negative log-likelihood, the LM iterations are second-order optimization, and the gyro-bias prior is Bayesian updating. Many ML ideas
+are already in the optimizer under other names.</li>
+<li><b>One OpenSpec change per phase</b> that touches C++ (<code>/opsx:propose</code>), with the gates in its tasks, the same as for any other change.</li>
+<li><b>Effort level:</b> high for the design and for interpreting results (Phases 3–5), medium for the exporter, the training scripts and the run batches.</li>
+<li><b>Long batches</b> (Optuna trials, full 44 runs) run as one background script that reports only its final tables, the same as the current run batches.</li>
+<li><b>Review:</b> each conclusion ("the model helps", "feature X matters") is checked by a review agent against the numbers before it goes into the journal.</li>
+<li><b>This page is the journal.</b> At the end of each session, add a row to <a href="#journal">section 8</a>: what was tried, the numbers, what was decided.</li>
+</ul>
+
+<h2 id="architectures">3. Which model for which job (question 2)</h2>
+<p>The data size decides most of this. With roughly a thousand windows and strong correlation between neighbours, a model with a
+million parameters will memorise. Tens of thousands of points per window do give enough rows for small per-point models.</p>
+
+<div class="table-wrap"><table>
+<tr><th>Task</th><th>Recommended</th><th>Why</th><th>Not now, and why</th></tr>
+<tr><td>Global TOML tuning</td><td>Bayesian optimization (TPE / GP), CMA-ES</td><td>3–10 continuous settings, an expensive and noisy objective, no gradients. These methods are built for that.</td><td>Neural networks: one data point costs a full run.</td></tr>
+<tr><td>Per-window error / uncertainty</td><td>Gradient-boosted trees, then a 2-layer MLP (~30 → 32 → 32 → 2: mean and log-σ)</td><td>Tabular, few rows; trees are hard to beat there and show feature importance. The MLP is easier to embed in C++.</td><td>LSTM/Transformer: too little data. Past windows enter as lagged features instead (section 4).</td></tr>
+<tr><td>Per-window parameter policy</td><td>The same small MLP, outputs passed through a bounded squashing function (for example 0.5–2× a sigma)</td><td>Bounded outputs keep a wrong prediction inside what the optimizer has always tolerated.</td><td>Reinforcement learning (PPO and similar). With only two recordings a policy would memorise them, and there is no ground truth for a reward. The environment also has state: windows chain through the map, the bias and the velocity. Run cost adds to this: a thousand 1.5-min episodes is about 25 h, possible but slow. A contextual bandit is the most that fits.</td></tr>
+<tr><td>Temporal context</td><td>Lagged features of the last 2–3 windows; a 1-D convolution or GRU over ~10 windows only if lags demonstrably fail</td><td>A GRU learns the same thing from more data. <span class="inf">(inference)</span></td><td>Transformers: data-hungry; nothing here needs long-range attention.</td></tr>
+<tr><td>Point quality / noise</td><td>Hand-made per-point features → MLP 10 → 32 → 16 → 1 (~900 weights)</td><td>Millions of training rows, cheap enough in Eigen, deterministic, interpretable.</td><td>PointNet / KPConv / denoising networks: need GPU, labelled data and a large runtime. They are worth revisiting only if the hand features plateau.</td></tr>
+<tr><td>Moving objects (people in buildings)</td><td>Nothing learned yet: the hold-out residual flags them</td><td>Caves are almost static.</td><td>4D moving-object segmentation networks: wrong target environment.</td></tr>
+<tr><td>Odometry itself</td><td>Keep the geometric optimizer</td><td>It is precise, explainable and already validated.</td><td>End-to-end learned LiDAR odometry (LO-Net and successors) is less precise than geometric methods on unseen environments, and caves are unseen. <span class="inf">(inference from the literature, not measured here)</span></td></tr>
+</table></div>
+
+<div class="warn"><b>A classical adaptive method is the first competitor</b>
+Not every adaptive parameter needs learning. KISS-ICP sets its correspondence threshold per scan from the observed deviation of the motion
+model, with no training at all. dMapper already estimates its gyro bias and velocity per window as Bayesian states. When a learned
+policy is proposed, write the hand-made or statistical version next to it and compare the two on the gates.</div>
+
+<h2 id="state">4. State representation: the input vectors (question 3)</h2>
+<h3>Per-window feature vector</h3>
+<p>Some of these values are computed inside <code>optimize_windows</code> and printed by <code>log_window_diagnostics</code>
+(<code>src/application/run_odometry.cpp</code>). Others are new. The column "known" matters for any model used <i>inside</i> the odometry
+(Phase 5): values known only <i>after</i> a window's optimization can steer the <i>next</i> window, never the window itself. For the
+diagnostic model of Phase 3 every column may be used.</p>
+<div class="table-wrap"><table>
+<tr><th>Group</th><th>Features</th><th>Known</th><th>Source today</th></tr>
+<tr><td>Motion (IMU)</td><td>window duration; mean and max angular rate; total turn angle; acceleration std; rest flag; turn-window flag</td><td>before</td><td><code>Window::imu_angles</code>, <code>imu_acc</code> (raw, in g, body frame), <code>is_turn_window</code></td></tr>
+<tr><td>IMU states</td><td>gyro-bias mean (3) and σ</td><td>prior before, estimate after</td><td><code>Window::gyro_bias</code>; written to the results JSON as <code>gyro_bias_per_window</code>, not to the log</td></tr>
+<tr><td></td><td>velocity start/end magnitude; velocity end σ</td><td>after</td><td><code>Window::velocity</code>; diagnostics line 2, only with <code>imu_always_on</code></td></tr>
+<tr><td></td><td>acceleration-offset σ</td><td>after</td><td>new</td></tr>
+<tr><td>Geometry</td><td>info ratio (smallest/largest eigenvalue of Σ n·nᵀ); vertical component of the weak direction</td><td>after</td><td>diagnostics. The matrix behind it (<code>lidar_translation_information</code>) is computed only in gated mode or with diagnostics on, so the exporter must compute it in every run.</td></tr>
+<tr><td></td><td>the three eigenvalues normalised by their sum; point count; range percentiles (10/50/90); share of points beyond 70° incidence; share of new map cells</td><td>before (points) / after (normals)</td><td>new</td></tr>
+<tr><td>Optimizer</td><td>iterations; final delta; |result − guess|; |result − previous-velocity prediction|</td><td>after</td><td>diagnostics</td></tr>
+<tr><td></td><td>velocity-prior χ²</td><td>after</td><td><code>log_weak_axis_diagnostics</code>, but only for windows with info ratio &lt; 0.45; otherwise new</td></tr>
+<tr><td></td><td>final NDT cost per point; degenerate projection active</td><td>after</td><td>new</td></tr>
+<tr><td>Context</td><td>the same features for the previous 1–3 windows (lagged)</td><td>before</td><td>joined in Python</td></tr>
+</table></div>
+
+<p>Rules for the vector:</p>
+<ul>
+<li><b>No absolute position, heading or time.</b> They identify the recording, and the model would memorise where 44 is hard instead of learning <i>why</i>. Directions are expressed relative to gravity (vertical component) or as eigenvalue ratios, which don't depend on the heading.</li>
+<li><b>Scale and normalise:</b> logarithms of counts, rates and σs, then z-scores whose mean and std come from the training set and are stored in the model file. C++ must apply the same normalisation.</li>
+<li><b>Causal for anything used inside the odometry:</b> only values known before or during the window's optimization. Non-causal values (later correction, final map) may be labels, never inputs.</li>
+<li><b>Out-of-range check:</b> store the training range per feature. Outside it, the model returns the neutral output (scale 1) and the run logs a warning. <span class="inf">(inference)</span> A cave will produce values that 44 never showed.</li>
+</ul>
+
+<h3>Per-point feature vector</h3>
+<div class="table-wrap"><table>
+<tr><th>Feature</th><th>Why</th><th>Cost</th></tr>
+<tr><td>range; log range</td><td>noise grows with range; mixed pixels at depth edges</td><td>free</td></tr>
+<tr><td>incidence angle to the local normal</td><td>grazing points smear along the surface; measured effect on 44's drift</td><td>needs a normal</td></tr>
+<tr><td>intensity, normalised by range</td><td>dust, water, dark or wet rock, retro-reflectors</td><td>free (<code>Point3Di::intensity</code>)</td></tr>
+<tr><td>beam elevation; time within the scan</td><td>per-beam calibration error; motion distortion at the scan's ends</td><td>free</td></tr>
+<tr><td>local shape: linearity, planarity, scattering (eigenvalue ratios) at 2 radii</td><td>edges and rough rock are noisier than walls</td><td>neighbour search, or the NDT cell's covariance</td></tr>
+<tr><td>Mahalanobis distance to the matched NDT cell</td><td>the point's current disagreement with the map</td><td>already computed in the cost</td></tr>
+</table></div>
+<div class="warn"><b>Known trap in the cell statistics</b>
+With <code>use_exact_ndt_bucket_statistics = false</code> (the default), a cell's mean is its first point. Its normal is fixed when the
+third point arrives, from those three points and the initial isotropic covariance. On a synthetic corridor 60 % of the normals are more than
+30° off when the points are inserted in grid order, and 12 % in random order. Real scan order is neither
+(<a href="degeneracy-information.html">Degeneracy information</a>).
+Shape and incidence features taken from the cells inherit that error. Compute them from a neighbour search for training, and measure how much worse the cell-based version is before using it inside the odometry.</div>
+
+<h3>"Adaptive dropping in narrow passages", reconsidered</h3>
+<p>In a narrow passage the near walls supply most points, and the info ratio is already low. Dropping points there removes information
+exactly where it is scarce. <span class="inf">(inference)</span> The goals behind the idea — not letting one near wall dominate, and not
+trusting points while the gyro bias is uncertain — are better served by <b>reweighting</b>: a per-point weight (Phase 4), and per-window sigma
+scaling driven by the gyro-bias σ (Phase 5). Gyro drift is a rotation error. Fewer points don't fix it, but a better IMU prior or more geometric information does.</p>
+
+<h2 id="data">5. Bootstrapping the training data (question 4)</h2>
+<div class="table-wrap"><table>
+<tr><th>Source</th><th>What it gives</th><th>Caveat</th></tr>
+<tr><td>Existing <code>*.log</code> runs with <code>log_window_diagnostics</code> (for example <code>raw data/44_diag.log</code>, 690 windows)</td><td>Phase-1 features at once, by parsing the log lines with a regex</td><td>The logs were made with older builds; their numbers match only the code of that time.</td></tr>
+<tr><td>Odometry window poses (A2, or <code>odometry_snapshot.bin</code>) + final trajectory</td><td>per-window label: how much loop closure and consistency changed the window's relative motion</td><td>The pseudo-label inherits loop-closure errors, and windows without a loop are only weakly corrected. Use it to rank windows, not as an absolute truth.</td></tr>
+<tr><td>Hold-out mode (<code>holdout_block_s</code>)</td><td>per-point label: residual of points that were never fitted</td><td>Needs runs in hold-out mode; the held-out points are only half the data.</td></tr>
+<tr><td>Existing setting sweeps (<code>44_g4_*</code>, <code>46_base_*</code>, archived OpenSpec experiments)</td><td>(settings, metric) pairs: warm start for Phase 2; counterfactuals for Phase 5</td><td>Different code versions. Use only runs whose build matches, or re-run them.</td></tr>
+<tr><td>s0/s1/s2 variants</td><td>the noise floor of every metric, which every improvement must exceed</td><td>They are not independent recordings and count as one for validation.</td></tr>
+<tr><td>Haus 47 plan (<code>plan_fit.py</code>, <code>plan_section.py</code>)</td><td>absolute geometry check for 44</td><td>One building; useful for testing, too narrow for training.</td></tr>
+<tr><td>Synthetic loop recording (<code>tests/synthetic_recording</code>)</td><td>exact ground truth, unlimited</td><td>Simulation-to-reality gap. Use it to test the plumbing and for unit tests, not as training data for shipped models.</td></tr>
+<tr><td>Planned cave scan with hand measurements</td><td>the only data that matches the target</td><td>Does not exist yet. Keep at least part of it as a test set that is never trained on.</td></tr>
+</table></div>
+
+<p><b>Splitting.</b> Split by recording first (train on 44, test on 46, then the reverse). Within a recording, split into contiguous time
+blocks with a gap between them. Never split randomly by window or point: neighbours are almost copies, and a random split reports
+accuracy that will not hold on a new recording. Two limits remain. Two similar buildings give only two folds, so every score has a large
+uncertainty; report both folds, not their mean. And a recording that revisits places (44 does) shows the same walls on both sides of a
+time split, so add a spatial split (by floor or by region) where the route allows it.</p>
+<p><b>From manual tuning to automated training.</b> Hand tuning (each archived OpenSpec experiment) gives starting points for Phase 2.
+Phase 2 gives settings and a cost surface. Phases 3–5 add per-window and per-point models on top of the best global settings. They are
+judged by whether they beat the global settings, never against the old defaults.</p>
+
+<h2 id="integration">6. How a model enters dMapper</h2>
+<ul>
+<li><b>Domain:</b> a <code>SmallMlp</code> value type (layer sizes, weights, activation, normalisation) with an <code>evaluate()</code> written as scalar loops in a fixed order, and unit-tested bit for bit against outputs exported from Python.</li>
+<li><b>Ports in the domain:</b> the per-point NDT term lives in <code>lo_domain</code> (<code>scan_to_map.cpp</code>), which cannot see <code>lo_application</code>. A <code>PointWeightModel</code> port therefore belongs in the domain, like <code>Logger</code> in <code>run_reporting.h</code>. Alternatively, weights or a weight function reach the optimizer through <code>ScanToMapOptions</code>. A <code>WindowPolicy</code> used by the window loop may live in the application. Each port has a neutral implementation (weight 1, scale 1), so the optimizer never knows whether a model is behind it.</li>
+<li><b>Infrastructure:</b> a JSON loader (vendored nlohmann json) that checks the model's feature list, sensor and numerics identifier, and refuses a mismatch.</li>
+<li><b>Settings:</b> a model path, empty by default, in a TOML section the odometry snapshot's settings hash covers. The hash must cover the model file's <i>contents</i>, not the path string. Otherwise renaming the file would invalidate snapshots, while changing its weights would not.</li>
+<li><b>Results:</b> the model's hash and numerics identifier in the results JSON and the parameter TOML, like <code>gyro_bias_per_window</code> today.</li>
+<li><b>Cost:</b> <span class="inf">(inference)</span> a 900-weight MLP costs about 1 800–2 000 floating-point operations per point. For 5·10⁷ point evaluations that is about 10¹¹ operations, roughly 10–100 s on one thread. It costs more if the weight is re-evaluated in every LM iteration, because incidence and cell distance change with the pose. Neighbour searches for the features cost more still. To be measured and reported, which is acceptable under "precision before speed".</li>
+</ul>
+
+<h2 id="continuous">7. Continuous learning without losing reproducibility (idea 4)</h2>
+<p>A model that learns <i>during</i> a mapping run would make the same input give different maps, and would break the golden baseline.
+"Continuous" therefore means a retraining cycle tied to the code's versions:</p>
+<ul>
+<li><b>Retrain on every numeric change.</b> A model trained on code with a bug learns to compensate for that bug. After the fix it over-compensates. Whenever new golden baselines are set, the dataset is regenerated and the model retrained. <span class="inf">(inference)</span></li>
+<li><b>Always compare three versions:</b> no model, the previous model, and the retrained model. The no-model path stays the reference forever.</li>
+<li><b>Watch the inputs:</b> log the share of windows or points outside the training range per run. A rising share means the recordings have moved away from the training data, as a cave scan will.</li>
+<li><b>Grow the dataset, not the model:</b> each new recording (cave scans above all) is added to training, except for a fixed test part that is never trained on.</li>
+</ul>
+
+<h2 id="journal">8. Journal</h2>
+<p class="meta">One row per session: what was tried, the numbers, what was decided. Newest last.</p>
+<div class="table-wrap"><table>
+<tr><th>Date</th><th>Phase</th><th>What happened</th><th>Decision / next</th></tr>
+<tr><td>2026-10-27</td><td>—</td><td>Roadmap written. Checked: 44 has 690 windows (<code>44_diag.log</code>); independent real recordings are 44 and 46 (buildings); no cave data yet; numpy/scipy/laspy installed, scikit-learn, LightGBM, Optuna and PyTorch not.</td><td>Next: Phase 0 (foundations), then Phase 1 as an OpenSpec change, after approval. <i>Superseded by the third row below.</i></td></tr>
+<tr><td>2026-10-27</td><td>—</td><td>A review agent checked the roadmap against the code. Corrected: the sources of several window features (the gyro bias is in the results JSON, not the log; χ² is printed only for weak windows; some features are new); which features are known before a window's optimization; Phase 5's real competitor (the degeneracy projection, because the sigma-raising rule is off with <code>imu_always_on</code>); the domain-layer placement of the point-weight port; determinism details; the label caveats (drift smoothing, censored windows, hold-out smear); the leakage caveats; per-sensor models; the version key (golden manifest hash); the inference cost (10–100 s, not "seconds"). Added the acceptance rule.</td><td>—</td></tr>
+<tr><td>2026-10-27</td><td>A</td><td>Plan reviewed with the user's direction: no training now; learning goes on as long as development does, and scans and learning data are produced along the way. Checked: a result records only <code>0.1.0</code> and the build date, not the commit; the results JSON is part of the golden baseline; numpy and matplotlib are installed.</td><td>Section 2 split into track A (now: provenance, window telemetry, recording cards with fixed roles, recording protocol, run archive, general objective, learning on existing data) and track B (model phases, each started by a data milestone). Next: A3 and A7 need no code; A1 and A2 are OpenSpec changes, after the user's go. A review agent then added the recording id, build configuration and numerics epoch to A1; backup, file hashes, restamp history and firmware to the cards; and resolved a contradiction: the first cave is validation for the retune, and the test role starts with the second recording of a kind.</td></tr>
+<tr><td>2026-10-27</td><td>—</td><td>Purpose clarified by the user: this page is a guide for the user's own research and learning. Nothing is scheduled, and none of track A or B starts with it.</td><td>Track A and B are directions to come back to, not tasks.</td></tr>
+</table></div>
+
+<h2 id="sources">Sources</h2>
+<ul class="src">
+<li>C. R. Qi et al., "PointNet: Deep Learning on Point Sets for 3D Classification and Segmentation", CVPR 2017.</li>
+<li>H. Thomas et al., "KPConv: Flexible and Deformable Convolution for Point Clouds", ICCV 2019.</li>
+<li>M.-J. Rakotosaona et al., "PointCleanNet: Learning to Denoise and Remove Outliers from Dense Point Clouds", Computer Graphics Forum 2020.</li>
+<li>R. Heinzler et al., "CNN-based Lidar Point Cloud De-Noising in Adverse Weather", IEEE RA-L 2020.</li>
+<li>B. Mersch et al., "Receding Moving Object Segmentation in 3D LiDAR Data Using Sparse 4D Convolutions", IEEE RA-L 2022.</li>
+<li>M. Brossard, A. Barrau, S. Bonnabel, "AI-IMU Dead-Reckoning", IEEE Transactions on Intelligent Vehicles 2020: a small network that adapts filter noise covariances, the idea behind Phase 5's bounded sigma scaling.</li>
+<li>Q. Li et al., "LO-Net: Deep Real-time Lidar Odometry", CVPR 2019.</li>
+<li>I. Vizzo et al., "KISS-ICP: In Defense of Point-to-Point ICP – Simple, Accurate, and Robust Registration If Done the Right Way", IEEE RA-L 2023: adaptive threshold without learning.</li>
+<li>M. Weinmann et al., "Semantic point cloud interpretation based on optimal neighborhoods, relevant features and efficient classifiers", ISPRS J. Photogrammetry and Remote Sensing 2015: eigenvalue shape features.</li>
+<li>J. Snoek, H. Larochelle, R. P. Adams, "Practical Bayesian Optimization of Machine Learning Algorithms", NeurIPS 2012.</li>
+<li>T. Akiba et al., "Optuna: A Next-generation Hyperparameter Optimization Framework", KDD 2019.</li>
+<li>N. Hansen, "The CMA Evolution Strategy: A Tutorial", arXiv:1604.00772, 2016.</li>
+<li>G. Ke et al., "LightGBM: A Highly Efficient Gradient Boosting Decision Tree", NeurIPS 2017.</li>
+<li>dMapper: <code>CLAUDE.md</code>, <code>docs/ARCHITECTURE.md</code>, <a href="degeneracy-information.html">Degeneracy information</a>, <a href="loop-closure-research.html">Loop closure research</a>, <code>tools/README.md</code>, <code>tools/holdout_sharpness.py</code>, <code>src/application/run_odometry.cpp</code>.</li>
+</ul>
+</main>
+</body>
+</html>
