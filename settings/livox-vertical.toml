@@ -87,8 +87,8 @@ imu_degenerate_information_ratio = 0.3
 imu_degenerate_max_duration_s = 15.0
 imu_degenerate_translation_sigma_m = 3e-4
 imu_acceleration_sigma_mps2 = 0.5
-# 2-3 samples at 200 Hz; a stretch over 2 * span (20 ms) is a gap and loses its terms, so up to two lost samples in a
-# row are kept. A longer span gives fewer terms and less accelerometer information (the floor dominates each term's
+# 2-3 samples at 200 Hz; a stretch over 2 * span (20 ms) is a gap and loses its terms: one lost sample is never a gap,
+# two in a row may be. A longer span gives fewer terms and less accelerometer information (the floor dominates each term's
 # sigma). TODO: count the dropped terms on the first recording
 imu_acceleration_span_s = 0.01
 imu_acceleration_offset_initial_sigma_mps2 = 0.1
