@@ -36,6 +36,7 @@ gyro_bias_initial_sigma_deg_s = 10.0
 gyro_bias_max_deg_s = 20.0
 gyro_bias_rw_deg_s_sqrt_s = 0.005
 handoff_tail_nodes = 6
+handoff_tail_velocity_span_nr_samples = 4
 use_gyro_bias_estimation = true
 
 [imu_translation]
@@ -187,6 +188,7 @@ lidar_odometry_motion_model_x_1_sigma_m = 1e-04
 lidar_odometry_motion_model_y_1_sigma_m = 1e-04
 lidar_odometry_motion_model_z_1_sigma_m = 1e-04
 max_prior_velocity_mps = 5.0
+prior_velocity_span_nr_samples = 4
 rotation_sigma_floor_deg = 0.0035449077
 rotation_sigma_inflation_k = 7.0898154
 rotation_sigma_inflation_k_turn = 0.0
