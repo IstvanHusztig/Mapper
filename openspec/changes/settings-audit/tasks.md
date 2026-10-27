@@ -4,8 +4,8 @@ Start only after `odometry-map-horizon` has shipped or been archived as rejected
 
 ## 1. The audit table
 
-- [ ] 1.1 `settings-audit.md` in this change: one row per `TomlIO::POINTERS` entry with table, class (design decision 1), where it is read (`file:line`), built-in default, `default_settings.toml` and `lidar-vertical.toml` values, the evidence, and the proposal (keep / constant / dead / rename later). Also a section for the hard-coded values that should become settings: the five of the proposal, plus any others found in `src/domain` and `src/application`. Verify: the row count equals the `POINTERS` count; every *constant* or *dead* row names its evidence.
-- [ ] 1.2 Check that `lidar-vertical.toml` sets every key whose built-in default changes in group 4 (today 13), and every key a *dead* proposal touches. Verify: a list in the table, with any missing key named. A missing key blocks group 4 until the user decides.
+- [ ] 1.1 `settings-audit.md` in this change: one row per `TomlIO::POINTERS` entry with table, class (design decision 1), where it is read (`file:line`), built-in default, `default_settings.toml` and `l2-vertical.toml` values, the evidence, and the proposal (keep / constant / dead / rename later). Also a section for the hard-coded values that should become settings: the five of the proposal, plus any others found in `src/domain` and `src/application`. Verify: the row count equals the `POINTERS` count; every *constant* or *dead* row names its evidence.
+- [ ] 1.2 Check that `l2-vertical.toml` sets every key whose built-in default changes in group 4 (today 13), and every key a *dead* proposal touches. Verify: a list in the table, with any missing key named. A missing key blocks group 4 until the user decides.
 - [ ] 1.3 The user decides on every *dead* and *constant* proposal (design decision 6). Verify: each row carries the decision and the date.
 
 ## 2. Hard-coded values become settings
@@ -26,7 +26,7 @@ Start only after `odometry-map-horizon` has shipped or been archived as rejected
 
 ## 5. Unknown keys are reported
 
-- [ ] 5.1 Loading logs one warning per unknown key with its table (design decision 5). Unit test in `tests/toml_config_repository_test.cpp`: a file with `ndt_map_horizon = 15.0` in `[lidar_odometry_control]` loads, keeps the built-in `ndt_map_horizon_m`, and the warning names the key and the table; `lidar-vertical.toml` and the shipped file load without warnings. Verify: Release `ctest`.
+- [ ] 5.1 Loading logs one warning per unknown key with its table (design decision 5). Unit test in `tests/toml_config_repository_test.cpp`: a file with `ndt_map_horizon = 15.0` in `[lidar_odometry_control]` loads, keeps the built-in `ndt_map_horizon_m`, and the warning names the key and the table; `l2-vertical.toml` and the shipped file load without warnings. Verify: Release `ctest`.
 
 ## 6. Dead switches removed
 
@@ -35,6 +35,6 @@ Start only after `odometry-map-horizon` has shipped or been archived as rejected
 
 ## 7. Baselines and wrap-up
 
-- [ ] 7.1 Full 44 with `settings/lidar-vertical.toml`. Verify: `tools/compare_baseline.py` against `tools/baseline/44.manifest.json` reports point clouds and trajectories identical; only the parameters TOML differs.
+- [ ] 7.1 Full 44 with `settings/l2-vertical.toml`. Verify: `tools/compare_baseline.py` against `tools/baseline/44.manifest.json` reports point clouds and trajectories identical; only the parameters TOML differs.
 - [ ] 7.2 New 44 and 44_short manifests in their own commit (parameters TOML only), old baseline folders renamed with a date suffix. Verify: `compare_baseline.py` IDENTICAL against the new manifests.
 - [ ] 7.3 Memory updated; candidates for measured follow-up changes (renames with aliases, `sliding_window_trajectory_length_threshold`, changed defaults such as `imu_always_on`) listed in the table's last section. Verify: the entries exist.

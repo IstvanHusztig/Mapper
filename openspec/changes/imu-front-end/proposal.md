@@ -33,5 +33,5 @@ These are correctness fixes. They are not expected to remove the ≈ 3° gallery
 ## Impact
 
 - `src/domain/scan_to_map.cpp` (bias measurement, prior weight), `src/domain/window_steps.cpp` / `src/application/lidar_odometry.cpp` / `src/application/run_odometry.cpp` (hand-off, window cutting), `src/infrastructure/fusion_orientation_estimator.cpp` (heading reset, gain).
-- `settings/lidar-vertical.toml`, `settings/default_settings.toml`, `src/domain/odometry_config.h` defaults (√π rescale), golden TOML files, unit tests.
+- `settings/l2-vertical.toml`, `settings/default_settings.toml`, `src/domain/odometry_config.h` defaults (√π rescale), golden TOML files, unit tests.
 - New baselines after each accepted numeric fix.

@@ -13,7 +13,7 @@
 
 ## 3. Separate the causes
 
-- [x] 3.1 Make the comparison results myself (Release, `lidar-vertical.toml`, window diagnostics on): an odometry-only result of 44 (loop closure and consistency off, odometry snapshot saved) and s0/s1/s2. Verify: the folders exist and the logs end without errors.
+- [x] 3.1 Make the comparison results myself (Release, `l2-vertical.toml`, window diagnostics on): an odometry-only result of 44 (loop closure and consistency off, odometry snapshot saved) and s0/s1/s2. Verify: the folders exist and the logs end without errors.
 - [x] 3.2 Run the diagnostics on them (a research subagent if the data calls for it) and sort each suspect wall into sensor-side / pose error in one visit / drift between visits / noise. Verify: the subagent's numbers are checked against the CSVs.
 - [ ] 3.3 Have the conclusions reviewed, write them into `findings.md`, show the numbers and images to the user, and ask how to proceed before any verdict or fix. Verify: `findings.md` exists and the user has answered.
 

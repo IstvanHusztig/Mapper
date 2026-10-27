@@ -117,7 +117,7 @@ I2 is adopted only if it also improves the gallery or floor 0, with no criterion
 ## Migration Plan
 
 - Off by default; with both settings off the result is bit-identical (unit test, plus `44_short` and full 44 against the manifests when the code lands).
-- Adoption in `settings/lidar-vertical.toml` (cross-floor on, with information edges) is the user's decision after task 4. It needs new 44 baselines in their own commit, since cross-floor isn't shipped there today.
+- Adoption in `settings/l2-vertical.toml` (cross-floor on, with information edges) is the user's decision after task 4. It needs new 44 baselines in their own commit, since cross-floor isn't shipped there today.
 - Rollback: switch the setting off.
 
 ## Open Questions

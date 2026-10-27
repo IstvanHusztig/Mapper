@@ -10,7 +10,7 @@ When the odometry skips or changes something that the results don't show, it SHA
 Reporting SHALL NOT change the results.
 
 #### Scenario: The map rebuild fires on recording 44
-- **WHEN** recording 44 is processed with `settings/lidar-vertical.toml`
+- **WHEN** recording 44 is processed with `settings/l2-vertical.toml`
 - **THEN** the log contains one map-rebuild line with its window number (window 586 at the time of writing), and the summary line counts one rebuild
 
 #### Scenario: Results unchanged

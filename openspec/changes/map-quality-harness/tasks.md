@@ -15,7 +15,7 @@
 ## 3. Noise floor and config-only experiments
 
 - [x] 3.1 This change's master on s0/s1/s2: full and odometry-only runs, snapshots saved; harness table. Verify: the table is in this task.
-  Done 2026-10-13 (code c9efa06, `raw data/44_nf_s{0,1,2}`, settings lidar-vertical + diagnostics + snapshot, harness with `--floors`):
+  Done 2026-10-13 (code c9efa06, `raw data/44_nf_s{0,1,2}`, settings l2-vertical + diagnostics + snapshot, harness with `--floors`):
 
   | | façade out / back [°] | revisit yaw med / worst [°], offset [m] | jitter p50 / p99 [°] | railing [cm] | stair max [cm] |
   |---|---|---|---|---|---|

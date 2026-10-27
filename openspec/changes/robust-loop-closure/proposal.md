@@ -22,7 +22,7 @@ On recording 44 the round railings of the stairwell are drawn twice on each floo
 - **A robust kernel (Cauchy) on the loop edges of the pose graph,** `loop_closure_kernel_scale`, in two stages: plain least squares first, then the kernel from that solution. It is measured on real data in this change and switched on, or removed if it doesn't help.
 - **A bug fix in the pose-graph solve.** Angle residuals were not wrapped in the right-hand side, so an edge with a relative yaw near ±180° stopped every step after the first. This is bit-identical on the shipped 44.
 - **Two tools:** `tools/spot_check.py` (per-pass offsets around one point) and `tools/stairwell_check.py` (drift between floors on a round stairwell), documented in `tools/README.md`.
-- **Shipping:** `settings/lidar-vertical.toml` switches cross-floor edges on (6 m), with new baselines.
+- **Shipping:** `settings/l2-vertical.toml` switches cross-floor edges on (6 m), with new baselines.
 
 ## Capabilities
 
@@ -37,7 +37,7 @@ On recording 44 the round railings of the stairwell are drawn twice on each floo
 
 ## Impact
 
-- `src/application/loop_closure.{h,cpp}`, `src/domain/odometry_config.h`, `src/infrastructure/toml_io.h` (+ golden TOML files), `settings/lidar-vertical.toml`.
+- `src/application/loop_closure.{h,cpp}`, `src/domain/odometry_config.h`, `src/infrastructure/toml_io.h` (+ golden TOML files), `settings/l2-vertical.toml`.
 - `tests/loop_closure_test.cpp`: pose-graph cases (kernel, cross-floor edges, drop ratio) and the shared-footprint crop.
 - The loop-closure stage's results change with the new settings, so new 44 and 44_short baselines. The odometry is unchanged. Cross-floor registrations (about 100 tries on 44) add time, measured and reported.
 - Docs (EN/HU) on loop closure; `tools/README.md`.

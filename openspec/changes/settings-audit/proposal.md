@@ -6,7 +6,7 @@ dMapper has 130 loadable settings (`TomlIO::POINTERS`), but the shipped `setting
 
 ## What Changes
 
-- **An audit table** (`settings-audit.md` in this change): each of the 130 settings classified as *sensor* (depends on the LiDAR/IMU), *environment* (depends on the site or the walk), *algorithm* (a numerical detail nobody should tune per dataset), *debug* (diagnostics and outputs) or *dead* (only reproduces replaced behaviour, or not read at all), with where it is used and the values in `default_settings.toml` and `lidar-vertical.toml`.
+- **An audit table** (`settings-audit.md` in this change): each of the 130 settings classified as *sensor* (depends on the LiDAR/IMU), *environment* (depends on the site or the walk), *algorithm* (a numerical detail nobody should tune per dataset), *debug* (diagnostics and outputs) or *dead* (only reproduces replaced behaviour, or not read at all), with where it is used and the values in `default_settings.toml` and `l2-vertical.toml`.
 - **Hard-coded values that depend on the environment become settings**, with today's values as defaults, so the results stay the same:
   - the loop-closure registration search grid (`loop_closure.cpp`: coarse radius 0.5 m and 2.5° yaw steps, fine radius 0.2 m, 0.75° yaw steps, 0.1 m / 0.2 m translation steps);
   - the weak-geometry eigenvalue ratio 0.2 in loop closure;
@@ -33,7 +33,7 @@ None.
 ## Impact
 
 - Code: `src/domain/odometry_config.h`, `src/infrastructure/toml_io.h` (`POINTERS`, `CATEGORIES`), `src/application/loop_closure.cpp`, `src/application/run_odometry.cpp`, the files of any setting that becomes a constant or is removed.
-- Settings: `settings/default_settings.toml` (regenerated, complete); the built-in defaults in `odometry_config.h` (13 values), `settings/lidar-vertical.toml` (removed keys only).
+- Settings: `settings/default_settings.toml` (regenerated, complete); the built-in defaults in `odometry_config.h` (13 values), `settings/l2-vertical.toml` (removed keys only).
 - Tests: the golden TOML files regenerated (`LO_UPDATE_GOLDEN=1`, own commit); a new test for the completeness of `default_settings.toml`.
-- Results: bit-identical with the `lidar-vertical.toml` baselines (that file sets every key whose built-in default changes; checked in the tasks). A user TOML that omits one of the 13 keys now gets the GUI's value. The output's parameters TOML gains the new keys and loses removed ones, so the 44 and 44_short manifests are rewritten in their own commit, as after earlier setting changes.
+- Results: bit-identical with the `l2-vertical.toml` baselines (that file sets every key whose built-in default changes; checked in the tasks). A user TOML that omits one of the 13 keys now gets the GUI's value. The output's parameters TOML gains the new keys and loses removed ones, so the 44 and 44_short manifests are rewritten in their own commit, as after earlier setting changes.
 - Docs: the parameter tables (EN/HU) and `CLAUDE.md` where it names settings.

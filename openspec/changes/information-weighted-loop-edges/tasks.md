@@ -41,7 +41,7 @@
 ## 4. Evaluation of I2 (same-floor edges too)
 
 - [x] 4.1 Reprocess the three 44 inputs and `45f` with I2, with the same checks as 3.1–3.2, plus `trajectory_seams.py` of `45f_i2` against shipped. Verify: results table `eval_i2.txt`; the I2 rule of D8 applied and the outcome written into the findings.
-- [x] 4.2 Report I1/I2 against the criteria to the user and ask which to adopt (none, I1, or I2) and whether to switch it on in `settings/lidar-vertical.toml`. Verify: the user's decision is recorded in the findings.
+- [x] 4.2 Report I1/I2 against the criteria to the user and ask which to adopt (none, I1, or I2) and whether to switch it on in `settings/l2-vertical.toml`. Verify: the user's decision is recorded in the findings.
 
 ## 5. Adoption and clean-up (only after the user's decision in 4.2)
 
@@ -54,5 +54,5 @@
   - a grep for the removed names finds nothing in `src/`, `tests/`, `docs/` and `settings/`;
   - the build and `ctest` pass;
   - the golden TOML files are regenerated in their own commit.
-- [x] 5.2 If it is switched on in `settings/lidar-vertical.toml`: run full 44 (about 20 min) and `44_short`; set new baselines in their own commit (manifests, `raw data/44_baseline` and `44_short_baseline`, old ones renamed with a date suffix); update `CLAUDE.md` and the docs (stairwell limitation, the cross-floor parameter description). Verify: `tools/compare_baseline.py` is bit-identical against the new manifests.
+- [x] 5.2 If it is switched on in `settings/l2-vertical.toml`: run full 44 (about 20 min) and `44_short`; set new baselines in their own commit (manifests, `raw data/44_baseline` and `44_short_baseline`, old ones renamed with a date suffix); update `CLAUDE.md` and the docs (stairwell limitation, the cross-floor parameter description). Verify: `tools/compare_baseline.py` is bit-identical against the new manifests.
 - [x] 5.3 Update `robust-loop-closure`'s spec delta and design to the edge model that shipped (point edges and keep-height out, if removed). Verify: `openspec validate robust-loop-closure` and `openspec validate information-weighted-loop-edges` pass.

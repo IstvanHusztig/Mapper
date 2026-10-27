@@ -23,7 +23,7 @@ The scanner is broken, so recording 44 is the only synchronized recording. Every
   - the difference from the baseline (`trajectory_seams.py`);
   - `eval_odometry.py`, whose window yaw difference is meaningful again now that the gyro is synchronized;
   - the residual time offset (`imu_time_offset.py`).
-- **Ship the result** as the new `settings/lidar-vertical.toml` with new baselines, and check the candidate once with the `/fp:fast` build.
+- **Ship the result** as the new `settings/l2-vertical.toml` with new baselines, and check the candidate once with the `/fp:fast` build.
 - **Not in this change:** the research-based improvements. Their redo follows in its own changes: the degeneracy projection re-check, IMU always on (branch `imu-always-on`), the Hessian degeneracy test, and loop-closure gating.
 
 ## Capabilities
@@ -38,6 +38,6 @@ None (settings only).
 
 ## Impact
 
-- `settings/lidar-vertical.toml`, and possibly `settings/default_settings.toml`.
+- `settings/l2-vertical.toml`, and possibly `settings/default_settings.toml`.
 - New baselines (folders and manifests); docs that quote the settings (`docs/index.html`, `docs/hu/index.html`).
 - No code change, so Release only (`CLAUDE.md` rule).

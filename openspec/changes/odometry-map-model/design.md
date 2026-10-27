@@ -59,7 +59,7 @@ The user's decision (2026-10-16): a finer-cell fix (2a), and a second screening 
   - Readings and sanity as phase 1, plus runtime and peak working set per run. Unusable also: route more than 10 % above master's, or more than 5 m off master at the end (the criterion added in phase 1). Decimation stays 0.03 m, so a planar 0.08 m cell holds at most ≈ 7 points (0.10 m ≈ 11) with the legacy first-point mean: a confound for F3, noted.
 - **Gain** of a variant = mean over s0–s2 of (variant − master, same input) of the gallery reading (mean of way out and way back). It counts only if gal−A also passes phase 1's "moves" condition, |ΔA| ≤ 0.25°, A−B and jitter p99 stay within master's range ± 0.1°: a gain must turn the gallery, not offset the start (V6).
 - **Choice:** G* = the best usable gain. Among the usable variants whose gain is within 0.4° of G* (≈ 2 SE of a difference of two 3-input means), the one that changes the fewest grids, then the coarsest. If a finer variant than the chosen one runs away, that is a cliff next to it: the chosen setting must then run on all six cuts without a runaway, else the next coarser candidate is taken. The chosen setting runs on s3–s5 too (all six cuts usable).
-- **Validation** of the chosen setting in `settings/lidar-vertical.toml`. The consistency pass uses the indoor resolution (`consistency.cpp`), loop closure doesn't (its refinement grids are fixed at 0.5 / 0.25 m) and changes only through the trajectory. Full 44 s0–s5 with loop closure and consistency, `tools/map_quality.py --floors`, paired per input against master's `44_g3b2bs6_s0..s5`:
+- **Validation** of the chosen setting in `settings/l2-vertical.toml`. The consistency pass uses the indoor resolution (`consistency.cpp`), loop closure doesn't (its refinement grids are fixed at 0.5 / 0.25 m) and changes only through the trajectory. Full 44 s0–s5 with loop closure and consistency, `tools/map_quality.py --floors`, paired per input against master's `44_g3b2bs6_s0..s5`:
   - global geometry: façade way out / back better by more than master's s0–s5 spread (0.88 / 0.91°) in the mean, or the spread itself smaller by more than half;
   - consistency (revisit |yaw| median and worst, pairs) and sharpness (railing NN, stair max, jitter p50 / p99): each mean worse by less than half master's s0–s5 spread; no spread wider by more than half;
   - 45f against master's `45f_cand`: loops found ≥ 90 % of master's, no runaway (route within 10 %), the position difference reported;
@@ -86,7 +86,7 @@ Gain = gallery reading paired against master on the same input (s0–s2); master
 
 #### 2a validation results (2026-10-16): V5 on full 44 s0–s5 and 45f
 
-`settings/lidar-vertical.toml` with 0.10 / 0.27 m (job tmp `lv_v5.toml`, snapshot and stage timing on), build `bin_final_g` (master); results `raw data/44_v5_s0..s5`, `45f_v5`; `tools/map_quality.py --floors` (job tmp `mq_v5.txt`) paired against `44_g3b2bs6_s0..s5` (`mq_g3b2bs6.txt`).
+`settings/l2-vertical.toml` with 0.10 / 0.27 m (job tmp `lv_v5.toml`, snapshot and stage timing on), build `bin_final_g` (master); results `raw data/44_v5_s0..s5`, `45f_v5`; `tools/map_quality.py --floors` (job tmp `mq_v5.txt`) paired against `44_g3b2bs6_s0..s5` (`mq_g3b2bs6.txt`).
 
 | measure | V5 mean | master mean | paired diff s0…s5 | mean diff | master spread (half) | V5 spread | rule |
 |---|---|---|---|---|---|---|---|

@@ -1,6 +1,6 @@
 # Results (2026-10-18, recording 44, Release)
 
-Term on = `settings/lidar-vertical.toml` + `consistency_gyro_rotation_term = true` (scale 3, gate 3°). Off = the
+Term on = `settings/l2-vertical.toml` + `consistency_gyro_rotation_term = true` (scale 3, gate 3°). Off = the
 shipped results (44_baseline, 44_s1_diag, 44_s2_diag; s0 = the baseline). On: 44_g4_s0_on (from the baseline's
 snapshot), 44_g4_s1_on, 44_g4_s2_on. Every run: all windows 100/100 iterations. Script `group4.sh` (scratchpad).
 

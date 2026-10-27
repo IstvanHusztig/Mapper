@@ -1,10 +1,10 @@
 ## Context
 
-- **Test bed:** the exact 95 s cuts `raw data/44c95b_s0..s5`, odometry only (`odo_master.toml`: `lidar-vertical` with loop closure and consistency off, window diagnostics on). The master references are `44c95bo_master_s0..s5`.
+- **Test bed:** the exact 95 s cuts `raw data/44c95b_s0..s5`, odometry only (`odo_master.toml`: `l2-vertical` with loop closure and consistency off, window diagnostics on). The master references are `44c95bo_master_s0..s5`.
   - gal−A: M = −4.31, range [−4.71, −4.02].
   - A−B: 0.89–1.00.
   - gal−B: −3.16…−3.82 on s0–s2.
-- **Full runs:** `44_s0..s5` and `45f` with `settings/lidar-vertical.toml`, against master's `44_g3b2bs6_s0..s5` (`mq_g3b2bs6.txt`) and `45f_cand`.
+- **Full runs:** `44_s0..s5` and `45f` with `settings/l2-vertical.toml`, against master's `44_g3b2bs6_s0..s5` (`mq_g3b2bs6.txt`) and `45f_cand`.
 - **IMU references** (`hand_eye_gyro.py`, master odometry-only full map `44_c10o_s0`):
   - gyro bias +0.61 / +0.46 / −0.82 °/s (body, ± 0.05);
   - yaw scale −0.58 ± 0.25 % (halves −0.19 / −1.23 %);

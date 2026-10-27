@@ -61,4 +61,4 @@
 
 ## Migration Plan
 
-Settings off in code (`loop_closure_cross_floor_max_vertical_m` = 0, `loop_closure_kernel_scale` = 0). `settings/lidar-vertical.toml` switches cross-floor edges on with the measured values. New baselines in their own commit, the old folders renamed with a date suffix. Rollback: set the cross-floor height to 0.
+Settings off in code (`loop_closure_cross_floor_max_vertical_m` = 0, `loop_closure_kernel_scale` = 0). `settings/l2-vertical.toml` switches cross-floor edges on with the measured values. New baselines in their own commit, the old folders renamed with a date suffix. Rollback: set the cross-floor height to 0.

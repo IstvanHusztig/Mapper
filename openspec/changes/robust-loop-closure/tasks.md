@@ -11,7 +11,7 @@
 - [x] 2.1 `loop_closure_kernel_scale`: Cauchy weights and cost on the loop edges in `optimize_loop_pose_graph`, two stages (design decision 6); the drop runs after the solve. Verify: scale 0 gives `44_short` bit-identical.
 - [x] 2.2 The angle wrap in `add_relative_pose_edge` (design decision 7). Verify: the full 44 with the kernel off bit-identical with `tools/baseline/44.manifest.json` apart from the parameters TOML (23 loops, 1.72 m).
 - [x] 2.3 Pose-graph unit tests in `tests/loop_closure_test.cpp` on two laps: a 15 cm wrong edge moves the solution clearly less with the kernel (0.5σ: 6.4 → 3.2 cm); consistent edges within 0.5 mm; a false edge still stands out. Verify: Release `ctest` passes.
-- [ ] 2.4 The kernel on real data: X3 settings plus `loop_closure_kernel_scale` 0.5 and 1.0 on `44_s0/s1/s2`. Verify: a results table here. If the kernel improves the floor offsets or the largest correction without losing loops on any input, it is switched on in `settings/lidar-vertical.toml`; otherwise the setting and its code are removed (no unused code), the pose-graph tests trimmed, and the golden TOML files regenerated.
+- [ ] 2.4 The kernel on real data: X3 settings plus `loop_closure_kernel_scale` 0.5 and 1.0 on `44_s0/s1/s2`. Verify: a results table here. If the kernel improves the floor offsets or the largest correction without losing loops on any input, it is switched on in `settings/l2-vertical.toml`; otherwise the setting and its code are removed (no unused code), the pose-graph tests trimmed, and the golden TOML files regenerated.
 
 ## 3. Cross-floor edges
 
@@ -46,6 +46,6 @@
 
 ## 5. Ship
 
-- [ ] 5.1 `settings/lidar-vertical.toml` with cross-floor edges on (6 m) and the kernel decision of 2.4; docs (EN/HU) on loop closure: cross-floor edges, the time cost, the remaining heading drift on stairs. Verify: the docs mention every new setting.
+- [ ] 5.1 `settings/l2-vertical.toml` with cross-floor edges on (6 m) and the kernel decision of 2.4; docs (EN/HU) on loop closure: cross-floor edges, the time cost, the remaining heading drift on stairs. Verify: the docs mention every new setting.
 - [ ] 5.2 New 44 and 44_short baselines in their own commit (old `raw data/44_baseline`, `44_short_baseline` renamed with a date suffix, manifests rewritten). Verify: `compare_baseline.py` IDENTICAL against the new manifests.
 - [ ] 5.3 Release `ctest` passes. Debug build + `ctest` only if the change touches threading or memory (it doesn't). Verify: test output.

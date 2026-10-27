@@ -31,5 +31,5 @@ steps, convergence thresholds, batch sizes) SHALL be a named constant in the cod
 - **THEN** they set it in the parameter file, without a rebuild
 
 #### Scenario: Former constants keep their values
-- **WHEN** `44` and `44_short` are processed with `settings/lidar-vertical.toml` after the hard-coded values became settings
+- **WHEN** `44` and `44_short` are processed with `settings/l2-vertical.toml` after the hard-coded values became settings
 - **THEN** the point clouds and trajectories are bit-identical with the previous baselines

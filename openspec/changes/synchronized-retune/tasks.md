@@ -27,7 +27,7 @@
 ## 3. Ship
 
 - [ ] 3.1 The chosen settings once with the `/fp:fast` build (the difference between the builds at most a few decimetres, as today).
-- [ ] 3.2 New `settings/lidar-vertical.toml`, new baselines (the old folders renamed with a date suffix, manifests rewritten), the settings tables in `docs/index.html` and `docs/hu/index.html`. Archive, push, memory notes.
+- [ ] 3.2 New `settings/l2-vertical.toml`, new baselines (the old folders renamed with a date suffix, manifests rewritten), the settings tables in `docs/index.html` and `docs/hu/index.html`. Archive, push, memory notes.
 
 ## 4. Re-check what was decided on the lagging data (after the retune, each its own change or task)
 

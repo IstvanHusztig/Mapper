@@ -22,7 +22,7 @@ a hold-out mode.
   `s × max(k × ARW × √dt, floor)` of the odometry's rotation prior (k, ARW, floor from the existing settings) and the
   scale `s` as a new setting. A window whose IMU rotation disagrees with its odometry result by more than a gate gets
   no gyro edges (recording 44 has a stretch where the gyro is wrong, C38). New settings in `[consistency]`, off by
-  default; on in `settings/lidar-vertical.toml` only if the evaluation accepts it.
+  default; on in `settings/l2-vertical.toml` only if the evaluation accepts it.
 - **Hold-out evaluation mode**: a setting that leaves the points of every other time block of a given length out of
   the odometry's, the loop closure's and the consistency pass's maps and point terms. All points are still saved, so
   the never-fitted points can be measured. Off by default (0); for evaluation only.
@@ -45,7 +45,7 @@ a hold-out mode.
 
 - `src/application/consistency.{h,cpp}` (gyro edges), `src/application/run_odometry.cpp`, `src/domain/scan_to_map.cpp`,
   `src/application/loop_closure.cpp` (hold-out), `src/domain/odometry_config.h`, `src/infrastructure/toml_io.h`
-  (settings), `settings/lidar-vertical.toml`, `settings/default_settings.toml`, golden TOML test files.
+  (settings), `settings/l2-vertical.toml`, `settings/default_settings.toml`, golden TOML test files.
 - Tests: `tests/consistency_test.cpp` (gyro term on the synthetic loop recording), a hold-out unit test.
 - Tools: new `tools/holdout_sharpness.py`; `tools/wall_precision.py`; `tools/README.md`.
 - With both settings off, results stay bit-identical (44_short and 44 manifests). Consistency time about +10 %.

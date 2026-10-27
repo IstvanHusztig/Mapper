@@ -15,7 +15,7 @@
 
 ## 3. Gyro rotation term in consistency
 
-- [x] 3.1 Settings `consistency_gyro_rotation_term` (false), `consistency_gyro_sigma_scale` (3.0), `consistency_gyro_gate_deg` (3.0) in `[consistency]`; `settings/default_settings.toml` and `lidar-vertical.toml` get them off; golden TOML files again in their own commit. Verify: `ctest` passes.
+- [x] 3.1 Settings `consistency_gyro_rotation_term` (false), `consistency_gyro_sigma_scale` (3.0), `consistency_gyro_gate_deg` (3.0) in `[consistency]`; `settings/default_settings.toml` and `l2-vertical.toml` get them off; golden TOML files again in their own commit. Verify: `ctest` passes.
 - [x] 3.2 The term in `Consistency` (design 1–5): edges inside each window, sigma from the odometry's rule × scale, per-window gate with a log line counting gated windows, assembled in node order into the band. Verify: unit test on the synthetic loop recording (`tests/synthetic_recording`): with the term the node-to-node rotation error against the truth is smaller than without; repeatable bit for bit; if the `should_fail` case "Consistency leaves a trajectory that is already right" starts to pass, its marker goes.
 - [x] 3.3 Bit-identity with the term off. Verify: 44_short IDENTICAL against the manifest. (The Debug build + `ctest` moved to 5.1: user, 2026-10-18, to save tokens; low risk, the band drops out-of-band writes.)
 - [x] 3.4 Reproduce the experiment with the real implementation: 44_short odometry with `holdout_block_s = 0.01` and a snapshot, consistency from it with the term off / s = 2 / 3 / 5. Verify: `holdout_sharpness.py` gives the same sign and size as the experiment (−0.7 to −0.9 mm at s = 2–5 against odometry only) within 0.2 mm. (Done 2026-10-18, real code, held-out all-time thickness against consistency off: consistency without the term +1.71 mm, term s = 2 / 3 / 5 −1.04 / −1.12 / −1.13 mm, 0 of 70 windows gated, consistency 8.2 → 8.4 s. Same sign, 0.15–0.26 mm better than the experiment (s3/s5 just outside the 0.2 mm band); the reference now also has the hold-out in loop closure.)
@@ -29,5 +29,5 @@
 
 ## 5. Ship (only if the user accepts in 4.4)
 
-- [ ] 5.1 Debug build + `ctest` (moved from 3.3); `settings/lidar-vertical.toml`: the term on with the chosen scale and gate; tracker C1 → fixed with the evidence; CLAUDE.md and `docs/PERFORMANCE.md` (consistency time) updated. Verify: the diff.
+- [ ] 5.1 Debug build + `ctest` (moved from 3.3); `settings/l2-vertical.toml`: the term on with the chosen scale and gate; tracker C1 → fixed with the evidence; CLAUDE.md and `docs/PERFORMANCE.md` (consistency time) updated. Verify: the diff.
 - [ ] 5.2 New 44 and 44_short baselines in their own commit (folders renamed with a date suffix, manifests rewritten). Verify: `compare_baseline.py` IDENTICAL on both new manifests; master-reviewer after the push.
