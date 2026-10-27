@@ -223,6 +223,12 @@ Steps 8–11 were added on 2026-10-03. They cover the goals that steps 0–7 sti
 - Domain and application code: no `std::cout`, no file paths, no globals, no `#if WITH_GUI`.
 - Config is passed in, never read from a global; state is returned, not mutated through params.
 - Numerical behaviour changes and refactors never share a commit.
+- New code and refactors respect the **SOLID** principles:
+  - **Single responsibility:** a class, function or file has one reason to change. For example, an adapter does I/O and no maths, and a window step does one step of the loop.
+  - **Open/closed:** a new sensor, file format or front end is added as a setting, an adapter or a new implementation of a port. Pipeline and domain code don't gain sensor- or format-specific branches.
+  - **Liskov substitution:** every implementation of a port (`RecordingSource`, `PointStore`, `ResultSink`, `Logger`, `ParallelExecutor` …) keeps the port's contract. A test fake and the real adapter are interchangeable, and they give the same results for the same input.
+  - **Interface segregation:** ports stay small and specific to their use. A use case depends only on the ports it calls, and a port isn't widened for one caller.
+  - **Dependency inversion:** use cases depend on ports defined in the application or domain layer, never on concrete adapters. The adapters are wired together only in the composition root (`main.cpp`, `make_folder_inputs`, `make_run_services`).
 
 ## 8. Decisions
 

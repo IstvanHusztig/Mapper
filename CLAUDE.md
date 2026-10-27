@@ -63,7 +63,7 @@ The input folder is scanned non-recursively. `pair_recording_files` (`src/infras
 
 ## Architecture
 
-Target architecture (Clean Architecture, layers, ports, migration roadmap) is in `docs/ARCHITECTURE.md`; refactors should move the code toward it. What follows describes the current code.
+Target architecture (Clean Architecture, layers, ports, migration roadmap) is in `docs/ARCHITECTURE.md`; refactors should move the code toward it, and new code and refactors respect the SOLID principles (its section 7). What follows describes the current code.
 
 **Layers:** the code is in `src/`, one folder per layer, each built as a static library whose include directories admit only what the layer may use. A file that includes something its layer must not see doesn't compile:
 - `src/domain` → `lo_domain`: entities and optimizers (`window.h`, `ndt_map`, `scan_to_map`, `robust_lidar_odometry`, `normal_equations`, `imu_kinematics`, `window_steps`, `optimizer_options`), plus `odometry_config.h`, `odometry_state.h`, `angle_units.h` and the `Logger`/`ProgressReporter` interfaces (`run_reporting.h`). Only Eigen, manif and observation_equations. Also the value types and pose conversions taken over from HDMapping's `core` (`structures.h` with `Point3Di`, `TaitBryanPose`, `LaserBeam`, `Plane` …; `transformations.h`; `ndt_types.h`; `point_placement.h` with `points_to_vector`), unchanged; `structures.h` still holds HDMapping structs dMapper doesn't use.
