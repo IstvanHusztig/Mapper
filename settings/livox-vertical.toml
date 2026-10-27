@@ -87,9 +87,10 @@ imu_degenerate_information_ratio = 0.3
 imu_degenerate_max_duration_s = 15.0
 imu_degenerate_translation_sigma_m = 3e-4
 imu_acceleration_sigma_mps2 = 0.5
-# 5 samples at 200 Hz (the L2's 0.01 is 2-3 samples here): a stretch over 2 * span is a gap and loses its terms,
-# so 0.01 would drop them after one lost sample. TODO: check the dropped terms on the first recording
-imu_acceleration_span_s = 0.025
+# 2-3 samples at 200 Hz; a stretch over 2 * span (20 ms) is a gap and loses its terms, so up to two lost samples in a
+# row are kept. A longer span gives fewer terms and less accelerometer information (the floor dominates each term's
+# sigma). TODO: count the dropped terms on the first recording
+imu_acceleration_span_s = 0.01
 imu_acceleration_offset_initial_sigma_mps2 = 0.1
 imu_acceleration_offset_rw_mps2_sqrt_s = 0.0001
 # IMU samples the gravity calibration averages velocities over: 20 ms at 200 Hz

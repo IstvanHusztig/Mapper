@@ -69,7 +69,7 @@ bool integrate_window_translations(Window &window, const Eigen::Vector3d &start_
 
 // window hand-off: the last tail_nodes nodes carry almost no points (the last one none), so their pose is
 // re-propagated from the last well-constrained node with the IMU rotation (motion_model_poses, corrected by
-// bias_update) and the velocity of the 20 nodes before it; the next window starts from the re-propagated last node.
+// bias_update) and the velocity of the velocity_nodes nodes before it; the next window starts from the re-propagated last node.
 // Does nothing for tail_nodes <= 0 or a window too short for the velocity span.
 void repropagate_window_tail(Window &window, int tail_nodes, int velocity_nodes, const Eigen::Vector3d &bias_update);
 

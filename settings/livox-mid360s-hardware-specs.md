@@ -41,7 +41,7 @@ Reference data for `settings/livox-vertical.toml` (Livox Mid-360S, vertical hand
 | `prior_velocity_span_nr_samples`, `handoff_tail_velocity_span_nr_samples` | 4 | 20 ms at 200 Hz |
 | `filter_threshold_xy_outer` | 40 m | range at 10 % reflectivity |
 | `max_distance_lidar`, `max_distance_lidar_rigid_sf` | 40 m | the same range, so far points are registered too |
-| `imu_acceleration_span_s` | 0.025 s | 5 samples at 200 Hz, so one lost sample is not a gap |
+| `imu_acceleration_span_s` | 0.01 s | as on the L2; 2-3 samples at 200 Hz, up to two lost samples in a row are not a gap |
 | `filter_threshold_xy_inner` | 0.35 m | the operator's body; also drops (0, 0, 0) points |
 | `lidar_imu_lever_arm_*` | TODO | the IMU position above, in the vertical mount's output axes |
 

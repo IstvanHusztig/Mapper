@@ -126,6 +126,15 @@ namespace
         s.prediction.acc_smoothing_half_width_s = 0.5 * params.imu_acc_smoothing_s;
         s.prediction.zupt_acc_threshold_mps2 = params.zero_velocity_acc_threshold_mps2;
         s.prediction.zupt_gyro_threshold_rad_s = params.zero_velocity_gyro_threshold_deg_s * DEG_TO_RAD;
+
+        // spans counted in IMU samples that don't fit a full window (a setting meant for another IMU rate)
+        const int kept_nodes = params.threshold_nr_poses - 1 - params.handoff_tail_nodes;
+        if (params.handoff_tail_nodes > 0 && params.handoff_tail_velocity_span_nr_samples > kept_nodes)
+            log_warning(logger) << "handoff_tail_velocity_span_nr_samples " << params.handoff_tail_velocity_span_nr_samples << " > "
+                                << kept_nodes << " kept nodes per window: the tail is not re-propagated";
+        if (s.uses_previous_velocity && params.prior_velocity_span_nr_samples > params.threshold_nr_poses - 1)
+            log_warning(logger) << "prior_velocity_span_nr_samples " << params.prior_velocity_span_nr_samples
+                                << " > threshold_nr_poses - 1: the previous velocity is measured over the whole window";
         return s;
     }
 
