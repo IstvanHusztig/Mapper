@@ -63,7 +63,7 @@ physical units, tested in the experiment, doesn't remove the dependence (and wou
 
 - With `imu_always_on` the motion-model translation term ties each node edge to a guess integrated from the
   start-velocity prior with sigma 1e-4 m (`run_odometry.cpp:1090,1105`; loosened only on the gated path, `:182-194`;
-  `l2-vertical.toml:167-169`): about 5 mm/s on a window's velocity (derived, not measured), whatever its covariance.
+  `l2-vertical.toml` `lidar_odometry_motion_model_x/y/z_1_sigma_m`): about 5 mm/s on a window's velocity (derived, not measured), whatever its covariance.
 - Consistency's chunk-local maps (F1).
 - LM damping is absolute (λ·I) on the poses only and grows ×10 per 10 iterations; the comment calls ~1e10 negligible
   against ~1e8 (`scan_to_map.cpp:997-1009`). Extends tracker C13.
