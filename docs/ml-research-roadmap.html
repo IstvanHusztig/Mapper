@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ML Research Roadmap</title>
+<title>ML Learning Guide</title>
 <style>
   :root {
     --bg: #fbfbfa; --panel: #ffffff; --text: #1d2126; --muted: #5b6470; --line: #e3e5e8;
@@ -70,15 +70,680 @@
   .flow li b { display: block; }
   .flow li span { color: var(--muted); font-size: 14px; }
   .flow .back { border-style: dashed; }
+  h4 { font-size: 16px; margin: 22px 0 6px; }
+  .eq { font-family: "Cambria Math", "STIX Two Math", Georgia, serif; font-size: 17px; background: var(--panel); border: 1px solid var(--line);
+        border-radius: 8px; padding: 10px 14px; margin: 12px 0; overflow-x: auto; line-height: 1.8; }
+  figure.diagram { margin: 18px 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  figure.diagram svg { width: 100%; height: auto; display: block; }
+  figure.diagram figcaption { color: var(--muted); font-size: 13.5px; margin-top: 6px; }
+  .module { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px 6px; margin: 18px 0; }
+  .module h3 { margin: 0 0 6px; }
+  .module dl { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 6px 12px; margin: 8px 0 10px; font-size: 15px; }
+  .module dt { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .04em; padding-top: 2px; }
+  .module dd { margin: 0; min-width: 0; }
+  @media (max-width: 560px) { .module dl { grid-template-columns: 1fr; } .module dt { padding-top: 6px; } }
+  details { border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; margin: 6px 0; background: var(--bg); }
+  details summary { cursor: pointer; font-weight: 600; }
+  details[open] summary { margin-bottom: 6px; }
 </style>
 </head>
 <body>
 <main>
-<h1>Machine learning for dMapper: a research roadmap</h1>
-<p class="lead">A learning plan and research log, started 2026-10-27. It asks where small neural networks could make dMapper's maps more
-precise: per-window parameter tuning, adaptation to motion, point filtering, and a model that keeps up as the code changes. It covers what to learn first, which model fits which task, what the inputs are, and where the training data comes from. Statements marked <span class="inf">(inference)</span> are my own reasoning, not taken from a source
-or a measurement. The <a href="#journal">journal</a> at the end records what was learned and decided, session by session.</p>
+<h1>Machine learning for dMapper: a learning guide</h1>
+<p class="lead">A guided course for learning machine learning on dMapper's own problems, started 2026-10-27. <a href="#path">Part I</a> is the learning path: nine modules to follow in order, each with something to read or watch, something to do and questions to check yourself. <a href="#theory">Part II</a> holds the explanations the modules point to (T1–T16). <a href="#part3">Part III</a> is the research roadmap: how these methods could improve dMapper later. The <a href="#journal">journal</a> at the end records what was learned, session by session. Statements marked <span class="inf">(inference)</span> are reasoning, not taken from a source or a measurement.</p>
 
+<h2 id="path">Part I · Your learning path</h2>
+<p>Follow the modules in order. Each one has a goal, something to read or watch, something to do, and questions to check yourself. Try each question
+before you open its answer. Move on when the "you understand it when" line is true for you, not when the time is up. The modules point to the
+explanations in <a href="#theory">Part II</a> (T1–T16). Part III, the dMapper roadmap, is read at the end, in module 9.</p>
+
+<div class="table-wrap"><table>
+<tr><th>Module</th><th>Topic</th><th>Theory</th><th>Hands-on</th></tr>
+<tr><td><a href="#m1">M1</a></td><td>The big picture: learning is fitting</td><td>T1, T2</td><td>E1: your first dataset from dMapper's log</td></tr>
+<tr><td><a href="#m2">M2</a></td><td>What a network computes</td><td>T3</td><td>a forward pass with pencil and paper</td></tr>
+<tr><td><a href="#m3">M3</a></td><td>Loss and gradient descent</td><td>T4, T5</td><td>E2, part 1: training by hand in numpy</td></tr>
+<tr><td><a href="#m4">M4</a></td><td>Backpropagation</td><td>T6</td><td>the backward pass on paper; E2, part 2: gradient check</td></tr>
+<tr><td><a href="#m5">M5</a></td><td>Generalisation: fooling yourself, and how not to</td><td>T7</td><td>E4: leakage made visible</td></tr>
+<tr><td><a href="#m6">M6</a></td><td>PyTorch: what the tool does for you</td><td>T8</td><td>E3: the same network in PyTorch, then with uncertainty</td></tr>
+<tr><td><a href="#m7">M7</a></td><td>Trees and Bayesian optimization</td><td>T9, T10</td><td>E5, E6</td></tr>
+<tr><td><a href="#m8">M8</a></td><td>Sequences, point clouds, RL, uncertainty</td><td>T11–T14</td><td>E7: calibration and ensembles</td></tr>
+<tr><td><a href="#m9">M9</a></td><td>Back to dMapper</td><td>Part III</td><td>read the roadmap with what you now know</td></tr>
+</table></div>
+<p class="meta">Tools: M1–M4 need only numpy and matplotlib (installed). Install scikit-learn before M5, PyTorch before M6 and Optuna before M7; the commands are in <a href="#t15">T15</a>.</p>
+
+<div class="module" id="m1">
+<h3>M1 · The big picture: learning is fitting</h3>
+<dl>
+<dt>Goal</dt><dd>See that training a model is an optimization, the same kind of computation as dMapper's odometry, and what makes it different.</dd>
+<dt>Read</dt><dd><a href="#t1">T1</a>, <a href="#t2">T2</a>. Optional: Goodfellow et al., <i>Deep Learning</i>, chapter 5 (machine learning basics).</dd>
+<dt>Do</dt><dd>E1: turn <code>44_diag.log</code> into a table, plot it, and fit a straight line with the normal equations. Starter code (tested: it finds all 690 windows):
+<pre><code>import re
+import numpy as np
+import matplotlib.pyplot as plt
+
+pattern = re.compile(
+    r"window diagnostics (\d+): t ([\d.]+) s, dt ([\d.]+) s, iterations (\d+), delta (\S+), "
+    r"start (\S+) (\S+) (\S+), guess move (\S+) (\S+) (\S+), result move (\S+) (\S+) (\S+), .*?"
+    r"result-guess (\S+) (\S+) (\S+), info ratio (\S+)")
+rows = []
+with open(r"C:\Users\User\Downloads\dLidar\raw data\44_diag.log", encoding="utf-8", errors="replace") as f:
+    for line in f:
+        m = pattern.search(line)
+        if m:
+            rows.append([float(v.rstrip(",")) for v in m.groups()])
+data = np.array(rows)
+t, iterations, info_ratio = data[:, 1], data[:, 3], data[:, 17]
+result_minus_guess = np.linalg.norm(data[:, 14:17], axis=1)    # how far the optimizer moved the guess [m]
+
+fig, ax = plt.subplots(3, 1, sharex=True)
+ax[0].plot(t, iterations); ax[0].set_ylabel("iterations")
+ax[1].plot(t, info_ratio); ax[1].set_ylabel("info ratio")
+ax[2].plot(t, result_minus_guess); ax[2].set_ylabel("|result - guess| [m]"); ax[2].set_xlabel("t [s]")
+plt.show()
+
+# a straight line result_minus_guess = w0 + w1 * info_ratio, solved with the normal equations
+A = np.column_stack([np.ones_like(info_ratio), info_ratio])
+w = np.linalg.solve(A.T @ A, A.T @ result_minus_guess)
+print(w)</code></pre>
+Then make a scatter plot of <code>info_ratio</code> against <code>result_minus_guess</code> with the line drawn in it. Does the line describe the cloud of points?</dd>
+<dt>Check</dt><dd>
+<details><summary>What does dMapper's optimizer want, and what does training want? Why does the difference matter?</summary>
+dMapper wants the best poses for the data in hand. Training wants weights that also work on data the model has never seen. You can only measure
+that on data held out from training, which is where splits, validation and overfitting come from.</details>
+<details><summary>Why is the column of ones in <code>A</code> there?</summary>
+It is the intercept w0: without it, the line would be forced through the origin.</details>
+<details><summary>Why can't a sum of features express "large error when the info ratio is low <i>and</i> the turn is fast"?</summary>
+A sum adds each feature's effect independently. An "and" means that one feature's effect depends on the other's value, an interaction, which needs a
+product or another nonlinearity. Networks learn such nonlinearities.</details>
+</dd>
+<dt>You understand it when</dt><dd>you can explain to someone why fitting a line and running dMapper's LM step are the same kind of problem, and what training adds.</dd>
+</dl>
+</div>
+
+<div class="module" id="m2">
+<h3>M2 · What a network computes</h3>
+<dl>
+<dt>Goal</dt><dd>Compute a network's output by hand, so it stops being a black box.</dd>
+<dt>Watch, then read</dt><dd>3Blue1Brown, "But what is a neural network?" (chapter 1 of the series), then <a href="#t3">T3</a>.</dd>
+<dt>Do</dt><dd>A forward pass with pencil and paper. The network has 2 inputs, 2 hidden ReLU neurons and 1 output:
+<div class="eq">x = (1, 2) &nbsp;&nbsp; W₁ = [[0.5, −1], [1, 0.5]] &nbsp;&nbsp; b₁ = (0, −1) &nbsp;&nbsp; W₂ = (2, 3) &nbsp;&nbsp; b₂ = 0.5 &nbsp;&nbsp; target y = 3</div>
+Compute z = W₁x + b₁, h = ReLU(z), ŷ = W₂·h + b₂ and the loss L = (ŷ − y)². Then check:
+<details><summary>Solution</summary>
+z = (0.5·1 − 1·2 + 0, &nbsp;1·1 + 0.5·2 − 1) = (−1.5, 1)<br>
+h = ReLU(z) = (0, 1): the first neuron is off<br>
+ŷ = 2·0 + 3·1 + 0.5 = 3.5<br>
+L = (3.5 − 3)² = 0.25</details>
+Keep your numbers: module 4 continues with them.</dd>
+<dt>Check</dt><dd>
+<details><summary>Why is an activation function needed at all?</summary>
+Without it, every layer is a linear map, and a chain of linear maps is one linear map. The whole network would be no more than linear regression.</details>
+<details><summary>How many parameters does a 5 → 8 → 1 network have?</summary>
+5·8 + 8 = 48 for the first layer, 8·1 + 1 = 9 for the second: 57.</details>
+<details><summary>Why do weights start random instead of zero?</summary>
+With equal weights, every neuron of a layer computes the same thing and receives the same gradient, so they stay identical forever. Randomness breaks the symmetry.</details>
+</dd>
+<dt>You understand it when</dt><dd>you can compute a small network's output by hand and say what each weight does.</dd>
+</dl>
+</div>
+
+<div class="module" id="m3">
+<h3>M3 · Loss and gradient descent</h3>
+<dl>
+<dt>Goal</dt><dd>Understand what the loss measures, and how the weights move to make it smaller.</dd>
+<dt>Watch, then read</dt><dd>3Blue1Brown, "Gradient descent, how neural networks learn" (chapter 2), then <a href="#t4">T4</a> and <a href="#t5">T5</a>.</dd>
+<dt>Do</dt><dd>E2, part 1: type in the numpy network from <a href="#t8">T8</a> yourself, without copy-paste, and run it. Then change the learning rate to 0.001, 0.05 and 1.0
+and plot the loss against the step for each. Say in one sentence what each curve shows.</dd>
+<dt>Check</dt><dd>
+<details><summary>What noise does the mean squared error assume?</summary>
+Gaussian noise with the same σ for every example: MSE is that noise model's negative log-likelihood, up to constants.</details>
+<details><summary>In the loss (y − μ)²/(2σ²) + log σ, what stops the network from predicting a huge σ everywhere to excuse its errors?</summary>
+The log σ term. A large σ makes the first term small but the second large, and the sum is smallest when σ matches the real size of the errors.</details>
+<details><summary>What does a too-large learning rate look like in the loss curve?</summary>
+The loss jumps up and down or explodes instead of falling. It can also kill neurons for good, as module 4 shows.</details>
+<details><summary>Why do networks train with first-order methods instead of Levenberg–Marquardt?</summary>
+LM needs a P × P matrix for P weights. That is impossible for millions of weights, and minibatch noise spoils the curvature anyway. The gradient
+costs only a few forward passes. For tiny networks on a full dataset, second-order methods such as L-BFGS do work.</details>
+</dd>
+<dt>You understand it when</dt><dd>you can predict roughly what a loss curve will look like before you change the learning rate.</dd>
+</dl>
+</div>
+
+<div class="module" id="m4">
+<h3>M4 · Backpropagation</h3>
+<dl>
+<dt>Goal</dt><dd>Know exactly how the gradient of every weight is computed. This is the core of all of deep learning.</dd>
+<dt>Watch, then read</dt><dd>3Blue1Brown, "What is backpropagation really doing?" and "Backpropagation calculus" (chapters 3–4), then <a href="#t6">T6</a>.
+Then the most valuable single resource on this page: Karpathy, "The spelled-out intro to neural networks and backpropagation: building micrograd" (the first video of <i>Zero to Hero</i>). Code along with it.</dd>
+<dt>Do</dt><dd>1. The backward pass on paper, on the M2 example, with the formulas of T6. Compute ∂L/∂ŷ, ∂L/∂W₂, ∂L/∂h, ∂L/∂z and ∂L/∂W₁.
+<details><summary>Solution</summary>
+∂L/∂ŷ = 2(3.5 − 3) = 1<br>
+∂L/∂W₂ = 1 · h = (0, 1) &nbsp;&nbsp; ∂L/∂b₂ = 1<br>
+∂L/∂h = W₂ · 1 = (2, 3)<br>
+∂L/∂z = (2·0, 3·1) = (0, 3): the first neuron was off (z = −1.5), so no gradient passes through it<br>
+∂L/∂W₁ = ∂L/∂z · xᵀ = [[0, 0], [3, 6]] &nbsp;&nbsp; ∂L/∂b₁ = (0, 3)</details>
+2. One gradient-descent step with learning rate 0.01, then the forward pass again.
+<details><summary>Solution</summary>
+W₂ = (2, 2.99), b₂ = 0.49, second row of W₁ = (0.97, 0.44), b₁ = (0, −1.03)<br>
+z = (−1.5, 0.82), h = (0, 0.82), ŷ = 2.99·0.82 + 0.49 = 2.9418<br>
+L = 0.0034, down from 0.25: one step, and the error fell by a factor of 70.</details>
+3. The same step with learning rate 0.1.
+<details><summary>Solution, and the lesson</summary>
+The second row of W₁ becomes (0.7, −0.1) and b₁ = (0, −1.3), so z = (−1.5, −0.8) and h = (0, 0). Both neurons are now off, ŷ = b₂ = 0.4,
+and L = 6.76, 27 times worse. Worse still, with both neurons off, every gradient into W₁ is zero, so gradient descent can never switch them back on.
+This is a "dead ReLU": a too-large step can permanently disable part of a network.</details>
+4. E2, part 2: add a gradient check to your numpy network. For five weights, compare your backprop gradient with (L(w+ε) − L(w−ε)) / 2ε, with ε = 10⁻⁵.</dd>
+<dt>Check</dt><dd>
+<details><summary>Why does backpropagation cost only a few forward passes, however many weights there are?</summary>
+Every step backward reuses the result of the step after it (the chain rule), and the forward pass has stored the intermediate values. Each weight's
+derivative is one multiplication away from quantities already computed.</details>
+<details><summary>Why do you need to store z during the forward pass?</summary>
+The backward pass needs to know where the ReLU was active (z &gt; 0), and the layer inputs (x, h) to form the weight gradients.</details>
+</dd>
+<dt>You understand it when</dt><dd>your gradient check agrees to about six digits, and you can explain why the dead ReLU in step 3 can never recover.</dd>
+</dl>
+</div>
+
+<div class="module" id="m5">
+<h3>M5 · Generalisation: fooling yourself, and how not to</h3>
+<dl>
+<dt>Goal</dt><dd>Learn to measure honestly. With dMapper's data, this matters more than any choice of model.</dd>
+<dt>Read</dt><dd><a href="#t7">T7</a>. Optional: Goodfellow et al., chapter 7 (regularisation); Hastie et al., chapter 7 (model assessment).</dd>
+<dt>Do</dt><dd>E4, on the E1 table: predict |result − guess| from the other columns with a small model (for example scikit-learn's <code>MLPRegressor</code>), with two splits:
+(a) 80 % of the windows drawn at random for training; (b) the first 80 % of the route for training, the last 20 % for validation. Compare the validation errors of (a) and (b).
+Then shrink and grow the network and watch training and validation error move apart.</dd>
+<dt>Check</dt><dd>
+<details><summary>Training error 0.01, validation error 0.30. What is happening?</summary>
+Overfitting: the model has learned the training examples, not the pattern. Make the model simpler, regularise it, or get more data.</details>
+<details><summary>Why does split (a) look better than split (b), and which one tells the truth?</summary>
+Neighbouring windows are nearly identical, so a random split puts near-copies of the validation windows into training. The model recognises them
+instead of predicting. Split (b) is the honest one, and leaving out a whole recording is more honest still.</details>
+<details><summary>What is weight decay in terms of probability?</summary>
+A Gaussian prior on the weights, centred on zero: the same idea as dMapper's priors, which pull a state toward its expected value unless the data says otherwise.</details>
+<details><summary>When may you look at the test set?</summary>
+Once, at the very end. Anything chosen after looking at it has been tuned on it, and the test result is no longer an honest estimate.</details>
+</dd>
+<dt>You understand it when</dt><dd>you distrust a good result until you know how the data was split.</dd>
+</dl>
+</div>
+
+<div class="module" id="m6">
+<h3>M6 · PyTorch: what the tool does for you</h3>
+<dl>
+<dt>Goal</dt><dd>Use PyTorch knowing what it does behind the scenes, and why it is worth its install size.</dd>
+<dt>Read</dt><dd><a href="#t8">T8</a>, then the PyTorch tutorial "Learn the Basics" (tensors, autograd, building a model, optimization). If you watched Karpathy's micrograd video in M4, you have already built a tiny PyTorch yourself.</dd>
+<dt>Do</dt><dd>E3: run the PyTorch version of your M3 network and compare its loss curve with your numpy one: same data, same start. Then switch to the uncertainty-predicting
+version from T8. To give it something to learn, make the toy data's noise grow with |x₁|. Plot the predicted σ against x₁.</dd>
+<dt>Check</dt><dd>
+<details><summary>What exactly happens in <code>loss.backward()</code>?</summary>
+During the forward pass, PyTorch recorded every operation as a graph. <code>backward()</code> walks that graph from the loss back to the weights, applies
+each operation's local derivative (the chain rule of M4), and adds each weight's gradient to its <code>.grad</code>.</details>
+<details><summary>Why is <code>opt.zero_grad()</code> needed every step?</summary>
+Gradients are added to <code>.grad</code>, not overwritten. Without clearing, each step would use the sum of all previous gradients.</details>
+<details><summary>What does PyTorch give you that writing it by hand doesn't? And what does it not give you?</summary>
+It gives you any loss and any model without deriving a single gradient, plus ready-made optimizers. It does not give you understanding of what goes
+on (that was M4), and it isn't needed to <i>use</i> a trained model: the C++ forward pass is just multiplications and additions.</details>
+</dd>
+<dt>You understand it when</dt><dd>you could rewrite any small PyTorch training loop in numpy, slowly, and know which line does what.</dd>
+</dl>
+</div>
+
+<div class="module" id="m7">
+<h3>M7 · Trees and Bayesian optimization</h3>
+<dl>
+<dt>Goal</dt><dd>Know the two classical methods that the roadmap ranks above neural networks for dMapper's current situation.</dd>
+<dt>Watch, then read</dt><dd>StatQuest (Josh Starmer) on decision trees and on gradient boosting (regression), then <a href="#t9">T9</a> and <a href="#t10">T10</a>. Optional: the Optuna tutorial.</dd>
+<dt>Do</dt><dd>E5: on your E4 task, compare gradient boosting with your MLP, both with split (b). E6: let Optuna minimise a noisy toy function, plot where it sampled, and watch it switch from exploring to exploiting.</dd>
+<dt>Check</dt><dd>
+<details><summary>What does each new tree in gradient boosting learn?</summary>
+What the trees so far still get wrong: their residuals for squared loss, and in general the negative gradient of the loss. Each tree's contribution is shrunk by a learning rate.</details>
+<details><summary>Why can't a tree model extrapolate?</summary>
+Its output is a constant per leaf. Beyond the range of the training data, it just repeats the value of the outermost leaf.</details>
+<details><summary>What two things does a Gaussian-process surrogate tell Bayesian optimization, and how are they used?</summary>
+A predicted quality and an uncertainty for every untried setting. The acquisition function trades them off: it tries settings that look good (exploitation) or that are very uncertain (exploration).</details>
+<details><summary>Why is Bayesian optimization a good fit for tuning dMapper's TOML settings?</summary>
+Few settings, no gradient, a noisy result, and every evaluation costs a full run. It is built for exactly that.</details>
+</dd>
+<dt>You understand it when</dt><dd>you can say for a given problem whether you would reach for trees, a network or Bayesian optimization, and why.</dd>
+</dl>
+</div>
+
+<div class="module" id="m8">
+<h3>M8 · Sequences, point clouds, reinforcement learning, uncertainty</h3>
+<dl>
+<dt>Goal</dt><dd>Understand the bigger architectures well enough to judge when they fit, and when they don't.</dd>
+<dt>Read and watch</dt><dd><a href="#t11">T11</a>–<a href="#t14">T14</a>. For attention: 3Blue1Brown's chapters on Transformers and attention. For RL: Sutton &amp; Barto, chapter 1 and chapter 2 (bandits).
+For point clouds: the PointNet paper (Qi et al., CVPR 2017), sections 1 and 4.</dd>
+<dt>Do</dt><dd>E7: for your E3 model, compute the z-scores and a reliability plot on held-out data. Then train 5 copies with different seeds, and plot their
+predictions far outside the training range. Watch them disagree.</dd>
+<dt>Check</dt><dd>
+<details><summary>How does PointNet handle the fact that points have no order?</summary>
+The same MLP is applied to every point, and the points are combined with max-pooling, which gives the same result in any order.</details>
+<details><summary>Why does reinforcement learning need so many episodes?</summary>
+The reward comes late (which decision earned it?), every action must be tried many times, including bad ones, and the policy's own changes make its
+old experience stale. One dMapper episode is a 1.5–20 min run.</details>
+<details><summary>Your z-scores have standard deviation 2. What does that mean?</summary>
+The model is overconfident: its real errors are about twice the σ it predicts. Used as weights 1/σ², its predictions would get four times too much influence.</details>
+<details><summary>What did your 5 seeds show far outside the training range, and what is that kind of uncertainty called?</summary>
+They disagree, while each one may still claim a small σ. That is epistemic uncertainty: the model doesn't know, and it can't tell from its own σ.
+A cave after training on buildings is exactly this case.</details>
+</dd>
+<dt>You understand it when</dt><dd>you can explain why the roadmap rejects Transformers and RL <i>for now</i>, and what would have to change for them to make sense.</dd>
+</dl>
+</div>
+
+<div class="module" id="m9">
+<h3>M9 · Back to dMapper</h3>
+<dl>
+<dt>Goal</dt><dd>Read the roadmap with the understanding you now have, and be able to criticise it.</dd>
+<dt>Read</dt><dd><a href="#part3">Part III</a>, sections 1–7.</dd>
+<dt>Check</dt><dd>
+<details><summary>Why does the roadmap prefer small models and gradient boosting over large networks?</summary>
+Few independent recordings and strongly correlated windows: variance dominates (M5). Small models and strong baselines generalise better from little data.</details>
+<details><summary>Why must the C++ forward pass be written as plain loops?</summary>
+dMapper's results must be bit-identical run to run. Vectorised code can change the summation order, and with it the last bits of the result.</details>
+<details><summary>What does the window error predictor learn from, and why is that label imperfect?</summary>
+From how much loop closure and consistency corrected each window later. But the pose graph spreads drift over many windows, so the correction is a smoothed
+share of drift rather than the window's own error, and windows without a loop are unobserved, not good.</details>
+<details><summary>Why is the first cave recording "validation" and not "test"?</summary>
+The cave retune needs it for tuning. A recording tuned on can't be an honest test, so the test role starts with the second recording of a kind.</details>
+</dd>
+<dt>You understand it when</dt><dd>you can find a weakness in the roadmap that it doesn't mention yourself, and write it in the journal.</dd>
+</dl>
+</div>
+
+
+<h2 id="theory">Part II · Theory: what happens behind the scenes</h2>
+<p>The explanations behind the modules of <a href="#path">Part I</a>, from the ground up. Each module tells you which topics to read; afterwards
+this part also serves as a reference. Formulas are kept to what is needed to see the mechanism.</p>
+<div class="table-wrap"><table>
+<tr><th>Topic</th><th>Question it answers</th></tr>
+<tr><td><a href="#t1">T1</a> Learning is optimization</td><td>What does "training" actually compute?</td></tr>
+<tr><td><a href="#t2">T2</a> Linear models</td><td>The simplest learner, and why it isn't enough</td></tr>
+<tr><td><a href="#t3">T3</a> Neurons and networks</td><td>What a neural network is, in arithmetic</td></tr>
+<tr><td><a href="#t4">T4</a> Loss functions</td><td>What "error" means, and why it is a probability</td></tr>
+<tr><td><a href="#t5">T5</a> Gradient descent</td><td>How the weights move, and why not Levenberg–Marquardt</td></tr>
+<tr><td><a href="#t6">T6</a> Backpropagation</td><td>How the gradient of millions of weights is computed cheaply</td></tr>
+<tr><td><a href="#t7">T7</a> Generalisation</td><td>Why a model that fits perfectly can be useless</td></tr>
+<tr><td><a href="#t8">T8</a> The tools: why PyTorch</td><td>What PyTorch, scikit-learn, LightGBM, Optuna do for you</td></tr>
+<tr><td><a href="#t9">T9</a> Trees and boosting</td><td>The strongest method for small tables</td></tr>
+<tr><td><a href="#t10">T10</a> Bayesian optimization</td><td>Tuning settings when each try costs 20 minutes</td></tr>
+<tr><td><a href="#t11">T11</a> Sequence models</td><td>RNN, LSTM, Transformer: memory over time</td></tr>
+<tr><td><a href="#t12">T12</a> Point cloud networks</td><td>How a network can eat an unordered set of points</td></tr>
+<tr><td><a href="#t13">T13</a> Reinforcement learning</td><td>Learning by trial and reward, and why it is so data-hungry</td></tr>
+<tr><td><a href="#t14">T14</a> Uncertainty and calibration</td><td>When a model says "σ = 2 cm", is it right?</td></tr>
+<tr><td><a href="#t15">T15</a> Exercises</td><td>Hands-on steps that build the understanding</td></tr>
+<tr><td><a href="#t16">T16</a> Glossary and reading</td><td>Terms at a glance; books and courses</td></tr>
+</table></div>
+
+<h3 id="t1">T1 · Learning is optimization — and you already know it</h3>
+<p>Training a model means: choose numbers (the <b>parameters</b> or <b>weights</b> θ) so that a function f(x; θ) produces outputs close to
+known answers y, for many examples (x, y). "Close" is measured by a <b>loss</b> L(θ), and training is minimising it:</p>
+<div class="eq">θ* = argmin<sub>θ</sub> &nbsp;(1/N) Σ<sub>i</sub> ℓ( f(x<sub>i</sub>; θ), y<sub>i</sub> )</div>
+<p>dMapper's odometry already does exactly this kind of computation. In scan-to-map optimization, the unknowns are the window's poses, the
+"examples" are the points, and the loss is the sum of Mahalanobis distances of points to their NDT cells plus the prior terms; Levenberg–Marquardt
+then finds the minimum. The differences to machine learning are in scale and purpose:</p>
+<div class="table-wrap"><table>
+<tr><th></th><th>dMapper scan-to-map</th><th>Training a neural network</th></tr>
+<tr><td>unknowns</td><td>poses of one window (360 nodes × 6 ≈ 2 000 numbers)</td><td>weights (hundreds to billions)</td></tr>
+<tr><td>model</td><td>physics: rigid motion, sensor geometry</td><td>a generic flexible function, shape learned from data</td></tr>
+<tr><td>loss</td><td>NDT + IMU + prior terms</td><td>error on training examples (+ regularisation)</td></tr>
+<tr><td>solver</td><td>Gauss–Newton / Levenberg–Marquardt (second order)</td><td>stochastic gradient descent, Adam (first order)</td></tr>
+<tr><td>goal</td><td>the best poses for <i>this</i> data</td><td>good predictions on <i>new, unseen</i> data</td></tr>
+</table></div>
+<p>The last row is the deep difference. dMapper wants the answer for the data in hand. Machine learning wants the parameters to work on data
+it has never seen. Everything about splitting data, overfitting and validation (T7) follows from that one requirement.</p>
+
+<h3 id="t2">T2 · Linear models: the simplest learner</h3>
+<p>Linear regression predicts ŷ = wᵀx + b: a weighted sum of the features. With the squared error as loss, the minimum has a closed form, the
+<b>normal equations</b> (Xᵀ X) w = Xᵀ y, the same structure dMapper solves in every LM step (AᵀPA Δ = AᵀPb). No iteration is needed.</p>
+<p><b>Logistic regression</b> is the classification version: σ(wᵀx + b), with the sigmoid σ(z) = 1/(1 + e<sup>−z</sup>) squashing the sum into a probability between 0 and 1.</p>
+<p><b>The limit:</b> a linear model can only bend its output along straight directions in feature space. "The odometry error is large when the
+info ratio is low <i>and</i> the turn rate is high" is an interaction, which a sum can't express. You can add hand-made features (x₁·x₂, x²), but
+then you are designing the nonlinearity yourself. Neural networks learn it.</p>
+<div class="note"><b>Why start with it anyway</b>
+A linear model is the honest baseline. If a neural network can't beat it on held-out data, the problem is in the data or the features, not the model.</div>
+
+<h3 id="t3">T3 · Neurons and networks, in arithmetic</h3>
+<p>A <b>neuron</b> computes a weighted sum of its inputs and passes it through a nonlinear <b>activation function</b>:</p>
+<div class="eq">h = φ( w₁x₁ + w₂x₂ + … + w<sub>n</sub>x<sub>n</sub> + b )</div>
+<p>Common activations: <b>ReLU</b> φ(z) = max(0, z), cheap and the default; <b>tanh</b>, smooth, between −1 and 1; <b>sigmoid</b>, between 0 and 1.
+Without φ, stacking layers would be pointless: a linear function of a linear function is still linear.</p>
+<p>A <b>layer</b> is many neurons reading the same inputs, written as a matrix: h = φ(W x + b). A <b>multi-layer perceptron (MLP)</b> stacks layers:</p>
+<div class="eq">h₁ = φ(W₁ x + b₁) &nbsp;→&nbsp; h₂ = φ(W₂ h₁ + b₂) &nbsp;→&nbsp; ŷ = W₃ h₂ + b₃</div>
+
+<figure class="diagram">
+<svg viewBox="0 0 520 230" role="img" aria-label="A small MLP: three inputs, four hidden neurons, one output; forward pass left to right, gradients right to left">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+    <marker id="arrb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--warn)"/></marker>
+  </defs>
+  <g stroke="var(--line)" stroke-width="1.2">
+    <line x1="90" y1="60" x2="250" y2="45"/><line x1="90" y1="60" x2="250" y2="95"/><line x1="90" y1="60" x2="250" y2="145"/><line x1="90" y1="60" x2="250" y2="195"/>
+    <line x1="90" y1="120" x2="250" y2="45"/><line x1="90" y1="120" x2="250" y2="95"/><line x1="90" y1="120" x2="250" y2="145"/><line x1="90" y1="120" x2="250" y2="195"/>
+    <line x1="90" y1="180" x2="250" y2="45"/><line x1="90" y1="180" x2="250" y2="95"/><line x1="90" y1="180" x2="250" y2="145"/><line x1="90" y1="180" x2="250" y2="195"/>
+    <line x1="250" y1="45" x2="410" y2="120"/><line x1="250" y1="95" x2="410" y2="120"/><line x1="250" y1="145" x2="410" y2="120"/><line x1="250" y1="195" x2="410" y2="120"/>
+  </g>
+  <g fill="var(--panel)" stroke="var(--accent)" stroke-width="2">
+    <circle cx="90" cy="60" r="15"/><circle cx="90" cy="120" r="15"/><circle cx="90" cy="180" r="15"/>
+    <circle cx="250" cy="45" r="15"/><circle cx="250" cy="95" r="15"/><circle cx="250" cy="145" r="15"/><circle cx="250" cy="195" r="15"/>
+    <circle cx="410" cy="120" r="15"/>
+  </g>
+  <g fill="var(--text)" font-size="14" font-family="system-ui, sans-serif" text-anchor="middle">
+    <text x="90" y="65">x₁</text><text x="90" y="125">x₂</text><text x="90" y="185">x₃</text>
+    <text x="250" y="50">h</text><text x="250" y="100">h</text><text x="250" y="150">h</text><text x="250" y="200">h</text>
+    <text x="410" y="125">ŷ</text>
+    <text x="170" y="222" fill="var(--muted)" font-size="13">W₁, b₁</text><text x="330" y="222" fill="var(--muted)" font-size="13">W₂, b₂</text>
+    <text x="475" y="112" font-size="13" fill="var(--muted)">loss</text><text x="475" y="130" font-size="13" fill="var(--muted)">L(ŷ, y)</text>
+  </g>
+  <line x1="60" y1="14" x2="430" y2="14" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="245" y="10" font-size="12" fill="var(--muted)" text-anchor="middle" font-family="system-ui, sans-serif" dy="-1">forward: compute ŷ</text>
+  <line x1="460" y1="160" x2="300" y2="226" stroke="var(--warn)" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arrb)"/>
+  <text x="478" y="178" font-size="12" fill="var(--warn)" font-family="system-ui, sans-serif" text-anchor="middle">backward:</text>
+  <text x="478" y="193" font-size="12" fill="var(--warn)" font-family="system-ui, sans-serif" text-anchor="middle">∂L/∂W</text>
+</svg>
+<figcaption>A 3 → 4 → 1 MLP. The forward pass computes the prediction left to right; backpropagation (T6) sends the loss's gradient back right to left, to every weight.</figcaption>
+</figure>
+
+<p><b>Counting parameters.</b> A layer from n inputs to m outputs has n·m weights plus m biases. The point network of the roadmap,
+10 → 32 → 16 → 1, has (10·32 + 32) + (32·16 + 16) + (16·1 + 1) = 352 + 528 + 17 = <b>897</b>. A rule of thumb: with few examples, keep the
+parameter count well below the number of independent examples, or the network can memorise them.</p>
+<p><b>Why this works at all.</b> The <i>universal approximation theorem</i> says one hidden layer with enough neurons can approximate any continuous
+function on a bounded region. It says nothing about how many neurons, how much data, or whether training finds those weights. The theorem
+explains why networks are flexible, not why they generalise.</p>
+<p><b>Initialisation.</b> Weights start random, not zero: with zeros every neuron in a layer would compute the same thing and receive the same
+gradient forever. The usual scale for ReLU layers is a normal distribution with standard deviation √(2 / n<sub>inputs</sub>) ("He initialisation"),
+which keeps the size of the signals roughly constant from layer to layer.</p>
+
+<h3 id="t4">T4 · Loss functions are likelihoods</h3>
+<p>The loss decides what the network learns, so it deserves more thought than the architecture. Most standard losses are negative log-likelihoods
+of a noise model, the same principle as the Mahalanobis terms in dMapper.</p>
+<ul>
+<li><b>Mean squared error</b> (y − ŷ)² is the negative log-likelihood of Gaussian noise with a fixed σ. It says: every example is equally reliable.</li>
+<li><b>Gaussian negative log-likelihood with a predicted σ</b> (heteroscedastic regression): the network outputs two numbers, a mean μ and log σ, and the loss is
+<div class="eq">ℓ = (y − μ)² / (2σ²) + log σ</div>
+The first term rewards a correct mean, weighted by 1/σ² like an information matrix. The second punishes claiming a large σ to excuse errors.
+At the minimum, σ matches the typical error. This is how a network learns "how uncertain am I here", which the roadmap needs for the window error
+predictor and the point weight. Predicting log σ instead of σ keeps σ positive without constraints.</li>
+<li><b>Cross-entropy</b> −[y log p + (1 − y) log(1 − p)] is the negative log-likelihood of a yes/no outcome. It is used for classification ("is this point noise?").</li>
+<li><b>Robust losses</b> (Huber, Cauchy) grow more slowly for large errors, so a few wrong labels can't dominate. They are the same idea as robust kernels in pose graphs and loop closure.</li>
+</ul>
+
+<h3 id="t5">T5 · Gradient descent, and why not Levenberg–Marquardt</h3>
+<p>The <b>gradient</b> ∇L(θ) is the vector of ∂L/∂θ<sub>k</sub> for every weight: the direction in which the loss rises fastest. Gradient descent
+takes a small step the other way:</p>
+<div class="eq">θ ← θ − η ∇L(θ)</div>
+<p>η is the <b>learning rate</b>. Too large, and the loss jumps around or explodes. Too small, and training crawls. It is the most important setting in training.</p>
+<ul>
+<li><b>Stochastic gradient descent (SGD):</b> instead of all N examples, each step uses a random <b>minibatch</b> (say 64). The gradient is noisy but
+N/64 times cheaper, and the noise even helps escape poor regions. One pass over all data is an <b>epoch</b>.</li>
+<li><b>Momentum:</b> keep a running average of past gradients and step along it, like a heavy ball rolling downhill. It smooths the noise and speeds up long valleys.</li>
+<li><b>Adam</b>, the usual default: momentum plus a per-weight step size, divided by the running root-mean-square of that weight's gradients.
+Weights with consistently large gradients get smaller steps, and rarely-active weights get larger ones. It is robust to the learning rate, which is why it is the default.</li>
+</ul>
+<div class="note"><b>Why not the solver dMapper uses?</b>
+Levenberg–Marquardt is second order: it builds the normal matrix JᵀJ, whose size is P × P for P unknowns. dMapper's window has a few thousand
+unknowns, and its matrix is banded, so this is cheap. A network with a million weights would need 10¹² matrix entries, and minibatch noise
+would make the curvature estimate unreliable anyway. First-order methods need only the gradient, which costs about as much as two or three
+forward passes (T6). For a tiny network (the 897-weight one) trained on the full dataset at once, second-order methods such as L-BFGS do work,
+and they are worth trying there.</div>
+<p>A network's loss is <b>not convex</b>: there are many minima and flat regions, and the result depends on the random start. Train several times
+with different seeds and compare them, just as dMapper's s0/s1/s2 runs show the spread of the odometry.</p>
+
+<h3 id="t6">T6 · Backpropagation: how the gradient is computed</h3>
+<p>Backpropagation is the chain rule of calculus, applied systematically. Take the 1-hidden-layer network from T3 with squared loss, for one example:</p>
+<div class="eq">z = W₁x + b₁, &nbsp; h = ReLU(z), &nbsp; ŷ = W₂h + b₂, &nbsp; L = (ŷ − y)²</div>
+<p>The <b>forward pass</b> computes and <i>stores</i> z, h and ŷ. The <b>backward pass</b> starts at the loss and walks back, multiplying local derivatives:</p>
+<div class="eq">∂L/∂ŷ = 2(ŷ − y)<br>
+∂L/∂W₂ = ∂L/∂ŷ · hᵀ &nbsp;&nbsp; ∂L/∂b₂ = ∂L/∂ŷ<br>
+∂L/∂h = W₂ᵀ · ∂L/∂ŷ<br>
+∂L/∂z = ∂L/∂h ⊙ [z &gt; 0] &nbsp;&nbsp; (ReLU lets the gradient through only where it was active)<br>
+∂L/∂W₁ = ∂L/∂z · xᵀ &nbsp;&nbsp; ∂L/∂b₁ = ∂L/∂z</div>
+<p>Each step reuses the result of the step before. That is the whole trick: computing the gradient of <i>all</i> weights costs about two to three
+forward passes, no matter how many weights there are. Computing each derivative separately by finite differences would cost one forward pass per weight.</p>
+<p><b>Gradient check.</b> When you write backprop by hand, verify it numerically: change one weight by ±ε, and compare (L(θ+ε) − L(θ−ε)) / 2ε with
+your analytic derivative. They should agree to about six digits. This is the same central difference dMapper's window diagnostics use for the NDT stiffness.</p>
+
+<h3 id="t7">T7 · Generalisation: why a perfect fit can be useless</h3>
+<p>A model with enough parameters can memorise its training data: zero training error, nonsense on new data. That is <b>overfitting</b>.
+The opposite, a model too simple to capture the pattern, is <b>underfitting</b>. You can only see which one you have on data the model never trained on.</p>
+<ul>
+<li><b>Training / validation / test split.</b> Train on one part. Choose settings (network size, learning rate, when to stop) on the
+<i>validation</i> part. Report the final quality once, on the <i>test</i> part. If you choose anything by looking at the test set, it stops being a test.</li>
+<li><b>Cross-validation:</b> with little data, rotate which part is held out (k folds) and average. In dMapper, the folds are recordings (leave one recording out).</li>
+<li><b>Leakage</b> is the classic way to fool yourself: information from the test set reaches training. With time series it happens silently. Neighbouring
+windows are almost identical, so a random split puts near-copies on both sides, and the model looks great because it recognises, not because it predicts.</li>
+<li><b>Regularisation</b> restrains the model:
+  <ul>
+  <li><i>weight decay</i> adds λ‖θ‖² to the loss. In probability terms, it is a Gaussian prior on the weights, the same as dMapper's priors pulling a state toward its expected value;</li>
+  <li><i>early stopping</i>: watch the validation loss during training, and stop when it starts to rise while the training loss still falls;</li>
+  <li><i>dropout</i>: randomly switch off neurons during training, so no single neuron can be relied on.</li>
+  </ul></li>
+<li><b>Feature normalisation:</b> scale each input to mean 0 and standard deviation 1 (with statistics from the training set only). Features on wildly different scales make the
+loss surface a long thin valley, the same ill-conditioning that unscaled normal equations suffer from, and gradient descent zigzags in it.</li>
+</ul>
+<div class="warn"><b>The bias–variance view</b>
+The error on new data has two sources: <i>bias</i> (the model is too rigid to represent the truth) and <i>variance</i> (the model follows the noise of
+the particular training set). More parameters lower bias and raise variance; more data lowers variance. With little data, as in dMapper,
+variance dominates. That is why the roadmap prefers small models, strong baselines and honest splits.</div>
+
+<h3 id="t8">T8 · The tools: what each does for you, and why PyTorch</h3>
+<p>Each tool takes over a part of the work above. Knowing which part tells you when you need it.</p>
+<div class="table-wrap"><table>
+<tr><th>Tool</th><th>What it does behind the scenes</th><th>When you need it</th></tr>
+<tr><td>numpy</td><td>Arrays and fast vectorised maths (C loops under the hood). No derivatives.</td><td>Always: data handling, features, hand-written models for learning.</td></tr>
+<tr><td>matplotlib</td><td>Plots.</td><td>Always: looking at data comes before fitting it.</td></tr>
+<tr><td>scikit-learn</td><td>Ready-made classical models (linear and logistic regression, trees, gradient boosting, small MLPs), splitting, cross-validation, scaling, metrics, all behind one <code>fit</code>/<code>predict</code> interface.</td><td>Baselines and standard models with standard losses.</td></tr>
+<tr><td>LightGBM</td><td>Fast gradient-boosted trees (T9), with good handling of missing values and categorical features.</td><td>Tabular data: per-window features.</td></tr>
+<tr><td>PyTorch</td><td>Tensors and <b>automatic differentiation</b>: you write only the forward pass, and it computes every gradient. Also layers, optimizers (SGD, Adam, L-BFGS), data loading, optional GPU.</td><td>As soon as the loss or the model is not off the shelf: a predicted σ, constraints, custom structure.</td></tr>
+<tr><td>Optuna</td><td>Bayesian optimization (T10) of settings: proposes the next settings to try from the results so far, and can stop hopeless trials early.</td><td>Tuning settings that each cost a run.</td></tr>
+</table></div>
+
+<h4>What autograd does, behind the scenes</h4>
+<p>PyTorch records every operation you perform on tensors while the forward pass runs. This builds a <b>computational graph</b>: nodes are operations,
+and each one knows its own local derivative. Calling <code>loss.backward()</code> walks that graph in reverse, applying the chain rule of T6, and adds each
+weight's gradient into its <code>.grad</code> field. That is why every step starts with <code>zero_grad()</code>: otherwise the gradients from the previous step
+would be added on top. The graph is rebuilt on every forward pass ("define by run"), so ordinary Python <code>if</code> and <code>for</code> work inside a model.</p>
+<p>The same 2-layer network, first by hand with numpy (every derivative written out, as in T6), then in PyTorch:</p>
+<pre><code>import numpy as np
+rng = np.random.default_rng(0)
+X = rng.normal(size=(500, 3))                      # 500 examples, 3 features
+y = (np.sin(X[:, 0]) + 0.5 * X[:, 1] ** 2 + 0.1 * rng.normal(size=500))[:, None]
+
+H, lr = 16, 0.05
+W1 = rng.normal(scale=np.sqrt(2 / 3), size=(3, H)); b1 = np.zeros(H)   # He initialisation
+W2 = rng.normal(scale=np.sqrt(2 / H), size=(H, 1)); b2 = np.zeros(1)
+for step in range(2000):
+    z1 = X @ W1 + b1                    # forward
+    h1 = np.maximum(z1, 0)              # ReLU
+    yhat = h1 @ W2 + b2
+    loss = np.mean((yhat - y) ** 2)
+    g_yhat = 2 * (yhat - y) / len(X)    # backward: chain rule, loss -&gt; weights
+    g_W2 = h1.T @ g_yhat; g_b2 = g_yhat.sum(axis=0)
+    g_z1 = (g_yhat @ W2.T) * (z1 &gt; 0)
+    g_W1 = X.T @ g_z1;    g_b1 = g_z1.sum(axis=0)
+    W1 -= lr * g_W1; b1 -= lr * g_b1; W2 -= lr * g_W2; b2 -= lr * g_b2    # gradient descent
+    if step % 500 == 0:
+        print(step, loss)</code></pre>
+<pre><code>import torch
+torch.manual_seed(0)
+Xt = torch.tensor(X, dtype=torch.float32); yt = torch.tensor(y, dtype=torch.float32)
+model = torch.nn.Sequential(torch.nn.Linear(3, 16), torch.nn.ReLU(), torch.nn.Linear(16, 1))
+opt = torch.optim.SGD(model.parameters(), lr=0.05)
+for step in range(2000):
+    loss = torch.mean((model(Xt) - yt) ** 2)   # forward: records the graph
+    opt.zero_grad()                             # clear the previous step's gradients
+    loss.backward()                             # backward: autograd fills every weight's .grad
+    opt.step()                                  # W -= lr * grad, for every weight</code></pre>
+<p>The derivative lines are gone. Now change the model so that it predicts its own uncertainty (T4). By hand, you derive and code new
+gradients for every layer. In PyTorch, only the loss changes:</p>
+<pre><code>model = torch.nn.Sequential(torch.nn.Linear(3, 16), torch.nn.ReLU(), torch.nn.Linear(16, 2))
+out = model(Xt)
+mu, log_sigma = out[:, :1], out[:, 1:]
+loss = torch.mean(0.5 * ((yt - mu) / torch.exp(log_sigma)) ** 2 + log_sigma)   # Gaussian NLL</code></pre>
+<p>This is the real reason to use PyTorch: <b>freedom in the loss and the model, at no cost in derivatives</b>. scikit-learn's MLP can't take
+a custom loss like this one. Writing it by hand is the best way to <i>learn</i> backpropagation, but the slowest way to <i>experiment</i>.</p>
+
+<h4>The alternatives, briefly</h4>
+<ul>
+<li><b>TensorFlow / Keras:</b> the same capabilities, with a heavier deployment ecosystem aimed at production servers and phones. PyTorch dominates research and teaching material, so examples and help are easier to find.</li>
+<li><b>JAX:</b> automatic differentiation of numpy-style pure functions, very elegant and fast, but more abstract. A good second framework, not a first.</li>
+<li><b>ONNX:</b> a file format for trained models, with runtimes for many languages. It is not needed in dMapper, because a small MLP's forward pass is about twenty lines of C++.</li>
+</ul>
+
+<h4>How a trained model reaches dMapper</h4>
+<p>Python is only for training. Once trained, the weights are plain numbers, written to a file and read by C++. The forward pass is a few loops.
+Written as plain loops, the sum runs in the same order every time, so a run gives the same bits as the last one:</p>
+<pre><code>// one hidden layer with ReLU; W1 is H x n (PyTorch's nn.Linear stores weights as out x in), W2 is 1 x H
+double mlp(const Eigen::VectorXd &amp;x, const Eigen::MatrixXd &amp;W1, const Eigen::VectorXd &amp;b1,
+           const Eigen::RowVectorXd &amp;W2, double b2)
+{
+    double out = b2;
+    for (int j = 0; j &lt; W1.rows(); j++)
+    {
+        double z = b1(j);
+        for (int i = 0; i &lt; W1.cols(); i++)
+            z += W1(j, i) * x(i);
+        out += W2(j) * std::max(z, 0.0);
+    }
+    return out;
+}</code></pre>
+<p>Training needs PyTorch's machinery. Using the trained model needs only multiplication and addition.</p>
+
+<h3 id="t9">T9 · Decision trees and gradient boosting</h3>
+<p>A <b>decision tree</b> asks a sequence of yes/no questions about the features ("info ratio &lt; 0.3?", then "turn rate &gt; 40°/s?") and predicts a constant in
+each leaf. Training picks, at each node, the feature and threshold that best separate the examples. Trees handle features on any scale and
+interactions naturally, but a single tree is crude and unstable.</p>
+<p><b>Gradient boosting</b> builds hundreds of small trees <i>in sequence</i>. Each new tree is fitted to what the trees so far still get wrong: for
+squared loss, literally their residuals; in general, the negative gradient of the loss, hence the name. Each tree's contribution is shrunk by a
+learning rate, so no single tree dominates. The sum is a strong, smooth-enough predictor.</p>
+<ul>
+<li><b>Strengths:</b> the best general method for small and medium tables of features, little tuning, and a ranking of feature importance that tells you what the model relies on.</li>
+<li><b>Weaknesses:</b> the output is piecewise constant (a staircase), with no gradient. It can't extrapolate beyond the training range, and it is harder to embed in C++ than an MLP, although still possible.</li>
+</ul>
+
+<h3 id="t10">T10 · Bayesian optimization: tuning when each try is expensive</h3>
+<p>Tuning dMapper settings has an unusual shape: few knobs, no gradient, a noisy result, and each evaluation costs a full run. Grid search wastes
+runs, and random search ignores what it has learned. Bayesian optimization keeps a <b>surrogate model</b> of "quality as a function of the settings",
+built from the runs so far, and uses it to choose the next run.</p>
+<ul>
+<li><b>Gaussian process surrogate:</b> a probability distribution over smooth functions. After each run it gives, for any untried setting, a predicted
+quality <i>and</i> an uncertainty: small near tried settings, large far from them. The kernel encodes how smooth the function is assumed to be.</li>
+<li><b>Acquisition function:</b> scores each candidate by balancing <i>exploitation</i> (predicted good) against <i>exploration</i> (very uncertain, might be
+better). <i>Expected improvement</i> is the classic one: how much better than the best so far, on average, under the surrogate's uncertainty.</li>
+<li><b>TPE</b> (Optuna's default) works the other way round: it models the density of settings among good trials versus bad trials, and proposes
+settings that are likely under "good" and unlikely under "bad". It handles discrete and conditional settings well.</li>
+</ul>
+<p>The result is typically a good setting in tens of runs instead of hundreds. Noise matters: if the run-to-run spread (s0/s1/s2) is as large as
+the differences between settings, the optimizer chases noise. That is why the gates require improvements beyond that spread.</p>
+
+<h3 id="t11">T11 · Sequence models: memory over time</h3>
+<p>Windows come in a sequence, and what happened before matters. There are three ways to give a model that context:</p>
+<ul>
+<li><b>Lagged features:</b> append the previous windows' features to the input. Simple and transparent, and the right first choice with little data.</li>
+<li><b>Recurrent networks (RNN, GRU, LSTM):</b> carry a hidden state vector from step to step, h<sub>t</sub> = φ(W h<sub>t−1</sub> + U x<sub>t</sub> + b), much like
+dMapper carries the gyro bias and velocity from window to window. Training backpropagates through all the steps ("through time"). Gradients
+then shrink or grow exponentially with the sequence length, which is the <i>vanishing gradient</i> problem. The LSTM and GRU add <b>gates</b>,
+small sigmoid layers that decide what to keep, forget and output, which let information and gradients survive many steps.</li>
+<li><b>Transformers:</b> no carried state. Every element looks at every other element through <b>attention</b>: it forms a query, compares it with all
+keys, and takes a weighted average of their values, softmax(QKᵀ/√d)·V. This is powerful for long-range patterns, but it needs a lot of data to learn
+which patterns matter. With a few thousand windows, a Transformer would mostly memorise.</li>
+</ul>
+
+<h3 id="t12">T12 · Point cloud networks</h3>
+<p>A point cloud is a <b>set</b>: the same points in any order are the same scene. An ordinary MLP takes a fixed-length, ordered vector, so feeding it
+raw points makes no sense. Two answers:</p>
+<ul>
+<li><b>PointNet:</b> apply the <i>same</i> small MLP to every point separately (a "shared MLP"), then combine all points with a <b>symmetric</b> function,
+max-pooling over each feature, whose result doesn't depend on the order. Its weakness is that each point is seen alone before the pooling, so local
+structure (an edge, a corner) is captured poorly. PointNet++ applies PointNet to local neighbourhoods, and convolution-style networks such as KPConv learn local filters on points.</li>
+<li><b>Hand-made local features:</b> compute per point what the neighbourhood looks like, for example the eigenvalues of the neighbours' covariance.
+Linearity, planarity and scattering are ratios of these eigenvalues, so a wall, an edge and gravel look different. Feed them, with range, incidence
+angle and intensity, to a small per-point MLP. This is a "PointNet without pooling" on features you designed. It is cheap, deterministic, explainable,
+and needs far less data than learning the local structure itself.</li>
+</ul>
+<p>Learned point networks shine with large labelled datasets and GPUs. With few recordings and no labels, the hand-made features are the right start.
+The networks are worth revisiting only if those features stop improving.</p>
+
+<h3 id="t13">T13 · Reinforcement learning, and why it is so data-hungry</h3>
+<p>In reinforcement learning (RL), an <b>agent</b> observes a <b>state</b>, takes an <b>action</b>, receives a <b>reward</b>, and the world moves to a new state.
+The goal is a <b>policy</b>, a rule from state to action, that maximises the total reward over an <b>episode</b>. Applied to dMapper: the state is a window's
+telemetry, the action is a setting, the reward is map quality at the end, and an episode is one run.</p>
+<p>Three difficulties make it expensive:</p>
+<ul>
+<li><b>Credit assignment:</b> the reward comes at the end. Which of 690 decisions made the map better?</li>
+<li><b>Exploration:</b> to learn that an action is good, it has to be tried, including bad ones, many times.</li>
+<li><b>Your own data:</b> the policy changes what it sees next, so old experience goes stale as it learns.</li>
+</ul>
+<p>Typical RL successes use millions of episodes from a fast simulator. One dMapper episode is a 1.5–20 minute run.</p>
+<p>A <b>contextual bandit</b> is RL with the hardest part removed: one decision, one reward, and no effect on later states. "Given these features, which of three settings?" is
+learnable with far less data, which is why the roadmap mentions it as the upper limit.</p>
+
+<h3 id="t14">T14 · Uncertainty and calibration</h3>
+<p>A model that predicts σ, the window error predictor or the point weight, is only useful if its σ is <b>calibrated</b>: errors predicted at
+2 cm should really be about 2 cm. Check it on held-out data:</p>
+<ul>
+<li><b>z-scores:</b> (y − μ)/σ over all examples should have mean ≈ 0 and standard deviation ≈ 1. A standard deviation of 2 means the model is overconfident by a factor of two.</li>
+<li><b>Reliability plot:</b> sort the examples by predicted σ into bins, and plot the observed RMS error per bin against the predicted σ. It should lie on the diagonal.</li>
+</ul>
+<p>Calibration matters most when σ becomes a weight 1/σ² in dMapper's optimizer. An overconfident model gives some points or windows too much
+influence, exactly like a wrong sigma in the TOML.</p>
+<p>Two kinds of uncertainty differ:</p>
+<ul>
+<li><b>Aleatoric uncertainty:</b> noise in the data itself. The heteroscedastic loss learns this.</li>
+<li><b>Epistemic uncertainty:</b> the model doesn't know because it has never seen such inputs, for example a cave after training on buildings. A model can't detect this from its own σ.</li>
+</ul>
+<p>Epistemic uncertainty needs separate checks: inputs outside the training range, or the disagreement between several models trained with different seeds (an <b>ensemble</b>).</p>
+
+<h3 id="t15">T15 · Exercises that build the understanding</h3>
+<p>Each exercise needs only what is named, and each ends with something to look at, not just a number.</p>
+<div class="table-wrap"><table>
+<tr><th>#</th><th>Exercise</th><th>You learn</th><th>Needs</th></tr>
+<tr><td>E1</td><td>Parse <code>raw data/44_diag.log</code> (690 windows) into a table. Plot iterations, |result − guess| and info ratio along the route. Fit a linear regression with the normal equations by hand.</td><td>looking at data; T2</td><td>numpy, matplotlib</td></tr>
+<tr><td>E2</td><td>Type the numpy MLP from T8 yourself, and add a gradient check (T6) for a few weights. Vary the learning rate: 0.001, 0.05, 1.0.</td><td>T3, T5, T6</td><td>numpy</td></tr>
+<tr><td>E3</td><td>Same network in PyTorch, then switch to the heteroscedastic loss. Plot the predicted σ against |x₁|; make the toy noise grow with |x₁| first.</td><td>T4, T8</td><td>torch</td></tr>
+<tr><td>E4</td><td>On the E1 table, predict |result − guess| with a random split and with a split into two halves of the route. Compare the validation errors.</td><td>T7, leakage, made visible</td><td>scikit-learn</td></tr>
+<tr><td>E5</td><td>Same task with gradient boosting (scikit-learn's <code>HistGradientBoostingRegressor</code>) and a small MLP. Compare which features each relies on with <code>sklearn.inspection.permutation_importance</code>: shuffle one feature at a time and see how much the error grows.</td><td>T9</td><td>scikit-learn</td></tr>
+<tr><td>E6</td><td>Optuna on a noisy 1-D toy function (for example (x − 2)² + noise). Plot where it chose to sample, and watch exploration turn into exploitation.</td><td>T10</td><td>optuna</td></tr>
+<tr><td>E7</td><td>For E3's model, compute the z-scores and a reliability plot on held-out data. Train 5 seeds and compare their predictions far outside the training range.</td><td>T14, ensembles</td><td>torch</td></tr>
+</table></div>
+<p class="meta">Installed today: numpy, matplotlib, scipy. Missing for E3–E7: <code>python -m pip install --user scikit-learn optuna</code> and
+<code>python -m pip install --user torch --index-url https://download.pytorch.org/whl/cpu</code> (CPU build, a download of a few hundred MB).</p>
+
+<h3 id="t16">T16 · Glossary and reading</h3>
+<div class="table-wrap"><table>
+<tr><th>Term</th><th>Meaning</th></tr>
+<tr><td>parameter / weight</td><td>a number the training adjusts</td></tr>
+<tr><td>hyperparameter</td><td>a setting chosen <i>outside</i> training: layer sizes, learning rate, regularisation strength</td></tr>
+<tr><td>feature</td><td>one input number of an example</td></tr>
+<tr><td>label / target</td><td>the known answer the model should predict</td></tr>
+<tr><td>loss</td><td>the number training minimises; usually a negative log-likelihood</td></tr>
+<tr><td>epoch / minibatch</td><td>one pass over all training data / the subset used for one step</td></tr>
+<tr><td>gradient</td><td>the vector of derivatives of the loss with respect to all weights</td></tr>
+<tr><td>backpropagation</td><td>the chain rule applied backwards through the network, to get the gradient cheaply</td></tr>
+<tr><td>autograd</td><td>software that does backpropagation automatically from the recorded forward pass</td></tr>
+<tr><td>overfitting</td><td>fitting the noise of the training data; good on training data, bad on new data</td></tr>
+<tr><td>regularisation</td><td>anything that restrains the model toward simpler solutions</td></tr>
+<tr><td>validation / test set</td><td>data held out to choose settings / to measure the final quality once</td></tr>
+<tr><td>leakage</td><td>test information reaching training, which makes results look better than they are</td></tr>
+<tr><td>surrogate model</td><td>a cheap model of an expensive function, used to decide where to evaluate next</td></tr>
+<tr><td>calibration</td><td>whether a predicted uncertainty matches the observed errors</td></tr>
+<tr><td>inference</td><td>using a trained model to predict; in dMapper, the C++ forward pass</td></tr>
+</table></div>
+<ul class="src">
+<li><b>Start here:</b> 3Blue1Brown, "Neural networks" video series: the intuition of T3–T6 in pictures.</li>
+<li>A. Karpathy, "Neural Networks: Zero to Hero" (video course): builds a small autograd engine (micrograd) from scratch. After it, PyTorch holds no mysteries.</li>
+<li>PyTorch tutorials, "Learn the Basics": tensors, autograd, training loops.</li>
+<li>C. M. Bishop, H. Bishop, <i>Deep Learning: Foundations and Concepts</i>, Springer 2024: a clear modern textbook, with probability-based loss functions as in T4.</li>
+<li>I. Goodfellow, Y. Bengio, A. Courville, <i>Deep Learning</i>, MIT Press 2016 (free at deeplearningbook.org): chapters 5–8 cover T5–T7 in depth.</li>
+<li>T. Hastie, R. Tibshirani, J. Friedman, <i>The Elements of Statistical Learning</i>, 2nd ed. 2009 (free online): linear models, trees, boosting, the bias–variance trade-off.</li>
+<li>K. P. Murphy, <i>Probabilistic Machine Learning: An Introduction</i>, MIT Press 2022 (free online): everything as probability, close to how estimation in SLAM is thought about.</li>
+<li>C. E. Rasmussen, C. K. I. Williams, <i>Gaussian Processes for Machine Learning</i>, MIT Press 2006 (free online): the theory behind T10.</li>
+<li>R. S. Sutton, A. G. Barto, <i>Reinforcement Learning: An Introduction</i>, 2nd ed. 2018 (free online): T13 in depth, bandits in chapter 2.</li>
+<li>T. D. Barfoot, <i>State Estimation for Robotics</i>, Cambridge University Press (2nd ed. 2024): the estimation side, for the bridges between dMapper's optimizer and ML.</li>
+</ul>
+
+<h2 id="part3">Part III · Applying it to dMapper: the roadmap</h2>
+<p>How these methods could improve dMapper, and what has to be in place first. Read it in module 9. Nothing in it is scheduled; it is a direction to come back to as the project produces more recordings.</p>
 <div class="tldr">
   <div class="card"><div class="big">~2</div><div class="lbl">independent real recordings to learn from today (44, 46, both buildings), with 690 windows in 44</div></div>
   <div class="card"><div class="big">0</div><div class="lbl">cave recordings, although caves are the target; a model trained on buildings is unproven there</div></div>
@@ -513,6 +1178,8 @@ judged by whether they beat the global settings, never against the old defaults.
 <tr><td>2026-10-27</td><td>—</td><td>A review agent checked the roadmap against the code. Corrected: the sources of several window features (the gyro bias is in the results JSON, not the log; χ² is printed only for weak windows; some features are new); which features are known before a window's optimization; Phase 5's real competitor (the degeneracy projection, because the sigma-raising rule is off with <code>imu_always_on</code>); the domain-layer placement of the point-weight port; determinism details; the label caveats (drift smoothing, censored windows, hold-out smear); the leakage caveats; per-sensor models; the version key (golden manifest hash); the inference cost (10–100 s, not "seconds"). Added the acceptance rule.</td><td>—</td></tr>
 <tr><td>2026-10-27</td><td>A</td><td>Plan reviewed with the user's direction: no training now; learning goes on as long as development does, and scans and learning data are produced along the way. Checked: a result records only <code>0.1.0</code> and the build date, not the commit; the results JSON is part of the golden baseline; numpy and matplotlib are installed.</td><td>Section 2 split into track A (now: provenance, window telemetry, recording cards with fixed roles, recording protocol, run archive, general objective, learning on existing data) and track B (model phases, each started by a data milestone). Next: A3 and A7 need no code; A1 and A2 are OpenSpec changes, after the user's go. A review agent then added the recording id, build configuration and numerics epoch to A1; backup, file hashes, restamp history and firmware to the cards; and resolved a contradiction: the first cave is validation for the retune, and the test role starts with the second recording of a kind.</td></tr>
 <tr><td>2026-10-27</td><td>—</td><td>Purpose clarified by the user: this page is a guide for the user's own research and learning. Nothing is scheduled, and none of track A or B starts with it.</td><td>Track A and B are directions to come back to, not tasks.</td></tr>
+<tr><td>2026-10-27</td><td>Theory</td><td>Added the theory part (T1–T16) at the user's request, from learning as optimization to backpropagation, the tools (why PyTorch), trees, Bayesian optimization, sequence and point networks, RL and calibration, with exercises E1–E7 and a reading list. The numpy example was run, and its loss falls from 1.61 to 0.05. A review agent checked the maths, code and sources. Fixed: E5 now uses permutation importance, and the unknowns per window are given consistently (~2 000).</td><td>Start with T1–T7 and exercises E1–E2.</td></tr>
+<tr><td>2026-10-27</td><td>Course</td><td>The page was turned into a learning guide, at the user's request. Part I is a learning path of nine modules (M1–M9): goal, what to read or watch, what to do, self-check questions with hidden answers, and a test of when you've understood. Part II is the theory, Part III the roadmap. Checked: the E1 starter code parses all 690 windows of <code>44_diag.log</code>, and the worked forward and backward example (including the dead ReLU at learning rate 0.1) was recomputed in numpy.</td><td>The user works through the guide; afterwards, work together starts.</td></tr>
 </table></div>
 
 <h2 id="sources">Sources</h2>
