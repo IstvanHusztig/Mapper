@@ -196,7 +196,7 @@ bool integrate_window_translations(Window &window, const Eigen::Vector3d &start_
     return true;
 }
 
-void repropagate_window_tail(Window &window, int tail_nodes, const Eigen::Vector3d &bias_update)
+void repropagate_window_tail(Window &window, int tail_nodes, int velocity_nodes, const Eigen::Vector3d &bias_update)
 {
     auto &tr = window.poses;
     const auto &imu = window.motion_model_poses;
@@ -204,8 +204,7 @@ void repropagate_window_tail(Window &window, int tail_nodes, const Eigen::Vector
     const int n = static_cast<int>(tr.size());
     const int m = tail_nodes;
     const int a = n - 1 - m;          // last node kept from the optimization
-    constexpr int velocity_nodes = 20; // same span as the prev_velocity estimate
-    if (m > 0 && a >= velocity_nodes && ts.size() == tr.size() && imu.size() == tr.size())
+    if (m > 0 && velocity_nodes > 0 && a >= velocity_nodes && ts.size() == tr.size() && imu.size() == tr.size())
     {
         const double dt_v = ts[a].first - ts[a - velocity_nodes].first;
         const Eigen::Vector3d v = dt_v > 0.0 ? Eigen::Vector3d((tr[a].translation() - tr[a - velocity_nodes].translation()) / dt_v)

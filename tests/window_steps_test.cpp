@@ -251,14 +251,14 @@ TEST_CASE("repropagate_window_tail continues the tail with the kept velocity and
 
     SUBCASE("no tail nodes: nothing changes")
     {
-        repropagate_window_tail(w, 0, Eigen::Vector3d::Zero());
+        repropagate_window_tail(w, 0, 20, Eigen::Vector3d::Zero());
         for (int k = 0; k < n; k++)
             CHECK(w.poses[k].matrix() == before.poses[k].matrix());
     }
 
     SUBCASE("the tail continues from the last kept node")
     {
-        repropagate_window_tail(w, tail, Eigen::Vector3d::Zero());
+        repropagate_window_tail(w, tail, 20, Eigen::Vector3d::Zero());
         const int a = n - 1 - tail;
         for (int k = 0; k <= a; k++)
             CHECK(w.poses[k].matrix() == before.poses[k].matrix());
@@ -271,9 +271,24 @@ TEST_CASE("repropagate_window_tail continues the tail with the kept velocity and
         }
     }
 
+    SUBCASE("a short velocity span (a slower IMU) gives the same tail at constant velocity")
+    {
+        repropagate_window_tail(w, tail, 4, Eigen::Vector3d::Zero());
+        for (int k = n - tail; k < n; k++)
+            CHECK(w.poses[k].translation().isApprox(Eigen::Vector3d(k * dt, 0.0, 0.0), 1e-9));
+    }
+
+    SUBCASE("no velocity span, or one longer than the kept nodes: nothing changes")
+    {
+        repropagate_window_tail(w, tail, 0, Eigen::Vector3d::Zero());
+        repropagate_window_tail(w, tail, n - tail, Eigen::Vector3d::Zero());
+        for (int k = 0; k < n; k++)
+            CHECK(w.poses[k].matrix() == before.poses[k].matrix());
+    }
+
     SUBCASE("a bias update removes rotation from the IMU increments")
     {
-        repropagate_window_tail(w, tail, Eigen::Vector3d(0.0, 0.0, 0.4));
+        repropagate_window_tail(w, tail, 20, Eigen::Vector3d(0.0, 0.0, 0.4));
         for (int k = n - tail; k < n; k++)
             CHECK(w.poses[k].linear().isApprox(Eigen::Matrix3d::Identity(), 1e-9));
     }

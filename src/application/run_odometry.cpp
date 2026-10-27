@@ -1035,8 +1035,8 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
             PreviousVelocity previous;
             if (setup.uses_previous_velocity && i > 0)
             {
-                constexpr int velocity_span_nodes = 20;
-                previous = estimate_previous_velocity(windows[i - 1], windows[i], velocity_span_nodes, params.max_prior_velocity_mps);
+                previous = estimate_previous_velocity(windows[i - 1], windows[i], params.prior_velocity_span_nr_samples,
+                                                      params.max_prior_velocity_mps);
                 if (previous.dropped)
                     log_info(logger) << "window " << i + 1 << ": previous window velocity " << previous.speed
                                      << " m/s > max_prior_velocity_mps " << params.max_prior_velocity_mps << ": not used as prior";
@@ -1139,7 +1139,7 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
                 const Eigen::Vector3d bias_update = setup.rotation_options.estimate_bias
                                                         ? Eigen::Vector3d(windows[i].gyro_bias.mean - setup.rotation_options.bias_prior_mean)
                                                         : Eigen::Vector3d::Zero();
-                repropagate_window_tail(windows[i], params.handoff_tail_nodes, bias_update);
+                repropagate_window_tail(windows[i], params.handoff_tail_nodes, params.handoff_tail_velocity_span_nr_samples, bias_update);
             }
 
             if (i % 100 == 0)

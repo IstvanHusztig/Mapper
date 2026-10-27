@@ -71,7 +71,7 @@ bool integrate_window_translations(Window &window, const Eigen::Vector3d &start_
 // re-propagated from the last well-constrained node with the IMU rotation (motion_model_poses, corrected by
 // bias_update) and the velocity of the 20 nodes before it; the next window starts from the re-propagated last node.
 // Does nothing for tail_nodes <= 0 or a window too short for the velocity span.
-void repropagate_window_tail(Window &window, int tail_nodes, const Eigen::Vector3d &bias_update);
+void repropagate_window_tail(Window &window, int tail_nodes, int velocity_nodes, const Eigen::Vector3d &bias_update);
 
 // how a window's Levenberg-Marquardt iterations converged (diagnostics of log_iteration_convergence)
 struct IterationConvergence

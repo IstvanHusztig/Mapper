@@ -101,8 +101,11 @@ struct OdometryConfig
     // velocity-continuity prior: world-frame acceleration sigma [m/s^2] between consecutive nodes,
     // also applied across window boundaries (removes velocity kinks every threshold_nr_poses); 0 = disabled
     double lidar_odometry_motion_model_acc_1_sigma_mps2 = 0.0;
-    // the previous window's final velocity (over its last 20 nodes) is used as a prior only up to this speed [m/s]
+    // the previous window's final velocity (over its last prior_velocity_span_nr_samples nodes) is used as a prior
+    // only up to this speed [m/s]
     double max_prior_velocity_mps = 10.0;
+    // IMU samples that velocity is measured over; counted in samples, so set per sensor (20 = 20 ms at 1 kHz)
+    int prior_velocity_span_nr_samples = 20;
 
     // time-scaled rotation prior between consecutive nodes:
     // sigma_axis(dt) = max(k * gyro_arw_axis * sqrt(dt), rotation_sigma_floor_deg); replaces the constant om/fi/ka sigmas above
@@ -181,6 +184,8 @@ struct OdometryConfig
     // window hand-off: the last handoff_tail_nodes nodes of each window are re-propagated from the IMU
     // before they seed the next window (they carry almost no points); 0 = disabled
     int handoff_tail_nodes = 30;
+    // IMU samples the re-propagated tail's velocity is measured over, before the tail (20 = 20 ms at 1 kHz); 0 = no re-propagation
+    int handoff_tail_velocity_span_nr_samples = 20;
 
     // IMU-aided translation prediction: instead of carrying the previous window's constant velocity, the initial guess
     // (and with it the translation motion-model prior) of each window is integrated from the accelerometer;
