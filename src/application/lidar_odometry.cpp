@@ -161,7 +161,9 @@ void calculate_trajectory(
 
             if (total_variance > startup_gyro_bias_max_variance_deg2_s2)
             {
-                log_info(logger) << "WARNING: Excessive movement detected (" << total_variance << "). Bias set to 0.";
+                log_warning(logger) << "start-up gyro bias: movement in the first " << n << " IMU samples (variance "
+                                    << total_variance << " deg^2/s^2 > " << startup_gyro_bias_max_variance_deg2_s2
+                                    << "), bias set to 0";
                 bias_gyr_x = 0.0;
                 bias_gyr_y = 0.0;
                 bias_gyr_z = 0.0;
@@ -176,6 +178,9 @@ void calculate_trajectory(
                 bias_gyr_z = gyr_z[n / 2];
             }
         }
+        else
+            log_warning(logger) << "start-up gyro bias: " << imu_data.size() << " IMU samples, startup_gyro_bias_nr_samples = "
+                                << startup_gyro_bias_nr_samples << ", bias set to 0";
 
         log_info(logger) << "------------------";
         log_info(logger) << "GYRO BIAS";
