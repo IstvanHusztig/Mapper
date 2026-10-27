@@ -47,6 +47,7 @@ imu_accel_noise_density_mps2_sqrt_hz = 0.0013
 imu_acceleration_offset_freeze_blind = false
 imu_acceleration_offset_initial_sigma_mps2 = 0.5
 imu_acceleration_offset_rw_mps2_sqrt_s = 0.05
+imu_acceleration_offset_span_nr_samples = 20
 imu_acceleration_only_when_degenerate = false
 imu_acceleration_sigma_mps2 = 0.5
 imu_acceleration_span_s = 0.01
