@@ -35,8 +35,8 @@ threshould_output_filter = 0.4
 gyro_bias_initial_sigma_deg_s = 10.0
 gyro_bias_max_deg_s = 20.0
 gyro_bias_rw_deg_s_sqrt_s = 0.005
-handoff_tail_nodes = 6
-handoff_tail_velocity_span_nr_samples = 4
+handoff_tail_nodes = 15
+handoff_tail_velocity_span_nr_samples = 10
 use_gyro_bias_estimation = true
 
 [imu_translation]
@@ -48,7 +48,7 @@ imu_accel_noise_density_mps2_sqrt_hz = 0.0013
 imu_acceleration_offset_freeze_blind = false
 imu_acceleration_offset_initial_sigma_mps2 = 0.1
 imu_acceleration_offset_rw_mps2_sqrt_s = 1e-04
-imu_acceleration_offset_span_nr_samples = 4
+imu_acceleration_offset_span_nr_samples = 10
 imu_acceleration_only_when_degenerate = true
 imu_acceleration_sigma_mps2 = 0.5
 imu_acceleration_span_s = 0.01
@@ -112,7 +112,7 @@ min_distance_lidar_outdoor_grid = 1.0
 nr_iter = 100
 sliding_window_trajectory_length_threshold = 200.0
 threshold_initial_points = 60000
-threshold_nr_poses = 72
+threshold_nr_poses = 180
 use_exact_ndt_bucket_statistics = false
 use_motion_from_previous_step = true
 
@@ -157,7 +157,7 @@ fusionConventionEnu = false
 fusionConventionNed = false
 fusionConventionNwu = true
 startup_gyro_bias_max_variance_deg2_s2 = 5.0
-startup_gyro_bias_nr_samples = 200
+startup_gyro_bias_nr_samples = 500
 use_remove_imu_bias_from_first_stationary_scan = true
 
 [misc]
@@ -188,7 +188,7 @@ lidar_odometry_motion_model_x_1_sigma_m = 1e-04
 lidar_odometry_motion_model_y_1_sigma_m = 1e-04
 lidar_odometry_motion_model_z_1_sigma_m = 1e-04
 max_prior_velocity_mps = 5.0
-prior_velocity_span_nr_samples = 4
+prior_velocity_span_nr_samples = 10
 rotation_sigma_floor_deg = 0.0035449077
 rotation_sigma_inflation_k = 7.0898154
 rotation_sigma_inflation_k_turn = 0.0
