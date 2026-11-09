@@ -15,7 +15,7 @@ Reference data for `settings/livox-vertical.toml` (Livox Mid-360S, vertical hand
 | Range precision (1σ) | ≤ 2 cm @ 10 m; ≤ 4 cm @ 0.2 m |
 | Angular precision (1σ) | < 0.15° |
 | IMU | ICM40609 (3-axis accelerometer + 3-axis gyroscope) |
-| IMU output rate | 200 Hz (default after power-on) |
+| IMU output rate | 200 Hz (default after power-on); 500 Hz with firmware 35.1.1.13 (measured: 1.997 ms median step) |
 | IMU axes | the same as the point cloud axes |
 | IMU position in the point frame | x = 11.0 mm, y = 23.29 mm, z = −44.12 mm |
 | Timestamps | 64-bit, ns; synchronised over IEEE 1588-2008 (PTPv2) or GPS (PPS + GPRMC) |
@@ -34,14 +34,14 @@ Reference data for `settings/livox-vertical.toml` (Livox Mid-360S, vertical hand
 
 | Setting | Value | From |
 |---|---|---|
-| `threshold_nr_poses` | 72 | 0.36 s windows at the 200 Hz IMU |
-| `handoff_tail_nodes` | 6 | 30 ms at 200 Hz |
-| `startup_gyro_bias_nr_samples` | 200 | 1 s at 200 Hz |
-| `imu_acceleration_offset_span_nr_samples` | 4 | 20 ms at 200 Hz |
-| `prior_velocity_span_nr_samples`, `handoff_tail_velocity_span_nr_samples` | 4 | 20 ms at 200 Hz |
+| `threshold_nr_poses` | 180 | 0.36 s windows at the 500 Hz IMU |
+| `handoff_tail_nodes` | 15 | 30 ms at 500 Hz |
+| `startup_gyro_bias_nr_samples` | 500 | 1 s at 500 Hz |
+| `imu_acceleration_offset_span_nr_samples` | 10 | 20 ms at 500 Hz |
+| `prior_velocity_span_nr_samples`, `handoff_tail_velocity_span_nr_samples` | 10 | 20 ms at 500 Hz |
 | `filter_threshold_xy_outer` | 40 m | range at 10 % reflectivity |
 | `max_distance_lidar`, `max_distance_lidar_rigid_sf` | 40 m | the same range, so far points are registered too |
-| `imu_acceleration_span_s` | 0.01 s | as on the L2; 2-3 samples at 200 Hz; one lost sample is never a gap, two in a row may be |
+| `imu_acceleration_span_s` | 0.01 s | as on the L2; 5 samples at 500 Hz; a gap (over 20 ms) needs about 9 lost samples in a row |
 | `filter_threshold_xy_inner` | 0.35 m | the operator's body; also drops (0, 0, 0) points |
 | `lidar_imu_lever_arm_*` | TODO | the IMU position above, in the vertical mount's output axes |
 

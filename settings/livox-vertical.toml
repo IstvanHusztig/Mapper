@@ -6,7 +6,7 @@
 # This file contains parameters organized in categories.
 # Version information is stored in [version_info] section for compatibility checking.
 #
-# Livox Mid-360S, vertical handheld mount (cave/outdoor): IMU 200 Hz, 200k pts/s, Z-up NWU.
+# Livox Mid-360S, vertical handheld mount (cave/outdoor): IMU 500 Hz (firmware 35.1.1.13), 200k pts/s, Z-up NWU.
 # PROVISIONAL: copied from l2-vertical.toml; the values marked TODO are measured on the first Mid-360S recordings.
 # Stand still >= 1-2 s at the start (IMU gyro bias removal + initial map).
 
@@ -42,10 +42,10 @@ threshould_output_filter = 0.4
 gyro_bias_initial_sigma_deg_s = 10.0
 gyro_bias_max_deg_s = 20.0
 gyro_bias_rw_deg_s_sqrt_s = 0.005
-# 30 ms at the 200 Hz IMU
-handoff_tail_nodes = 6
-# 20 ms at the 200 Hz IMU
-handoff_tail_velocity_span_nr_samples = 4
+# 30 ms at the 500 Hz IMU
+handoff_tail_nodes = 15
+# 20 ms at the 500 Hz IMU
+handoff_tail_velocity_span_nr_samples = 10
 use_gyro_bias_estimation = true
 
 [loop_closure]
@@ -87,14 +87,14 @@ imu_degenerate_information_ratio = 0.3
 imu_degenerate_max_duration_s = 15.0
 imu_degenerate_translation_sigma_m = 3e-4
 imu_acceleration_sigma_mps2 = 0.5
-# 2-3 samples at 200 Hz; a stretch over 2 * span (20 ms) is a gap and loses its terms: one lost sample is never a gap,
-# two in a row may be. A longer span gives fewer terms and less accelerometer information (the floor dominates each term's
+# 5 samples at 500 Hz; a stretch over 2 * span (20 ms) is a gap and loses its terms: about 9 lost samples in a row make
+# one. A longer span gives fewer terms and less accelerometer information (the floor dominates each term's
 # sigma). TODO: count the dropped terms on the first recording
 imu_acceleration_span_s = 0.01
 imu_acceleration_offset_initial_sigma_mps2 = 0.1
 imu_acceleration_offset_rw_mps2_sqrt_s = 0.0001
-# IMU samples the gravity calibration averages velocities over: 20 ms at 200 Hz
-imu_acceleration_offset_span_nr_samples = 4
+# IMU samples the gravity calibration averages velocities over: 20 ms at 500 Hz
+imu_acceleration_offset_span_nr_samples = 10
 use_imu_translation_prediction = false
 use_zero_velocity_detection = false
 
@@ -139,8 +139,8 @@ nr_iter = 100
 lm_factor_initial = 5.0
 sliding_window_trajectory_length_threshold = 200.0
 threshold_initial_points = 60000
-# window of 0.36 s at the 200 Hz IMU
-threshold_nr_poses = 72
+# window of 0.36 s at the 500 Hz IMU
+threshold_nr_poses = 180
 use_exact_ndt_bucket_statistics = false
 use_motion_from_previous_step = true
 
@@ -166,8 +166,8 @@ fusionConventionNed = false
 fusionConventionNwu = true
 # TODO: set from the gyro noise at rest
 startup_gyro_bias_max_variance_deg2_s2 = 5.0
-# 1 s at the 200 Hz IMU
-startup_gyro_bias_nr_samples = 200
+# 1 s at the 500 Hz IMU
+startup_gyro_bias_nr_samples = 500
 use_remove_imu_bias_from_first_stationary_scan = true
 
 [misc]
@@ -191,8 +191,8 @@ lidar_odometry_motion_model_fi_1_sigma_deg = 0.17724539
 lidar_odometry_motion_model_ka_1_sigma_deg = 0.26586808
 lidar_odometry_motion_model_acc_1_sigma_mps2 = 1.0
 max_prior_velocity_mps = 5.0
-# 20 ms at the 200 Hz IMU
-prior_velocity_span_nr_samples = 4
+# 20 ms at the 500 Hz IMU
+prior_velocity_span_nr_samples = 10
 lidar_odometry_motion_model_om_1_sigma_deg = 0.17724539
 lidar_odometry_motion_model_x_1_sigma_m = 1e-04
 lidar_odometry_motion_model_y_1_sigma_m = 1e-04
