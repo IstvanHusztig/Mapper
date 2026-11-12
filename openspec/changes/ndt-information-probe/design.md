@@ -86,3 +86,7 @@ User explicitly requested stopping before a new run. No Livox2 replay has starte
 
 ## Preparation complete; replay still stopped
 See full-livox2-replay-readiness.md for finalized runner safeguards, ten synthetic tests, final independent review and archived preparation manifest. Tasks11.1/11.2 complete; replay/reproduction/causal analysis remain pending explicit user resume. User subsequently objected to standalone HTML presentation overhead and prefers reusable Python diagnostics suitable for later dMapper integration. Do not extend the HTML viewer; no replacement implementation is implied by that feedback.
+
+
+## Full replay explicitly resumed
+User explicitly authorized starting the single full Livox2 replay, monitoring through completion and documenting in OpenSpec. This supersedes the prior launch stop only for this one unchanged replay. Medium suffices for execution and mechanical validation; notify before High is needed for causal interpretation. OpenSpec documentation is a standing requirement and does not need repeated user reminders.

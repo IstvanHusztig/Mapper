@@ -68,3 +68,7 @@ interpretation of the new trace.
 
 The synchronized retained-run view and its browser-verification limitation are
 documented in [flyaway-timeline-delivery.md](flyaway-timeline-delivery.md).
+
+
+## Execution resumed
+User explicitly authorized launch and monitoring. Reviewed runner passed preflight and started the single full original Livox2 replay. External run.json is authoritative for running/completion status; initial status running, evidence/reproduction pending. Normal log and focused trace are separate. No additional replay is authorized automatically. Medium execution; notify before High causal analysis.
