@@ -174,3 +174,10 @@ Current conclusion: propagation through an already rapidly moving prediction is
 supported; the unique initiating factor is unresolved. High remains useful for
 instrumentation design and causal trace interpretation if that next step is
 approved. Routine replay monitoring would not itself require High.
+
+Follow-up: the user requested inspection of the surrounding point cloud before
+any replay. [full-livox2-cloud-context.md](full-livox2-cloud-context.md) records
+raw close-scene evidence, new CloudCompare extracts, tool validation and review.
+The operator may have been outside; the raw data show nearby rectangular surface
+arrangements before both escalations. Exact location and causal attribution
+remain unresolved. No replay has been authorized or launched.

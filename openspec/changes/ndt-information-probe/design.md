@@ -70,3 +70,7 @@ After visually liking the new short Livox2 cloud, the user explicitly selected l
 
 ## Authorized existing full Livox2 diagnosis
 After switching to High, the user authorized investigating the retained full run and documenting it in OpenSpec, with advance notice before new runs. Scope is existing log/snapshot/final trajectories/raw IMU and primary-source research only. See full-livox2-jump-diagnosis.md for reviewed findings and proposed replay. No new mapper runs, builds or fixes are authorized by this investigation.
+
+
+## Authorized surrounding-cloud inspection
+User requested Python analysis of surroundings and authorized reusable diagnostic tools. Inspect existing raw sensor-frame range/short snapshots and transformed final-cloud intervals; do not rerun SLAM. Record time/frame conventions, identity and scene-inference limits. See full-livox2-cloud-context.md. tools/cloud_context.py is a read-only-input offline analysis tool; artifacts stay in the external experiment directory.

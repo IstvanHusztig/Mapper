@@ -43,3 +43,7 @@
 ## 9. User-authorized existing full Livox2 diagnosis
 - [x] 9.1 Locate onset and propagation using existing log, pre-loop snapshot, final trajectories and raw IMU; preserve diagnostic tables and plots externally.
 - [x] 9.2 Independently review mechanism and research alternatives, document user flyaway feedback and evidence limits, and identify any proposed replay before requesting authorization.
+
+## 10. User-requested surrounding-cloud investigation
+- [x] 10.1 Inspect raw range/return context and time-selected exported cloud around the first and second escalations, preserving new external views/extracts without rerunning SLAM.
+- [x] 10.2 Review scene interpretation, document its limits and provide useful CloudCompare extracts; retain the new-run authorization boundary.
