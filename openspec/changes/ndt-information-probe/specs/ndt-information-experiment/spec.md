@@ -40,6 +40,12 @@ iteration evidence separately from acceptance of any correction.
 - **THEN** exact stage-specific trajectories and cloud identity SHALL be checked against the retained corresponding runs before trace interpretation
 - **AND** any mismatch SHALL be reported rather than silently treated as the same failure
 
+#### Scenario: Focused full Livox2 reproduction
+- **WHEN** the approved full alpha0.1/beta0.1 Livox2 replay enables focused diagnostic tracing
+- **THEN** original full input and settings SHALL remain unchanged and no additional mapper run SHALL start automatically
+- **AND** close-scene support, match turnover, prediction/carry state, factor contributions and accepted updates SHALL be distinguished in the report
+- **AND** exact pre-loop/final trajectories and cloud identity SHALL be checked against the retained full run before treating the trace as its explanation
+
 ### Requirement: Isolated translation continuity intervention
 The approved follow-up SHALL scale XYZ motion observation information consistently in Hessian, RHS and cost only when the acceleration factor is active, preserving other factors and beta1 behavior.
 

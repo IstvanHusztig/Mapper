@@ -19,11 +19,13 @@ def build(root, output):
     payload=json.dumps(dict(rows=rows,ranges=ranges,samples=samples),allow_nan=False,separators=(',',':'))
     html=TEMPLATE.replace('__DATA__',payload)
     output.mkdir(exist_ok=False)
-    (output/'index.html').write_text(html,encoding='utf-8')
+    # Hash exactly the bytes written, including on Windows (no CRLF conversion).
+    html_bytes=html.encode('utf-8')
+    (output/'index.html').write_bytes(html_bytes)
     inputs=[root/'jump-diagnosis/all-windows.json',root/'cloud-context/raw_ranges_by_second.csv',
             root/'cloud-context/raw_sensor_frame_sample.npy',root/'cloud-context/final_world_sample.npy',Path(__file__)]
     manifest={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in inputs}
-    manifest['index.html']=hashlib.sha256(html.encode()).hexdigest()
+    manifest['index.html']=hashlib.sha256(html_bytes).hexdigest()
     (output/'manifest.json').write_text(json.dumps(manifest,indent=2))
     print(output/'index.html')
 

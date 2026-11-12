@@ -74,3 +74,15 @@ After switching to High, the user authorized investigating the retained full run
 
 ## Authorized surrounding-cloud inspection
 User requested Python analysis of surroundings and authorized reusable diagnostic tools. Inspect existing raw sensor-frame range/short snapshots and transformed final-cloud intervals; do not rerun SLAM. Record time/frame conventions, identity and scene-inference limits. See full-livox2-cloud-context.md. tools/cloud_context.py is a read-only-input offline analysis tool; artifacts stay in the external experiment directory.
+
+
+## Approved full Livox2 focused replay
+User explicitly approved focused logging and one full original Livox2 replay after the close-scene inspection. Scratch instrumentation only: separate DMAPPER_TRACE_LIVOX2 opt-in covers windows408-416,730-780,830-885 (116windows), retaining pre-onset lead-ins and both near-surface episodes. Preserve alpha0.1/beta0.1, exact archived TOML and original raw2; no snapshot restart/cut, automatic extra run, filtering or fix. Extend read-only traces with node times/IMU samples and prediction/handoff poses, per-range match support/geometry/turnover, actual projected NDT step contributions by range and final iteration poses. Existing factor/carry/acceptance traces remain. Release trace parity/conservation and full recorded reproduction are required gates. New external artifact root full-livox2-trace/. Notify when High is no longer required for mechanical execution; causal interpretation still benefits from High.
+
+
+## User stop before replay launch
+User explicitly requested stopping before a new run. No Livox2 replay has started. Scratch logging commit5eb882e is built; parity/conservation test passed1668assertions, fullRelease reproduced the same existing assertion failures. Frozen binary is in full-livox2-trace/bin (SHA256 d7915fba00a131f032d0a620fec2f11ae99b5f9bda291e2f8b8d213f61db7673). Runner out/full_livox2_trace_replay.py has not launched and still needs review fixes for bundle inventory, rich trace completeness, archive overwrite protection and capture-error child handling. Do not launch until the user explicitly resumes. Tasks11.2-11.4 remain unfinished; no automatic retry or processing.
+
+
+## Preparation complete; replay still stopped
+See full-livox2-replay-readiness.md for finalized runner safeguards, ten synthetic tests, final independent review and archived preparation manifest. Tasks11.1/11.2 complete; replay/reproduction/causal analysis remain pending explicit user resume. User subsequently objected to standalone HTML presentation overhead and prefers reusable Python diagnostics suitable for later dMapper integration. Do not extend the HTML viewer; no replacement implementation is implied by that feedback.
