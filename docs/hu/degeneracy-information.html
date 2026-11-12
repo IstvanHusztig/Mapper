@@ -130,24 +130,11 @@ sajátérték-felbontása közvetlenül megadja a választ:</p>
 <em>mentén</em> is a helyükön tartják, így az aránya nem fedi fel a vakságot.</p>
 
 <h2>3. Hogyan használja a dMapper</h2>
-<p>Járás közben csak körülbelül 0.2 m/s² gyorsulás keletkezik, miközben már egy 1°-os dőlési hiba is 0.17 m/s² gravitációt hagy a
-gyorsulásmérőben. A gyorsulásmérő tehát rossz pozícióérzékelő, és csak ott használjuk, ahol a LiDAR vak
-(<a href="index.html#p-imu"><code>[imu_translation]</code></a>):</p>
-<ol>
-  <li>Minden ablak után kiszámítjuk az információjának arányát. Az <code>imu_degenerate_information_ratio</code> (0.3) alatt
-  az ablakot <b>degeneráltnak</b> számítjuk.</li>
-  <li>A <em>következő</em> ablak ekkor bekapcsolja a gyorsulásmérő-tagot (a csomópontok közötti mért sebességváltozás), és a transzlációs
-  a priori információ szórását (prior) 1e-4 m-ről az <code>imu_degenerate_translation_sigma_m</code> értékére (3e-4 m) lazítja, hogy a
-  gyorsulásmérő valóban el tudja mozdítani a csomópontokat a vak irány mentén.</li>
-  <li>Egy degenerált szakaszban eltöltött <code>imu_degenerate_max_duration_s</code> (15 s) után a tag ismét kikapcsol,
-  mert a gyorsulásmérő hibája az idővel nő.</li>
-  <li>A degenerált szakaszokon kívül a gravitációs vektort és a gyorsulás-eltolást a LiDAR-trajektóriából kalibráljuk,
-  így készen állnak a következő vak szakaszra.</li>
-</ol>
-<p>Ehhez <code>use_imu_acceleration_term = true</code> és <code>imu_acceleration_only_when_degenerate = true</code> szükséges;
-mindkettő be van állítva a <code>settings/l2-vertical.toml</code> fájlban. Ott azonban az <code>imu_always_on = true</code> felváltja ezt a kaput:
-a gyorsulásmérő minden ablakban dolgozik, a zajával és egy rezgési padlóval súlyozva, így az arány már nem kapcsolja
-(lásd: <a href="index.html#p-imu">[imu_translation]</a>). Az arány továbbra is a degeneráció-tudatos NDT-tagokat vezérli (5b. szakasz).</p>
+<p>A gyorsulásmérő-tag (<code>imu_always_on</code>, <a href="index.html#p-imu"><code>[imu_translation]</code></a>)
+minden ablakban dolgozik, a szenzor zajával és egy rezgési padlóval súlyozva, így az arány nem kapcsolja. Az arány a
+degeneráció-tudatos NDT-tagokat vezérli (5b. szakasz). Egy régebbi változat a gyorsulásmérőt csak egy degenerált ablak
+utáni ablakban használta, legfeljebb 15 s-ig, lazított transzlációs a priori információval; a be- és kikapcsolása a
+kerekítésen billent, és szellemfalat rajzolt, ezért 2026-11-ben megszűnt.</p>
 
 <h3>Mért értékek</h3>
 <div class="table-wrap"><table>
@@ -206,9 +193,7 @@ adott hozzá a <code>use_exact_ndt_bucket_statistics</code> beállítás mögé 
 </table></div>
 <p>Helyes normálisokkal a valós adatokon az arányok sokkal alacsonyabbak, és a hibás normálisokon hangolt 0.3-as küszöb egy valódi felvétel
 ablakainak nagy részét degeneráltnak jelöli, és sokkal gyakrabban kapcsolja be a gyorsulásmérő-tagot. A térkép kevésbé lett éles, de ez az új statisztikát
-a sokkal gyakoribb gyorsulásmérő-taggal keveri össze. A kapcsoló egyelőre kikapcsolva marad. A következő lépés egy olyan futás
-lenne, amelyben az <code>imu_degenerate_information_ratio</code> értékét addig csökkentjük, amíg nagyjából annyi ablak számít
-degeneráltnak, mint korábban (nagyjából 0.1–0.15). A tesztcsomag már a pontos statisztikán fut, így a folyosóteszt
+a sokkal gyakoribb gyorsulásmérő-taggal keveri össze. A kapcsoló egyelőre kikapcsolva marad. (Ez a kapu azóta megszűnt; a gyorsulásmérő-tag most minden ablakban dolgozik.) A tesztcsomag már a pontos statisztikán fut, így a folyosóteszt
 normál, sikeres teszt.</p>
 
 <h2>5b. Szellemfalak vak járatokban és a degenerációt figyelembe vevő NDT-tagok</h2>

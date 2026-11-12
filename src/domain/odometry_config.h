@@ -197,41 +197,16 @@ struct OdometryConfig
     double zero_velocity_acc_threshold_mps2 = 0.3; // max |world acceleration| inside the window
     double zero_velocity_gyro_threshold_deg_s = 3.0; // max rotation rate inside the window
 
-    // accelerometer as a soft measurement inside the window optimization: the change of world-frame velocity between
-    // nodes ~imu_acceleration_span_s apart must match the measured acceleration R * f - g minus an offset e;
-    // e (3 unknowns per window, absorbs tilt and accelerometer bias errors) is carried across windows as a prior.
-    // The prediction stays constant velocity. Usually combined with looser lidar_odometry_motion_model_x/y/z_1_sigma_m.
-    bool use_imu_acceleration_term = false;
-    double imu_acceleration_sigma_mps2 = 0.5;                 // accuracy of the measured acceleration
+    // the accelerometer in every window after the first: the change of world-frame velocity between nodes
+    // ~imu_acceleration_span_s apart must match the measured acceleration R * f - g minus an offset e (3 unknowns per window,
+    // absorbs tilt and accelerometer bias errors, carried across windows as a prior). Each term is weighted by the sensor's
+    // noise, sigma^2 = density^2 / span + floor^2; the window's start and end velocities are unknowns, the start with a prior
+    // carried from the previous window's end (its marginal covariance, grown over the gap); a window at rest gets a
+    // zero-velocity measurement. Off: no accelerometer term (only the velocity-continuity prior).
+    bool imu_always_on = false;
     double imu_acceleration_span_s = 0.01;                    // node spacing of the velocity-change terms
     double imu_acceleration_offset_initial_sigma_mps2 = 0.5;  // prior sigma of e in the first window
     double imu_acceleration_offset_rw_mps2_sqrt_s = 0.05;     // e prior sigma grows by rw * sqrt(window duration)
-    // IMU samples the trajectory velocities of the gravity calibration are averaged over (observed_acceleration_offset);
-    // counted in samples like threshold_nr_poses, so set per sensor for its IMU rate (20 = 20 ms at 1 kHz)
-    int imu_acceleration_offset_span_nr_samples = 20;
-    // use the accelerometer term only where the LiDAR geometry does not constrain the translation in some direction
-    // (smallest / largest eigenvalue of sum(n * n^T) over the surface normals the points are matched to, below
-    // imu_degenerate_information_ratio; decided from the previous window),
-    // for at most imu_degenerate_max_duration_s per such stretch; outside, e is calibrated from the LiDAR trajectory
-    bool imu_acceleration_only_when_degenerate = false;
-    double imu_degenerate_information_ratio = 0.05;
-    double imu_degenerate_max_duration_s = 15.0;
-    double imu_degenerate_translation_sigma_m = 3e-4; // lidar_odometry_motion_model_x/y/z_1_sigma_m while the term is active
-    // continuous weight instead of the on/off gate: with imu_degenerate_weight_ratio_full above imu_degenerate_information_ratio,
-    // the term's weight is 1 at or below imu_degenerate_information_ratio, 0 at or above imu_degenerate_weight_ratio_full and
-    // linear in between, from the median ratio of the last imu_degenerate_smoothing_windows windows; the accelerometer sigma is
-    // divided by sqrt(weight) and the translation sigma moves from the normal one towards imu_degenerate_translation_sigma_m.
-    // 0 = the on/off gate (previous window's ratio below imu_degenerate_information_ratio)
-    double imu_degenerate_weight_ratio_full = 0.0;
-    int imu_degenerate_smoothing_windows = 5;
-    // keep the acceleration offset where it is along the window's weakest LiDAR direction while the term is active (it is not
-    // observable there: the LiDAR can't see the motion it would explain)
-    bool imu_acceleration_offset_freeze_blind = false;
-    // the accelerometer in every window after the first (implies use_imu_acceleration_term; the degenerate gate, its time limit,
-    // its loosened translation sigma and the gravity calibration are not used): each term weighted by the sensor's noise,
-    // sigma^2 = density^2 / span + floor^2; the window's start and end velocities are unknowns, the start with a prior carried from
-    // the previous window's end (its marginal covariance, grown over the gap); a window at rest gets a zero-velocity measurement
-    bool imu_always_on = false;
     double imu_accel_noise_density_mps2_sqrt_hz = 0.0013; // the sensor's accelerometer noise density, measured at rest (largest axis); set per sensor in its TOML
     double imu_accel_floor_sigma_mps2 = 0.1;               // walking vibration and unmodelled effects; set per sensor in its TOML
     double imu_velocity_initial_sigma_mps = 1.0;           // velocity prior of the first window with the term, if not at rest

@@ -31,9 +31,7 @@ namespace
         bool use_imu_pred = false; // IMU-aided translation prediction
         bool use_zupt = false;     // zero-velocity detection
         double gravity_norm = 1.0; // accelerometer reading of gravity [g]
-        bool use_acc_term = false; // accelerometer term in the optimization
-        bool acc_gated = false;    // ... only in LiDAR-degenerate stretches
-        bool always_on = false;    // ... in every window after the first, with velocity states (imu_always_on)
+        bool always_on = false;    // accelerometer term in every window after the first, with velocity states (imu_always_on)
         double acc_offset_sigma0 = 0.0;
         bool use_acc_prior = false;               // velocity-continuity prior
         bool uses_previous_velocity = false;      // the acc prior, IMU translation or the accelerometer term need it
@@ -59,11 +57,6 @@ namespace
         GyroBiasState bias;                                     // the previous window's estimate, the prior of the next one
         Eigen::Vector3d acc_gravity = Eigen::Vector3d::Zero();  // gravity in the odometry frame [accelerometer units]
         Eigen::Matrix3d acc_offset_cov = Eigen::Matrix3d::Zero(); // prior of the next window's acceleration offset
-        bool previous_window_degenerate = false;                // decides about the accelerometer term in the next window
-        double acc_weight = 0.0;                                // continuous weight of the term in the next window (imu_degenerate_weight_ratio_full)
-        std::vector<double> ratio_history;                      // the last windows' information ratios (for the median)
-        Eigen::Vector3d weak_direction = Eigen::Vector3d::Zero(); // the last window's weakest LiDAR direction
-        double degenerate_time_s = 0.0;                         // time spent in the current degenerate stretch
         double acc_distance = 0.0;                              // trajectory length since the last sliding-window reset [m]
         std::vector<Point3Di> points_global;                    // map points since the last reset
         int stationary_windows = 0;
@@ -110,18 +103,15 @@ namespace
             s.gravity_norm = sum / double(windows[0].imu_acc.size());
         }
 
-        s.use_acc_term = (params.use_imu_acceleration_term || params.imu_always_on) && s.have_acc;
         s.always_on = params.imu_always_on && s.have_acc;
         s.acc_offset_sigma0 = params.imu_acceleration_offset_initial_sigma_mps2;
-        // gating to LiDAR-degenerate stretches: degeneracy of the previous window, time spent in the current stretch
-        s.acc_gated = s.use_acc_term && params.imu_acceleration_only_when_degenerate && !s.always_on;
 
         s.use_acc_prior = params.lidar_odometry_motion_model_acc_1_sigma_mps2 > 0.0;
         const bool imu_translation = s.use_imu_pred || s.use_zupt;
-        s.uses_previous_velocity = s.use_acc_prior || imu_translation || s.use_acc_term;
+        s.uses_previous_velocity = s.use_acc_prior || imu_translation || s.always_on;
         s.prediction.use_imu_pred = s.use_imu_pred;
         s.prediction.use_zupt = s.use_zupt || s.always_on; // imu_always_on: a window at rest is also predicted without motion
-        s.prediction.constant_velocity = s.use_acc_prior || s.use_acc_term;
+        s.prediction.constant_velocity = s.use_acc_prior || s.always_on;
         s.prediction.gravity_norm = s.gravity_norm;
         s.prediction.acc_smoothing_half_width_s = 0.5 * params.imu_acc_smoothing_s;
         s.prediction.zupt_acc_threshold_mps2 = params.zero_velocity_acc_threshold_mps2;
@@ -145,7 +135,7 @@ namespace
         c.bias.covariance = Eigen::Matrix3d::Identity() * (setup.bias_sigma0_rad * setup.bias_sigma0_rad);
         // accelerometer term: gravity in the odometry frame [accelerometer units], taken from the first window
         // (the recording starts at rest); the acceleration offset e is folded into it after every window
-        if (setup.use_acc_term)
+        if (setup.always_on)
         {
             for (size_t k = 0; k < windows[0].imu_acc.size(); k++)
                 c.acc_gravity += rotation_of(windows[0].poses[k]) * windows[0].imu_acc[k];
@@ -164,74 +154,33 @@ namespace
         double window_duration_s = 0.0;
     };
 
-    // accelerometer term (from the second window on, like the bias): offset prior grown by its random walk;
-    // with gating, only in a degenerate stretch that is not too long yet (updates carry.degenerate_time_s)
-    AccTerm prepare_acc_term(const Window &window, bool after_first_window, double prev_velocity_age_s,
-                             const OdometryRunSetup &setup, WindowLoopCarry &carry, const OdometryConfig &params)
+    // accelerometer term (imu_always_on, from the second window on, like the bias): offset prior grown by its random walk
+    AccTerm prepare_acc_term(const Window &window, bool after_first_window, const OdometryRunSetup &setup, const WindowLoopCarry &carry,
+                             const OdometryConfig &params)
     {
         AccTerm t;
         t.offset_cov = carry.acc_offset_cov;
         t.window_duration_s = window.timestamps.size() > 1
                                   ? window.timestamps.back().first - window.timestamps.front().first
                                   : 0.0;
-        bool acc_term_active = setup.use_acc_term && after_first_window;
-        if (setup.acc_gated)
-        {
-            // a new degenerate stretch starts with the calibrated gravity and a fresh offset prior
-            if (carry.previous_window_degenerate && carry.degenerate_time_s == 0.0)
-                carry.acc_offset_cov = Eigen::Matrix3d::Identity() * (setup.acc_offset_sigma0 * setup.acc_offset_sigma0);
-            carry.degenerate_time_s = carry.previous_window_degenerate ? carry.degenerate_time_s + t.window_duration_s : 0.0;
-            acc_term_active = acc_term_active && carry.previous_window_degenerate && carry.degenerate_time_s <= params.imu_degenerate_max_duration_s;
-        }
-        double sigma_x_m = params.lidar_odometry_motion_model_x_1_sigma_m;
-        double sigma_y_m = params.lidar_odometry_motion_model_y_1_sigma_m;
-        double sigma_z_m = params.lidar_odometry_motion_model_z_1_sigma_m;
-        const bool weighted = params.imu_degenerate_weight_ratio_full > params.imu_degenerate_information_ratio;
-        if (setup.acc_gated && acc_term_active)
-        {
-            if (weighted)
-            {
-                const double w = carry.acc_weight;
-                sigma_x_m += w * (params.imu_degenerate_translation_sigma_m - sigma_x_m);
-                sigma_y_m += w * (params.imu_degenerate_translation_sigma_m - sigma_y_m);
-                sigma_z_m += w * (params.imu_degenerate_translation_sigma_m - sigma_z_m);
-            }
-            else
-                sigma_x_m = sigma_y_m = sigma_z_m = params.imu_degenerate_translation_sigma_m;
-        }
         t.motion_model = setup.motion_model;
-        t.motion_model.x_sigma_m = sigma_x_m;
-        t.motion_model.y_sigma_m = sigma_y_m;
-        t.motion_model.z_sigma_m = sigma_z_m;
+        t.motion_model.x_sigma_m = params.lidar_odometry_motion_model_x_1_sigma_m;
+        t.motion_model.y_sigma_m = params.lidar_odometry_motion_model_y_1_sigma_m;
+        t.motion_model.z_sigma_m = params.lidar_odometry_motion_model_z_1_sigma_m;
 
-        if (acc_term_active && window.imu_acc.size() == window.poses.size())
+        if (setup.always_on && after_first_window && window.imu_acc.size() == window.poses.size())
         {
-            const double window_duration = t.window_duration_s;
             const double rw = params.imu_acceleration_offset_rw_mps2_sqrt_s;
             t.options.enabled = true;
             t.options.acc = &window.imu_acc;
             t.options.gravity = carry.acc_gravity;
             t.options.to_mps2 = 9.80665 / carry.acc_gravity.norm();
-            t.options.sigma_mps2 = params.imu_acceleration_sigma_mps2;
-            if (setup.acc_gated && weighted)
-                t.options.sigma_mps2 /= std::sqrt(std::max(carry.acc_weight, 1e-6));
             t.options.span_s = params.imu_acceleration_span_s;
-            t.options.prev_velocity_age_s = prev_velocity_age_s;
-            t.options.offset_prior_cov = carry.acc_offset_cov + Eigen::Matrix3d::Identity() * (rw * rw * window_duration);
-            if (params.imu_acceleration_offset_freeze_blind && carry.weak_direction.squaredNorm() > 0.5)
-            {
-                // the offset's spread along the weakest LiDAR direction shrunk to 1 %: it stays where it was there
-                const Eigen::Matrix3d A = Eigen::Matrix3d::Identity() - 0.99 * carry.weak_direction * carry.weak_direction.transpose();
-                t.options.offset_prior_cov = A * t.options.offset_prior_cov * A.transpose();
-            }
+            t.options.offset_prior_cov = carry.acc_offset_cov + Eigen::Matrix3d::Identity() * (rw * rw * t.window_duration_s);
             t.offset_cov = t.options.offset_prior_cov;
-            if (setup.always_on)
-            {
-                t.options.always_on = true;
-                t.options.noise_density_mps2_sqrt_hz = params.imu_accel_noise_density_mps2_sqrt_hz;
-                t.options.floor_sigma_mps2 = params.imu_accel_floor_sigma_mps2;
-                t.options.zero_velocity_sigma_mps = params.imu_zero_velocity_sigma_mps;
-            }
+            t.options.noise_density_mps2_sqrt_hz = params.imu_accel_noise_density_mps2_sqrt_hz;
+            t.options.floor_sigma_mps2 = params.imu_accel_floor_sigma_mps2;
+            t.options.zero_velocity_sigma_mps = params.imu_zero_velocity_sigma_mps;
         }
         return t;
     }
@@ -255,7 +204,7 @@ namespace
     void prepare_velocity_state(Window &window, const PreviousVelocity &previous, bool at_rest, const OdometryRunSetup &setup,
                                 const WindowLoopCarry &carry, AccTerm &t, const OdometryConfig &params)
     {
-        if (!setup.always_on || !t.options.enabled)
+        if (!t.options.enabled)
             return;
         const double initial = params.imu_velocity_initial_sigma_mps, rest = params.imu_zero_velocity_sigma_mps;
         Eigen::Vector3d mean = previous.use ? previous.velocity : Eigen::Vector3d::Zero();
@@ -279,63 +228,16 @@ namespace
         window.velocity.end = mean;
     }
 
-    // after the window: its degeneracy decides about the term in the next window, gravity is calibrated outside
-    // degenerate stretches, and an estimated offset is folded into the gravity vector
-    void update_acc_term_after_window(const Window &window, int i, const AccTerm &t, const Eigen::Matrix3d &lidar_translation_information,
-                                      const Eigen::Vector3d &acc_offset, const OdometryRunSetup &setup, WindowLoopCarry &carry,
-                                      const OdometryConfig &params, Logger &logger)
+    // after the window: the end velocity becomes the next window's prior, and an estimated offset is folded into the gravity vector
+    void update_acc_term_after_window(const Window &window, int i, const AccTerm &t, const Eigen::Vector3d &acc_offset, WindowLoopCarry &carry,
+                                      Logger &logger)
     {
-        constexpr double gravity_calibration_time_constant_s = 2.0;
-        if (setup.acc_gated)
-        {
-            // degeneracy of this window decides about the term in the next one
-            const Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eig(lidar_translation_information);
-            const double ratio = eig.eigenvalues().maxCoeff() > 0.0 ? eig.eigenvalues().minCoeff() / eig.eigenvalues().maxCoeff() : 0.0;
-            const Eigen::Vector3d weak = eig.eigenvectors().col(0);
-            carry.weak_direction = weak;
-            const bool weighted = params.imu_degenerate_weight_ratio_full > params.imu_degenerate_information_ratio;
-            if (weighted)
-            {
-                // the median of the last windows' ratios, so one window's noise doesn't flip the term
-                carry.ratio_history.push_back(ratio);
-                const size_t keep = static_cast<size_t>(std::max(1, params.imu_degenerate_smoothing_windows));
-                if (carry.ratio_history.size() > keep)
-                    carry.ratio_history.erase(carry.ratio_history.begin());
-                std::vector<double> sorted = carry.ratio_history;
-                std::sort(sorted.begin(), sorted.end());
-                const double median = sorted[sorted.size() / 2];
-                const double r0 = params.imu_degenerate_information_ratio, r1 = params.imu_degenerate_weight_ratio_full;
-                carry.acc_weight = std::clamp((r1 - median) / (r1 - r0), 0.0, 1.0);
-                carry.previous_window_degenerate = carry.acc_weight > 0.0;
-            }
-            else
-                carry.previous_window_degenerate = ratio < params.imu_degenerate_information_ratio;
-            log_info(logger) << "lidar translation information window " << i + 1 << ": ratio " << std::fixed << std::setprecision(4) << ratio
-                             << " weakest direction " << std::setprecision(2) << weak.x() << " " << weak.y() << " " << weak.z()
-                             << (t.options.enabled ? " | accelerometer term active" : "")
-                             << (weighted ? " | next weight " : "") << (weighted ? std::to_string(carry.acc_weight).substr(0, 4) : std::string());
-
-            // outside degenerate stretches: calibrate the gravity vector from the LiDAR-constrained trajectory
-            Eigen::Vector3d observed;
-            if (!t.options.enabled && !carry.previous_window_degenerate &&
-                observed_acceleration_offset(window.poses, window.timestamps,
-                                             window.imu_acc, carry.acc_gravity, 9.80665 / carry.acc_gravity.norm(), params.handoff_tail_nodes,
-                                             params.imu_acceleration_offset_span_nr_samples, observed))
-            {
-                const double alpha = 1.0 - std::exp(-t.window_duration_s / gravity_calibration_time_constant_s);
-                carry.acc_gravity += alpha * observed / (9.80665 / carry.acc_gravity.norm());
-            }
-        }
-
-        if (t.options.enabled && t.options.always_on)
+        if (t.options.enabled)
         {
             carry.velocity_valid = true;
             carry.velocity_mean = window.velocity.end;
             carry.velocity_cov = window.velocity.end_covariance;
             carry.velocity_time_s = window.timestamps.back().first;
-        }
-        if (t.options.enabled)
-        {
             carry.acc_term_windows++;
             // fold the estimated offset into the gravity vector; its uncertainty carries over as the next prior
             carry.acc_gravity += acc_offset / t.options.to_mps2;
@@ -472,7 +374,7 @@ namespace
             const bool applied = optimize_lidar_odometry(intermediate_points, window, state.buckets_indoor, state.buckets_outdoor,
                                     setup.scan_to_map, acc_term.motion_model, window_rotation_options, acc_term.options,
                                     velocity_prior, lm_factor, delta, acc_offset, acc_term.offset_cov, logger,
-                                    setup.acc_gated || params.log_window_diagnostics ? &lidar_translation_information : nullptr, timing, &workspace);
+                                    params.log_window_diagnostics ? &lidar_translation_information : nullptr, timing, &workspace);
             if (params.log_iteration_convergence)
             {
                 poses_after.push_back(window.poses);
@@ -994,7 +896,7 @@ namespace
         log_info(logger) << "total_length_of_calculated_trajectory: " << state.total_length_of_calculated_trajectory << " [m]";
         if (setup.use_zupt)
             log_info(logger) << "zero-velocity detection: " << carry.stationary_windows << " of " << windows.size() << " windows stationary";
-        if (setup.use_acc_term)
+        if (setup.always_on)
             log_info(logger) << "accelerometer term: active in " << carry.acc_term_windows << " of " << windows.size() << " windows";
         if (setup.always_on)
             log_info(logger) << "accelerometer always on: " << carry.rest_windows << " of " << windows.size() << " windows at rest";
@@ -1044,8 +946,7 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
             PreviousVelocity previous;
             if (setup.uses_previous_velocity && i > 0)
             {
-                previous = estimate_previous_velocity(windows[i - 1], windows[i], params.prior_velocity_span_nr_samples,
-                                                      params.max_prior_velocity_mps);
+                previous = estimate_previous_velocity(windows[i - 1], params.prior_velocity_span_nr_samples, params.max_prior_velocity_mps);
                 if (previous.dropped)
                     log_info(logger) << "window " << i + 1 << ": previous window velocity " << previous.speed
                                      << " m/s > max_prior_velocity_mps " << params.max_prior_velocity_mps << ": not used as prior";
@@ -1088,7 +989,7 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
             }
 
             // accelerometer term (from the second window on, like the bias) and the window's translation sigmas
-            AccTerm acc_term = prepare_acc_term(windows[i], i > 0, previous.age_s, setup, carry, params);
+            AccTerm acc_term = prepare_acc_term(windows[i], i > 0, setup, carry, params);
             if (setup.always_on)
             {
                 const bool at_rest = window_at_rest(windows[i], setup, params);
@@ -1141,7 +1042,7 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
             log_heading_diagnostics(i, windows[i], poses_before_optimization, intermediate_points, state, setup.scan_to_map, params, logger);
 
             update_gyro_bias_after_window(windows[i], i, setup, carry, params, logger);
-            update_acc_term_after_window(windows[i], i, acc_term, lidar_translation_information, acc_offset, setup, carry, params, logger);
+            update_acc_term_after_window(windows[i], i, acc_term, acc_offset, carry, logger);
 
             // window hand-off; the initial guess was corrected with the prior bias, so the tail gets the update estimated in this window
             {

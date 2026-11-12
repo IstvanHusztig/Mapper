@@ -28,12 +28,6 @@ std::vector<Eigen::Vector3d> world_acceleration(const std::vector<Eigen::Affine3
                                                 const std::vector<Eigen::Vector3d> &ahrs_om_fi_ka,
                                                 double gravity_norm, double half_width_s);
 
-// acceleration offset e [m/s^2] seen in an optimized window; false if the window is too short
-bool observed_acceleration_offset(const std::vector<Eigen::Affine3d> &trajectory,
-                                  const std::vector<std::pair<double, double>> &timestamps,
-                                  const std::vector<Eigen::Vector3d> &acc, const Eigen::Vector3d &gravity,
-                                  double to_mps2, int tail_nodes, int span, Eigen::Vector3d &offset);
-
 // true if the device rests during the whole window: small world acceleration and small rotation rate
 bool is_window_stationary(const std::vector<Eigen::Affine3d> &trajectory,
                           const std::vector<std::pair<double, double>> &timestamps,

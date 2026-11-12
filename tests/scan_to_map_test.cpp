@@ -766,7 +766,6 @@ namespace
             o.translation_imu.to_mps2 = g_mps2;
             o.translation_imu.span_s = 0.008; // one term per node: anchors 10 ms apart, well inside the 2 * span_s gap limit
             o.translation_imu.offset_prior_cov = Eigen::Matrix3d::Identity() * k.offset_sigma * k.offset_sigma;
-            o.translation_imu.always_on = true;
             o.translation_imu.noise_density_mps2_sqrt_hz = 0.0013;
             o.translation_imu.floor_sigma_mps2 = 0.1;
             o.translation_imu.velocity_prior_mean = k.velocity_prior;

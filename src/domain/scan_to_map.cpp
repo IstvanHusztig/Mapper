@@ -141,13 +141,12 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
     const int n_pose_params = static_cast<int>(window.poses.size()) * 6;
     const bool acc_term = translation_imu_options.enabled && have_dt && translation_imu_options.acc &&
                           translation_imu_options.acc->size() == window.poses.size();
-    const bool always_on = acc_term && translation_imu_options.always_on;
-    // [pose_0 .. pose_n-1 | b_om b_fi b_ka (gyro bias) | e_x e_y e_z (acceleration offset) | v_start | v_end (imu_always_on)]
-    const int n_params = n_pose_params + (estimate_bias ? 3 : 0) + (acc_term ? 3 : 0) + (always_on ? 6 : 0);
+    // [pose_0 .. pose_n-1 | b_om b_fi b_ka (gyro bias) | e_x e_y e_z (acceleration offset) | v_start | v_end (accelerometer term)]
+    const int n_params = n_pose_params + (estimate_bias ? 3 : 0) + (acc_term ? 9 : 0);
     const int ib = n_pose_params;                        // first bias column
     const int io = n_pose_params + (estimate_bias ? 3 : 0); // first acceleration offset column
-    const int iv = io + 3;                               // start velocity (imu_always_on)
-    const int ie = iv + 3;                               // end velocity (imu_always_on)
+    const int iv = io + 3;                               // start velocity (accelerometer term)
+    const int ie = iv + 3;                               // end velocity (accelerometer term)
 
     double sigma_motion_model_om = motion_model.om_sigma_deg * DEG_TO_RAD;
     double sigma_motion_model_fi = motion_model.fi_sigma_deg * DEG_TO_RAD;
@@ -175,11 +174,11 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
                 anchors.push_back(k);
         for (size_t j = 1; j + 1 < anchors.size(); j++)
             pose_band_offset = std::max(pose_band_offset, (anchors[j + 1] - anchors[j - 1]) * 6 + 5);
-        if ((velocity_prior.use || always_on) && anchors.size() > 1)
+        if (anchors.size() > 1)
             pose_band_offset = std::max(pose_band_offset, anchors[1] * 6 + 5);
     }
-    // imu_always_on: the end velocity is tied to the last two anchors, with the accelerometer from their midpoint to the last node
-    if (always_on && anchors.size() > 1)
+    // the end velocity is tied to the last two anchors, with the accelerometer from their midpoint to the last node
+    if (acc_term && anchors.size() > 1)
         pose_band_offset = std::max(pose_band_offset, (static_cast<int>(window.poses.size()) - 1 - anchors[anchors.size() - 2]) * 6 + 5);
 
     // the normal matrix, stored by band (only the band is ever used)
@@ -714,11 +713,11 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
         }
     }
 
-    // imu_always_on: the accelerometer term with the node rotations, noise from the sensor and the start and end velocity as
+    // the accelerometer term with the node rotations, noise from the sensor and the start and end velocity as
     // unknowns. One term: residual r = sum(c_j * p_j) + c_v * v - sign * (mean acceleration - e) * tau [m/s], with mean
     // acceleration = time-weighted mean of (R_k f_k - g) * to_mps2 over the term's interval; the node rotations enter through
     // d(R f) = -[R f]x d(theta). Weight 1 / (sigma^2 tau^2) with sigma^2 = density^2 / tau + floor^2.
-    if (always_on)
+    if (acc_term)
     {
         const auto &acc = *translation_imu_options.acc;
         const int n = static_cast<int>(window.poses.size());
@@ -861,90 +860,6 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
         AtPBndt.block<3, 1>(io, 0) += prior_inf * (translation_imu_options.offset_prior_mean - acc_offset);
     }
 
-    // accelerometer as a soft measurement of the change of world-frame velocity between node anchors ~span_s apart:
-    // residual = sum(c_j * p_j) - (mean acceleration - e) * tau, with mean acceleration = mean(R f - g) * to_mps2
-    // (the node rotations are taken as fixed here) and e the acceleration offset of this window
-    if (acc_term && !always_on)
-    {
-        const auto &acc = *translation_imu_options.acc;
-        const int n = static_cast<int>(window.poses.size());
-        std::vector<Eigen::Vector3d> a(n);
-        for (int k = 0; k < n; k++)
-            a[k] = (Eigen::Quaterniond(window.poses[k].linear()).normalized() * acc[k] - translation_imu_options.gravity) * translation_imu_options.to_mps2;
-
-        // time-weighted mean acceleration over [t0, t1), nodes first..last searched
-        auto mean_acceleration = [&](double t0, double t1, int first, int last)
-        {
-            Eigen::Vector3d sum = Eigen::Vector3d::Zero();
-            double weight = 0.0;
-            for (int k = first; k <= last && k + 1 < n; k++)
-            {
-                const double s0 = std::max(window.timestamps[k].first, t0);
-                const double s1 = std::min(window.timestamps[k + 1].first, t1);
-                if (s1 > s0)
-                {
-                    sum += a[k] * (s1 - s0);
-                    weight += s1 - s0;
-                }
-            }
-            return weight > 0.0 ? Eigen::Vector3d(sum / weight) : a[std::clamp(first, 0, n - 1)];
-        };
-
-        const double w_scale = 1.0 / (translation_imu_options.sigma_mps2 * translation_imu_options.sigma_mps2);
-        auto add_term = [&](const std::vector<int> &nodes, const std::vector<double> &c, const Eigen::Vector3d &measured_dv, double tau)
-        {
-            const double w = w_scale / (tau * tau);
-            Eigen::Vector3d r = -measured_dv;
-            for (size_t j = 0; j < nodes.size(); j++)
-                r += c[j] * window.poses[nodes[j]].translation();
-            r += acc_offset * tau; // measured_dv = (mean acceleration - e) * tau
-            for (int k = 0; k < 3; k++)
-            {
-                for (size_t ja = 0; ja < nodes.size(); ja++)
-                {
-                    const int ra = nodes[ja] * 6 + k;
-                    for (size_t jb = 0; jb < nodes.size(); jb++)
-                        AtPAndt.add(ra, nodes[jb] * 6 + k, w * c[ja] * c[jb]);
-                    AtPAndt.add(ra, io + k, w * c[ja] * tau);
-                    AtPAndt.add(io + k, ra, w * c[ja] * tau);
-                    AtPBndt(ra, 0) -= w * c[ja] * r(k);
-                }
-                AtPAndt.add(io + k, io + k, w * tau * tau);
-                AtPBndt(io + k, 0) -= w * tau * r(k);
-            }
-            assert((nodes.back() - nodes.front()) * 6 + 5 <= pose_band_offset); // the band computed at the top covers every term
-        };
-
-        for (size_t j = 1; j + 1 < anchors.size(); j++)
-        {
-            const int A = anchors[j - 1], B = anchors[j], C = anchors[j + 1];
-            const double tA = window.timestamps[A].first, tB = window.timestamps[B].first, tC = window.timestamps[C].first;
-            const double dt1 = tB - tA, dt2 = tC - tB;
-            const double m1 = 0.5 * (tA + tB), m2 = 0.5 * (tB + tC);
-            const double tau = m2 - m1;
-            add_term({A, B, C}, {1.0 / dt1, -(1.0 / dt1 + 1.0 / dt2), 1.0 / dt2}, mean_acceleration(m1, m2, A, C) * tau, tau);
-        }
-
-        // tie the first velocity of this window to the final velocity of the previous window
-        if (velocity_prior.use && anchors.size() > 1)
-        {
-            const int B = anchors[1];
-            const double t0 = window.timestamps[0].first, tB = window.timestamps[B].first;
-            const double dt = tB - t0;
-            const double tau = 0.5 * dt + translation_imu_options.prev_velocity_age_s;
-            // measured_dv relative to prev_velocity: move prev_velocity to the measured side
-            const Eigen::Vector3d measured_dv = mean_acceleration(t0, 0.5 * (t0 + tB), 0, B) * tau + velocity_prior.velocity;
-            add_term({0, B}, {-1.0 / dt, 1.0 / dt}, measured_dv, tau);
-        }
-
-        // offset prior carried over from the previous window
-        const Eigen::Matrix3d prior_inf = translation_imu_options.offset_prior_cov.inverse();
-        for (int r = 0; r < 3; r++)
-            for (int c = 0; c < 3; c++)
-                AtPAndt.add(io + r, io + c, prior_inf(r, c));
-        AtPBndt.block<3, 1>(io, 0) += prior_inf * (translation_imu_options.offset_prior_mean - acc_offset);
-    }
-
     motion_terms_timer.stop();
     PhaseTimer assembly_timer(phase(&ScanToMapTiming::assembly));
 
@@ -983,9 +898,10 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
                 if (estimate_bias)
                     window.gyro_bias.covariance = cols.block<3, 3>(ib, ib - n_pose_params);
                 if (acc_term)
+                {
                     acc_offset_cov = cols.block<3, 3>(io, io - n_pose_params);
-                if (always_on)
                     window.velocity.end_covariance = cols.block<3, 3>(ie, ie - n_pose_params);
+                }
             }
         }
     }
@@ -1029,7 +945,7 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
         if (acc_term)
             for (int r = 0; r < 3; r++)
                 acc_offset(r) += h_x[io + r];
-        if (always_on)
+        if (acc_term)
             for (int r = 0; r < 3; r++)
             {
                 window.velocity.start(r) += h_x[iv + r];

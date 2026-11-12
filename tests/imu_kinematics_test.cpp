@@ -91,34 +91,6 @@ TEST_CASE("world_acceleration removes gravity and converts to m/s^2")
     CHECK(smoothed[5].isApprox((expected[4] + expected[5] + expected[6]) / 3.0, 1e-12));
 }
 
-TEST_CASE("observed_acceleration_offset recovers an accelerometer offset")
-{
-    const Eigen::Vector3d gravity = Eigen::Vector3d::UnitZ();
-    const double to_mps2 = 9.80665;
-    const Eigen::Vector3d e(0.1, -0.2, 0.05); // [m/s^2]
-
-    const int n = 100;
-    const auto ts = timestamps(n);
-    const auto tr = trajectory(n, 0.0, 1.0); // constant velocity
-    const std::vector<Eigen::Vector3d> acc(n, gravity + e / to_mps2);
-
-    Eigen::Vector3d offset = Eigen::Vector3d::Zero();
-    REQUIRE(observed_acceleration_offset(tr, ts, acc, gravity, to_mps2, 0, 20, offset));
-    CHECK(offset.isApprox(e, 1e-9));
-
-    // too short: fewer than 2 * 20 nodes between the two velocity estimates
-    const int short_n = 60;
-    CHECK_FALSE(observed_acceleration_offset(trajectory(short_n, 0.0, 1.0), timestamps(short_n),
-                                             std::vector<Eigen::Vector3d>(short_n, gravity), gravity, to_mps2, 0, 20, offset));
-
-    // a shorter span (a slower IMU) fits the same 60 nodes and still recovers the offset
-    const std::vector<Eigen::Vector3d> short_acc(short_n, gravity + e / to_mps2);
-    offset = Eigen::Vector3d::Zero();
-    REQUIRE(observed_acceleration_offset(trajectory(short_n, 0.0, 1.0), timestamps(short_n), short_acc, gravity, to_mps2, 0, 4, offset));
-    CHECK(offset.isApprox(e, 1e-9));
-    CHECK_FALSE(observed_acceleration_offset(tr, ts, acc, gravity, to_mps2, 0, 0, offset));
-}
-
 TEST_CASE("is_window_stationary detects rest")
 {
     const int n = 30;

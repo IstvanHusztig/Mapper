@@ -37,7 +37,6 @@ Reference data for `settings/livox-vertical.toml` (Livox Mid-360S, vertical hand
 | `threshold_nr_poses` | 180 | 0.36 s windows at the 500 Hz IMU |
 | `handoff_tail_nodes` | 15 | 30 ms at 500 Hz |
 | `startup_gyro_bias_nr_samples` | 500 | 1 s at 500 Hz |
-| `imu_acceleration_offset_span_nr_samples` | 10 | 20 ms at 500 Hz |
 | `prior_velocity_span_nr_samples`, `handoff_tail_velocity_span_nr_samples` | 10 | 20 ms at 500 Hz |
 | `filter_threshold_xy_outer` | 40 m | range at 10 % reflectivity |
 | `max_distance_lidar`, `max_distance_lidar_rigid_sf` | 40 m | the same range, so far points are registered too |
