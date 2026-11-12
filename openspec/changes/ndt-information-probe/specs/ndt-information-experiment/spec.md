@@ -39,3 +39,11 @@ iteration evidence separately from acceptance of any correction.
 - **WHEN** alpha1 and alpha0.1 are replayed with tracing
 - **THEN** exact stage-specific trajectories and cloud identity SHALL be checked against the retained corresponding runs before trace interpretation
 - **AND** any mismatch SHALL be reported rather than silently treated as the same failure
+
+### Requirement: Isolated translation continuity intervention
+The approved follow-up SHALL scale XYZ motion observation information consistently in Hessian, RHS and cost only when the acceleration factor is active, preserving other factors and beta1 behavior.
+
+#### Scenario: Finite beta diagnostic
+- **WHEN** beta0.1 is selected with alpha0.1 after synthetic and review gates
+- **THEN** only XYZ observation contributions including their attitude coupling SHALL be reduced
+- **AND** both approved recordings SHALL be compared to retained controls with provenance and no acceptance claim from single runs

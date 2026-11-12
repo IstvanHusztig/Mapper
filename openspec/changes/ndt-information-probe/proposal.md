@@ -28,3 +28,5 @@ needed for its implementation/tests/runs. Candidate acceptance/push remain separ
 
 Follow-up explicitly authorized: diagnostic logging plus two full Livox1 replays
 (alpha1/.1) to inspect the onset/runaway without changing settings or algorithm.
+
+User subsequently approved next-step-design.md: finite motion XYZ information beta0.1 with NDT alpha0.1 fixed, gated tests/review and two full-start Livox1/Livox2 first60s runs. No shipped defaults or acceptance changes.

@@ -29,3 +29,13 @@
 - [x] 6.3 Run two full Livox1 replays sequentially on unchanged input/configs, preserving all traces and output identities.
 - [x] 6.4 Verify exact pre-loop/final trajectory and cloud reproduction before interpreting traces; report any mismatch.
 - [x] 6.5 Analyze focused windows, obtain independent review, update OpenSpec/roadmap with evidence and remaining causal limits.
+
+## 7. Approved translation-prior experiment
+- [x] 7.1 Implement finite XYZ residual information multiplier with focused assembly/parity/support tests.
+- [x] 7.2 Complete Release gates and independent source review; freeze executable provenance.
+- [x] 7.3 Run approved full Livox1 and Livox2 first60s candidates sequentially.
+- [x] 7.4 Verify logs, stage trajectories, matched map measurements and before/after views; independently review evidence and report limits.
+
+## 8. User-approved full Livox2 visual check
+- [ ] 8.1 Verify original full Livox2 and launch the identical frozen alpha0.1/beta0.1 build with unchanged archived settings.
+- [ ] 8.2 Verify completion/log/snapshot/output identity and deliver full cloud for user inspection; no extra tuning runs.

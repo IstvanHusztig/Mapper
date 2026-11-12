@@ -60,3 +60,9 @@ Artifact root: C:/Users/User/Downloads/dLidar/experiments/phase0b-2026-11-12/
 livox1-instrumented/. Root OpenSpec remains authoritative. Preserve old artifacts.
 Current high effort is useful through trace review and interpretation; medium
 suffices for mechanical waiting, but do not silently change user model settings.
+
+## Approved finite translation-prior follow-up
+User approved next-step-design.md and its two-run matrix. That document governs the isolated beta experiment and required synthetic gates. Prior completed tasks remain historical; section7 tracks the new work.
+
+## Full Livox2 follow-through
+After visually liking the new short Livox2 cloud, the user explicitly selected launching the full run. Use the same frozen alpha0.1/beta0.1 binary and exact archived settings on original raw data/livox/2. Disable only optional detailed trace (verified behavior-preserving); retain ordinary diagnostics and snapshots. New external output full-livox2-motion-prior. No new tuning or defaults. User will consider recording a new Livox1 after inspecting this full result.

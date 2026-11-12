@@ -1,7 +1,8 @@
 # Next experiment: translation continuity pressure
 
 2026-11-12. User-authorized design following the completed 18/18 tasks.
-Implementation and additional mapper runs remain proposed, not approved.
+User approved implementation and both runs with "Yes go" after reviewing this
+design. Implementation gates still precede processing; no further runs implied.
 
 ## Recommendation and evidence
 
@@ -53,7 +54,7 @@ connections but still needs conditioning and geometry checks.
    configuration-sensitive risk. Failed gates block recorded-data processing;
    no arbitrary damping or covariance floor to force a pass.
 
-## Proposed two-run matrix: approval required before starting
+## Approved two-run matrix
 
 | Input | Candidate | Retained control |
 |---|---|---|
