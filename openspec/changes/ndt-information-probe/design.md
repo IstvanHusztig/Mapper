@@ -90,3 +90,7 @@ See full-livox2-replay-readiness.md for finalized runner safeguards, ten synthet
 
 ## Full replay explicitly resumed
 User explicitly authorized starting the single full Livox2 replay, monitoring through completion and documenting in OpenSpec. This supersedes the prior launch stop only for this one unchanged replay. Medium suffices for execution and mechanical validation; notify before High is needed for causal interpretation. OpenSpec documentation is a standing requirement and does not need repeated user reminders.
+
+
+## Full Livox2 traced replay completed
+Single authorized replay completed overnight2026-11-12/13: mapper exit0, collected_complete,3993.63s. All63 output hashes reproduce retained full run exactly;116 windows/11600 iterations/23200 assembly identity checks complete, zero mismatches. Trace2,497,193,543 bytes. Run-health triggers unchanged, not an accuracy pass. See openspec/changes/ndt-information-probe/full-livox2-trace-results.md. No jobs remain. Task11.3 complete;11.4 causal analysis pending High. Use streaming Python on existing trace; no additional run required now. User wants quiet monitoring and standing OpenSpec updates.

@@ -72,3 +72,5 @@ documented in [flyaway-timeline-delivery.md](flyaway-timeline-delivery.md).
 
 ## Execution resumed
 User explicitly authorized launch and monitoring. Reviewed runner passed preflight and started the single full original Livox2 replay. External run.json is authoritative for running/completion status; initial status running, evidence/reproduction pending. Normal log and focused trace are separate. No additional replay is authorized automatically. Medium execution; notify before High causal analysis.
+
+Execution and exact reproduction are now complete; see [full-livox2-trace-results.md](full-livox2-trace-results.md). The earlier stopped/running notes are historical. Causal interpretation remains pending High.
