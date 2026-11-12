@@ -148,3 +148,46 @@ diagnostic sweep. Full-recording execution is distinct from shipment acceptance.
 Artifacts under the external root: runs/livox1, runs/livox2_0_60, maps/livox1,
 maps/livox2_0_60, maps/livox2_plan_overlay, trace-analysis-v2, gate_logs and bundle
 identities. Prior artifacts remain intact. No mapper jobs remain from this batch.
+
+User clarified priority: if full Livox2 looks good, then locate where and why Livox1 goes wrong using the same candidate. Do not assume a new Livox1 recording is the immediate next step or change settings before that decision.
+
+Full Livox2 launched after independent runner review. Output: C:/Users/User/Downloads/dLidar/experiments/phase0b-2026-11-12/full-livox2-motion-prior/result/. Original raw2, exact archived TOML and frozen candidate; detailed iteration trace disabled only. Normal diagnostics and snapshot remain enabled. Full-input health exit0 with one handheld-noise warning, no timing/gyro-offset failure. Run completion/validation pending.
+
+User requested live trajectory-jump monitoring before export. External monitor/ snapshots preserve readings. First >10deg heading correction: window414, recording148.68s, -11.192deg. At monitorwindow476/t171s no estimated/end or successive-start speed >2.5m/s, no result-guess >1m, and no guard/warning lines. This is a heading diagnostic, not proof of position teleport; run continues unchanged.
+
+Live full-run monitoring detected the requested positional/speed failure: first reported speed >2.5m/s at window759/t272.88s (2.617m/s), peak5.242m/s at771/t277.20s; successive-start displacement speed first >2.5 at760/t273.24s, peak4.923m/s at772/t277.56s (about1.772m/.36s). No result-guess >1m or logged guard at snapshot784. User notified immediately; full run continues unchanged to preserve evidence, no new correction or rerun. High needed before causal diagnosis, routine monitoring remains sufficient at Sol Medium.
+
+Further live event: window870/t312.84s estimated speed7.647m/s;871/t313.20s successive-start speed6.126m/s (~2.205m/.36s). At874/t314.28s15 node updates would exceed1m fromguess and were not applied; result-guess norm.998m. User notified; guard is not evidence of recovery. No causal interpretation or tuning while current run executes.
+
+User explicitly requested stopping at the higher-effort boundary: finish current run, export and basic checks, then stop before causal diagnosis and ask user to switch to High. Do not start a new corrective investigation or additional run automatically.
+
+## Full Livox2 completion: stop before diagnosis
+
+Mapper exit0, wall2998.45s (~49m58s), collected_complete/evidence_complete true.
+All1517windows covered for speed/heading/bias;831conditional uncertainty rows.
+Odometry/final snapshots contain273060poses each. Original raw-file/settings/
+frozen-binary hashes, snapshot/log coherence and output identities verified.
+No input copy, rebuild, tuning or detailed trace; only this single full run.
+
+Descriptive diagnostics:93estimated-speed crossings above2.5m/s, maximum7.647;
+84heading corrections above3deg,14above10deg, maximum19.925deg. Native summary
+records29big-jump node updates rejected,0solver skips and2map rebuilds. The
+run-health tool's zero warning count does NOT mean no jump guards.64loops,
+maximum loop correction2.56m; no universal loop-size accuracy criterion applies.
+Five diagnostic trigger categories; integrity completion is NOT map accuracy.
+
+First positional/speed warning at272.88s, larger event at312.84-313.20s;
+retained monitor snapshots identify exact windows. These are descriptive readings,
+not a causal explanation or proof of physical trajectory error magnitude. No
+full-map accuracy/robustness comparison was performed; user inspection is pending.
+
+Final cloud:
+C:/Users/User/Downloads/dLidar/experiments/phase0b-2026-11-12/full-livox2-motion-prior/result/scan_lio_merged.laz
+Companion evidence: run.json, run.log, run-health.txt, preflight.json, imu-health.txt,
+monitor/ and the preserved runner in the parent output directory.
+
+All authorized processing is finished; no jobs remain. User received the cloud
+and was told to switch to High before diagnosis. Stop here as requested. The
+condition 'if full Livox2 is good, investigate Livox1 next' is not established by
+successful export; full Livox2 has the recorded instability. No new runs or
+corrections are authorized by this completion record.

@@ -37,5 +37,5 @@
 - [x] 7.4 Verify logs, stage trajectories, matched map measurements and before/after views; independently review evidence and report limits.
 
 ## 8. User-approved full Livox2 visual check
-- [ ] 8.1 Verify original full Livox2 and launch the identical frozen alpha0.1/beta0.1 build with unchanged archived settings.
-- [ ] 8.2 Verify completion/log/snapshot/output identity and deliver full cloud for user inspection; no extra tuning runs.
+- [x] 8.1 Verify original full Livox2 and launch the identical frozen alpha0.1/beta0.1 build with unchanged archived settings.
+- [x] 8.2 Verify completion/log/snapshot/output identity and deliver full cloud for user inspection; no extra tuning runs.
