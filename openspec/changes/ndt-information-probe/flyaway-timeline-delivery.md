@@ -5,7 +5,7 @@ stopped. Implemented tools/flyaway_timeline.py using retained JSON, CSV and NumP
 samples. No new package, mapper run or numerical setting change.
 
 Delivered to:
-`C:/Users/User/Downloads/dLidar/experiments/phase0b-2026-11-12/full-livox2-motion-prior/timeline/index.html`.
+`C:/Users/User/Downloads/dLidar/experiments/phase0b-2026-11-12/full-livox2-motion-prior/timeline-v2/index.html`.
 
 Standalone HTML embeds the selected data; no network/CDN or server is required.
 Six diagnostic charts share a selected window with raw sensor-frame and final
@@ -29,3 +29,5 @@ missing cloud coverage, projections, stepping, slider and chart click. Native
 browser visual layout has not been independently verified. No accuracy verdict
 or causal conclusion is added by this UI. Replay remains stopped. Medium is
 sufficient for this tooling; notify user before High is needed for causal work.
+
+The initial HTML failed a JavaScript escaping smoke check; the template was corrected and the successful build is timeline-v2. The original timeline directory is superseded.

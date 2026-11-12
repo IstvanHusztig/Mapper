@@ -27,7 +27,7 @@ def build(root, output):
     (output/'manifest.json').write_text(json.dumps(manifest,indent=2))
     print(output/'index.html')
 
-TEMPLATE='''<!doctype html><html><meta charset="utf-8"><title>Livox2 flyaway timeline</title>
+TEMPLATE=r'''<!doctype html><html><meta charset="utf-8"><title>Livox2 flyaway timeline</title>
 <style>body{background:#101923;color:#e8eff6;font:15px system-ui;margin:24px}h1{font-size:25px}button,select{padding:8px;background:#25384b;color:white;border:1px solid #668;margin:4px;cursor:pointer}input{width:98%}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}canvas{width:100%;height:210px;background:#172635;border-radius:6px}section{padding:12px;background:#17212d;border-radius:8px}p{line-height:1.5}.muted{color:#afc2d4}a{color:#75d9ff}#status{white-space:pre-wrap}label{display:block} .scene{height:320px}</style>
 <h1>Livox2 — synchronized flyaway timeline</h1>
 <p class="muted">Retained run only. Estimated motion is not ground truth. No replay or solver changes. Click any chart, drag the slider, or step through windows.</p>
