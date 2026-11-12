@@ -66,3 +66,7 @@ User approved next-step-design.md and its two-run matrix. That document governs 
 
 ## Full Livox2 follow-through
 After visually liking the new short Livox2 cloud, the user explicitly selected launching the full run. Use the same frozen alpha0.1/beta0.1 binary and exact archived settings on original raw data/livox/2. Disable only optional detailed trace (verified behavior-preserving); retain ordinary diagnostics and snapshots. New external output full-livox2-motion-prior. No new tuning or defaults. User will consider recording a new Livox1 after inspecting this full result.
+
+
+## Authorized existing full Livox2 diagnosis
+After switching to High, the user authorized investigating the retained full run and documenting it in OpenSpec, with advance notice before new runs. Scope is existing log/snapshot/final trajectories/raw IMU and primary-source research only. See full-livox2-jump-diagnosis.md for reviewed findings and proposed replay. No new mapper runs, builds or fixes are authorized by this investigation.

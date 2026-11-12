@@ -191,3 +191,15 @@ and was told to switch to High before diagnosis. Stop here as requested. The
 condition 'if full Livox2 is good, investigate Livox1 next' is not established by
 successful export; full Livox2 has the recorded instability. No new runs or
 corrections are authorized by this completion record.
+
+## Subsequent authorized existing-run diagnosis
+
+The user switched to High, authorized diagnosis from the retained full run, and
+reported that the cloud flies outside the building. This supersedes the earlier
+stop-before-diagnosis instruction, but authorizes no new mapper run. See
+[full-livox2-jump-diagnosis.md](full-livox2-jump-diagnosis.md) for reviewed evidence,
+Terra 6.1 research, external plots/tables and the proposed replay boundary.
+The large excursion already exists before loop closure/export. Sustained speed
+growth begins around W754 (window start 271.08s), following W747–750 disruption;
+large inherited predictions pass the correction-relative guard. The unique
+initiating factor remains unproven. No fixes, builds or new processing occurred.

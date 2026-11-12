@@ -39,3 +39,7 @@
 ## 8. User-approved full Livox2 visual check
 - [x] 8.1 Verify original full Livox2 and launch the identical frozen alpha0.1/beta0.1 build with unchanged archived settings.
 - [x] 8.2 Verify completion/log/snapshot/output identity and deliver full cloud for user inspection; no extra tuning runs.
+
+## 9. User-authorized existing full Livox2 diagnosis
+- [x] 9.1 Locate onset and propagation using existing log, pre-loop snapshot, final trajectories and raw IMU; preserve diagnostic tables and plots externally.
+- [x] 9.2 Independently review mechanism and research alternatives, document user flyaway feedback and evidence limits, and identify any proposed replay before requesting authorization.
