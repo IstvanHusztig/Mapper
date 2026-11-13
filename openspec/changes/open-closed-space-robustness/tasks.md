@@ -4,10 +4,10 @@ Applying this change starts with bounded existing-data analysis. It does not aut
 
 ## 1. Freeze references and resolve the remaining empirical decision
 
-- [ ] 1.1 Record implementation branch/base, isolated checkout, frozen Huber3 binaries/TOMLs, original Livox2/3 hashes and established W415/W754 evidence; verify a written manifest against files without running odometry.
-- [ ] 1.2 Produce a bounded later-failure decision from existing W904–916 logs/snapshots, separating observation from absent detailed trace; verify the report identifies any exact missing state/capture and does not repeat the established W415 ablation.
-- [ ] 1.3 Analyze declared stationary Livox3 surfaces/ranges and repeated support to justify one empirical residual-floor value or predeclared narrow range; deliver data/uncertainty/coverage evidence, distinguish noise from map/pose error and unsupported range/incidence extrapolation, and check whether that range affects the known influential cell widths. Stop numerical application if unjustified or inconsistent with the proposed mechanism; do not claim unique noise calibration or enlarge the range by endpoint tuning.
-- [ ] 1.4 Record independent review of the selected first candidate and the failure-mechanism evidence; verify no silent switch to map-statistics/projection/prior changes and update this design before any alternate branch.
+- [x] 1.1 Record implementation branch/base, isolated checkout, frozen Huber3 binaries/TOMLs, original Livox2/3 hashes and established W415/W754 evidence; verify a written manifest against files without running odometry.
+- [x] 1.2 Produce a bounded later-failure decision from existing W904–916 logs/snapshots, separating observation from absent detailed trace; verify the report identifies any exact missing state/capture and does not repeat the established W415 ablation.
+- [x] 1.3 Analyze declared stationary Livox3 surfaces/ranges and repeated support to justify one empirical residual-floor value or predeclared narrow range; deliver data/uncertainty/coverage evidence, distinguish noise from map/pose error and unsupported range/incidence extrapolation, and check whether that range affects the known influential cell widths. Stop numerical application if unjustified or inconsistent with the proposed mechanism; do not claim unique noise calibration or enlarge the range by endpoint tuning.
+- [x] 1.4 Record independent review of the selected first candidate and the failure-mechanism evidence; verify no silent switch to map-statistics/projection/prior changes and update this design before any alternate branch.
 
 ## 2. Experimental residual confidence floor and focused verification
 
