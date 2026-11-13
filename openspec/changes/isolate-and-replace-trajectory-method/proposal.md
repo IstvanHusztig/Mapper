@@ -36,3 +36,8 @@ No whole-pipeline rewrite or new dependency is selected. This plan supersedes
 the rejected floor's implementation direction, retains its evidence, and reuses
 the active ndt-information-probe findings. Planning authorizes no code changes
 or new processing runs.
+
+Subsequent user authorization: implement the local NDT cell-validity and
+correspondence-consistency candidate described in `ndt-match-guard-plan.md` as
+an isolated experimental detour. This does not authorize new processing runs,
+default adoption, or completion of the larger interface work.

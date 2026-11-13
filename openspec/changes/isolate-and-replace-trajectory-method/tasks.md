@@ -1,5 +1,10 @@
 # Tasks
 
+Current local detour: the user authorized the NDT match guard implementation in
+`ndt-match-guard-plan.md`. Its own checklist tracks preparation/testing; it does
+not complete the interface/replacement tasks below. Charlie stays 3/19. Stop
+before any new recording or captured-window replay.
+
 Planning only. Apply starts with group 1, not an algorithm change. Each new
 processing/checkpoint run needs explicit approval of its concrete scope. The
 separately authorized stronger-gyro Livox4 replay does not authorize other runs.

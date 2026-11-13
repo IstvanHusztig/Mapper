@@ -135,3 +135,20 @@ is cell eligibility/correspondence consistency, not an unapproved whole-solver
 swap or revival of rejected floor/statistics tests. Charlie3/19 unchanged.
 Scratch inspection commitb892823; external livox4-ndt-cell-audit has frozen tools,
 validatedcells, cell-ranking-v2.json/history-v2.json and plot. No fix/newrun approved.
+
+
+## Latest: local NDT match guard implemented; replay awaiting approval
+
+User authorized the local cell-validity/correspondence-consistency fix. Candidate
+commits 426b8ed / 1268e5a in out/ahrs-gain-worktree; default off, shipped root
+settings unchanged. Admission min6 cell points, SPD/finite/inverse validation,
+model-relative residual<=6; >=6 unique source returns required. Targets and
+membership fixed for entire window; diagnostics use same set. Unsupported window
+stops before optimization/map carry; zero-normal supported volumes allowed.
+Release+Debug7 newcases206 assertions pass each;8 legacy fixtures byteexact;
+fullRelease137 cases accepted (3 pre-existing expected-failure assertions),3 skipped.
+Independent review complete. See ndt-match-guard-implementation.md in the active
+OpenSpec change for scope, risks and exact paths. External livox4-ndt-match-guard
+bundle prepared_not_run, approvalfalse. Next proposed125s prefix alpha1/beta1/
+Huber3,10-20minutes; STOP before launch. No replay/cloud-quality verdict yet.
+Charlie3/19 unchanged. Medium enough for mechanical monitoring; high for analysis.
