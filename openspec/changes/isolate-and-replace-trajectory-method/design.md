@@ -34,10 +34,22 @@ extraction. Research chooses a candidate; this document does not choose one.
 Trace incoming velocity and attitude/gravity integration separately from matching
 and outgoing carry. Start with existing Livox2/4 evidence and reused synthetic
 tests, not a fresh general diagnostic framework. Identify input state, calculation,
-output state and propagation for each suspected mechanism. If missing pre-LM
-state prevents attribution, specify the smallest capture and reproducible check;
-obtain explicit run approval before collecting it. An isolated guard weakness is
-not sufficient evidence that its boundary contains the initiating error.
+output state and propagation for each suspected mechanism. Concentrate on the
+first departure and one later angular event rather than repeatedly processing
+whole routes. If missing pre-LM state prevents attribution, specify the smallest
+capture and reproducible check; obtain explicit run approval before collecting it.
+An isolated guard weakness is not sufficient evidence that its boundary contains
+the initiating error.
+
+Prefer a bounded window replay only after its incoming state and map have been
+captured and validated against the unmodified sequential run. The current
+`--from-snapshot` path bypasses odometry and resumes downstream stages; it is
+not an odometry restart. The saved `motion_model_poses` have also been overwritten
+by final poses. Cutting raw data at the failure time would reinitialize velocity,
+bias, gravity and map, so it cannot be treated as the same causal experiment.
+If reaching a valid checkpoint requires a prefix pass, run that prefix once and
+reuse the verified checkpoint for candidate comparisons. Compare bounded and
+original sequential calculations at the boundary before interpreting changes.
 
 Gate: a reviewed evidence note distinguishes demonstrated transitions, upstream
 uncertainty and multiple mechanisms. If attribution remains unresolved, record
