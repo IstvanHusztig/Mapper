@@ -34,4 +34,28 @@ Provide the new cloud for visual review. A single comparison cannot establish
 robustness or adoption; perturbation runs need separate authorization. Physical
 region quality not yet measured must remain explicit.
 
-Status: prepared; runtime state is recorded in the external run.json.
+## Completed comparison and visual review
+
+The one authorized native replay finished (exit 0) in 1995.14 s. All 1016
+windows completed; frozen input/build/settings hashes and artifacts verified.
+The output cloud is `result/scan_lio_merged.laz` (305,791,452 bytes). Diagnostic
+coverage is complete, but run-health exits 1 for investigation triggers; neither
+its exit nor the user's look is an independently surveyed accuracy measure.
+
+| Reading | Huber3 reference | Gyro4x |
+|---|---:|---:|
+| Odometry start/end separation | 36.542 m | 44.791 m |
+| Final start/end separation | 36.717 m | 44.394 m |
+| Bends >3 degrees | 11 | 14 |
+| Speed windows >2.5 m/s | 8 | 27 |
+
+The user reports that the gyro-weighted cloud is also a mess. Same-table return
+is known from acquisition notes, so the endpoint separation remains a serious
+failure signal, though it is not a whole-map accuracy metric. Odometry curves
+diverge by at most 37.000 m and final curves by 35.418 m; timestamps/counts
+match (182880 poses each). First >0.5 m separation is 108.66 s odometry and
+108.84 s final. A fourfold stronger relative-rotation constraint did not solve
+this recording and worsened these specific triggers and return separations.
+Do not adopt this weighting as a default or infer gyro quality is the root cause.
+The isolation-first plan remains the next algorithm step. No further replay is
+authorized by this comparison.
