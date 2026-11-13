@@ -24,9 +24,9 @@ Applying this change starts with bounded existing-data analysis. It does not aut
 
 ## 4. Authorized checkpoint and longer-segment evaluation
 
-- [ ] 4.1 Prepare a concrete exact-control/candidate experiment manifest and estimated runtime, and obtain explicit user authorization before launching; verify approval is recorded and the runner refuses existing output paths/no automatic retry.
+- [x] 4.1 Prepare a concrete exact-control/candidate experiment manifest and estimated runtime, and obtain explicit user authorization before launching; verify approval is recorded and the runner refuses existing output paths/no automatic retry.
 - [ ] 4.2 After approval, reproduce the frozen Huber W415 control before one enabled candidate check; verify full declared control equivalence, fixed-state signed translation/rotation influence and robust weights, then evolving support/motion and bias/velocity/offset estimates and finite/SPD covariance/carry with declared units. Do not rank by cost reductions across different sigmas; document independent review without claiming full-route success.
-- [ ] 4.3 Prepare a longer failure segment with control-equivalent incoming map/state, identifying any additional capture separately; obtain approval for that run and verify reproduction, cumulative motion, support and state-carry results. If required state is unavailable, deliver the missing-evidence report rather than a cold-start substitute.
+- [x] 4.3 Prepare a longer failure segment with control-equivalent incoming map/state, identifying any additional capture separately; obtain approval for that run and verify reproduction, cumulative motion, support and state-carry results. If required state is unavailable, deliver the missing-evidence report rather than a cold-start substitute.
 - [ ] 4.4 Review the longer-segment results against predeclared gates; verify failed or unsupported candidates stop here and a survivor's next experiment is proposed before any full replay.
 
 ## 5. Full-route preservation, robustness and promotion gates
