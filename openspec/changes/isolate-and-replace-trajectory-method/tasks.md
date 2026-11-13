@@ -8,7 +8,7 @@ legacy removal remain separate user decisions; no push is authorized.
 
 ## 1. Isolate the responsible computation
 
-- [ ] 1.1 Freeze the evidence/control inventory, including source/configuration identities, existing synthetic checks and rejected candidates; verify the inventory links to preserved artifacts and distinguishes shipped defaults from frozen Huber3.
+- [x] 1.1 Freeze the evidence/control inventory, including source/configuration identities, existing synthetic checks and rejected candidates; verify the inventory links to preserved artifacts and distinguishes shipped defaults from frozen Huber3.
 - [ ] 1.2 Trace Livox4 W301–320 prediction growth separately from W395–410 angular corrections and the Livox2 events; deliver a state-transition table naming calculations, observed values, upstream uncertainty and missing pre-LM state, independently reviewed against existing data.
 - [ ] 1.3 If existing data cannot isolate the initiating transition, prepare a minimal state-capture/reproduction scope and cost, obtain explicit run approval, and collect only that scope; verify captured input/output identities and reproduction, or document why causal isolation remains blocked.
 - [ ] 1.4 Deliver the reviewed isolation decision and concrete interface contract covering the smallest coherent coupled state; verify the note distinguishes proven cause from guard weakness and defines units, frames, lifecycle, failure and commit semantics before extraction.
