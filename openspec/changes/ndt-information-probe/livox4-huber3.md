@@ -24,7 +24,41 @@ identities on completion. No automatic native retry. First setup attempt found
 a missing parent directory before any mapper process/output was created; mkdir
 was corrected, then the single authorized native replay started (PID 32748).
 
-Status: running. Native logs and live trajectory diagnostics are monitored;
-complete run-health and stage endpoint readings will be recorded after saving.
-Diagnostic triggers alone are not map accuracy verdicts. Prior Livox3 runtime
-was about 23 minutes; this longer scan may take longer. No completion claimed.
+## Completed collection
+
+Native exit 0; collected after 1798.64 s (about 30 minutes). Source/frozen hashes
+rechecked; artifact_integrity_complete=true. Cloud:
+result/scan_lio_merged.laz, 305,742,899 bytes. Run.json and output hashes retain
+the definitive identity. No retry or extra run was performed.
+
+All 1,016 windows completed; 182,880 poses in both stages. Actual first/last
+pose separation: odometry 36.5421 m, final 36.7170 m. Vertical displacement:
+odometry -2.2930 m, final -1.7239 m. User reports return to the same Wohnen table;
+these are estimated endpoint separations, not independently surveyed error
+measurements. They indicate an unresolved substantial return mismatch.
+
+| Diagnostic | Reading |
+|---|---:|
+| Bend/speed/bias rows | 1016/1016 each |
+| Bends above 3 deg / 10 deg | 11 / 1 |
+| Largest bend | -11.704 deg, W397, 142.56 s |
+| Speed crossings above 2.5 m/s | 8 windows |
+| Largest speed | 5.08615 m/s, W320, 114.84 s |
+| Residual bias maximum absolute XYZ | 0.21 / 0.32 / 0.64 deg/s |
+| Selected velocity quadratic median / p95 | 86 / 675 over 520 rows |
+| Solver failures / big-jump nodes | 0 / 0 |
+| Loop closures / largest correction | 51 / 1.63 m |
+
+run-health exit 2: diagnostics_complete=false because conditional velocity
+uncertainty eligibility is unresolved/missing at windows 95 and 736. This is
+retained, not silently converted to a pass. Completed native output and its
+hash integrity are separate from this diagnostic gap. Accuracy not accepted;
+map sharpness/visit consistency/physical-region comparisons NOT MEASURED here.
+The full cloud is ready for the user's visual review.
+
+The user requested a focused code analysis while a lower-cost monitor watched
+the replay. See livox4-code-audit.md: independent review confirmed prediction
+dominates displacement escalation at W301–320, the translation-only acceptance
+guard permits the observed angular corrections, and W321's speed drop is an
+explicit prior reset. This is a narrowed investigation, not a proven full cause
+or an implemented fix. No algorithm/settings change was made.
