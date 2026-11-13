@@ -200,3 +200,12 @@ Independent review clear. Release build and 18 tests / 2436 assertions pass.
 See ndt-iteration-refresh.md. NO new recording replay started. Next candidate
 replay needs approval; 50 s diagnoses early drift, 125 s also covers rotation gate.
 Current high sufficient; Charlie remains 3/19; no shipped adoption.
+
+Approved iteration-refresh 50s replay completed: native0, 137 windows, 577.356s.
+Max speed2.992->1.100m/s; >2.5 crossings8->0; W87 correction8.18->13.49mm.
+Still1.583m max disagreement with unguarded same-time reference (not truth).
+W97 missing chi2 warning resolved by exact trace ratio.4503025 above cutoff;
+raw warning retained, collection-review.json records review. Cloud and comparison
+in external livox4-iteration-refresh-50s. Independent review done. No full-route/
+107s/robustness/map-accuracy verdict. No further run authorized; high sufficient.
+See ndt-iteration-refresh.md. Charlie3/19, no adoption.
