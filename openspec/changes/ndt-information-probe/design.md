@@ -230,3 +230,15 @@ Huber3/alpha.1/beta.1/allotherparsedsettings andexistingfrozenexecutable. No bui
 tracingoff, normaldiagnostics retained. See full-livox2-return-diagnosis.md for
 mechanism/applicability/acceptance limits. Stop diagnostictool expansion and
 prioritize thisboundedcorrectiontest peruser's token-cost feedback.
+
+## Audit continuation (2026-11-13)
+User resumed code/cause work after the Sol6.1 audit. The stop boundary is lifted
+for this investigation; no new mapper replay has been launched. Phase21 targets
+the earlier W415-416 rotation bend using existing Huber3 trace, snapshot and raw
+IMU. Raw-gyro local integration agrees with AHRS within0.09deg, whereas optimized
+rotation differs by about9deg. NDT supports these accepted updates against the
+motion prior; exact cell attribution is pending. Reuse existing reconstruction
+with unchanged map/source gates. Origin regularizer units defect is real but
+first-node movement<0.00011deg excludes it as the dominant cause here. Preserve
+all earlier diagnostic gaps and failed bias-off records. No production fix or
+full-route acceptance yet. User requests very concise output.

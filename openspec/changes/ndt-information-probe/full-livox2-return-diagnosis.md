@@ -101,3 +101,21 @@ It reuses the original frozen Huber3 binary and records the sole parsed TOML
 change. The normal CLI may rewrite derived raw/cache and raw/preview; original
 recording files and retained experiment results remain identity-checked.
 Completion and comparison remain pending. No automatic retry.
+
+
+## User stop and independent Sol 6.1 audit (2026-11-13)
+User explicitly stopped further investigation/runs/changes and requested Sol6.1
+review of decisions and code. No mapper remains active. Sol6.1 read-only audit
+is running; no implementation authorized by that audit.
+Latest no-online-bias mapper completed exit0, native2395.60s, runner2474.37s;
+result is substantially worse (window-start endpoint proxy209.94m,minZ-87.34m,
+maxspeed8.60m/s). Native clouds saved. DO NOT RERUN or adopt setting.
+Collection then failed serializing NumPy health['speeds']; unsafe overwrite and
+same exception-handler save truncated run.json, run-health.json also partial.
+run-health.txt complete; W814conditionaluncertainty unresolved, biasrowsdisabled.
+Original partial files and frozen runner preserved. No recovery collector has
+been executed; any later recovery must be offline into a separate record with
+original bytes/hashes preserved. Do not silently repair original evidence.
+Current authorized work is independent Sol6.1 audit only. Main cloud goal remains
+unfinished. User requests OpenAI investigation; no escalation channel available
+or submission claimed. Root will report audit without implementing fixes.

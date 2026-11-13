@@ -101,3 +101,8 @@
 - [x] 20.1 Prepare/review a minimal replay using the existing frozen executable and exactly one parsed setting change; preserve startup calibration and diagnostic applicability.
 - [ ] 20.2 Execute one fresh full Livox2 run, monitor, preserve outputs and verify input/build/source coverage without automatic retries.
 - [ ] 20.3 Compare early orientation departure, pre-loop apartment return and final cloud geometry against retained Huber3; independently review and report the correction decision.
+
+## 21. Resume from independent audit: early rotation failure
+- [x] 21.1 Locate W415–416 orientation departure using retained trace, original raw gyro and saved snapshot; independently review factor signs, local rotation checks and causal limits.
+- [x] 21.2 Reuse the existing map reconstruction tool at W415, preserving exact source/association/geometry and quadratic-contribution gates; identify responsible correspondence contributions without running odometry. V2 passed all gates; earlier W754-only history-check failure preserved.
+- [x] 21.3 Execute one exact-control-gated W415 three-cell causal check and document the supported mechanism and correction decision. All100 control iterations reproduced exactly; three-cell omission reduced9.142869°→2.656545°. See early-heading-cause-audit.md. This diagnoses a local causal contributor; no general fix or full-route acceptance.
