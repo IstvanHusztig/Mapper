@@ -52,4 +52,4 @@
 - [x] 11.1 Extend opt-in scratch tracing for close-scene transitions, predictors, per-factor contributions, match turnover/range geometry and final states; independently review behaviour preservation.
 - [x] 11.2 Run appropriate parity/tests, freeze the alpha0.1/beta0.1 executable and unchanged settings, and review the one-run runner.
 - [x] 11.3 Execute exactly one full original Livox2 replay, preserve provenance and verify pre-loop/final trajectory and cloud reproduction against the retained run.
-- [ ] 11.4 Diagnose onset and propagation from traced factors/associations with scene context; independently review, document findings and notify the user when High is no longer needed.
+- [x] 11.4 Diagnose onset and propagation from traced factors/associations with scene context; independently review, document findings and notify the user when High is no longer needed. Initial traced diagnosis is in full-livox2-trace-analysis.md; physical association correctness remains unresolved and High remains useful for follow-up causal/design work.
