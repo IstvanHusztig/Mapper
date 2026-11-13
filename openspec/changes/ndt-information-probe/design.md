@@ -197,3 +197,16 @@ firstsavedfinalsnapshot mustreproduce64numericfiles, thenLCandodometrystages;
 freshcache/originalraw preserved. Phase18 preparesstandaloneexporter/runner.
 No fullodometry/newnumericalcandidate, noacceptance. Mediumsufficientforexports/
 measurements; usernotified, flagbeforeHigh correctiondesignifuserswitchesdown.
+
+
+## Existing-data route/scene interpretation (phase19)
+The saved-stage geometry is complete and reviewed; phase18 did not fix or accept
+full-route accuracy. Prioritize the remaining large odometry-stage displacement.
+Before any new optimizer execution, inspect bounded beginning/end scene geometry
+and relate raw sensor geometry/estimated motion to known route context. A final
+indoor cluster is displaced roughly62m from the start; this is endpoint separation,
+not physical closure error without route evidence. User was asked whether Livox2
+ended in apartment56, another indoor location or outside. No timestamp recall.
+A small bounded chunk-view script is prepared/reviewed for first/last60s; translation
+only local panels are shape inspection, never a physical alignment or accuracy
+claim. Reuse retained outputs and preserve all source-coverage caveats.
