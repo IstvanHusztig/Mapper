@@ -85,3 +85,35 @@ medium is sufficient for routine execution once numerical analysis is settled.
 After the detour, record its evidence here and resume the remaining tasks or
 explicitly revise the roadmap with the user. Do not restart the prior research
 or rerun rejected candidates as new ideas.
+
+
+## Latest: authorized rotation-factor trace running
+
+User explicitly authorized tracing the first bad rotation update. Scratch
+`f400479` adds diagnostic-only W297–300 logging and passed Release parity/Huber
+checks (5 cases,2159 assertions). One existing125s prefix replay launched to
+external `livox4-ahrs-gain-trace`; monitor its run.json and native run.log.
+Do not launch a second run. Require identical346 snapshot window payloads to
+existing candidate before attribution. Critical provenance correction: previous
+control log alpha0.1, candidate alpha1 and build beta1. Previous gain-only causal
+attribution withdrawn; this trace reproduces candidate1/1 intentionally. Details
+and pending evidence in `livox4-rotation-factor-trace.md`. High remains appropriate.
+
+
+## Latest: rotation trace completed and numerical driver localized
+
+Single authorized replay completed exit0 in607.476s; all346 snapshot payloads
+exact, all400 trace iterations valid. At W298 iteration0, node164 bends-0.855775°:
+NDT net-0.855777°, principally2–5m response-1.064728°, near net+0.208951°.
+Beyond5m matches zero throughoutW298; projection identity. Repeated accepted
+updates reach-17.917741°. Fixed-match NDT cost always falls, but rematched cost
+rises40/100 times; simple fixed-cost guard is insufficient. Reviewed independently.
+Specific physically incorrect cell/surface and upstream map/model cause unresolved.
+Previous candidate/control comparison confounded: controlalpha.1, candidatealpha1/
+beta1; gain-only causal claims withdrawn. See livox4-rotation-factor-trace.md.
+No fix/bypass/new run authorized beyond the completed diagnostic. Archive and
+scripts live in external livox4-ahrs-gain-trace; scratch source commitf400479.
+
+Roadmap update: task1.3 complete via exact sequential-prefix fallback;3/19.
+Task1.4 interface contract remains open. Do not infer reusable full-map restart
+support from this diagnostic capture.

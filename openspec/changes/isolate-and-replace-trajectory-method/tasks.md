@@ -10,7 +10,11 @@ legacy removal remain separate user decisions; no push is authorized.
 
 - [x] 1.1 Freeze the evidence/control inventory, including source/configuration identities, existing synthetic checks and rejected candidates; verify the inventory links to preserved artifacts and distinguishes shipped defaults from frozen Huber3.
 - [x] 1.2 Trace Livox4 W301–320 prediction growth separately from W395–410 angular corrections and the Livox2 events; deliver a state-transition table naming calculations, observed values, upstream uncertainty and missing pre-LM state, independently reviewed against existing data.
-- [ ] 1.3 If existing data cannot isolate the initiating transition, prepare the smallest prefix capture and bounded failure-window replay, including incoming state/map, identity checks, sequential-equivalence test and cost. Obtain explicit run approval, then collect only that scope; never treat a raw cut or downstream-only snapshot as an equivalent restart. If faithful restart is unavailable, document the constraint and the minimum prefix cost.
+- [x] 1.3 If existing data cannot isolate the initiating transition, prepare the smallest prefix capture and bounded failure-window replay, including incoming state/map, identity checks, sequential-equivalence test and cost. Obtain explicit run approval, then collect only that scope; never treat a raw cut or downstream-only snapshot as an equivalent restart. If faithful restart is unavailable, document the constraint and the minimum prefix cost.
+  - Completed through the approved sequential-prefix fallback: unchanged candidate,
+    incoming state/matched-map identities,400 iterations and346 exact snapshot
+    payloads. See `livox4-rotation-factor-trace.md`. No standalone restart or
+    reusable full-map checkpoint is claimed; specific offending cells remain open.
 - [ ] 1.4 Deliver the reviewed isolation decision and concrete interface contract covering the smallest coherent coupled state; verify the note distinguishes proven cause from guard weakness and defines units, frames, lifecycle, failure and commit semantics before extraction.
 
 ## 2. Extract and preserve the current method

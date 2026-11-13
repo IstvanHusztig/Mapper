@@ -1,5 +1,12 @@
 # Optimizer code audit and comparison with other methods
 
+> Provenance correction (2026-11-13 diagnostic preparation): the saved control
+> log reports alpha=0.1; the saved candidate log reports alpha=1, and its build
+> defines beta=1. The earlier “gain-only” label and alpha0.1/beta0.1 candidate
+> description are incorrect. Candidate/control differences cannot be attributed
+> solely to the AHRS gain fix. The saved candidate jump remains a valid event
+> to investigate. See `livox4-rotation-factor-trace.md` for the authorized trace.
+
 2026-11-13. Requested before proceeding with an optimizer bypass. Inspected the
 executed gain-only source at fc73404, its caller and generated observation
 equations, existing tests, prior findings and saved Livox4 states. A requested
