@@ -126,4 +126,6 @@
 
 ## 26. New indoor Livox3: agree plan before replay
 - [x] 26.1 Verify original indoor recording and capture metadata; record route and capture changes, preserve source identities and input-check evidence. livox3-indoor-plan.md.
-- [ ] 26.2 Agree the baseline replay with the user, then execute only that approved run and provide the actual cloud with pre-loop/final diagnostic and return checks.
+- [x] 26.2 Agree the baseline replay with the user, then execute only that approved run and provide the actual cloud with pre-loop/final diagnostic and return checks.
+
+- [ ] 26.3 Review the completed Livox3 cloud with the user and agree the next action; no further replay or general-fix acceptance implied.

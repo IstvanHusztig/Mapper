@@ -87,3 +87,52 @@ are hash-bound in preflight.json; runner archived. Native completion is recorded
 before collection; health arrays serialized atomically using the reviewed helper.
 Missing diagnostics remain incomplete and no accuracy pass is inferred. No retry.
 Keep monitoring quiet and notify user once actual merged cloud is complete.
+
+User documentation requirement: if a correction is accepted as a general fix,
+update the existing docs HTML files with implementation/rationale, settings and
+validation results. Keep OpenSpec evidence as well. A single run is not general
+acceptance; no HTML documentation change is claimed for this pending experiment.
+
+## Completed reference replay (2026-11-13)
+Full original Livox3 Huber3 run completed exit0; native processing1325.13s,
+runner1360.16s.702/702 windows,126360 poses in each stage. All original recording,
+frozen executable/settings/runner and analysis-helper identity checks passed.
+Source cbca36d2747cfcd1fc3ceac3d906bd221080d8f8. Huber3 marker verified;
+no Cauchy or per-iteration trace output. Settings equal settings/livox-vertical.toml
+except snapshot saving/log_window_diagnostics enabled and real_time_threshold_seconds
+10→3600 to avoid wall-clock iteration truncation. No sensor/mount parameter change.
+
+| Measurement | Odometry | Final |
+|---|---:|---:|
+| Actual first-to-last sensor position separation |0.055587m|0.110057m|
+| End minus start Z |−0.002301m|−0.005212m|
+| Minimum sensor Z |−5.287734m|−5.338602m|
+| Maximum sensor Z |0.576234m|0.583376m|
+
+No prior-style runaway observed: zero bends>3deg or>10deg, maxbend1.557deg,
+maxloggedvelocity1.302582m/s, zero velocities>2.5m/s. Max optimized residual gyro
+bias XYZ.136/.087/.258deg/s. Observed vertical excursion is compatible with the
+reported multiple-floor route; exact floor elevations/order are not established.
+Endpoint figures are observed position separations, not surveyed closure errors.
+
+Diagnostic coverage is complete, but health exit1 remains TRIGGERS: conditional
+velocity-jump chi2 median32/p95313.68 across377 eligible windows. No missing rows.
+79 logged loop closures, maxloggedcorrection.33m; no universal correction-size
+accuracy judgment. Do not interpret a good-looking trajectory as uncertainty
+calibration. The full run record explicitly retains accuracy_accepted=false.
+
+Cloud: BASE/livox3-indoor/huber3-baseline/result/scan_lio_merged.laz.
+Trajectory and actual merged-cloud/start-end views under views/; source hashes,
+fixed-index thinning, full-stream count/bounds and descriptive metrics retained.
+No ICP/rotation/translation alignment of start/end geometry. User received the
+actual cloud link immediately after successful collection. Independent Sol6.1
+result review supports no observed prior-style runaway and the above limits.
+
+Next is the user's inspection of room shapes, stair connections, floor overlap
+and return consistency. Do not launch a new run or declare a general correction
+accepted. Route and capture/filtering changed together; success here cannot prove
+that outdoors alone caused Livox2 failure, or that Huber alone improved Livox3.
+Perturbation robustness, matched-wall quality and production acceptance remain
+NOT MEASURED. Existing HTML docs must be updated if a general fix is accepted;
+that condition has not been met by this single reference run. Medium sufficient
+for this report/user review; ask before any deeper diagnosis requires High.
