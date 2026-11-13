@@ -1,6 +1,6 @@
-# Roadmap checkpoint before a focused fix
+# Charlie — roadmap checkpoint before a focused fix
 
-Saved 2026-11-13 at the user's request. The larger replacement roadmap is
+Checkpoint name: **Charlie**. Saved 2026-11-13 at the user's request. The larger replacement roadmap is
 parked for a possible focused-fix detour, not abandoned or complete.
 
 ## Progress and resume point
