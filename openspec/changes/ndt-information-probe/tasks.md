@@ -81,5 +81,10 @@
 
 ## 17. Retained-snapshot postprocessing attribution
 - [x] 17.1 Prepare a standalone exact-provenance snapshot driver with observational stage/pass captures, appropriate tests and independent review; retain normal experimental CLI safeguards. Scratch f18353e; Release/Debug observer selftests and 12 runner tests passed, independent review cleared, frozen bundle verified. No core numerical changes.
-- [ ] 17.2 Freeze provenance and execute one unchanged postprocessing replay; require exact final trajectory/cloud reproduction before interpreting intermediate states.
-- [ ] 17.3 Attribute observed variation by stage/pass, inspect affected geometry, independently review and document the next correction or unresolved evidence boundary.
+- [x] 17.2 Freeze provenance and execute one unchanged postprocessing replay; require exact final trajectory/cloud reproduction before interpreting intermediate states. Exit0,1127.06s,all64numericfinalfiles exact and12stage snapshots validated; original raw/cache/preview preserved.
+- [ ] 17.3 Attribute observed variation by stage/pass, inspect affected geometry, independently review and document the next correction or unresolved evidence boundary. Stage attribution and independent binary-parser review are complete; affected stage-cloud geometry remains pending phase18. No correction accepted.
+
+## 18. Native exports of retained stages for geometry comparison
+- [x] 18.1 Prepare/review a standalone native snapshot exporter and runner with exact final-control reproduction before earlier-stage exports; no optimizer invocation or normal CLI guard changes. Scratch4f8af9a; Release/Debug selftests and9runner tests pass; independent Codex review cleared native I/O and complete source/trajectory coverage gates.
+- [ ] 18.2 Export final-control, after-loop-closure and odometry clouds into fresh external folders; verify snapshot/input identity and matching exported source sequences.
+- [ ] 18.3 Compare actual stage geometry and coverage, independently review findings, deliver meaningful new clouds and record the remaining physical-reference/correction decision.

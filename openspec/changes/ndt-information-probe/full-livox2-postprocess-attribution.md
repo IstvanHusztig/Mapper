@@ -67,8 +67,73 @@ passed. Independent Codex source/runner review (not Sonnet) cleared execution.
 The frozen bundle covers twelve files; runner/tests are separately bound by
 `preparation-manifest.json`.
 
-The single unchanged postprocessing replay launched on November 13, around
-04:49 Europe/Berlin. Live state is `postprocess-attribution/run.json`; root
-monitoring session 41934. No odometry optimizer runs. All twelve stage snapshots
-and numeric final exports must pass identity/coverage gates before attribution.
-Keep monitoring through completion; no additional mapper or cache job in parallel.
+The single unchanged postprocessing replay completed on November 13 in
+1127.06 s, exit 0. `postprocess-attribution/run.json` reports
+`exact_postprocess_reproduction`: all 64 numeric final files reproduce exactly,
+and all twelve stage snapshots preserve settings and exact timestamp/window
+coverage. The restored snapshot also matches the original byte-for-byte before
+postprocessing. Original inputs/cache/preview and retained outputs are unchanged.
+No odometry optimizer ran. The inherited W798 diagnostic gap remains unresolved.
+
+## Result: the two stages have different effects
+
+| Saved stage | Dense trajectory arclength | Stride-50 arclength, all 50 offsets |
+|---|---:|---:|
+| Restored odometry | 334.276 m | 332.153–332.171 m |
+| After loop closure | 333.228 m | 331.102–331.120 m |
+| After consistency pass 1 | 408.553 m | 331.587–331.948 m |
+| After consistency pass 5 | 674.183 m | 333.601–334.562 m |
+| After consistency pass 10 | 892.159 m | 335.674–337.671 m |
+
+Loop closure causes the large global/vertical adjustment: maximum 3D change
+10.4697 m and maximum absolute Z change 5.3631 m. Trajectory Z changes from
+[-7.8724, 0.8465] m to [-3.6127, 5.6827] m. It does not cause the subsequent
+dense-arclength inflation.
+
+The consistency passes progressively introduce fine-scale variation. Across
+all ten passes, the maximum position change from the after-loop-closure state
+is 0.3310 m, median 0.0300 m; maximum absolute Z change is 0.1113 m. Dense
+arclength rises on every pass, while all coarse offsets remain much closer.
+The maximum final adjacent-position derivative reaches 23.09 m/s; this is not
+the optimizer velocity state or physical speed. Different coarse offsets omit
+different endpoint tails; their envelope is descriptive, not a noise floor.
+
+Independent Codex review (not Sonnet) checked exact execution gates and used
+a separate binary snapshot parser to reproduce these readings. This attributes
+the observed changes to stages, not to a specific residual/coding defect, and
+does not establish whether a large loop correction is physically right or wrong.
+The exporter and trajectory parser are not the source of these two effects.
+
+Artifacts: `postprocess-attribution/analysis/analysis.json` and `stages.png`;
+the executed analysis source is preserved in its `analysis_scripts/` directory
+(SHA256 `08bd7c5ae117d4fba7b59d0e584e7e9d98b242dbe9866120efa3fb7f1a68099c`).
+The unused later root-script output-guard refinement is not the executed version.
+
+## Next bounded map check
+
+Export clouds from the retained odometry and after-loop-closure snapshots,
+without optimization, alongside the existing final cloud. First export the
+saved final snapshot and require exact reproduction of all 64 numeric files;
+only then export the earlier stages. Use the original recording/settings and
+fresh external cache, and verify source return sequence and coverage. This
+supplies actual geometry for the user's inspection before selecting a correction.
+No algorithm change or stage-removal acceptance is implied.
+
+Medium is sufficient for this export/measurement step; the user was notified.
+Notify before a later correction-design step requires High if they switch down.
+
+
+## Stage-cloud export launched (2026-11-13)
+Reviewed standalone exporter scratch commit `4f8af9aa592d5e90a211cbe851716ac8efe6b0c8`,
+parent f18353e; Release SHA256 `732be39070087799bfbf61e04eb46531c38a66ae3912c11efb42513e4c3d1706`.
+Runner SHA256 `63ad2011e7de406b0b8dae9a6a3cd0a5694ef3eb35d74cacabf4bb37c708b0fb`.
+Release and Debug builds/selftests and nine runner tests passed. Independent Codex
+review (not Sonnet) added explicit native writer-error detection and full merged
+return-count/ordered GPS-time/intensity plus trajectory coverage checks before
+clearing execution. Source/settings/snapshot hashes and original cache are checked
+before/after. A fresh twelve-file bundle and separately archived runner/tests are
+under `full-livox2-huber3/stage-clouds/`.
+One export-only job launched from that frozen runner. It must reproduce all64
+final-control numeric files before saving after-loop-closure and odometry clouds.
+No odometry or postprocessing optimizer is called. Completion is pending; W798
+uncertainty remains unresolved and physical accuracy is not established.

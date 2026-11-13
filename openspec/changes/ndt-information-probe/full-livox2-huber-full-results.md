@@ -145,13 +145,16 @@ traced velocity vectors against the snapshot, narrowed the coverage claim to
 the selected slice, and prevented interpreting the 892 m as physical travel or
 the patch measures as a 3D wall-thickness pass.
 
-The next bounded check reuses the exact candidate odometry snapshot and
-recomputes only unchanged postprocessing while capturing intermediate states.
-See `full-livox2-postprocess-attribution.md`. No additional full odometry replay
-is needed for that check, and no stage is disabled before reproduction passes.
+The bounded postprocessing-only replay has now reproduced all 64 numeric final
+files exactly. Intermediate captures attribute the large global/vertical
+adjustment to loop closure and progressive fine-scale variation to consistency.
+See `full-livox2-postprocess-attribution.md`. Native exports of the saved earlier
+stages are next, with no optimization or new full odometry run, so actual cloud
+geometry can be compared before choosing a correction.
 
 The user has been asked where the complete recording ended (starting apartment,
 elsewhere inside, or outside), without asking for timestamp recollection.
 Endpoint truth, full-route geometry and perturbation robustness remain unresolved.
-High remains useful for causal/design interpretation; routine execution does not
-need it. The continuing authorization does not imply candidate acceptance or push.
+High remains useful for a later correction-design decision; Medium is sufficient
+for the current exports/measurements and the user has been notified. The
+continuing authorization does not imply candidate acceptance or push.

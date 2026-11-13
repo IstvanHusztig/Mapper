@@ -56,3 +56,14 @@ full-livox2-postprocess-attribution.md reuses exact retained odometry, captures
 afterloop and each unchanged consistency pass, and requires exact final
 trajectory/cloud reproduction before attribution. No full odometry replay,
 shipped settings change, or silent experimental snapshot-guard bypass.
+
+## Exact postprocessing attribution complete; native stage exports next
+Phase17 replay exit0,1127.06s; all64numericfiles exact,12stage snapshots verified.
+Independent binary-parser review separatesLCmax10.4697m(global)/5.3631mvertical
+fromconsistency densepath333.228->408.553pass1->892.159pass10. This isnotphysical
+travel or proofwhichcorrectionisright. See full-livox2-postprocess-attribution.md.
+Usercontinuationauthorizationcoversboundedstagecloudexportswithoutoptimization:
+firstsavedfinalsnapshot mustreproduce64numericfiles, thenLCandodometrystages;
+freshcache/originalraw preserved. Phase18 preparesstandaloneexporter/runner.
+No fullodometry/newnumericalcandidate, noacceptance. Mediumsufficientforexports/
+measurements; usernotified, flagbeforeHigh correctiondesignifuserswitchesdown.
