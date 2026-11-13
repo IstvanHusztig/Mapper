@@ -138,8 +138,9 @@ and full RHS match production at both sampled iterations.
 W87 (30.96 s log-relative time) makes a total endpoint correction
 (-0.00440318, +0.00665278, -0.00181734) m, approximately 8.18 mm.
 The first iteration already supplies about 7.57 mm; by iteration 10 the next
-endpoint step is only about 7 nanometres. This is convergence to the guarded
-local model, not failure to execute an update.
+endpoint step is only about 7 nanometres. The factors nearly balance under the
+guarded local model. Late small steps also reflect scheduled damping; they do
+not prove a global optimum. The update is executed, not skipped.
 
 For the same descriptive fixed-attitude velocity ramp defined above, iteration 99:
 
@@ -203,3 +204,10 @@ prior. A subsequent controlled test must separate refresh from admission changes
 and retain the original rotation-jump gate. New algorithm changes and any further
 recording replay require user approval. Current high effort is sufficient;
 Charlie remains 3/19.
+
+Independent corrected-run evidence review: trace_review (Codex, not Sonnet)
+confirmed the exact reproduction and bounded mechanism. Review explicitly
+separates conditional stiffness from gradient cancellation and cautions that
+late small steps include scheduled damping. All full-ramp alternative quadratic
+cost changes remain positive; larger corrective push does not prove recovery.
+Changing matched-only costs must not be used as an objective acceptance test.
