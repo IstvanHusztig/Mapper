@@ -103,3 +103,25 @@ range when prediction is already wrong and can retain initially plausible wrong
 associations. The physical origin of the old cell mismatch remains unresolved.
 No general flyaway cure, default change or HTML adoption update is claimed.
 Medium effort suffices for routine monitoring; numerical interpretation needs high.
+
+## Replay authorization
+
+User approved starting the prepared Livox4 replay. Frozen hashes and free disk
+checked; no competing mapper process. One125-second prefix launched, with
+alpha1/beta1/Huber3 and guard enabled. External run.json/log are live authority.
+No retries or additional runs authorized. Completion/quality checks pending.
+
+## Completed approved replay
+
+Native exit0; wall524.17s; all346windows processed. Cloud ready at external
+livox4-ndt-match-guard/result/scan_lio_merged.laz. run.json and run-health.json
+preserve status/measurements. No retry or additional replay performed.
+
+Compared with the matching alpha1/beta1/Huber3 reference: largest gyro-relative
+bend approximately1.8 vs16.959 degrees, but maximum window speed5.402 vs1.260m/s;
+116 vs0 windows exceed2.5m/s. Odometry path216 vs77m; window-start endpoint proxy
+63.96 vs16.03m (this prefix does not have a known physical closure). Translation
+is already excessive by85s, before the old107s rotation event. Candidate is not
+a successful overall flyaway fix. Physical cause of the new drift is unresolved.
+Map geometry/revisit/sharpness and perturbation quality remain NOT MEASURED;
+no adoption/default change. High effort needed for further numerical diagnosis.

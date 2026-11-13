@@ -152,3 +152,10 @@ OpenSpec change for scope, risks and exact paths. External livox4-ndt-match-guar
 bundle prepared_not_run, approvalfalse. Next proposed125s prefix alpha1/beta1/
 Huber3,10-20minutes; STOP before launch. No replay/cloud-quality verdict yet.
 Charlie3/19 unchanged. Medium enough for mechanical monitoring; high for analysis.
+
+
+Latest approved NDT guard replay completed exit0 in524.17s,346windows.
+Cloud external livox4-ndt-match-guard/result/scan_lio_merged.laz. Maxbend1.8vs17deg
+but maxspeed5.40vs1.26m/s;116 excessive-speedwindows. Not a successful fix.
+See ndt-match-guard-implementation.md. No more runs authorized; high needed
+for numerical diagnosis. Charlie3/19, no adoption.
