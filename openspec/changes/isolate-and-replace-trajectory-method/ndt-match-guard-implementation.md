@@ -125,3 +125,9 @@ is already excessive by85s, before the old107s rotation event. Candidate is not
 a successful overall flyaway fix. Physical cause of the new drift is unresolved.
 Map geometry/revisit/sharpness and perturbation quality remain NOT MEASURED;
 no adoption/default change. High effort needed for further numerical diagnosis.
+
+Independent read-only review confirmed completed coverage and measurements.
+First candidate window above2.5m/s is W122 at43.56s. Exact maximum bends:
+1.783 vs16.959deg; logged path proxies216.38 vs76.72m. Later smaller bend
+does not demonstrate correction under comparable incoming state. No cause
+claim or further mapping runs.
