@@ -209,3 +209,13 @@ raw warning retained, collection-review.json records review. Cloud and compariso
 in external livox4-iteration-refresh-50s. Independent review done. No full-route/
 107s/robustness/map-accuracy verdict. No further run authorized; high sufficient.
 See ndt-iteration-refresh.md. Charlie3/19, no adoption.
+
+125s refreshed replay completed, native0,1698.819s346windows; first130 exact50s.
+W298 rotation -2.247deg, but W301/302 -8.600/-9.095deg andW312+5.874deg.
+Rotation gate NOTpassed; do notclaim samecause moved. Maxspeed2.404,zero>2.5,
+versusfrozen5.402/116crossings; rises atprefixend. Detailedtrace297-300only,
+400iterationserrors[]. Candidate9loops/max6.16m correction. Cloud+chart ready
+external livox4-iteration-refresh-125s. OpenSpec ndt-iteration-refresh.md has
+fulltable/identities/limits; independentreviewdone. No further run authorized.
+Next existing-data focusW301–302; newtrace requiresapproval. High sufficient.
+Charlie3/19; noadoption. User likedshortcloud, notyetreviewed125scloud.
