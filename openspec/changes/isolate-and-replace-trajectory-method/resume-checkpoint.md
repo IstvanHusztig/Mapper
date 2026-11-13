@@ -169,3 +169,14 @@ residualgate and freezing remain confounded. Attitude contribution measured,
 net gravity leakage unproven (missing preLM/gravity states). Independent review
 complete. See ndt-guard-early-drift-analysis.md. No newcode/build/optimizer/replay.
 Next possible trace W84-102 requires explicit run approval. Charlie3/19.
+
+
+Latest W87trace: scratch9635964; external livox4-guard-w87-trace nativeexit0
+214.877s137windows, but first130ALLdiffer -> identity_failed. Preparationcut0
+removed491leadingLiDARreturns beforefirstIMU, shiftedseed/windowstart~4ms.
+Localfactoranalysis190iterations6assemblyalternatives internalchecks pass; NDT
+dominantconditionaltranslationresistance, but originalcause NOTconfirmed.
+Correctedfolder livox4-guard-w87-trace-corrected prepared_not_run approvedfalse,
+start-10duration60preservesleadingdata; first200kLiDARrecords+IMUprefixexact.
+STOP before additional replay; obtain approval. See ndt-guard-w87-trace.md.
+High sufficient; Charlie3/19 unchanged.
