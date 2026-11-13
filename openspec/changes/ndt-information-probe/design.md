@@ -163,3 +163,17 @@ Nextartifactroot full-livox2-huber3/ underapprovedphase0bexperimentroot.
 NeedfulltraceH3coverage, finite/conservationchecks, raw/settings/bundleidentity,
 health/stage/mapcomparison; changedcandidateoutputsareexpected, noexactfullrun
 reproductionrequirement. Rootresultcommitpending afterthisentry.
+## Full Livox2 Huber3 launched (latest, 2026-11-13)
+Frozen scratchcbca36d fullcandidate launched from external full-livox2-huber3/.
+Rootunifiedexecsession46859 monitorsarchived full_livox2_huber_replay.py; livePID
+andstatus inrun.json, quietwindowlogs inmonitor.log. No competing mapper/cachejob.
+Originalraw2/settings alpha.1beta.1 unchanged; childenvH3=1, focusedtrace=1.
+ExeSHA101881d74dfcb4369103d070701b003e5a83bdf4b95538aa3cc0a0114f997287.
+RunnerSHA2bbb0fc664381055516bdd2cc67ab9ca67bcfe68202cbc5ec63a8475a5bb2e27.
+Build/test/reviewgatespassed exceptidenticalknownbaselinecorridorfailure;18runner
+tests pass. See full-livox2-huber-replay.md. Keepwatchingthroughcompletion,
+thenvalidateodometry/finalstagesandmap. Do notstartadditionalprocessingonraw2.
+Userhasauthorizedcontinueuntilgoal/newinfo; nofreshpermissionneededforthisrun.
+UsertoldMediumis sufficientforprocessing; iftheyswitchdownnotifybeforeHighcausalwork.
+Allagentscurrentlyfinished; historical_measurementsownscompletedsourcechanges,
+provenance_auditcompletedrunner, snapshot_format_reviewcompletedlaunchreview.

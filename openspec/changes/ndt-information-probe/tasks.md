@@ -75,6 +75,6 @@
 - [x] 15.3 Review candidate states, support/information and limitations independently; document results and propose further validation before any additional run. full-livox2-huber-results.md; independent Codex evidence review passed. User subsequently authorized full replay and continuing toward the goal.
 
 ## 16. Authorized fresh full Livox2 Huber validation
-- [ ] 16.1 Prepare explicit scratch full-odometry Huber3 opt-in, test unchanged disabled behavior and activation, freeze the Release bundle and independently review runner/source safeguards.
+- [x] 16.1 Prepare explicit scratch full-odometry Huber3 opt-in, test unchanged disabled behavior and activation, freeze the Release bundle and independently review runner/source safeguards. Scratchcbca36d; focusedRelease/Debug4cases491assertionspass, fullRelease unchangedknownfailure;18runner tests pass; independentreviewpassed;13-filefrozenbundle verified.
 - [ ] 16.2 Execute fresh full original Livox2 with Huber3, alpha0.1/beta0.1 and unchanged settings; monitor trajectory/solver behavior, preserve trace and verify completion/provenance without expecting identical candidate output.
 - [ ] 16.3 Compare odometry/final trajectories, onset and later excursions, support and map geometry; independently review findings and provide useful new cloud artifacts for inspection.
