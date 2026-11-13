@@ -23,6 +23,7 @@ add_executable(lidar_odometry_tests
   loop_closure_test.cpp
   consistency_test.cpp
   orientation_test.cpp
+  fusion_orientation_test.cpp
   gui_view_model_test.cpp)
 
 # the code under test comes from the layer libraries (lo_gui_view_model brings lo_infrastructure, lo_application and
