@@ -242,3 +242,11 @@ with unchanged map/source gates. Origin regularizer units defect is real but
 first-node movement<0.00011deg excludes it as the dominant cause here. Preserve
 all earlier diagnostic gaps and failed bias-off records. No production fix or
 full-route acceptance yet. User requests very concise output.
+## Authorized bounded correction (2026-11-13)
+User: fix what you found. Implement/test all-cell Cauchy NDT influence correction
+in scratch, preserving IMU and bias. See cauchy-correction.md and phase22 tasks.
+Input-integrity check found no decoding/nonfinite/local timestamp failure;
+reflections, calibration and internal synchronization are not thereby certified.
+First gate is exact Huber3 W415 control followed by one Cauchy3 checkpoint.
+No shipped-default change, full replay or broad parameter search authorized by
+this design alone; respect the existing tell-before-new-run instruction.
