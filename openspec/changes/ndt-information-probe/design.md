@@ -98,3 +98,26 @@ Single authorized replay completed overnight2026-11-12/13: mapper exit0, collect
 
 ## Existing-evidence map reconstruction investigation
 User authorized continuing analysis. A standalone diagnostic helper may reconstruct the pre-W754 map from retained post-handoff snapshot poses and point caches using unchanged C++ map-update arithmetic. This does not authorize a new odometry optimization run or settings intervention. Require exact source-order, matched-cell and matched-cell-geometry hashes for both grids at all selected iterations before trusting per-return attribution. Fail closed on reconstruction mismatch. Fresh external outputs only; no recording/cache/bundle mutation.
+
+## Authorized isolated W754 checks (2026-11-13)
+User switched High and approved the two checks in full-livox2-cell-attribution.md.
+Restore exact traced pre-iteration state and priors; use the unchanged production
+optimizer and schedule against the independently validated historical map.
+Require exact control state/decision reproduction across all100 iterations before
+one restart omitting the three named outdoor cells. No next window, full replay,
+settings change or shipped fix. Fresh external artifacts and frozen provenance.
+User then requested finishing this work, saving state and stopping for later.
+Section13 tracks these checks; do not archive the broader investigation.
+## W754 causal checks completed; user resumed correction design (2026-11-13)
+Exact isolated control reproduced all15,400 trace records/100 iterations. Omitting
+only3 outdoor cells reduced estimated endpointtilt15.1886->2.3260deg and endpoint
+speed0.8899->0.3555m/s; initial outdoor support loses11 terms only. Both100accepted
+iterations, projection scales1. Independent Codex review passed. This confirms
+collective causal influence inW754, not physical accuracy or correctedfullcloud.
+Report: openspec/changes/ndt-information-probe/full-livox2-w754-ablation.md.
+External artifacts: full-livox2-trace/optimizer-w754-control-ablation/ under the
+approved experimentroot. Scratchcommit7f99b29; Release/Debugbuilds pass. Nojobs.
+User first requested finish/save/pause, then explicitly said don'tstop/goon.
+Continue generalcorrection design fromthischeckpoint withsource/primaryresearch;
+High stilluseful. Noadditionaloptimizer/fullreplay launched orspecified yet.
+Do not generalize hardcodedcellIDs intoashippingfilter. Keepallresults.

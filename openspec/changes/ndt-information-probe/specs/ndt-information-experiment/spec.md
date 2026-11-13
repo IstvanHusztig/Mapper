@@ -53,3 +53,18 @@ The approved follow-up SHALL scale XYZ motion observation information consistent
 - **WHEN** beta0.1 is selected with alpha0.1 after synthetic and review gates
 - **THEN** only XYZ observation contributions including their attitude coupling SHALL be reduced
 - **AND** both approved recordings SHALL be compared to retained controls with provenance and no acceptance claim from single runs
+
+### Requirement: Frozen-window causal check
+The isolated W754 driver SHALL restore the existing run's initial state, priors,
+samples, maps and optimizer schedule without changing recorded inputs or settings.
+
+#### Scenario: Control reproduction gate
+- **WHEN** the unchanged W754 control executes
+- **THEN** every recorded iteration state and decision SHALL reproduce exactly before the intervention is allowed
+- **AND** a mismatch SHALL preserve its artifacts and prevent the ablation
+
+#### Scenario: Three-cell intervention
+- **WHEN** the control gate passes
+- **THEN** a single identical restart SHALL omit only outdoor cells 77310918653, 73015885821 and 81605885949
+- **AND** support loss and state changes SHALL be reported without claiming a corrected full recording
+- **AND** reviewed evidence and a resumable handoff SHALL be saved before the user's later continuation, without automatically starting additional optimizer runs

@@ -117,6 +117,9 @@ not necessarily temporal extrema.
 
 ## Proposed next experiment — not executed
 
+Historical proposal below: subsequently authorized and completed on November13.
+Results and current pause boundary are in `full-livox2-w754-ablation.md`.
+
 Two isolated optimizer checks on reconstructed W754, without a full replay:
 
 1. Control: restore exact initial poses/model poses, IMU/node samples, gravity,

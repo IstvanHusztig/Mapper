@@ -58,3 +58,13 @@
 - [x] 12.1 Quantify matched-cell information, residuals and support changes at754; independently review range/geometry interpretations without altering the mapper.
 - [x] 12.2 Establish whether exact historical point-to-cell associations can be reconstructed from existing snapshots/recording; document the remaining evidence boundary before any new mapper run. Standalone map-only reconstruction passed exact source/association/geometry and numerical gates; no optimizer invoked.
 - [x] 12.3 Trace insertion history of the three influential coarse-grid cells and independently review what that history establishes before proposing an intervention. Bitwise history gates and independent review passed; proposed frozen-window control/ablation awaits user authorization.
+
+## 13. Authorized isolated W754 checks and saved handoff
+- [x] 13.1 Prepare and independently review a standalone W754 optimizer driver restoring exact traced state and reconstructed maps; build appropriate configurations and freeze provenance. Scratch7f99b29; Release/Debug passed; independent Codex execution review passed.
+- [x] 13.2 Execute the unchanged 100-iteration control and require exact traced state/decision reproduction; stop the intervention if the control gate fails. All15,400 records reproduce exactly.
+- [x] 13.3 Only after the control gate passes, execute one identical restart omitting outdoor cells 77310918653, 73015885821 and 81605885949; report tilt, velocity and support without claiming a full-cloud fix. Both100 iterations; tilt15.19 to2.33deg, speed0.890 to0.356m/s. See full-livox2-w754-ablation.md.
+- [x] 13.4 Independently review evidence, save OpenSpec/results/next steps and commits, then stop as requested by the user. Independent Codex source/output review passed; resumable state in full-livox2-w754-ablation.md. User subsequently resumed correction-design work; no additional run started.
+
+## 14. Resumed general-correction design
+- [ ] 14.1 Review source and primary research for general treatment of the influential associations; distinguish principled models from diagnostic heuristics.
+- [ ] 14.2 Specify a bounded correction and validation proposal, obtain independent review and document the new-run boundary before any additional optimizer execution.
