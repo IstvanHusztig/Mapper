@@ -128,4 +128,11 @@
 - [x] 26.1 Verify original indoor recording and capture metadata; record route and capture changes, preserve source identities and input-check evidence. livox3-indoor-plan.md.
 - [x] 26.2 Agree the baseline replay with the user, then execute only that approved run and provide the actual cloud with pre-loop/final diagnostic and return checks.
 
-- [ ] 26.3 Review the completed Livox3 cloud with the user and agree the next action; no further replay or general-fix acceptance implied.
+- [x] 26.3 Review the completed Livox3 cloud with the user and agree the next action; no further replay or general-fix acceptance implied.
+
+## 27. User-requested quality measurements and visual plan confirmation
+- [x] 27.1 Run existing wall spread/revisit tools at declared heights and preserve coverage/limitations, without new odometry runs. livox3-quality.md.
+- [x] 27.2 Create and inspect a Livox3-specific rigid plan overlay, preserve ambiguity and reflection caveats, and independently review measured claims before proposing the next research phase.
+
+## 28. Proposed open/closed-space research
+- [ ] 28.1 After user confirms High, research primary sources and existing implementations for weak-geometry handling and reliable matching across open/confined transitions; propose a bounded design and evaluation plan before additional numerical changes or runs.
