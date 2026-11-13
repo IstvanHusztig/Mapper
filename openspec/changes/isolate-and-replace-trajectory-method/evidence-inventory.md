@@ -16,7 +16,7 @@ as the shipped algorithm. SHA-256 values refer to files as checked today.
 Existing-data calculations: `out/livox4-prediction-vs-matching.json`
 SHA-256 `6d5bcc7d2be4c52a93acd8d5337915ec95c32acb76b695fff187fc5e6a6f161a6`;
 `out/livox4-prediction-decomposition.json`
-SHA-256 `d1ff918d965ad181e4351cfde687d96b36aa611907ae02c2609023e8545f2f7e91`.
+SHA-256 `d1ff918d965ad181e4351cfdedd96b36aa611907ae02c2609023e8545f2f7e91`.
 Reviewed interpretation: `../ndt-information-probe/livox4-code-audit.md`.
 
 Prior tests include the synthetic room, corridor, open-plane, wrong-cell,
