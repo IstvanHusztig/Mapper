@@ -80,6 +80,6 @@
 - [x] 16.3 Compare odometry/final trajectories, onset and later excursions, support and map geometry; independently review findings and provide useful new cloud artifacts for inspection. full-livox2-huber-full-results.md; independent Codex review, mixed first-minute geometry, later speed escalation and postprocessing variation retained; no acceptance.
 
 ## 17. Retained-snapshot postprocessing attribution
-- [ ] 17.1 Prepare a standalone exact-provenance snapshot driver with observational stage/pass captures, appropriate tests and independent review; retain normal experimental CLI safeguards.
+- [x] 17.1 Prepare a standalone exact-provenance snapshot driver with observational stage/pass captures, appropriate tests and independent review; retain normal experimental CLI safeguards. Scratch f18353e; Release/Debug observer selftests and 12 runner tests passed, independent review cleared, frozen bundle verified. No core numerical changes.
 - [ ] 17.2 Freeze provenance and execute one unchanged postprocessing replay; require exact final trajectory/cloud reproduction before interpreting intermediate states.
 - [ ] 17.3 Attribute observed variation by stage/pass, inspect affected geometry, independently review and document the next correction or unresolved evidence boundary.

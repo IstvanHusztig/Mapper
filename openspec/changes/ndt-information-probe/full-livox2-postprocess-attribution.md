@@ -46,4 +46,29 @@ variation first appears after loop closure or within a consistency pass before
 proposing a correction. Any subsequent ablation must be explicitly documented
 and independently reviewed; never infer physical truth from numerical parity.
 
-Preparation is in progress. No diagnostic postprocessing replay launched yet.
+## Reviewed preparation and launch
+
+The standalone driver changes only a new diagnostic source and an
+`EXCLUDE_FROM_ALL` CMake target. It uses the existing main-thread progress and
+logger boundaries to capture after loop closure and each completed consistency
+pass. No core numerical hook or normal CLI guard changed. Its fresh point store
+and no-op preview sink are installed before loading, preserving the original
+recording cache/preview. A newly serialized restored snapshot must equal the
+pinned input byte-for-byte before postprocessing begins.
+
+Scratch commit `f18353edb0bd491e985a36ee6f9eb50b49f29192`, parent `cbca36d`.
+Release driver SHA256:
+`b8bcde8ad91f78320226fc1bbfe5cdbbfbb56804f274596599971be18d2c85fa`.
+Runner SHA256:
+`f1786e50fd169706c64d8170070449d05670160f8ca3b2086fe8dc1b7cd10479`.
+Release and Debug observer selftests passed, including thread ownership,
+ordering, disabled capture and capture-failure handling. Twelve runner tests
+passed. Independent Codex source/runner review (not Sonnet) cleared execution.
+The frozen bundle covers twelve files; runner/tests are separately bound by
+`preparation-manifest.json`.
+
+The single unchanged postprocessing replay launched on November 13, around
+04:49 Europe/Berlin. Live state is `postprocess-attribution/run.json`; root
+monitoring session 41934. No odometry optimizer runs. All twelve stage snapshots
+and numeric final exports must pass identity/coverage gates before attribution.
+Keep monitoring through completion; no additional mapper or cache job in parallel.
