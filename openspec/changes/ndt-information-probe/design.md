@@ -250,3 +250,11 @@ reflections, calibration and internal synchronization are not thereby certified.
 First gate is exact Huber3 W415 control followed by one Cauchy3 checkpoint.
 No shipped-default change, full replay or broad parameter search authorized by
 this design alone; respect the existing tell-before-new-run instruction.
+## Full-route Cauchy evaluation outcome (2026-11-13)
+The authorized full candidate failed to fix flyaway: actual endpoint separation
+114.14039m pre-loop/114.08830m final versus Huber62.14774m/62.33812m; odometry
+minimumZ-48.85783m. Source/input/artifact checks completed, conditional diagnostic
+gaps remain explicit. Preserve the opt-in experiment and all results, do not
+adopt defaults or infer a full-route cure from exact W415 local improvement.
+Deeper diagnosis uses retained outputs after the user switches from Sol6.1 medium
+to High; another replay requires a separate decision. See cauchy-correction.md.

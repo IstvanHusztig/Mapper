@@ -141,3 +141,58 @@ an additional observation separating indoor stair/floor transitions from outdoor
 matching, rather than reproducing the same route. Suggested unchanged mounting,
 marked same start/end in apartment56, and a still pause at both ends. It is not a
 prerequisite for the active replay; no new recording has been received.
+
+## Full-route result: correction not adopted (2026-11-13)
+
+The single authorized run finished normally: native exit0, 2761.21s reported
+processing time, 2849.92s runner wall time. Collection also completed normally;
+the former health-array serialization failure did not recur. Original inputs,
+frozen executable/settings/runner and analysis helpers passed identity checks.
+All1517 windows and273060 poses per stage are present. The merged cloud contains
+82688088 returns with the same ordered timestamps and intensities as Huber3.
+These fields are not unique physical return IDs; provenance and fixed export
+selection support the comparison. Candidate XYZ is expected to differ.
+
+| Measure | Huber3 retained control | Cauchy3 full replay |
+|---|---:|---:|
+| Logged bends above3deg |22|90|
+| Logged bends above10deg |1|2|
+| Logged velocity above2.5m/s |12|212|
+| Largest logged velocity |5.15398m/s|6.51932m/s|
+| Odometry endpoint separation, actual first/last pose |62.14774m|114.14039m|
+| Final endpoint separation, actual first/last pose |62.33812m|114.08830m|
+| Lowest odometry pose Z |−7.87244m|−48.85783m|
+| Odometry end minus start Z |−0.15947m|−46.78569m|
+
+Endpoint separations above come from full snapshots/final trajectories, not the
+rounded window-start proxy. Exact endpoint placement was not surveyed, but the
+confirmed return inside apartment56 is incompatible with this gross displacement.
+The actual merged-cloud overview also shows the extended displaced structure.
+This is a failed full-route correction; do not adopt Cauchy3 or change defaults.
+The previous exact W415 local improvement remains valid but did not generalize.
+No new causal conclusion follows from this result alone.
+
+Diagnostic completeness remains false: Cauchy conditional-uncertainty gaps at
+W629/W984/W1200; Huber W798 remains explicit. Candidate health exit2, accuracy
+unaccepted. Conditional chi2 median68.5/p95751.48 over867 reported windows versus
+88.55/1121.275 over810 for Huber is not an overall improvement verdict: populations
+are selected and differ. Candidate max residual gyro-bias XYZ .315/.566/3.615deg/s.
+The final adjacent-pose speed is a positional derivative, not the logged velocity
+state, and is retained separately in the comparison JSON.
+
+Artifacts under `full-livox2-cauchy3`: `run.json`, `run-health.json/.txt`,
+`preflight.json`, archived runner, `result/scan_lio_merged.laz`, and `comparison/`
+with the archived comparison script, hashes, metrics, trajectory plots and sampled
+actual-cloud overview. All cloud points contribute to bounds/counts; plotting uses
+fixed global-index thinning and no spatial clipping/alignment. Mirror/window
+projections are not automatically classified as drift. Matched wall sharpness,
+visit consistency and perturbation robustness are NOT MEASURED for this failed
+candidate; no additional run was started to assess them.
+
+Independent Sol6.1 evidence review confirms the completed run fails to fix the
+flyaway and supports no adoption, without assigning a new cause. The comparison
+finished afterward and its actual endpoint measurements are reported above.
+User was given the new CloudCompare file and trajectory preview. Current model
+is user-confirmed Sol6.1 medium. Collection/reporting are complete; request High
+before deeper diagnosis of the remaining translation/orientation feedback using
+these existing outputs. Do not start another replay without user authorization.

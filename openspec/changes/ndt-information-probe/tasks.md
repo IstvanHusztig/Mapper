@@ -114,5 +114,8 @@
 
 ## 23. Authorized full Livox2 Cauchy replay
 - [x] 23.1 Freeze unchanged settings and candidate, validate atomic collection with real health data, independently review and launch one fresh full run. User explicitly approved; Sol6.1 found no launch/collector blocker. PID23284, full-livox2-cauchy3, source c52b25f.
-- [ ] 23.2 Monitor completion; verify native outputs, input identity, coverage and odometry/final comparisons without automatic retry.
-- [ ] 23.3 Evaluate remaining flyaway and return displacement, inspect cloud geometry, document independently reviewed findings and provide the new cloud for visual inspection. Perturbation robustness and shipment remain separate gates.
+- [x] 23.2 Monitor completion; verify native outputs, input identity, coverage and odometry/final comparisons without automatic retry.
+- [x] 23.3 Evaluate remaining flyaway and return displacement, inspect cloud geometry, document independently reviewed findings and provide the new cloud for visual inspection. Perturbation robustness and shipment remain separate gates.
+
+## 24. Remaining full-route failure
+- [ ] 24.1 After the requested High switch, investigate the remaining failure using existing Huber/Cauchy outputs; distinguish measured behavior from causal hypotheses before proposing another correction or run.
