@@ -91,7 +91,13 @@
 
 
 ## 19. Remaining odometry placement: existing-data scene interpretation
-- [x] 19.1 Inspect beginning/end room shapes from retained clouds, with source coverage and no physical identity assumption; relate to route confirmation if available. Bounded chunk assumption rejected for165postlastpose returns; full merged v2 completed with explicitcoverage. Physicalrouteconfirmationpending.
+- [x] 19.1 Inspect beginning/end room shapes from retained clouds, with source coverage and no physical identity assumption; relate to route confirmation if available. Bounded chunk assumption rejected for165postlastpose returns; full merged v2 completed with explicitcoverage. User subsequently confirmed return to apartment56; see full-livox2-return-diagnosis.md.
 - [x] 19.2 Document the remaining evidence boundary and next focused odometry diagnostic, independently review before any new optimizer execution or correction selection.
 
-- [ ] 19.3 Reconcile the pending physical endpoint/route confirmation with the scene views before interpreting closure or selecting a route-dependent correction; continue focused orientation/translation diagnosis under the recorded state-coverage limits.
+- [x] 19.3 Reconcile the confirmed return to apartment56 with the scene views before interpreting closure or selecting a route-dependent correction; continue focused orientation/translation diagnosis under the recorded state-coverage limits.
+
+
+## 20. One online gyro-bias feedback ablation
+- [x] 20.1 Prepare/review a minimal replay using the existing frozen executable and exactly one parsed setting change; preserve startup calibration and diagnostic applicability.
+- [ ] 20.2 Execute one fresh full Livox2 run, monitor, preserve outputs and verify input/build/source coverage without automatic retries.
+- [ ] 20.3 Compare early orientation departure, pre-loop apartment return and final cloud geometry against retained Huber3; independently review and report the correction decision.

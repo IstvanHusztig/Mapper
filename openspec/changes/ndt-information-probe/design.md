@@ -210,3 +210,23 @@ ended in apartment56, another indoor location or outside. No timestamp recall.
 A small bounded chunk-view script is prepared/reviewed for first/last60s; translation
 only local panels are shape inspection, never a physical alignment or accuracy
 claim. Reuse retained outputs and preserve all source-coverage caveats.
+
+
+## Route confirmation received (2026-11-13)
+User confirms fullLivox2 finished in apartment56, sameapartment asstartWohnen.
+No longer waitingforrouteinfo. Exactendpointposition/heightnotknown;62m is
+estimatedseparation, notexactsurveyedclosureerror. Grossapartmentmisplacement
+is nowconfirmed. See full-livox2-return-diagnosis.md. Continue existing-data
+orientation/translation diagnosis withTerra sourcecontracts andindependentreview;
+AHRS angles are notpuregyro; always-on processing enables rest checks and a later moving-window acceleration integration despite disabled generic prediction flags.
+No newmapperrun currentlystarted; no acceptance.
+
+
+## Focused online gyro-bias ablation (phase20)
+Userconfirmedreturntoapartment56; existingorientationanalysis showslargeAHRS
+relative departures by149-207s, beforelatevelocityrunaway. Independentreview
+supports onefullstart use_gyro_bias_estimation=false test, keepingstartupbias,
+Huber3/alpha.1/beta.1/allotherparsedsettings andexistingfrozenexecutable. No build;
+tracingoff, normaldiagnostics retained. See full-livox2-return-diagnosis.md for
+mechanism/applicability/acceptance limits. Stop diagnostictool expansion and
+prioritize thisboundedcorrectiontest peruser's token-cost feedback.
