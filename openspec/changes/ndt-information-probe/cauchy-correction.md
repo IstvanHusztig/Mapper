@@ -196,3 +196,16 @@ User was given the new CloudCompare file and trajectory preview. Current model
 is user-confirmed Sol6.1 medium. Collection/reporting are complete; request High
 before deeper diagnosis of the remaining translation/orientation feedback using
 these existing outputs. Do not start another replay without user authorization.
+
+## User-requested cloud before flyaway (2026-11-13)
+Extracted existing final merged returns by timestamp, no replay or odometry change:
+`full-livox2-cauchy3/before-flyaway/path_000_238s.laz` (34800559 returns) and
+`scene_218_238s.laz` (3075004 returns). Scene preview and extraction.json include
+source/output SHA256, complete-stream count82688088, time origin and bounds.
+Cutoff238s precedes logged speed growth near240s and first2.5m/s crossing242.28s;
+it is a conservative inspection boundary, not proof of the first algorithm error.
+Later sustained runaway near326.5s is distinct. All selected original point fields,
+heights and ranges retained, no spatial clipping/registration. These are subsets
+of the completed final cloud, not newly reconstructed pre-loop geometry. Full
+stream identity and output header counts verified; preview thins source index20.
+Medium sufficient for this extraction. High still needed before deeper diagnosis.
