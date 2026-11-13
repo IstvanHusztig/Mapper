@@ -33,6 +33,7 @@ target_link_libraries(lidar_odometry_tests PRIVATE lo_gui_view_model lo_infrastr
 target_include_directories(
   lidar_odometry_tests
   PRIVATE ${EXTERNAL_LIBRARIES_DIRECTORY}/doctest
+          ${EXTERNAL_LIBRARIES_DIRECTORY}/Fusion/Fusion
           ${EXTERNAL_LIBRARIES_DIRECTORY}
           ${EIGEN3_INCLUDE_DIR}
           ${EXTERNAL_LIBRARIES_DIRECTORY}/json/include
