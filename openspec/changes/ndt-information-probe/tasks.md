@@ -53,3 +53,8 @@
 - [x] 11.2 Run appropriate parity/tests, freeze the alpha0.1/beta0.1 executable and unchanged settings, and review the one-run runner.
 - [x] 11.3 Execute exactly one full original Livox2 replay, preserve provenance and verify pre-loop/final trajectory and cloud reproduction against the retained run.
 - [x] 11.4 Diagnose onset and propagation from traced factors/associations with scene context; independently review, document findings and notify the user when High is no longer needed. Initial traced diagnosis is in full-livox2-trace-analysis.md; physical association correctness remains unresolved and High remains useful for follow-up causal/design work.
+
+## 12. Existing-evidence investigation of influential range group
+- [x] 12.1 Quantify matched-cell information, residuals and support changes at754; independently review range/geometry interpretations without altering the mapper.
+- [x] 12.2 Establish whether exact historical point-to-cell associations can be reconstructed from existing snapshots/recording; document the remaining evidence boundary before any new mapper run. Standalone map-only reconstruction passed exact source/association/geometry and numerical gates; no optimizer invoked.
+- [x] 12.3 Trace insertion history of the three influential coarse-grid cells and independently review what that history establishes before proposing an intervention. Bitwise history gates and independent review passed; proposed frozen-window control/ablation awaits user authorization.

@@ -94,3 +94,7 @@ User explicitly authorized starting the single full Livox2 replay, monitoring th
 
 ## Full Livox2 traced replay completed
 Single authorized replay completed overnight2026-11-12/13: mapper exit0, collected_complete,3993.63s. All63 output hashes reproduce retained full run exactly;116 windows/11600 iterations/23200 assembly identity checks complete, zero mismatches. Trace2,497,193,543 bytes. Run-health triggers unchanged, not an accuracy pass. See openspec/changes/ndt-information-probe/full-livox2-trace-results.md. No jobs remain. Task11.3 complete;11.4 causal analysis pending High. Use streaming Python on existing trace; no additional run required now. User wants quiet monitoring and standing OpenSpec updates.
+
+
+## Existing-evidence map reconstruction investigation
+User authorized continuing analysis. A standalone diagnostic helper may reconstruct the pre-W754 map from retained post-handoff snapshot poses and point caches using unchanged C++ map-update arithmetic. This does not authorize a new odometry optimization run or settings intervention. Require exact source-order, matched-cell and matched-cell-geometry hashes for both grids at all selected iterations before trusting per-return attribution. Fail closed on reconstruction mismatch. Fresh external outputs only; no recording/cache/bundle mutation.
