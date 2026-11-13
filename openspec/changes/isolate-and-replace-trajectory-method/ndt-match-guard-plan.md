@@ -47,3 +47,10 @@ smallest faithful prefix comparison, preserving actual alpha1/beta1/Huber3 of
 the W298 reference (the older alpha0.1 control was not gain-only). Obtain approval
 before launch. Map quality, coverage, indoor preservation and perturbation gates
 remain required before adoption. No push/default change is authorized.
+
+## Authorized iteration refresh (implementation pending verification)
+
+The user authorized refreshing valid matches between iterations while retaining
+cell validity guards. This supersedes whole-window freezing in the experimental
+candidate only. Implementation and validation are tracked in
+`ndt-iteration-refresh.md`; no recording replay is authorized by this instruction.

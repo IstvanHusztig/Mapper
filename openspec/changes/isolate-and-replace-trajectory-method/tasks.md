@@ -1,7 +1,7 @@
 # Tasks
 
 Current local detour: the user authorized the NDT match guard implementation in
-`ndt-match-guard-plan.md`. Its own checklist tracks preparation/testing; it does
+`ndt-match-guard-plan.md` (follow-up: `ndt-iteration-refresh.md`). Its own checklist tracks preparation/testing; it does
 not complete the interface/replacement tasks below. Charlie stays 3/19. Stop
 before any new recording or captured-window replay.
 

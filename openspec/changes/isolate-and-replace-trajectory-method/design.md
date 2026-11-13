@@ -4,7 +4,7 @@
 
 The W298 factor/cell evidence is now recorded in `livox4-rotation-factor-trace.md`
 and `livox4-ndt-cell-audit.md`. The user subsequently authorized a local fix for
-cell validity and correspondence consistency. `ndt-match-guard-plan.md` defines
+cell validity and correspondence consistency. `ndt-match-guard-plan.md` (follow-up: `ndt-iteration-refresh.md`) defines
 that reviewed, default-off experimental candidate and its checks. It is separate
 from the numerical-equivalence extraction below; Charlie remains 3/19. No new
 replay or broader method adoption is authorized by this detour.

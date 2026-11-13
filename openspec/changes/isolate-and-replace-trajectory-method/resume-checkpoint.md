@@ -191,3 +191,12 @@ fix adoption or new replay. See ndt-guard-w87-trace.md corrected section.
 Next: propose refreshing between linearizations, preserving cell validity and
 consistent trial associations. Ask before algorithm change/new runs. High sufficient.
 Charlie remains 3/19.
+
+
+Iteration-refresh candidate implemented and committed in scratch as 71e2fa5.
+Valid matches refresh each iteration; cell/support guards unchanged; each solve
+keeps immutable targets. Enabled snapshot policy hash rejects frozen-guard state.
+Independent review clear. Release build and 18 tests / 2436 assertions pass.
+See ndt-iteration-refresh.md. NO new recording replay started. Next candidate
+replay needs approval; 50 s diagnoses early drift, 125 s also covers rotation gate.
+Current high sufficient; Charlie remains 3/19; no shipped adoption.
