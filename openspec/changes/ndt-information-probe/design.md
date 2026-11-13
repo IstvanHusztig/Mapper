@@ -177,3 +177,12 @@ Userhasauthorizedcontinueuntilgoal/newinfo; nofreshpermissionneededforthisrun.
 UsertoldMediumis sufficientforprocessing; iftheyswitchdownnotifybeforeHighcausalwork.
 Allagentscurrentlyfinished; historical_measurementsownscompletedsourcechanges,
 provenance_auditcompletedrunner, snapshot_format_reviewcompletedlaunchreview.
+## Retained Huber3 postprocessing attribution (2026-11-13)
+Full Huber3 mapper completed; see full-livox2-huber-full-results.md. Structural
+comparison is verified, while W798 conditional-uncertainty eligibility remains
+unresolved and original needs_review/health exit2 are preserved. No acceptance.
+User authorized continuation to the goal. Next bounded check in
+full-livox2-postprocess-attribution.md reuses exact retained odometry, captures
+afterloop and each unchanged consistency pass, and requires exact final
+trajectory/cloud reproduction before attribution. No full odometry replay,
+shipped settings change, or silent experimental snapshot-guard bypass.

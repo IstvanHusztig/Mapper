@@ -76,5 +76,10 @@
 
 ## 16. Authorized fresh full Livox2 Huber validation
 - [x] 16.1 Prepare explicit scratch full-odometry Huber3 opt-in, test unchanged disabled behavior and activation, freeze the Release bundle and independently review runner/source safeguards. Scratchcbca36d; focusedRelease/Debug4cases491assertionspass, fullRelease unchangedknownfailure;18runner tests pass; independentreviewpassed;13-filefrozenbundle verified.
-- [ ] 16.2 Execute fresh full original Livox2 with Huber3, alpha0.1/beta0.1 and unchanged settings; monitor trajectory/solver behavior, preserve trace and verify completion/provenance without expecting identical candidate output.
-- [ ] 16.3 Compare odometry/final trajectories, onset and later excursions, support and map geometry; independently review findings and provide useful new cloud artifacts for inspection.
+- [x] 16.2 Execute fresh full original Livox2 with Huber3, alpha0.1/beta0.1 and unchanged settings; monitor trajectory/solver behavior, preserve trace and verify completion/provenance without expecting identical candidate output. Mapper exit0; structural comparison verified separately; original strict diagnostics remain incomplete only at W798 rounded eligibility boundary, never marked PASS.
+- [x] 16.3 Compare odometry/final trajectories, onset and later excursions, support and map geometry; independently review findings and provide useful new cloud artifacts for inspection. full-livox2-huber-full-results.md; independent Codex review, mixed first-minute geometry, later speed escalation and postprocessing variation retained; no acceptance.
+
+## 17. Retained-snapshot postprocessing attribution
+- [ ] 17.1 Prepare a standalone exact-provenance snapshot driver with observational stage/pass captures, appropriate tests and independent review; retain normal experimental CLI safeguards.
+- [ ] 17.2 Freeze provenance and execute one unchanged postprocessing replay; require exact final trajectory/cloud reproduction before interpreting intermediate states.
+- [ ] 17.3 Attribute observed variation by stage/pass, inspect affected geometry, independently review and document the next correction or unresolved evidence boundary.

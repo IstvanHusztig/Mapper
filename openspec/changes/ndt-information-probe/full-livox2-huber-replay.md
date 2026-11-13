@@ -4,8 +4,11 @@
 authorized continuing toward the goal until new information is required and
 requested Terra research when useful.
 
-Status: launched and being monitored; completion and map quality are pending.
-No accuracy or corrected-cloud claim yet. See `run.json` for the live PID/status.
+Status: mapper completed with exit 0; offline comparison collected with one
+explicit conditional-uncertainty eligibility gap at W798. Original `run.json`
+remains `needs_review`; supplemental `reviewed-collection.json` distinguishes
+verified artifact integrity from incomplete diagnostics. See
+`full-livox2-huber-full-results.md`. No accuracy or corrected-cloud acceptance.
 
 ## Frozen conditions
 

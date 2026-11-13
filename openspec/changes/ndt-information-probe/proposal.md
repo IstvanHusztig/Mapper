@@ -46,3 +46,13 @@ full Livox2 Huber3 replay and continuing toward the goal until new information
 is required. Preserve alpha/beta/settings, isolated build/provenance and review
 gates. This supersedes the prior pause/new-run approval boundary for the authorized
 continuation; it does not authorize pushing or accepting survey accuracy.
+
+## Retained Huber3 postprocessing attribution (2026-11-13)
+Full Huber3 mapper completed; see full-livox2-huber-full-results.md. Structural
+comparison is verified, while W798 conditional-uncertainty eligibility remains
+unresolved and original needs_review/health exit2 are preserved. No acceptance.
+User authorized continuation to the goal. Next bounded check in
+full-livox2-postprocess-attribution.md reuses exact retained odometry, captures
+afterloop and each unchanged consistency pass, and requires exact final
+trajectory/cloud reproduction before attribution. No full odometry replay,
+shipped settings change, or silent experimental snapshot-guard bypass.

@@ -80,3 +80,13 @@ while preserving all cells, priors and disabled behavior.
 - **AND** the candidate SHALL restart identical state and retain every map cell
 - **AND** raw support/cost, robust weights/cost and weighted information SHALL remain distinguishable
 - **AND** no calibrated sigma, physical accuracy or full-route improvement SHALL be inferred from this checkpoint alone
+
+### Requirement: Retained-snapshot postprocessing attribution
+A standalone diagnostic replay SHALL preserve exact recording, settings and
+experimental snapshot provenance while capturing unchanged postprocessing stages.
+
+#### Scenario: Observational intermediate captures
+- **WHEN** the retained Huber3 odometry is restored for stage attribution
+- **THEN** loop closure and all consistency passes SHALL execute unchanged
+- **AND** exact final trajectory/cloud reproduction SHALL precede interpretation
+- **AND** the normal experimental CLI snapshot guard and original diagnostic gaps SHALL remain explicit and unchanged
