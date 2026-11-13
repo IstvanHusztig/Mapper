@@ -119,3 +119,11 @@
 
 ## 24. Remaining full-route failure
 - [ ] 24.1 After the requested High switch, investigate the remaining failure using existing Huber/Cauchy outputs; distinguish measured behavior from causal hypotheses before proposing another correction or run.
+
+## 25. User-requested fresh raw-prefix replay
+- [ ] 25.1 Cut original sensor-frame Livox2 LAZ and IMU before the first major speed escalation, verify retained points and IMU, and replay with the existing frozen candidate.
+- [ ] 25.2 Verify completion, inspect the recomputed prefix map and provide its cloud with clear limits; document inputs/settings and preserve the full-run failure evidence.
+
+## 26. New indoor Livox3: agree plan before replay
+- [x] 26.1 Verify original indoor recording and capture metadata; record route and capture changes, preserve source identities and input-check evidence. livox3-indoor-plan.md.
+- [ ] 26.2 Agree the baseline replay with the user, then execute only that approved run and provide the actual cloud with pre-loop/final diagnostic and return checks.

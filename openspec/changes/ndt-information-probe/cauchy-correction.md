@@ -209,3 +209,28 @@ heights and ranges retained, no spatial clipping/registration. These are subsets
 of the completed final cloud, not newly reconstructed pre-loop geometry. Full
 stream identity and output header counts verified; preview thins source index20.
 Medium sufficient for this extraction. High still needed before deeper diagnosis.
+
+## Fresh raw-prefix replay authorized (2026-11-13)
+The user requested dMapper processing of the extracted portion and objected to
+using the distorted final cloud for scene identification. The earlier LAZ files
+were only time slices of mapped output; they are not raw replay inputs. Correct
+workflow now uses the original sensor-frame lidar0002.laz and matching original
+imu0002.csv, preserving startup and cutting at absolute sensor238.38408168s
+(first exported pose0.38408168s +238s). Native cut_recording uses first IMU time
+0.00208724s, hence duration238.38199444s, start0. It rereads and verifies every
+retained LAZ point including extra fields and original coordinates/timestamps.
+Fresh external directory: BASE/livox2-before-flyaway-replay, recording/ input,
+result/ output. Original timing sidecar is provenance only and is not mislabelled
+as timing statistics for the cut. Source hashes, tool/build/settings identities,
+raw-cut verification log, IMU check and archived runner are retained. Same frozen
+Cauchy executable and byte-identical settings as the just-completed full run;
+no numerical correction, no inference that the prefix is error-free. This is the
+single newly authorized truncated run, independent of the failed full-route gate.
+Medium effort is sufficient to cut, run and collect. Deeper causal work waits for
+High as requested. The final mapped-cloud slices are never used as raw input.
+
+## Prefix replay stopped; indoor plan supersedes pending continuation
+User explicitly stopped the prefix replay; native PID8008 terminated, wrapper
+exit1, retained record needs_review. Partial artifacts are not a completed result.
+No automatic continuation. New Livox3 checks/plan are in livox3-indoor-plan.md;
+wait for user agreement before a Livox3 run.
