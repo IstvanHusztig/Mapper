@@ -114,3 +114,30 @@ alpha0.1/beta0.1, Cauchy3 enabled, Huber/trace flags cleared, fresh output
 Full-run launch remains separate from this completed bounded check, respecting
 the user's instruction to stop before new runs. The old Huber approval already
 produced its full run and is not recycled as approval for this new candidate.
+
+## Full Cauchy replay authorized and launched (2026-11-13)
+
+User explicitly requested the full replay. One fresh run is active in
+`C:/Users/User/Downloads/dLidar/experiments/phase0b-2026-11-12/full-livox2-cauchy3`.
+PID23284; native source c52b25f; frozen candidate copied from the reviewed bundle.
+The Huber-control TOML is byte-identical, alpha0.1/beta0.1, online gyro bias enabled;
+Cauchy3 enabled and inherited Huber/trace flags removed. Original Livox2 is input.
+`preflight.json` pins raw files, executable/DLLs, settings, runner and analysis
+helpers. Preserved Huber reference diagnostics include the W798 coverage gap.
+
+Runner `out/full_livox2_cauchy_replay.py` is archived with the run. Its real-health
+selftest passed NumPy array serialization, atomic replacement, failed-object/NaN
+preservation and environment checks. Sol6.1 independently reviewed the runner and
+reference schemas: no launch/collection blocker. No retry is authorized by this
+runner. Native completion is saved before expensive collection. Accuracy remains
+unaccepted regardless of health/comparison completion.
+
+Next: monitor, collect complete odometry/final outputs and evaluate return error,
+excursions and cloud geometry. No additional replay or parameter sweep starts
+without another user decision. High effort is unnecessary for routine monitoring.
+
+User proposed a new indoor-only scan down to the first floor. This would provide
+an additional observation separating indoor stair/floor transitions from outdoor
+matching, rather than reproducing the same route. Suggested unchanged mounting,
+marked same start/end in apartment56, and a still pause at both ends. It is not a
+prerequisite for the active replay; no new recording has been received.

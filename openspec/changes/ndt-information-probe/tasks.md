@@ -111,3 +111,8 @@
 - [x] 22.1 Check original input integrity around the failure and independently review a general bounded-influence correction; cauchy-correction.md.
 - [x] 22.2 Implement mutually exclusive Cauchy opt-in in both NDT grids with matching cost/trace, preserving Huber/disabled behavior; validate meaningful Release tests and independent code review. Seven diagnostic cases/817 assertions pass; full suite130/131 with the same existing17.9039mm corridor failure; Sol6.1 review found no blocking issue.
 - [x] 22.3 Run exact Huber-control-gated, all-cell W415 correction check; measure gyro consistency and collateral effects, document and commit without claiming full-route acceptance. Resumed checkpoint exit0; exact100-iteration control; raw-gyro disagreement9.188469°→1.639269°, all cells retained; Sol6.1 result review complete. cauchy-correction.md records collateral effects and remaining route/robustness gates.
+
+## 23. Authorized full Livox2 Cauchy replay
+- [x] 23.1 Freeze unchanged settings and candidate, validate atomic collection with real health data, independently review and launch one fresh full run. User explicitly approved; Sol6.1 found no launch/collector blocker. PID23284, full-livox2-cauchy3, source c52b25f.
+- [ ] 23.2 Monitor completion; verify native outputs, input identity, coverage and odometry/final comparisons without automatic retry.
+- [ ] 23.3 Evaluate remaining flyaway and return displacement, inspect cloud geometry, document independently reviewed findings and provide the new cloud for visual inspection. Perturbation robustness and shipment remain separate gates.
