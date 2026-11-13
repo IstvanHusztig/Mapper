@@ -117,3 +117,21 @@ scripts live in external livox4-ahrs-gain-trace; scratch source commitf400479.
 Roadmap update: task1.3 complete via exact sequential-prefix fallback;3/19.
 Task1.4 interface contract remains open. Do not infer reusable full-map restart
 support from this diagnostic capture.
+
+
+## Latest: W298 cell-level cause of the rotational pull
+
+Existing-data native reconstruction matches all source/association/target-cell
+hashes for iterations0,1,2,10,99 in both grids; no SLAM replay or optimizer solve.
+See livox4-ndt-cell-audit.md. Coarse dense cell1892points admits32 currentmatches
+90.9–368.4mm off its3.162mm narrow-axis model; mean correction along that axis
+only0.216mm, so known first-pointmean does not explain that discrepancy.
+Another coarse cell has2 returns20usapart, no normal, yet admits213 matches.
+Containing-voxel lookup plus inverse/viewpoint checks lacks support/association
+validation; Huber retains influential incompatible residuals. These2cells are
+55.15%net2–5m yaw-work, not endpointangle attribution. Independent review done.
+Physical reason for initialgeometry disagreement remains open. Nextdesign target
+is cell eligibility/correspondence consistency, not an unapproved whole-solver
+swap or revival of rejected floor/statistics tests. Charlie3/19 unchanged.
+Scratch inspection commitb892823; external livox4-ndt-cell-audit has frozen tools,
+validatedcells, cell-ranking-v2.json/history-v2.json and plot. No fix/newrun approved.

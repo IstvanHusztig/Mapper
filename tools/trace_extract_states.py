@@ -2,7 +2,7 @@
 import argparse,hashlib,json,re
 from pathlib import Path
 
-HEADER=re.compile(rb'LIVOX2_TRACE window=(\d+) iteration=(-?\d+) kind=(\w+) (.*)')
+HEADER=re.compile(rb'LIVOX[124]_TRACE window=(\d+) iteration=(-?\d+) kind=(\w+) (.*)')
 PAIRS=re.compile(r'(\w+)=(\[[^\]]*\]|\S+)')
 KINDS={'poses_before','poses_after','solver_update_before_bias_clamp','projection_matrix','matches','experiment_weights','range_step','projection'}
 

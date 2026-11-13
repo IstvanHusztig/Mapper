@@ -2,8 +2,8 @@
 
 ## Authorization and scope
 
-User explicitly requested: “Go trace which factor causes the first bad rotation
-update, log it, trace it!” This authorizes the previously proposed single
+User explicitly requested: â€œGo trace which factor causes the first bad rotation
+update, log it, trace it!â€ This authorizes the previously proposed single
 125-second prefix diagnostic replay, with unchanged executed candidate settings.
 No parameter sweep, bypass, numerical correction or full recording replay.
 Current high effort is sufficient. Charlie's larger interface/replacement remains
@@ -27,7 +27,7 @@ these identical, previously verified input bytes.
 
 ## Logging and validation
 
-Enable `DMAPPER_TRACE_LIVOX4=1` only for W297–300, every iteration. Reuse existing
+Enable `DMAPPER_TRACE_LIVOX4=1` only for W297â€“300, every iteration. Reuse existing
 pose/state, factor RHS, range support, Huber weights and match-turnover records.
 Add:
 
@@ -41,7 +41,7 @@ Add:
 - Release dropped-write count. Production accumulation, solver, state and acceptance
   are unchanged. Shared-H responses are not counterfactual factor-removal runs.
 
-Expected diagnostic cost 10–20 minutes; existing settings allow 3600 s/window.
+Expected diagnostic cost 10â€“20 minutes; existing settings allow 3600 s/window.
 Fresh destination: `C:/Users/User/Downloads/dLidar/experiments/phase0b-2026-11-12/livox4-ahrs-gain-trace`.
 Input is reused from `livox4-ahrs-gain-prefix/input`; no duplicate recording copy.
 Require exact snapshot window payload equality with the existing candidate for
@@ -70,41 +70,41 @@ No automatic retry. Native completion and exact equality remain pending.
 
 Native exit 0; wall time 607.476 seconds. All 346 odometry snapshot window payloads
 are byte-identical to the previously saved candidate, including the failure.
-All 400 expected traced iterations (W297–300,0–99) are present. 90,076 extracted
+All 400 expected traced iterations (W297â€“300,0â€“99) are present. 90,076 extracted
 records match the final native log exactly; helper identities unchanged.
 Independent Codex review confirmed the algebra and evidence, with the coupling
 and provenance limitations below. No fix or second replay was performed.
 
 **The initiating numerical driver in W298 is the NDT scan-matching RHS, with
-its largest net contribution coming from 2–5 m returns under the coupled solve.**
+its largest net contribution coming from 2â€“5 m returns under the coupled solve.**
 W298 begins at raw timestamp 107.2746488 s (log-relative 106.92 s). W297's final
 node164 correction is only -0.0420 degrees. W298 does not jump 18 degrees in one
 step: repeated accepted updates accumulate the bend.
 
 | Iteration (zero-based) | Node164 Euler-z step | Accumulated from actual pre-LM pose |
 |---|---:|---:|
-| 0 | -0.855775° | -0.855775° |
-| 1 | -1.109296° | -1.965071° |
-| 2 | -1.103977° | -3.069047° |
-| 99 | -0.000005° | -17.917741° |
+| 0 | -0.855775Â° | -0.855775Â° |
+| 1 | -1.109296Â° | -1.965071Â° |
+| 2 | -1.103977Â° | -3.069047Â° |
+| 99 | -0.000005Â° | -17.917741Â° |
 
 At iteration 0, shared damped-H responses at node164 are:
 
 | RHS family | Euler-z contribution |
 |---|---:|
-| All NDT | -0.855777° |
-| NDT 2–5 m | -1.064728° |
-| NDT below 2 m | +0.208951° |
-| NDT beyond 5 m | 0° |
-| Accelerometer | approximately +0.000002° |
-| Motion/gyro and carried priors | approximately 0° |
+| All NDT | -0.855777Â° |
+| NDT 2â€“5 m | -1.064728Â° |
+| NDT below 2 m | +0.208951Â° |
+| NDT beyond 5 m | 0Â° |
+| Accelerometer | approximately +0.000002Â° |
+| Motion/gyro and carried priors | approximately 0Â° |
 
 These are additive `H_damped^-1 b_family` responses under the same complete
 Hessian, not independent optimizations or factor-removal experiments. Near
 returns also exert angular influence: their angular-only RHS response is
--1.46050°, offset by translation coupling; therefore do not say only the 2–5 m
+-1.46050Â°, offset by translation coupling; therefore do not say only the 2â€“5 m
 points exert rotational force. At this first step, there are 503 fine-grid and 839
-coarse-grid matches in 2–5 m; these are factor occurrences, potentially sharing
+coarse-grid matches in 2â€“5 m; these are factor occurrences, potentially sharing
 source returns, not 1342 unique points. All beyond 5 m matches remain zero across
 both grids and all 100 W298 iterations. The 203 newly visible distant returns do
 not cause this local update. This does not resolve every outdoor failure.
@@ -138,8 +138,8 @@ Executed source is scratch commit `f400479`,
 `C:/Repo/dMapper/out/ahrs-gain-worktree/src/domain/scan_to_map.cpp`:
 
 - Cell selection: fine lookup line 518, coarse lookup line 672.
-- Point weighting and accumulated NDT RHS: lines 597–607 and 739–749.
-- Projected NDT RHS enters the joint system at lines 803–809.
+- Point weighting and accumulated NDT RHS: lines 597â€“607 and 739â€“749.
+- Projected NDT RHS enters the joint system at lines 803â€“809.
 - Joint damped solve line 1330; translation-only acceptance from line 1342.
 
 This isolates the local numerical driver to matching/residual assembly feeding
@@ -159,8 +159,8 @@ these distinctions. A numerical fix or another comparison requires separate scop
 | Measure | Original failing candidate | Diagnostic replay |
 |---|---:|---:|
 | Windows/iterations | 346 /100 each | 346 /100 each |
-| Maximum logged yaw correction | 16.959° | 16.959° |
-| Corrections >3° / >10° | 4 /1 | 4 /1 |
+| Maximum logged yaw correction | 16.959Â° | 16.959Â° |
+| Corrections >3Â° / >10Â° | 4 /1 | 4 /1 |
 | Maximum end velocity | 1.2602 m/s | 1.2602 m/s |
 | Maximum loop correction | 4.83 m | 4.83 m |
 
