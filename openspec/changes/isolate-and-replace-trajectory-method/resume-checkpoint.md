@@ -159,3 +159,13 @@ Cloud external livox4-ndt-match-guard/result/scan_lio_merged.laz. Maxbend1.8vs17
 but maxspeed5.40vs1.26m/s;116 excessive-speedwindows. Not a successful fix.
 See ndt-match-guard-implementation.md. No more runs authorized; high needed
 for numerical diagnosis. Charlie3/19, no adoption.
+
+
+Latest existing-data guard diagnosis: first clear departure W87/30.96s, not
+W122/43.56s. Nearly same predictions; reference corrects93mm, guard8mm despite
+22,988 admitted sources. Larger outgoingvelocity carries forward. Frozen
+prediction-selected associations are strongest supported mechanism; occupancy,
+residualgate and freezing remain confounded. Attitude contribution measured,
+net gravity leakage unproven (missing preLM/gravity states). Independent review
+complete. See ndt-guard-early-drift-analysis.md. No newcode/build/optimizer/replay.
+Next possible trace W84-102 requires explicit run approval. Charlie3/19.
