@@ -50,9 +50,17 @@ decomposition JSON files. Original complete run bundles remain in place.
 
 ## Detour boundaries
 
-No particular quick fix has yet been selected or implemented. Evaluate a focused
-candidate separately; do not silently mark larger roadmap tasks complete because
-it looks better. New mapping/checkpoint runs still require explicit user approval.
+The narrow Fusion AHRS gain-setter correction was implemented and tested in a
+separate gain-only build. The two approved Livox4 prefix runs completed; see
+`livox4-gain-prefix-comparison.md`. Control first325 snapshot windows exactly
+match the original full run. Candidate maximum speed fell5.086->1.260 m/s, but
+maximum yaw correction increased3.480->16.959 degrees atW298/106.92 s. This is
+not an accepted flyaway fix. Both clouds are ready for visual review. The separate
+AHRS-gravity-model experiment remains parked and was not included.
+
+Next: at high effort, investigate the candidate W298–300 rotation jump from the
+existing pair before proposing further runs. Do not silently mark larger roadmap
+tasks complete. New mapping/checkpoint runs still require explicit user approval.
 Commits authorized, no push. Keep OpenSpec updated; use existing Python tools.
 Latest user-confirmed model/effort: Astra high. Tell before needing a change;
 medium is sufficient for routine execution once numerical analysis is settled.

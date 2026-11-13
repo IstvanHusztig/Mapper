@@ -10,6 +10,8 @@ import subprocess
 import sys
 import time
 
+import numpy as np
+
 import run_health
 import snapshot_trajectory
 import trajectory_seams
@@ -23,9 +25,17 @@ def sha(path):
     return h.hexdigest()
 
 
+def json_value(value):
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, np.generic):
+        return value.item()
+    raise TypeError(f'Unsupported JSON type: {type(value).__name__}')
+
+
 def save(path, data):
     temp = path.with_suffix('.tmp')
-    temp.write_text(json.dumps(data, indent=2, allow_nan=False) + '\n')
+    temp.write_text(json.dumps(data, indent=2, allow_nan=False, default=json_value) + '\n')
     temp.replace(path)
 
 
@@ -72,54 +82,71 @@ def verify(manifest, bundle):
         require(sha(path) == expected, 'Changed prepared artifact: ' + path)
 
 
-def run(bundle, approved):
+def run(bundle, approved, resume_control=False):
     require(approved, 'No launch: explicit --approved required after user approval')
     manifest = json.loads((bundle / 'preparation.json').read_text())
     require(manifest['status'] == 'prepared', 'Bundle not prepared')
     require(manifest['control_windows'] == 325, 'Unexpected comparison boundary')
-    require(not (bundle / 'runs').exists(), 'Existing runs: no retry or overwrite')
+    if resume_control:
+        record = json.loads((bundle / 'comparison.json').read_text())
+        require(record['approved'] and record['status'] == 'needs_review', 'Not a stopped approved comparison')
+        require(record.get('error') == "TypeError('Object of type ndarray is not JSON serializable')",
+                'Recovery only supports the known collection error')
+        require(set(record['runs']) == {'control'} and record['runs']['control'].get('exit') == 0,
+                'Recovery requires exactly one successful native control')
+        require(not (bundle / 'runs' / 'gain-fix').exists(), 'Candidate already exists: no retry')
+    else:
+        require(not (bundle / 'runs').exists(), 'Existing runs: no retry or overwrite')
     verify(manifest, bundle)
     no_mapper()
     require(shutil.disk_usage(bundle).free > 15 * 1024**3, 'Need 15 GiB free')
-    (bundle / 'runs').mkdir()
+    if not resume_control:
+        (bundle / 'runs').mkdir()
     env = os.environ.copy()
     for key in list(env):
         if key.startswith('DMAPPER_'):
             del env[key]
     env['DMAPPER_DIAGNOSTIC_NDT_HUBER3'] = '1'
-    record = {'status': 'running', 'approved': True, 'runs': {}, 'accuracy_accepted': False}
+    if not resume_control:
+        record = {'status': 'running', 'approved': True, 'runs': {}, 'accuracy_accepted': False}
+    else:
+        record['collection_recovery'] = record.pop('error')
+        record['status'] = 'running'
     save(bundle / 'comparison.json', record)
     try:
         for name in ('control', 'gain-fix'):
             no_mapper()
             folder = bundle / 'runs' / name
             result = folder / 'result'
-            result.mkdir(parents=True)
-            command = [str(bundle / 'bin' / name / 'dMapper.exe'),
-                       str(bundle / 'input'), str(bundle / 'settings.toml'), str(result)]
-            info = {'command': command, 'status': 'running'}
-            record['runs'][name] = info
-            save(bundle / 'comparison.json', record)
-            start = time.monotonic()
-            with (folder / 'run.log').open('xb') as log:
-                process = None
-                try:
-                    process = subprocess.Popen(command, env=env, cwd=bundle / 'bin' / name,
-                                               stdout=log, stderr=subprocess.STDOUT)
-                    info['pid'] = process.pid
-                    save(bundle / 'comparison.json', record)
-                    code = process.wait()
-                except BaseException:
-                    if process is not None and process.poll() is None:
-                        process.terminate()
-                        try:
-                            process.wait(timeout=15)
-                        except subprocess.TimeoutExpired:
-                            process.kill()
-                            process.wait()
-                    raise
-            info.update(exit=code, wall_s=time.monotonic() - start)
-            require(code == 0, name + ' failed; no automatic retry')
+            if resume_control and name == 'control':
+                info = record['runs']['control']
+            else:
+                result.mkdir(parents=True)
+                command = [str(bundle / 'bin' / name / 'dMapper.exe'),
+                           str(bundle / 'input'), str(bundle / 'settings.toml'), str(result)]
+                info = {'command': command, 'status': 'running'}
+                record['runs'][name] = info
+                save(bundle / 'comparison.json', record)
+                start = time.monotonic()
+                with (folder / 'run.log').open('xb') as log:
+                    process = None
+                    try:
+                        process = subprocess.Popen(command, env=env, cwd=bundle / 'bin' / name,
+                                                   stdout=log, stderr=subprocess.STDOUT)
+                        info['pid'] = process.pid
+                        save(bundle / 'comparison.json', record)
+                        code = process.wait()
+                    except BaseException:
+                        if process is not None and process.poll() is None:
+                            process.terminate()
+                            try:
+                                process.wait(timeout=15)
+                            except subprocess.TimeoutExpired:
+                                process.kill()
+                                process.wait()
+                        raise
+                info.update(exit=code, wall_s=time.monotonic() - start)
+                require(code == 0, name + ' failed; no automatic retry')
             verify(manifest, bundle)
             text = (folder / 'run.log').read_text()
             require(text.count('NDT_HUBER_DIAGNOSTIC enabled=1') == 1, 'Missing Huber marker')
@@ -165,5 +192,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('bundle', type=Path)
     parser.add_argument('--approved', action='store_true')
+    parser.add_argument('--resume-control-collection', action='store_true')
     args = parser.parse_args()
-    run(args.bundle.resolve(), args.approved)
+    run(args.bundle.resolve(), args.approved, args.resume_control_collection)
