@@ -4,9 +4,9 @@ Livox2's full route still flies away while the new indoor multi-floor Livox3 map
 
 ## What Changes
 
-- Reuse established failure evidence and bound the missing later-onset analysis; derive a defensible uncertainty-floor range from existing data before selecting experiment values.
+- Reuse established failure evidence and bound the missing later-onset analysis; justify an empirical regularization range from existing data before selecting experiment values, without claiming stationary observations identify universal sensor noise.
 - Add an experimental, disabled-by-default NDT residual covariance floor for odometry only, consistently used in both grids, cost and robust weights, without changing stored map statistics or other priors.
-- Validate progressively against exact checkpoints and the outdoor/indoor references, with per-run authorization, complete evidence and perturbation gates before adoption.
+- Validate progressively against exact checkpoints and the outdoor/indoor references, including mixed-axis Huber reweighting and carried-state uncertainty, with per-run authorization, complete evidence and perturbation gates before adoption.
 - Preserve the house-plan registration audit, fit/held-out regions, unresolved physical correspondences and fixed-scale overlays; never warp the map to the plan.
 - Update existing HTML documentation when a general change is accepted; detailed recording evidence stays in OpenSpec rather than becoming sensor-specific product documentation.
 

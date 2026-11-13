@@ -14,6 +14,17 @@ Evaluation SHALL identify original inputs, executable/source, configuration, sup
 - **WHEN** restored control fails its declared reproduction gate
 - **THEN** candidate results are not interpreted as an isolated causal intervention
 
+### Requirement: Regularization evidence separates scaling from improvement
+Evaluation SHALL justify the selected regularization scale using declared physical support, uncertainty limitations and relevance to the influential cells. It SHALL NOT treat stationary plane spread as a uniquely identified total residual noise model or select the scale by endpoint tuning. Fixed-state cost reductions across changed scales SHALL NOT establish improved geometry. Evaluation SHALL inspect mixed-axis robust influence and joint bias/velocity/offset estimates and covariance carry, preserving configured prior models/parameters and controlled initialization.
+
+#### Scenario: Supported scale does not affect the proposed mechanism
+- **WHEN** the defensible floor range leaves the implicated cell eigenvalues unchanged
+- **THEN** evaluation records the incompatibility before implementation instead of enlarging the floor solely to improve the failing checkpoint
+
+#### Scenario: Same prior configuration produces different carry
+- **WHEN** changed NDT information changes the joint solve and outgoing uncertainty
+- **THEN** evaluation checks units, finite/SPD status, innovations and subsequent carry and does not claim unchanged or calibrated posterior uncertainty
+
 ### Requirement: General acceptance protects both environment classes
 Evaluation SHALL distinguish odometry and final outputs, retain coverage and failures, and measure trajectory behavior, geometry, revisit consistency, sharpness and robustness before recommending general acceptance. Indoor success alone SHALL NOT establish outdoor causality or cave suitability. Accepted general changes SHALL be documented in existing HTML guidance, with detailed recording evidence retained in OpenSpec.
 
