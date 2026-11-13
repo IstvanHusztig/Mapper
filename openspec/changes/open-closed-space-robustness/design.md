@@ -69,6 +69,12 @@ Implement in the isolated experimental checkout after apply is invoked. Default 
 
 ## Open Questions
 
+Existing-data application selected 0.006 m as a limited local engineering candidate;
+see existing-data-checks.md for measurements, conditional rationale and independent
+review. This resolves the first experiment value without calibrating a universal
+noise model. Exact later restart state and physical registration anchors remain
+unresolved. The zero default remains unchanged.
+
 Deferrable empirical quantities are the justified nonzero sigma, exact availability of a longer control-equivalent restart, and confirmed as-built structural anchors. Tasks explicitly gate candidate runs/registration acceptance on these answers. If the answers require a different model or solver, revise the proposal instead of silently widening scope.
 
 ## Numerical review, 2026-11-13
