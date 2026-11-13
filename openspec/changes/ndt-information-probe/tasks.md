@@ -135,4 +135,9 @@
 - [x] 27.2 Create and inspect a Livox3-specific rigid plan overlay, preserve ambiguity and reflection caveats, and independently review measured claims before proposing the next research phase.
 
 ## 28. Proposed open/closed-space research
-- [ ] 28.1 After user confirms High, research primary sources and existing implementations for weak-geometry handling and reliable matching across open/confined transitions; propose a bounded design and evaluation plan before additional numerical changes or runs.
+- [x] 28.1 After user confirms High, research primary sources and existing implementations for weak-geometry handling and reliable matching across open/confined transitions; propose a bounded design and evaluation plan before additional numerical changes or runs.
+
+## 29. High research and registration audit, before implementation
+- [x] 29.1 Complete requested Terra primary-source research and source audit; reuse established W415 causal result and distinguish later evidence gaps.
+- [x] 29.2 Investigate house-plan misalignment, preserve rigid registration evidence and held-out residuals, review the proposed design and present the plan for approval.
+- [ ] 29.3 Obtain user agreement before algorithm/settings changes or any new odometry/checkpoint run.
