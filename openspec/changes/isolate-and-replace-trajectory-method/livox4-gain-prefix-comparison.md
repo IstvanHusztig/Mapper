@@ -157,3 +157,8 @@ Clouds for the user's visual check, relative to the external bundle:
 
 - `runs/control/result/scan_lio_merged.laz`
 - `runs/gain-fix/result/scan_lio_merged.laz`
+
+Follow-up high-effort existing-data analysis is in `gain-jump-107s-analysis.md`.
+It locates the rotation within the joint optimizer before tail handoff, rules
+out a direct AHRS heading jump, and records the remaining initiating-factor
+evidence gap. No further mapping run accompanied that investigation.

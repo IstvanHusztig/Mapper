@@ -58,9 +58,16 @@ maximum yaw correction increased3.480->16.959 degrees atW298/106.92 s. This is
 not an accepted flyaway fix. Both clouds are ready for visual review. The separate
 AHRS-gravity-model experiment remains parked and was not included.
 
-Next: at high effort, investigate the candidate W298–300 rotation jump from the
-existing pair before proposing further runs. Do not silently mark larger roadmap
-tasks complete. New mapping/checkpoint runs still require explicit user approval.
+Existing-data high-effort investigation completed: `gain-jump-107s-analysis.md`.
+AHRS increments remain nearly identical, but the joint optimizer creates about
+17.9 degrees of correction by untouched node164 at W298, strongly violating the
+active gyro factor. Translation-only acceptance permits the bend; exact initiating
+factor/match is still unknown. Research agent independently confirmed the findings.
+The proposed next step is diagnostic-only logging for W297–300 and one identical
+125-second candidate prefix with exact equivalence against the saved gain-only
+run. It is NOT authorized or launched. See the analysis note for scope and limits.
+Do not mark larger roadmap tasks complete. New mapping/checkpoint runs still
+require explicit user approval.
 Commits authorized, no push. Keep OpenSpec updated; use existing Python tools.
 Latest user-confirmed model/effort: Astra high. Tell before needing a change;
 medium is sufficient for routine execution once numerical analysis is settled.
