@@ -68,6 +68,16 @@ The proposed next step is diagnostic-only logging for W297–300 and one identic
 run. It is NOT authorized or launched. See the analysis note for scope and limits.
 Do not mark larger roadmap tasks complete. New mapping/checkpoint runs still
 require explicit user approval.
+
+Before the bypass or trace, user requested optimizer code research. Completed
+`optimizer-code-and-methods-audit.md`: gyro signs and carried-bias handling are
+consistent; acceleration angular Jacobian formula checks agree. Known C37
+origin-angle units defect is real but does not explain downstream W298 rotation.
+Midpoint acceleration quadrature differs from exact time weights, with small,
+similar local discrepancies in both runs. Independent research compared Ceres,
+FAST-LIO and LIO-SAM/GTSAM; no replacement chosen and no new run authorized.
+Priority remains identifying the first rotation-growing update and its changing
+support, rather than bundling minor corrections or switching off the optimizer.
 Commits authorized, no push. Keep OpenSpec updated; use existing Python tools.
 Latest user-confirmed model/effort: Astra high. Tell before needing a change;
 medium is sufficient for routine execution once numerical analysis is settled.
