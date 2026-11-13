@@ -121,3 +121,45 @@ User first requested finish/save/pause, then explicitly said don'tstop/goon.
 Continue generalcorrection design fromthischeckpoint withsource/primaryresearch;
 High stilluseful. Noadditionaloptimizer/fullreplay launched orspecified yet.
 Do not generalize hardcodedcellIDs intoashippingfilter. Keepallresults.
+## Authorized W754 Huber diagnostic (2026-11-13)
+User resumed and explicitly approved the proposed exactcontrol+Huber3 check after
+build/tests/review. See full-livox2-robust-design.md. Scratch-only runtimeoption
+(default0) in bothgrids, consistent H/RHS/robustcost, allmapcells retained; no
+shippedsetting. No fullreplay or extra kernel/scale/checkpoint authorized.
+## Huber preparation gates and launched scope
+Scratchcommit c4b3b6f implements diagnostic-only Huber3, disabledbydefault.
+Release/Debug focused3cases469assertions passed each. FullRelease127cases126pass,
+1knownunexpectedcorridorfailure,3skipped; allfour printedassertionvalues match
+retainedbaseline exactly. Independent Codexsource/testreview passed. User gave
+explicitgo; exactcontrolthenHuber3 launched into full-livox2-trace/optimizer-w754-huber3/.
+FrozenexeSHA eb4eedf4a4e9678d0a05fdb8f183a16ff7bfab78b0550414620c7f16cac6f6d7.
+No fullreplay. Terra6.1 research challenge saved in full-livox2-robust-design.md.
+## Huber3 isolated W754 result (2026-11-13; latest)
+Approved exactcontrol+Huber3 completed, exit0,136.93s. Controlall15,400records exact;
+candidate100acceptediterations/allprojection1, allcells retained and identical
+initialmatches. Tilt15.1886->2.1480deg, endpointvelocitynorm0.8899->0.3739m/s.
+Finalsupport13501/12514 ->16666/14705 indoor/outdoor. Initial meanweights~.922/.936
+hide stronger directionalinforeduction (~28%/42% smallest summedinfoeigenvalue).
+Independent Codex reviewpassed; fullcloud/physicalaccuracy/robustness NOTMEASURED.
+See openspec/changes/ndt-information-probe/full-livox2-huber-results.md and
+full-livox2-robust-design.md (includesrequestedTerra6.1researchchallenge).
+Artifacts full-livox2-trace/optimizer-w754-huber3/ underapprovedexperimentroot.
+Scratch c4b3b6f; defaultdisabled diagnostic runtimefield, noTOML/GUI exposure.
+Release/Debugfocused3/469pass; fullRelease retainedidentical knowncorridorfailure.
+Nojobsremain. Proposednext: opt-in freshfullLivox2 Huber3 run, keepingalpha/beta
+andsettingsfixed. Useraskedforauthorization; nofullrunlaunched. Honor anylater
+reply. Highusefulforinterpretation; Mediumsufficientforroutinepreparation/waiting.
+## Latest authorization supersedes pending full-run question (2026-11-13)
+User: "Go ahead until you achive the goal or need nee info from me", and useTerra
+researchwhenneeded. FullLivox2Huber3 is nowapproved; do notaskagain. Continue
+necessary bounded diagnosis/validation towardusablefullcloud, preservequality
+andprovenance, report meaningfulchanges. No push/shippingacceptance implied.
+Activepreparation: historical_measurements owns scratch application-level
+DMAPPER_DIAGNOSTIC_NDT_HUBER3=1 optin (unsetdisabled) andbuilds/tests; provenance_audit
+owns rootout/full_livox2_huber_replay.py +synthetictests. RootownsOpenSpec,
+externalfreeze/launch andanalysis. snapshot_format_review reviews beforelaunch.
+Terra6.1 researchcompleted, findingssaved. No fullcandidate processlaunchedyet.
+Nextartifactroot full-livox2-huber3/ underapprovedphase0bexperimentroot.
+NeedfulltraceH3coverage, finite/conservationchecks, raw/settings/bundleidentity,
+health/stage/mapcomparison; changedcandidateoutputsareexpected, noexactfullrun
+reproductionrequirement. Rootresultcommitpending afterthisentry.

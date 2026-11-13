@@ -68,3 +68,15 @@ samples, maps and optimizer schedule without changing recorded inputs or setting
 - **THEN** a single identical restart SHALL omit only outdoor cells 77310918653, 73015885821 and 81605885949
 - **AND** support loss and state changes SHALL be reported without claiming a corrected full recording
 - **AND** reviewed evidence and a resumable handoff SHALL be saved before the user's later continuation, without automatically starting additional optimizer runs
+
+### Requirement: Bounded robust-residual diagnostic
+The scratch Huber experiment SHALL apply one residual-based weight consistently
+to each point's Hessian and RHS in both grids, with an identified robust cost,
+while preserving all cells, priors and disabled behavior.
+
+#### Scenario: Huber checkpoint candidate
+- **WHEN** the authorized Huber3 checkpoint runs after synthetic/review gates
+- **THEN** a disabled exact control SHALL reproduce all original records before the candidate starts
+- **AND** the candidate SHALL restart identical state and retain every map cell
+- **AND** raw support/cost, robust weights/cost and weighted information SHALL remain distinguishable
+- **AND** no calibrated sigma, physical accuracy or full-route improvement SHALL be inferred from this checkpoint alone

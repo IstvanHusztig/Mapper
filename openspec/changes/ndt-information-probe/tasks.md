@@ -66,5 +66,15 @@
 - [x] 13.4 Independently review evidence, save OpenSpec/results/next steps and commits, then stop as requested by the user. Independent Codex source/output review passed; resumable state in full-livox2-w754-ablation.md. User subsequently resumed correction-design work; no additional run started.
 
 ## 14. Resumed general-correction design
-- [ ] 14.1 Review source and primary research for general treatment of the influential associations; distinguish principled models from diagnostic heuristics.
-- [ ] 14.2 Specify a bounded correction and validation proposal, obtain independent review and document the new-run boundary before any additional optimizer execution.
+- [x] 14.1 Review source and primary research for general treatment of the influential associations; distinguish principled models from diagnostic heuristics.
+- [x] 14.2 Specify a bounded correction and validation proposal, obtain independent review and document the new-run boundary before any additional optimizer execution. full-livox2-robust-design.md; independent Codex recommendation review passed. User explicitly authorized its control+Huber3 check.
+
+## 15. Authorized W754 Huber diagnostic
+- [x] 15.1 Implement scratch-only disabled-by-default Huber weighting consistently in both grids and diagnostics, with synthetic tests and independent review. Release/Debug focused3cases469assertions pass each; fullRelease127cases126pass1knownfailure, allfour printedfailurevalues identical to retained baseline. Independent Codex source/test review passed.
+- [x] 15.2 Freeze provenance and execute exact W754 control, then only after its exact gate one identical restart with Huber3 and all map cells retained. Exact15,400controlrecords; candidate100iterations;136.93s; allinput/bundleidentitygates passed.
+- [x] 15.3 Review candidate states, support/information and limitations independently; document results and propose further validation before any additional run. full-livox2-huber-results.md; independent Codex evidence review passed. User subsequently authorized full replay and continuing toward the goal.
+
+## 16. Authorized fresh full Livox2 Huber validation
+- [ ] 16.1 Prepare explicit scratch full-odometry Huber3 opt-in, test unchanged disabled behavior and activation, freeze the Release bundle and independently review runner/source safeguards.
+- [ ] 16.2 Execute fresh full original Livox2 with Huber3, alpha0.1/beta0.1 and unchanged settings; monitor trajectory/solver behavior, preserve trace and verify completion/provenance without expecting identical candidate output.
+- [ ] 16.3 Compare odometry/final trajectories, onset and later excursions, support and map geometry; independently review findings and provide useful new cloud artifacts for inspection.

@@ -36,3 +36,13 @@ full-livox2-cell-attribution.md: exact control, then a three-outdoor-cell ablati
 only if control reproduction succeeds. The latest instruction is to finish these
 checks, save the state and stop for later continuation. No full replay or fix is
 authorized by this step.
+
+The user then resumed work and explicitly authorized the next isolated exact
+W754 control plus Huber3 candidate after preparation/review. See
+full-livox2-robust-design.md. No additional full-recording replay is included.
+
+After the successful Huber checkpoint, the user explicitly authorized the fresh
+full Livox2 Huber3 replay and continuing toward the goal until new information
+is required. Preserve alpha/beta/settings, isolated build/provenance and review
+gates. This supersedes the prior pause/new-run approval boundary for the authorized
+continuation; it does not authorize pushing or accepting survey accuracy.
