@@ -180,3 +180,14 @@ Correctedfolder livox4-guard-w87-trace-corrected prepared_not_run approvedfalse,
 start-10duration60preservesleadingdata; first200kLiDARrecords+IMUprefixexact.
 STOP before additional replay; obtain approval. See ndt-guard-w87-trace.md.
 High sufficient; Charlie3/19 unchanged.
+
+Corrected W87 trace completed with user approval: external
+livox4-guard-w87-trace-corrected, native exit 0, 211.590 s, 137 windows;
+first 130 window payloads EXACT against original guard. Factor audit passes.
+NDT supplies 89.64% conditional curvature; motion/velocity gradients balance its
+small corrective push. Refreshing guarded matches increases local NDT push 5.62x
+at i99 with similar curvature. Admission also reduces push. No alternative solve,
+fix adoption or new replay. See ndt-guard-w87-trace.md corrected section.
+Next: propose refreshing between linearizations, preserving cell validity and
+consistent trial associations. Ask before algorithm change/new runs. High sufficient.
+Charlie remains 3/19.

@@ -116,3 +116,90 @@ The safest fallback is unchanged125sinput; the prepared corrected50sprefix still
 must pass the first130-window exact gate. Request explicit approval before either
 additional replay. Current high effort is sufficient. No algorithm/default change
 or adoption. Charlie remains3/19. Preserve failed attempt and its evidence.
+
+## Corrected replay — exact reproduction confirmed
+
+User explicitly approved “Run corrected trace”. The prepared corrected bundle
+was run once, without algorithm/settings changes. Native exit 0; 211.590 s wall
+time; 137 windows. All first 130 odometry window payloads match the original
+125-second guard run **exactly**. `run.json` status is `validated`; the original
+preparation manifest remains an immutable record of the earlier unapproved state.
+The failed first attempt is retained separately.
+
+External bundle: `C:/Users/User/Downloads/dLidar/experiments/phase0b-2026-11-12/livox4-guard-w87-trace-corrected`.
+Log SHA256: `d33dcc6c18f7817d6417536575e46e61623ac35e3d715c9293078ef7a6825194`.
+Snapshot SHA256: `319223671b21fe67ca0a0283d35ae9093b8e6daa812edf2b1a57cc6b3d6f53a6`.
+`factor-analysis.json` records original_run_reproduced=true, no internal errors,
+190 actual iterations and six alternative assemblies. Frozen alternative hashes
+and full RHS match production at both sampled iterations.
+
+### What actually blocks further correction
+
+W87 (30.96 s log-relative time) makes a total endpoint correction
+(-0.00440318, +0.00665278, -0.00181734) m, approximately 8.18 mm.
+The first iteration already supplies about 7.57 mm; by iteration 10 the next
+endpoint step is only about 7 nanometres. This is convergence to the guarded
+local model, not failure to execute an update.
+
+For the same descriptive fixed-attitude velocity ramp defined above, iteration 99:
+
+| Factor | Curvature | Linear push | Local quadratic cost change |
+|---|---:|---:|---:|
+| NDT | 70814.93 | 696.76 | 69421.41 |
+| Motion edges | 4043.23 | -374.84 | 4792.90 |
+| Carried start-velocity prior | 4141.74 | -321.29 | 4784.31 |
+
+NDT supplies 89.64% of directional curvature. However, **curvature and the
+opposing gradient are different questions**: NDT still pushes toward a small
+correction; the motion edges and carried velocity prior oppose it. At iteration
+10 the shared-H endpoint responses projected along this direction are NDT
++2.234 mm, motion edges -2.283 mm, accelerometer +0.148 mm and carried velocity
+prior -0.099 mm (other terms complete the near cancellation). These are additive
+RHS responses under the same joint damped Hessian, not factor-removal experiments.
+Thus do not say NDT alone pushes backward or gyro alone blocks the solve.
+
+All three translation-projection scales are 1 at the inspected iterations
+0, 1, 2, 10 and 99. Weak-axis projection is not suppressing this correction there.
+Near-zero accelerometer curvature remains specific to this constant-velocity
+ramp; it does not rule out inertial/attitude coupling in the full system.
+
+### Why the guarded NDT model loses corrective pull
+
+Same state and map; no alternative trajectory was run:
+
+| Iteration | Frozen NDT push | Refreshed admission push | Legacy rematching push |
+|---|---:|---:|---:|
+| 0 | 11325.35 | 11325.35 | 19167.64 |
+| 99 | 696.76 | 3918.16 | 11945.09 |
+
+Refreshing valid associations at iteration 99 increases the corrective linear
+push 5.62-fold, with almost unchanged directional curvature (70569.12 versus
+70814.93). Fine/coarse matches change from 17640/19335 to 18200/19390; legacy
+uses 21048/20863. Source identities and assembly checks pass. This isolates a
+local effect of whole-window freezing; the initial admission policy also reduces
+push, as shown at iteration 0. It does not prove which rejected matches are good,
+or that legacy's much larger push is accurate or safe.
+
+The supported mechanism is: prediction-selected, whole-window frozen NDT targets
+have too little corrective pull in this state; motion/velocity constraints balance
+that small pull after an 8 mm correction, leaving excess outgoing velocity to
+feed the next prediction. It is a local mechanism, not proof of a successful fix
+or of the entire later flyaway's cause. The chosen direction uses rounded
+reference differences, not surveyed truth; alternative models use the candidate
+map and were assembled only, not solved.
+
+### Run diagnostics and next decision
+
+Coverage 137/137; no missing required diagnostics. Maximum heading bend 1.783 deg;
+maximum speed 2.992 m/s; eight speed crossings above 2.5 m/s (first W122 at
+43.56 s). Conditional velocity chi-square median/p95 827.7/2517.32 over 34 eligible
+windows. This faithfully reproduces the drift; it is not an improved map. No
+map-accuracy, physical closure or robustness verdict is made for this prefix.
+
+Recommended next design, not implemented: retain cell-validity checks; refresh
+admission/correspondences between outer linearizations, freezing only for an
+individual trial/acceptance comparison. Do not simply weaken the gyro or velocity
+prior. A subsequent controlled test must separate refresh from admission changes
+and retain the original rotation-jump gate. New algorithm changes and any further
+recording replay require user approval. Current high effort is sufficient;
+Charlie remains 3/19.
