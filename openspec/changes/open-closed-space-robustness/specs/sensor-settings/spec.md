@@ -1,3 +1,7 @@
+> **Withdrawn delta, 2026-11-13.** User rejected the residual-floor experiment
+> and its setting was removed. Retained for evidence only; do not sync these
+> requirements into main specs or reimplement them. See ../../rejection.md.
+
 ## ADDED Requirements
 
 ### Requirement: Residual-noise floor is an explicit recorded setting

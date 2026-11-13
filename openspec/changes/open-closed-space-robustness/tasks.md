@@ -1,5 +1,11 @@
 # Tasks
 
+> **Candidate rejected and removed, 2026-11-13.** User: "Reject and remove".
+> Checked items retain historical execution evidence; section 2's code was
+> subsequently reverted. Unchecked floor-evaluation/promotion tasks are
+> cancelled, not passed or still queued. Do not resume them through apply.
+> House-plan review remains separate and unresolved. See rejection.md.
+
 Applying this change starts with bounded existing-data analysis. It does not authorize any processing/checkpoint run or a positive shipped default. All tasks begin unchecked; historical research is evidence, not newly completed implementation.
 
 ## 1. Freeze references and resolve the remaining empirical decision

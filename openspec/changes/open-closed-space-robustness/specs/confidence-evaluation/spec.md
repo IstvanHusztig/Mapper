@@ -1,4 +1,8 @@
 ## Purpose
+
+> The residual-floor candidate was rejected on 2026-11-13. These evaluation
+> principles are retained as historical requirements; they do not authorize
+> more runs or imply successful validation. See ../../rejection.md.
 Keep confidence-model experiments reproducible and protect successful indoor mapping while diagnosing open-space failures without unsupported acceptance claims.
 
 ## ADDED Requirements

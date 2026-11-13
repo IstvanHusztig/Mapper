@@ -1,4 +1,8 @@
 ## Purpose
+
+> The residual-floor candidate was rejected on 2026-11-13. Independent provisional
+> registration evidence remains; no registration acceptance or completed
+> main-spec integration is claimed. See ../../rejection.md.
 Provide reproducible house-plan overlays that distinguish registration uncertainty from map deformation and retain independent checking surfaces.
 
 ## ADDED Requirements

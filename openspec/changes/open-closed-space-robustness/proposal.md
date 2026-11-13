@@ -1,3 +1,10 @@
+> **Rejected candidate, 2026-11-13:** user instructed "Reject and remove".
+> The residual-floor implementation and dedicated repository tools were removed.
+> This proposal is retained as experiment history, not active implementation
+> authorization. No floor specs may be synced or further floor runs launched.
+> House-plan evidence remains provisional. The flyaway is unresolved; another
+> intervention needs a revised plan. See rejection.md.
+
 ## Why
 
 Livox2's full route still flies away while the new indoor multi-floor Livox3 map looks crisp. Existing evidence establishes excessive influence from thin NDT cells at W415, but not the complete later runaway mechanism; a local Cauchy improvement failed on the full route. We need a bounded confidence-model correction that preserves the indoor result, plus honest house-plan registration evidence.

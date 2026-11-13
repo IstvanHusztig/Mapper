@@ -1,5 +1,11 @@
 # W415 residual-floor checkpoint
 
+> **User rejected and requested removal on 2026-11-13.** Candidate source,
+> setting, tests and dedicated repository tools have been removed. Frozen
+> evidence remains in the experiment bundle. Subsequent text is the preserved
+> experiment report; its proposed follow-up is not a new run authorization.
+> See rejection.md.
+
 2026-11-13. User authorized the prepared control/candidate experiment with
 "Astra high on, go". Approval is recorded in the frozen bundle manifest;
 execution began at approximately 14:39 Europe/Berlin. No full-route replay is

@@ -1,5 +1,8 @@
 # Experimental implementation status, 2026-11-13
 
+> **Historical implementation, removed 2026-11-13 at the user's request.**
+> See rejection.md. Checks below describe the rejected candidate before removal.
+
 ## Latest: tasks2.3/2.4 complete; checkpoint prepared
 
 Scratch5be333f adds information-eligibility/skip counters, explicit rejection of

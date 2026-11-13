@@ -1,5 +1,11 @@
 # Design
 
+> **Historical design: rejected 2026-11-13.** The user rejected and requested
+> removal of the residual-floor candidate. Its implementation has been reverted;
+> the requirements below describe the evaluated experiment, not a feature to
+> reintroduce. No larger floor or further candidate replay is authorized.
+> See rejection.md and checkpoint-floor6mm.md.
+
 ## Context
 
 See proposal.md and the linked ndt-information-probe evidence. Root and scratch are separate working copies: numerical work is based on the experimental scratch branch, while this OpenSpec change is the planning source of truth. Freeze the implementation base and its relation to Huber source cbca36d before editing; do not overwrite prior bundles or merge failed Cauchy behavior into defaults.
