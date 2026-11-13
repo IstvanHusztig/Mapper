@@ -75,3 +75,15 @@ check; no old run permission is recycled for Livox3.
 Independent Sol6.1 review supports this frozen experimental reference run and
 requires separate odometry/final results, endpoint uncertainty, floor coverage
 and matched beginning/end views. No route order or floor heights are assumed.
+
+## Approved run launched (2026-11-13)
+User explicitly approved the full Huber3 replay on Livox3. Frozen full-Livox2
+Huber3 bundle verified before copying executable/DLLs, with byte-identical TOML;
+alpha0.1/beta0.1, startup/online gyro bias enabled. Huber3 flag enabled, inherited
+Cauchy and both trace flags cleared. PID36736, wrapper session73429. Fresh output
+BASE/livox3-indoor/huber3-baseline; original raw data/livox/3 is input, normal CLI
+cache/preview writes only. All five checked original files and analysis helpers
+are hash-bound in preflight.json; runner archived. Native completion is recorded
+before collection; health arrays serialized atomically using the reviewed helper.
+Missing diagnostics remain incomplete and no accuracy pass is inferred. No retry.
+Keep monitoring quiet and notify user once actual merged cloud is complete.
