@@ -64,3 +64,35 @@ No algorithm correction, recording replay or claim of map improvement is part
 of this check. Medium is sufficient for result bookkeeping; high is appropriate
 when designing and evaluating that coupled-state correction.
 Diagnostic source committed as9987917 in the experimental worktree. No push.
+
+## Preparation for a retained-tail candidate
+
+The application already supports retaining the optimized tail by setting
+`handoff_tail_nodes = 0` in the experimental replay TOML. The window-steps
+test checks that zero tail nodes leave the poses unchanged. This gives a
+configuration-only comparison using the tested recovery binary and the
+completed 125-second replay as control. Disable tail rewriting throughout
+that experimental run. A production policy may need a narrower scope.
+
+The comparison changes both the terminal pose and the geometric previous
+velocity estimate consumed by the next window. Test these alongside the
+carried optimized velocity and covariance. Check window 301 completion,
+velocity changes around window 313, and the 31-second region. Compare
+pre-loop-closure trajectory and final cloud separately. Retaining the tail
+can remove the measured end-factor discontinuity while giving up the
+existing IMU rotation reconstruction over those nodes.
+
+Before choosing this as the production policy, review the effect on bias
+correction in the tail and on the next window's seed. Keep pose, velocity and
+covariance from the same accepted state if retaining the optimized tail.
+For an inertial rewrite, require an explicit state and uncertainty model.
+The captured-call result alone does not choose between those policies.
+
+This is preparation only. The evaluation uses the existing verified prefix,
+the completed control settings with the one edit above, Huber3, and a fresh
+result directory. The user must approve any recording replay separately.
+
+High-effort follow-up is complete: see `retained-tail-comparison-plan.md` for
+the reviewed bias/velocity/covariance audit and frozen candidate. Bias estimation
+remains active with zero tail nodes. Candidate prepared externally, not started;
+no production policy adopted. Medium suffices for preparation and monitoring.

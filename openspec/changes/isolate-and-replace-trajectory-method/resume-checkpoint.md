@@ -313,3 +313,6 @@ assertions each, Python9pass. Independent review completed and its findings
 addressed. See acceptance-seed-damping-fix.md for artifacts/limits. No new
 recording replay, cloud, push or adoption. Stop for approval before any run.
 Charlie3/19. Medium sufficient for preparation/monitoring; high for analysis.
+
+
+Latest (2026-11-14): retained-tail design reviewed; see openspec/changes/isolate-and-replace-trajectory-method/retained-tail-comparison-plan.md. Existing setting handoff_tail_nodes=0 keeps optimized poses; gyro-bias estimation/carry remain active. External livox4-retained-tail-125s prepared with unchanged recovery binary and one TOML change, approval=false, not started. Two Release tests/299 assertions pass; input/binary/settings identities verified. Cache/process ownership must be rechecked at launch (CIM access denied during preparation). Await separate replay approval. Medium sufficient for monitoring; High before new numerical diagnosis. Charlie remains 3/19.
