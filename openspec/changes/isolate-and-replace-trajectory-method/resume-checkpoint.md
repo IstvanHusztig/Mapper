@@ -316,3 +316,6 @@ Charlie3/19. Medium sufficient for preparation/monitoring; high for analysis.
 
 
 Latest (2026-11-14): retained-tail design reviewed; see openspec/changes/isolate-and-replace-trajectory-method/retained-tail-comparison-plan.md. Existing setting handoff_tail_nodes=0 keeps optimized poses; gyro-bias estimation/carry remain active. External livox4-retained-tail-125s prepared with unchanged recovery binary and one TOML change, approval=false, not started. Two Release tests/299 assertions pass; input/binary/settings identities verified. Cache/process ownership must be rechecked at launch (CIM access denied during preparation). Await separate replay approval. Medium sufficient for monitoring; High before new numerical diagnosis. Charlie remains 3/19.
+
+
+Latest W214 implementation (2026-11-14): scratch a27fa33, clean. Restricted fallback uses fully retained directions and raw/symmetric NDT translation residual derivative; guards preserved, enabled snapshot policy v5. Independent review clear. Release 164 cases pass/3 skipped (3 pre-existing expected assertions), Debug 12 cases/333 assertions pass. See openspec/changes/isolate-and-replace-trajectory-method/translation-recovery-fix.md for logs/limits. Real W214 and map validation pending; no new replay authorized. Medium for preparation/monitoring, High for numerical diagnosis. Charlie3/19.

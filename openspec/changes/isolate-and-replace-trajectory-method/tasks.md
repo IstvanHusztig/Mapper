@@ -2,7 +2,9 @@
 
 Latest design-only detour: proposed W214 restricted recovery and its checklist
 are in `translation-recovery-fix.md`. The user requested preserving weak-direction
-and rotation guards. Its implementation and recording validation remain pending.
+and rotation guards, then authorized implementation, tests and independent
+review. Implementation is complete in experimental commit a27fa33, with full
+Release and focused Debug validation. Recording validation remains pending.
 
 Latest diagnostic detour: user authorized repairing checked-solver tracing and
 preparing reusable W301 cases. See `solver-case-capture.md` for the local

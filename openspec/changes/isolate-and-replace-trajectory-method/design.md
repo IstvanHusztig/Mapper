@@ -3,8 +3,9 @@
 W214 design follow-up (2026-11-14) is in the proposed extension at the start of
 `translation-recovery-fix.md`. It confines recovery to fully retained LiDAR
 directions and aligns the new branch's translation derivative with its evaluated
-merit. Implementation and new processing require separate authorization. The
-existing identity-projection recovery remains the implemented baseline.
+merit. The user subsequently authorized implementation, testing and independent
+review. New processing requires separate approval. The existing identity
+recovery is the numerical compatibility baseline.
 
 Latest diagnostic authorization (2026-11-14): repair checked proposal/base-merit
 tracing and prepare a bounded frozen-call capture/replay path, preserving all

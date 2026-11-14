@@ -3,9 +3,10 @@
 ## Proposed W214 extension (2026-11-14)
 
 The user requested design on High with weak-direction and rotation guards
-preserved. This section is a proposed implementation contract. W214 diagnostics
-are in `retained-tail-comparison-plan.md`. No implementation or new replay is
-authorized by this design request.
+preserved, then authorized implementation, tests and independent review.
+Implementation is complete in `out/ahrs-gain-worktree`. W214 diagnostics
+are in `retained-tail-comparison-plan.md`. New recording and captured-case
+replays require separate approval.
 
 ### Restricted fallback
 
@@ -79,14 +80,14 @@ window. W214 may still have no usable descent in the allowed subspace.
 
 ### Implementation and evidence checklist
 
-- [ ] Export validated projection metadata in the internal proposal and log
+- [x] Export validated projection metadata in the internal proposal and log
   fallback eligibility/rank/scales, including explicit skip reasons.
-- [ ] Add the lazy raw-residual translation derivative and restricted solve.
-- [ ] Test rotated rank-one/two spaces, excluded partial scales, rank zero,
+- [x] Add the lazy raw-residual translation derivative and restricted solve.
+- [x] Test rotated rank-one/two spaces, excluded partial scales, rank zero,
   cutoff/repeated-eigenvalue behavior, invalid information, approximate rotations,
   Huber derivatives and an uphill ordinary proposal with feasible restricted
   descent. Verify published suppressed components and unchanged coupled state.
-- [ ] Test failure without descent and atomic rollback, existing angular and
+- [x] Test failure without descent and atomic rollback, existing angular and
   translation bounds, damping carry and identity-path regressions. Run relevant
   Release tests and independent implementation review before any replay.
 - [ ] Prepare bounded W214 capture with actual projection metadata and frozen
@@ -103,6 +104,40 @@ and identified the raw/Euler derivative issue incorporated here. It supports
 testing the design. Whether this branch resolves the real W214 state remains
 unmeasured. Charlie remains 3/19. High is appropriate for implementation and
 numerical validation; medium suffices for later monitoring.
+
+### Implemented and tested
+
+Experimental commit `a27fa3344436af02bb7b318053a5af186bfb1ae1`, clean worktree.
+The new branch uses symmetric cell information in its raw-residual translation
+derivative and curvature. Independent review identified this requirement for
+approximately symmetric admitted matrices, along with finite-value checks and
+correct normal-based synthetic observability fixtures. Those findings were fixed.
+The independent reviewer reported no remaining source blocker.
+
+Full Release suite passed 164 cases, with 3 skipped cases and the 3 pre-existing
+expected-failure assertions. Focused Debug passed 12 cases / 333 assertions.
+The corrected uphill-proposal fixture exercises rejected ordinary steps followed
+by restricted descent. The full Release suite includes the existing identity
+recovery and acceptance guard tests. Saved real W301/W214 call replay remains
+unmeasured in this change.
+
+The existing active-projection rejection test uses zero normals and covers rank
+zero without publication or recovery attempts. Existing cell-validity tests
+cover indefinite/asymmetric covariance, stale inverse and invalid thresholds.
+The exact new diagnostic wording is inspected in source rather than asserted.
+
+Logs are under the experimental worktree's `out/` directory:
+`w214-release-suite.log`, `w214-debug-focused.log`,
+`w214-release-verified-build.log`, `w214-debug-build-retry.log`.
+Earlier build overlap and sandbox PDB access failures were resolved through
+serial builds and elevated compiler access. Their failed logs are preserved.
+
+The enabled snapshot policy is now `fixed_merit_atomic_v5_restricted_recovery`.
+Release executable SHA256 is
+`0191C873A32629E474AC7DCCC98B8F1F8BAD1CD63E914482B21402277605B1CF`.
+Actual W214 completion and map quality await separately authorized processing.
+Medium is sufficient for preparing/monitoring a replay. High is appropriate for
+interpreting new numerical failures. No recording or saved-case replay started.
 
 ## Existing implemented identity-projection recovery
 
