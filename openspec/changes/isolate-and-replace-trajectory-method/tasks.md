@@ -52,7 +52,18 @@ legacy removal remain separate user decisions; no push is authorized.
 - [ ] 6.1 Present the reviewed evidence and obtain the user's keep/reject/default decision; record the decision and unresolved limits in OpenSpec, with no automatic default switch or legacy removal.
 - [ ] 6.2 Apply only the chosen disposition, update the existing sensor-neutral HTML documentation and method guidance for accepted behavior, or remove rejected implementation/exclusive dependencies while preserving evidence; verify retained-method behavior and actionable removed-ID errors. Legacy removal requires explicit separate authorization.
 
-Acceptance-fix preparation: `rotation-objective-acceptance-plan.md` specifies the
-complete residual/trial/atomic-commit work and synthetic gates. Its checklist is
-unimplemented; existing diagnostic partial costs are not an acceptance objective.
+Acceptance-fix implementation: `rotation-objective-acceptance-plan.md` specifies the
+complete residual/trial/atomic-commit work and synthetic gates. Its checklist tracks the authorized scratch implementation and validation.
+Complete fixed-support merit is now separate from the old partial diagnostics.
 No new recording run is authorized. Broader roadmap remains3/19.
+
+Local acceptance checklist now complete for implementation/preparation: source
+1f0abc5, golden fixtures be898d6, Release146test cases passed and8Python checks.
+Prepared125s replay remains approval-pending; no map validation or broader
+interface milestone is complete. Details in rotation-objective-acceptance-plan.md.
+
+
+User approved the prepared125s replay. Native process19688 launched once, with
+manifest hashes/cache ownership/free-space checked and all unrelated DMAPPER_
+environment overrides removed. Bundle manifest/run.json now record approval and
+running status. Monitor this run; do not retry or start another without approval.

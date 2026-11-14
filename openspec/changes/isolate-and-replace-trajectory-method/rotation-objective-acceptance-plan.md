@@ -1,7 +1,8 @@
-# Rotation and objective acceptance: prepared fix
+# Rotation and objective acceptance: experimental implementation
 
-Status: design prepared for implementation; **not implemented or replayed**.
-User authorized preparation, retaining cell guards and refreshed matches. This
+Status: user authorized implementation; code and tests implemented in the scratch
+worktree, Release validation passed; **not replayed**. Retains cell
+guards and refreshed matches. This
 artifact is the concrete solver change, not a new verification skill. Existing
 verify-run will consume its diagnostics. Charlie remains3/19; no new run approved.
 
@@ -106,23 +107,23 @@ identity. Disabled legacy settings/snapshot identities must remain unchanged.
 
 ## Files and implementation checklist
 
-- [ ] `src/domain/scan_to_map.cpp/.h`: shared complete residual evaluation and
+- [x] `src/domain/scan_to_map.cpp/.h`: shared complete residual evaluation and
   fixed trial context, including fallback/regularizer semantics.
-- [ ] Same domain: private coupled trial, finite/SO(3)/translation gates,
+- [x] Same domain: private coupled trial, finite/SO(3)/translation gates,
   backtracking, acceptance result, atomic state/covariance commit.
-- [ ] `src/application/run_odometry.cpp`: accepted-iteration refresh, same-set
+- [x] `src/application/run_odometry.cpp`: accepted-iteration refresh, same-set
   retry and explicit failure/convergence handling; no unconditional refreshing
   or false-success delta on rejection.
-- [ ] `odometry_config`, `optimizer_options`, `toml_io`, snapshot identity:
+- [x] `odometry_config`, `optimizer_options`, `toml_io`, snapshot identity:
   default-off settings, validation, roundtrip and compatibility.
-- [ ] Structured per-iteration logs: current/trial merit and factor components,
+- [x] Structured per-iteration logs: current/trial merit and factor components,
   actual scaled/clamped step, rotation from current/prediction, accepted scale,
   rejection reason, support identity, covariance linearization identity.
-- [ ] Existing verify-run: recognize coverage/rejection summaries after logging
+- [x] Existing verify-run: recognize coverage/rejection summaries after logging
   format exists. This reports behavior; it does not implement acceptance.
-- [ ] Release build plus meaningful synthetic acceptance tests and independent
+- [x] Release build plus meaningful synthetic acceptance tests and independent
   code review. Debug only if changed behavior warrants it.
-- [ ] Freeze concrete candidate build/settings and request replay approval.
+- [x] Freeze concrete candidate build/settings and request replay approval.
 
 ## Mandatory tests before recording replay
 
@@ -162,3 +163,84 @@ separate stationarity detection; explicit origin penalty; six damping attempts.
 No algorithm edits/builds/recording runs occurred during this preparation. The
 OpenSpec validation checks document structure only; implementation and numerical
 tests remain unchecked above. Do not report this plan as a tested fix.
+
+
+## Implementation and review (2026-11-14)
+
+The user subsequently authorized implementation, tests and independent review.
+Implementation is in `C:/Repo/dMapper/out/ahrs-gain-worktree`, based on71e2fa5.
+`step_acceptance.cpp` owns private trials and atomic publication. Shared residual
+costs remain beside assembly in `scan_to_map.cpp`; objective-only mode returns
+before covariance calculation/solve. Requested IMU/time-dependent factors fail
+closed on malformed shapes/timing. Nonfinite and nonrigid rotations are rejected.
+The existing NDT validity checks and between-iteration refresh remain unchanged.
+
+New STEP_MERIT and STEP_ACCEPTANCE diagnostics report fixed support identities,
+factor costs, trials/retries and terminal outcome. Candidate `tools/run_health.py`
+includes acceptance coverage for the entire log, even when ordinary metrics are
+time-filtered. It preserves exhaustion before a window summary, including W1.
+The existing verify-run workflow uses this tool; no new skill was created.
+
+Independent Codex reviewer trace_review (not Sonnet) found and prompted fixes for
+snapshot-property hash placement, target identity, proposal-rejection visibility,
+unnecessary dense objective probe allocation, stationary information reporting,
+malformed factor inputs, and unfinished-window diagnostic retention. Tests were
+strengthened for coupled covariance rollback, exact clamped/backtracked publication,
+legacy velocity derivatives and a genuinely nonidentity projected-zero stall.
+Final review found no further optimizer blocker; executed tests remain the gate.
+
+Limits: this safeguard can explicitly stop without producing a cloud. The raw
+full-merit stationarity rule does not recognize constrained optima at an active
+bias clamp; these may report rejection. Accepted covariance is the base proposal
+linearization, not recalculated for the accepted trial. Additional cost from
+complete merit evaluation has not yet been measured on a recording. No robustness,
+map improvement or general adoption is claimed. Current high effort is sufficient.
+
+
+## Completed validation and frozen candidate
+
+Implementation commit `1f0abc5`; deliberate serialization golden update in its
+own commit `be898d6` (current scratch HEAD). Working tree clean. No push.
+
+- Release dMapper and test executable built successfully. Existing vendored
+  doctest warning C5285 only; no Debug build warranted by this numerical change.
+- New acceptance tests: 8 cases /597 assertions, all passed. Includes coupled
+  and legacy/fallback gradients, backtracking and bias clamp, full-state rollback,
+  accumulated cap, physical heading across pi, malformed/NaN inputs, stationary
+  outcome, projected-zero stall and roundoff rejection.
+- Full CTest: passed in12.98s. Doctest146 cases passed,3 skipped;
+  79,369 assertions include3 expected failures in the pre-existing consistency
+  should-fail cases (not new failures). Initial CTest exposed only the three
+  golden TOML comparisons; reviewed diffs add exactly the five default-off
+  acceptance fields to each fixture, then full CTest passed.
+- Python acceptance diagnostics: 8 tests passed, including an exhausted first
+  window and an unfinished later window. Existing125s control log still yields
+  the documented W97 eligibility ambiguity/INCOMPLETE result; the new checker
+  does not turn historical missing evidence into a pass.
+- Independent source review: no remaining optimizer blocker found. Review fixes
+  and limitations are listed above. No recording, cloud, perturbation or golden
+  recording equivalence check was run; those remain separately gated.
+
+Frozen folder:
+`C:/Users/User/Downloads/dLidar/experiments/phase0b-2026-11-12/livox4-step-acceptance-125s`.
+`manifest.json` has status `prepared_not_run`, approvalfalse, exact argv/environment,
+source identity and14 artifact/input SHA256 hashes. Executable SHA256:
+`09f9ae113ab8a3712cd011385d1b0b03a71571257a12b524008d343e67854c88`.
+Input LAZ/IMU hashes were rechecked against the existing125s control manifest;
+no raw data were copied or recut. Only the five acceptance settings differ from
+that control TOML. Huber3, cell guards, refreshed matches and all other settings
+are retained. Validation logs and both checker scripts are frozen alongside it.
+
+Replay approval requested for this125s prefix, checking31s translation and108s
+rotation regions and completeness before cloud review. Control cost28.31min;
+new overhead NOT MEASURED, provision roughly45–120min or longer and6GB. Rejection
+may stop processing early, explicitly, without a finished cloud. No replay has
+started. Map quality and robustness NOT MEASURED. Charlie remains3/19.
+Routine monitoring can use medium; retain high for interpreting an unexpected
+rejection or trajectory failure. No higher model/effort was required to implement.
+
+
+User approved the prepared125s replay. Native process19688 launched once, with
+manifest hashes/cache ownership/free-space checked and all unrelated DMAPPER_
+environment overrides removed. Bundle manifest/run.json now record approval and
+running status. Monitor this run; do not retry or start another without approval.

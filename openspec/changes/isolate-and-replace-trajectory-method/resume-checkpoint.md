@@ -241,3 +241,22 @@ and distinct stationarity/rejection. Experimental1deg/3deg caps,8scales,6damping
 attempts and numerical tolerances are proposed, not validated. Existing verify-run
 will report acceptance; fix belongs in optimizer, not a new verify skill.
 High sufficient for preparation; reassess implementation. Charlie3/19.
+
+
+## Latest: acceptance implementation tested, replay approval pending
+
+Scratch `1f0abc5` implements fixed-support full-merit/rotation acceptance with
+atomic coupled state/covariance; `be898d6` updates only serialization fixtures.
+Cell guards and refreshed matches retained; acceptance defaultoff. Independent
+review clear after fixes. Release full suite146passed/3skipped (existing3 expected
+assertion failures), new8cases/597assertions and8Python checks pass. See
+rotation-objective-acceptance-plan.md for evidence/limitations. External bundle
+`livox4-step-acceptance-125s` is prepared_not_run, approvalfalse; input identities
+verified. Explicit125s replay approval requested, not received yet. No new cloud.
+Charlie3/19 unchanged. Medium enough for monitoring; high for unexpected diagnosis.
+
+
+User approved the prepared125s replay. Native process19688 launched once, with
+manifest hashes/cache ownership/free-space checked and all unrelated DMAPPER_
+environment overrides removed. Bundle manifest/run.json now record approval and
+running status. Monitor this run; do not retry or start another without approval.

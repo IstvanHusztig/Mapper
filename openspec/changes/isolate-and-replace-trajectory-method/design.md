@@ -179,3 +179,7 @@ cell guards and refresh. See `rotation-objective-acceptance-plan.md` for the
 concrete reviewed-design work, implementation sequence and required tests.
 This is optimizer behavior, not a verify skill. No implementation or new recording
 run is claimed by preparation; complete residual evaluation is a prerequisite.
+
+Subsequent authorization (2026-11-14): implement and test this acceptance detour
+with independent review. See its checklist for actual validation status. No new
+recording replay, default change, or interface milestone is implied.
