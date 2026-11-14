@@ -1,5 +1,111 @@
 # Translation recovery after bounded-step exhaustion
 
+## Proposed W214 extension (2026-11-14)
+
+The user requested design on High with weak-direction and rotation guards
+preserved. This section is a proposed implementation contract. W214 diagnostics
+are in `retained-tail-comparison-plan.md`. No implementation or new replay is
+authorized by this design request.
+
+### Restricted fallback
+
+After ordinary checked trials exhaust, an actively projected proposal may try
+a translation fallback confined to directions the existing LiDAR information
+test fully retains. Export the actual eigenbasis and scales from the proposal's
+assembly. Let Q contain only columns with computed scale exactly 1. Directions
+with scales below 1, including partially attenuated directions, receive zero
+additional displacement in this fallback. This stricter fallback restriction
+preserves the ordinary proposal's existing soft attenuation policy.
+
+Use the already computed scales, including its configured threshold behavior.
+Recomputing a cutoff from rounded eigenvalues could select a different subspace.
+Freeze Q for the solver call and validate finite eigenvalues, eigensolver success
+and orthonormal columns. Repeated eigenvectors may change sign or rotate within
+an equal-eigenvalue group, so compare subspaces through Q Q^T.
+
+For N pose translations and rank r, form B = I_N tensor Q. Extract the full
+frozen-merit translation curvature H_tt and negative half-gradient b_t.
+Build H_r = B^T H_tt B and b_r = B^T b_t. With diagonal scaling
+D_jj = 1/sqrt(H_r[j,j]), solve
+
+    (D H_r D + lambda I) z = D b_r
+    delta_t = B D z
+
+Use the existing normalized damping sequence and backtracking budget. Require
+positive finite diagonals, successful LLT, finite steps and the existing relative
+linear residual check. With accurate b_t and an SPD reduced system, its nonzero
+solution is a descent direction for the frozen objective to first order.
+Actual objective decrease remains the acceptance requirement.
+
+Rank zero or invalid metadata produces an explicit recovery-unavailable reason.
+Rank one/two uses this branch. Identity projection uses the existing recovery
+path to preserve its validated outputs. This avoids extending the full-space
+fallback into suppressed directions. Scaling a full-rank basis by attenuation
+alone would allow the inverse solve to cancel that scaling.
+
+### Match the derivative to the evaluated objective
+
+Independent review found a concrete compatibility issue to address in the new
+branch. `scan_to_map.cpp` forms NDT RHS with Euler-reconstructed poses, while
+its checked NDT merit uses raw stored rotations. Even approximate orthogonal
+rotations can make these residuals differ. For fixed raw rotation A, the NDT
+residual is A*p+t-mu and its translation Jacobian is exactly I.
+
+During lazy recovery-model assembly, supply a dedicated translation RHS built
+from that raw residual, the same frozen target information and Huber weight
+used by the merit. Retain the other objective terms' translation contributions
+and the origin increment regularizer. Do not accidentally add projected NDT
+RHS or count NDT twice. The existing translation curvature is an IRLS model,
+not the exact robust Hessian. Expose this derivative only to the new branch,
+leaving the ordinary and identity-recovery numerical paths intact.
+
+Verify -2*b_t.dot(delta_t) against central finite differences of the native
+frozen objective on synthetic fixtures, including approximate AHRS rotations
+and active Huber weights. A derivative match does not certify stationarity.
+
+### Publication and failure
+
+Keep raw rotation matrices, velocity states, bias, offset and all covariance
+blocks fixed during the restricted trial. Apply translations directly and use
+the existing atomic trial/commit path. Require the existing full fixed-support
+merit decrease, per-node translation bound and both rotation bounds. Check the
+suppressed component (I-Q Q^T)*delta_t for the actual published displacement,
+with a scale-aware floating-point tolerance. Do not relax a guard to make the
+case complete. Preserve ordinary damping carry as in identity recovery.
+
+If every restricted trial fails, report exhaustion. A zero restricted gradient
+does not prove full constrained stationarity and must not silently complete the
+window. W214 may still have no usable descent in the allowed subspace.
+
+### Implementation and evidence checklist
+
+- [ ] Export validated projection metadata in the internal proposal and log
+  fallback eligibility/rank/scales, including explicit skip reasons.
+- [ ] Add the lazy raw-residual translation derivative and restricted solve.
+- [ ] Test rotated rank-one/two spaces, excluded partial scales, rank zero,
+  cutoff/repeated-eigenvalue behavior, invalid information, approximate rotations,
+  Huber derivatives and an uphill ordinary proposal with feasible restricted
+  descent. Verify published suppressed components and unchanged coupled state.
+- [ ] Test failure without descent and atomic rollback, existing angular and
+  translation bounds, damping carry and identity-path regressions. Run relevant
+  Release tests and independent implementation review before any replay.
+- [ ] Prepare bounded W214 capture with actual projection metadata and frozen
+  solver state so native directional checks can distinguish causes. The user
+  must separately approve the concrete recording/captured-case replay scope.
+  Retained-tail W214 was never captured, so older W301 cases cannot substitute.
+- [ ] Compare the frozen failing call against the restricted fallback, including
+  derivative agreement, actual decrease and weak-direction preservation. Any
+  successful solver result still needs the earlier W94-100 trajectory divergence
+  investigated before a retained-tail map-quality recommendation.
+
+Reviewer `seed_damping_crosscheck` independently reviewed the subspace design
+and identified the raw/Euler derivative issue incorporated here. It supports
+testing the design. Whether this branch resolves the real W214 state remains
+unmeasured. Charlie remains 3/19. High is appropriate for implementation and
+numerical validation; medium suffices for later monitoring.
+
+## Existing implemented identity-projection recovery
+
 User authorized implementation on 2026-11-14. Existing captured solver cases and
 unit tests are the local validation; no new recording replay is authorized.
 Checkpoint Charlie remains 3/19. This is a local acceptance detour.

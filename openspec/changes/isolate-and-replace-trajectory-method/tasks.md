@@ -1,5 +1,9 @@
 # Tasks
 
+Latest design-only detour: proposed W214 restricted recovery and its checklist
+are in `translation-recovery-fix.md`. The user requested preserving weak-direction
+and rotation guards. Its implementation and recording validation remain pending.
+
 Latest diagnostic detour: user authorized repairing checked-solver tracing and
 preparing reusable W301 cases. See `solver-case-capture.md` for the local
 implementation/test checklist and `108s-boundary-stall-analysis.md` for evidence.

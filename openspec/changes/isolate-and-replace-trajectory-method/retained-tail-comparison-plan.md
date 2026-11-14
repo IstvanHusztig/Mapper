@@ -107,3 +107,59 @@ Existing Release tail and bias-prior tests:2 cases/299 assertions passed, log
 checked; source unchanged. No build or Debug run needed. Medium is sufficient
 for preparation/monitoring; request High before unexpected numerical diagnosis
 or choosing production policy. No replay launched or default changed.
+
+## First launch
+
+The user approved the replay on medium. The frozen files passed hash checks,
+no dMapper process was present before launch, and about 80 GB was free.
+PID 31664 loaded the settings and point cloud. The sandboxed process check
+gave a false negative during loading. On the user's retry approval,
+the retry preflight detected an active dMapper process and did not launch a
+second one. An elevated process inventory confirmed that original PID 31664
+was still running the candidate and writing solver logs at W24. The original
+manifest's `running` state was correct at that check.
+
+## Window 214 stall
+
+The original replay completed 213 windows. Stderr records `Fatal error: Step
+acceptance exhausted at window 214 iteration 9: merit_not_decreased`. W214 starts
+at 76.68 s on the elapsed recording clock. No cloud was exported. The launch
+did not capture an exit code.
+
+- W214 accepted iterations 0–8. At iteration 9 the fine grid dropped one
+  association and the coarse grid was unchanged. All 48 subsequent trials used
+  the same frozen source and target hashes. Across six damping values (5 to
+  500,000) and eight scales (1 to 1/128), the evaluated merit rose by 0.000000396
+  to 0.040239 from 189231.251487. The strict-decrease tolerance was about
+  0.00000000269. Max step rotation was 0.001173° and max prediction-relative
+  rotation was 0.689180°, both inside the 1°/3° guards.
+- First full-scale trial: NDT cost rose 0.509524 while motion, velocity and
+  IMU fell by 0.380016, 0.066534 and 0.026096 respectively. The origin penalty
+  added 0.003332. The NDT increase also dominates the smaller trials. The
+  refresh changed the objective before the trials, but the logs cannot isolate
+  the removed match as the cause of the failed search direction.
+- `step_acceptance.cpp:63` evaluates unprojected merit, whereas the proposal can
+  downweight weak LiDAR translation directions (`scan_to_map.cpp:824–842`).
+  `step_acceptance.cpp:387,423–425` enables translation recovery only if at
+  least one valid ordinary proposal had identity projection, the frozen bias
+  is within bounds and base rotation is within budget. All six proposals reached
+  trial evaluation. Iteration 8 committed a bias clamped to the same bound and
+  a 0.689156° correction. Recovery was therefore skipped because the proposals
+  used active projection, inferred from the code and absent recovery rows.
+  Exact projection eigenvalues and proposal vectors were not logged.
+- Independent reviewer `seed_damping_crosscheck` confirmed the gate deduction
+  and cross-checked the bias using the logged prior uncertainty and bias cost.
+  With a positive definite prior, the implied bias is below 0.13°/s per axis,
+  well within the 20°/s limit. Adjacent-window information ratios cannot stand
+  in for the missing W214 iteration 9 projection eigenvalues.
+- Tail-15 control passed W214 iteration 9 on its first trial. Rounded logged
+  window-start positions were already 7.7 cm apart at W94 (33.48 s), 1.15 m
+  at W100 (35.64 s) and 1.53 m at W213 (76.32 s). These are differences
+  between runs, not absolute errors. W214 identifies the fatal failure in the
+  search and recovery policy, well after the trajectories diverged.
+
+The logs establish the failed descent and skipped recovery. They do not resolve
+whether the projection alone reversed the descent, or whether a feasible
+translation-only step exists that respects the weak-direction policy. Evaluating
+that requires the saved W214 state, matches and derivatives, which this replay
+did not capture. No new processing or algorithm change was performed.
