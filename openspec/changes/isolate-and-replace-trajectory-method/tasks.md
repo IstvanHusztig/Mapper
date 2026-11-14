@@ -67,3 +67,18 @@ User approved the prepared125s replay. Native process19688 launched once, with
 manifest hashes/cache ownership/free-space checked and all unrelated DMAPPER_
 environment overrides removed. Bundle manifest/run.json now record approval and
 running status. Monitor this run; do not retry or start another without approval.
+
+
+Latest: first approved acceptance replay exited1 in23.262s atW1 before solve:
+new1e-8 rigid validator incompatible with finite Fusion approximate-quaternion
+matrices. Existing control m_g error1.45e-5 confirms incompatibility. No cloud.
+Bounded representation/normalized-angle-only correction and regression fixtures
+implemented; build5/test pending. Preserve failed bundle; no second replay approved.
+See acceptance-plan failure section. Charlie3/19. High sufficient.
+
+
+Latest state: compatibility correction16e4ae7 tested (Release147cases pass,
+9focused/620assertions,9Python checks), reviewed, committed. Fresh external
+livox4-step-acceptance-125s-v2 approved by user and running PID14700. Same settings/
+input as failed first attempt. Monitor/collect this run; no third replay approved.
+No cloud yet. Failed original attempt retained. Details in acceptance plan.

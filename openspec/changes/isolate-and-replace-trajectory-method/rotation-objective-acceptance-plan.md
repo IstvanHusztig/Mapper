@@ -1,7 +1,8 @@
 # Rotation and objective acceptance: experimental implementation
 
 Status: user authorized implementation; code and tests implemented in the scratch
-worktree, Release validation passed; **not replayed**. Retains cell
+worktree. Original Release validation passed; approved replay stopped at W1.
+Compatibility correction validated and approved replay running; no completed cloud yet. Retains cell
 guards and refreshed matches. This
 artifact is the concrete solver change, not a new verification skill. Existing
 verify-run will consume its diagnostics. Charlie remains3/19; no new run approved.
@@ -244,3 +245,72 @@ User approved the prepared125s replay. Native process19688 launched once, with
 manifest hashes/cache ownership/free-space checked and all unrelated DMAPPER_
 environment overrides removed. Bundle manifest/run.json now record approval and
 running status. Monitor this run; do not retry or start another without approval.
+
+
+## First approved replay: early validator compatibility failure
+
+Original candidatebe898d6 attempted once, nativeexit1 after23.262s, before the
+first solve/window publication. No result cloud. Log SHA256
+55bad049942866fa5496cac5dc69d76629538759588fc7c7dc795a64d243628e.
+Fatal message `Nonfinite acceptance base state` conflated finite nonrigidity with
+NaN. This was a newly introduced validation bug, not evidence about the sensor
+or a measured flyaway. Preserve the failed bundle and do not retry automatically.
+
+Code evidence: calculate_trajectory promotes Fusion Quaternionf to Quaterniond
+without normalization; Fusion uses approximate inverse square root. Existing
+imu_kinematics::rotation_of explicitly accommodates nonorthonormal AHRS matrices.
+The zero carried bias path does not normalize initial poses. Existing control
+snapshot's saved initial m_g has orthogonality Frobenius error1.4495253384062551e-5
+and determinant error1.0249691962949115e-5, already above the new1e-8 check.
+No raw replay is needed to demonstrate this incompatibility.
+
+Correction: bounded representation tolerance0.01 for both Frobenius orthogonality
+and determinant error, positive determinant, finite checks separate from rigidity.
+This is an input-representation tolerance, not a trajectory accuracy limit. A
+100,000-sample float emulation of the bundled normalization polynomial on squared
+norm[0.5,2] gives q-norm-squared[0.99869454,1.00129914], worst rotation determinant
+bound0.005215 and Frobenius bound0.007375. This sampled envelope motivates the
+margin; it is not a proof for arbitrary malformed upstream matrices. Gross2I
+scale remains rejected. Geodesic angles use existing rotation_of normalization
+on temporary quaternion copies only. Stored states and immutable predictions
+remain byte-preserved; no global AHRS or predictor normalization change.
+
+Added actual Fusion float-conversion and saved Livox4 initial-orientation fixtures
+for bounded representation, bit preservation and known relative-angle measurement.
+The existing Euler update reconstructs exact rotations, so scale tending tozero
+need not reproduce a nonorthonormal base matrix exactly; external merit can still
+stall explicitly on this representation change. Do not conceal that limitation
+or describe compatibility repair as a flyaway cure. Policy hash revisionv2.
+Build/test/review of the correction in progress; no second replay authorized.
+
+
+Independent compatibility review confirmed the bounded tolerance/temporary
+normalization adjustment. It also exposed a separate representation distinction:
+the old Euler assembly RHS and raw-matrix merit differ on nonorthonormal input.
+The original nonzero-point regression correctly rejected instead of becoming
+stationary; the revised tests preserve that fail-closed case and separately use
+zero points/targets to verify stationary bit-preservation and geodesic measurement.
+Stationarity now requires an orthonormal base (1e-10 numerical tolerance) or an
+exactly zero nonnegative physical merit, plus the original small full RHS test.
+This conservative condition passed independent review. Final build6 pending.
+Python9checks pass, including actual first-window native failure returning
+INCOMPLETE/exit2 with its cause. No second replay started or authorized.
+
+
+## Compatibility correction validated; second replay approved
+
+Scratch commit16e4ae7, clean. Release build6 complete;9focused cases/620assertions
+pass; full CTest147cases pass,3skipped, existing3expected consistency assertions
+remain (79,392assertions total). Python9checks pass. Independent narrow review
+found no blocker in the bounded representation/angle/stationarity correction.
+No Debug build or shipped-default change.
+
+Fresh bundle `livox4-step-acceptance-125s-v2`, same125s input and identical settings
+as the failed attempt. Executable SHA256
+20ba76a2e8cf9d23bf9e3b0d07bfe180d01500f225f12ea6c252541c7abc98b0.
+Input identities rechecked; frozen validation logs and checker scripts included.
+User approved `Run the corrected replay`; process14700 launched once, with
+prepared hashes, exclusive dMapper/cache ownership and free space checked. Native
+run.json/manifest statusrunning. Monitor and collect; no third replay authorized.
+Failed original bundle remains intact. Medium is sufficient for monitoring;
+high is appropriate for interpreting any unexpected acceptance failure.
