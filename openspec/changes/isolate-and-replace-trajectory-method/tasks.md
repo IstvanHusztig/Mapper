@@ -1,5 +1,10 @@
 # Tasks
 
+Latest diagnostic detour: user authorized repairing checked-solver tracing and
+preparing reusable W301 cases. See `solver-case-capture.md` for the local
+implementation/test checklist and `108s-boundary-stall-analysis.md` for evidence.
+No new recording or captured-case replay is authorized. Charlie remains 3/19.
+
 Current local detour: the user authorized the NDT match guard implementation in
 `ndt-match-guard-plan.md` (follow-up: `ndt-iteration-refresh.md`). Its own checklist tracks preparation/testing; it does
 not complete the interface/replacement tasks below. Charlie stays 3/19. Stop

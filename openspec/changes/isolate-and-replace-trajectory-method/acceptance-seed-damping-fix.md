@@ -103,3 +103,36 @@ No recording run, new map, default adoption or push. Map quality and resolution
 of the 108-second failure remain NOT MEASURED. Ask before any replay. Medium
 is sufficient for mechanical replay preparation/monitoring; use high to assess
 new numerical behavior. Charlie remains 3/19, with this local checklist complete.
+
+## Authorized 125-second validation replay
+
+The user approved the replay on 2026-11-14. Started at 11:18 CET, PID 35044.
+Bundle: C:/Users/User/Downloads/dLidar/experiments/phase0b-2026-11-12/livox4-seed-damping-125s.
+Verified the tested ba0268c executable, both input file hashes and identical v2
+settings before launch. Huber3, cell guards, refreshed matches and acceptance
+limits are active. Check the 31 s translation and 108 s rotation sections
+against the refresh control and the v2 acceptance run.
+
+Replay finished after 3111.23 s (51.85 min), native exit 1. Completed 300/346
+windows. No merged LAZ or snapshot. Log SHA256:
+64a5280564de54c209af18fb7311965e7821dbb66f2592e95287709c9eee2d5e.
+
+W87 (30.96 s) matches v2 and the refresh control at logged precision:
+result move [0.262,-0.199,-0.005] m, result-minus-guess [-0.008,0.011,0.001] m,
+last-node yaw correction +0.353 deg. W300 (107.64 s) ends with a -2.505 deg
+yaw correction versus -2.775 in v2 and -2.064 in the refresh control. These
+are differences from each run's prediction; map accuracy is unmeasured.
+
+W301 (108.00 s) accepted 51 local updates versus nine in v2. No W301 output
+was committed to the map. Last accepted update (iteration 50) reached
+2.9999999999999916 deg at node 152 (recording time 108.65889624 s),
+with effective LM 5e18 and a merit decrease of about 2.9e-9. Iteration 51
+exhausted retries with merit_not_decreased. At the last trial, effective LM
+was about 5e24 and before/after merits were identical at logged precision.
+The successful damping carry plus the retained multiplier merits analysis.
+This run does not isolate the contribution of each fix.
+
+Verify-run reports INCOMPLETE: no completed-window yaw bends over 3 deg, max
+end speed 1.25 m/s, and velocity-jump chi-square median/p95 95/1172 across
+104 reported windows. Wall, revisit and map geometry checks NOT MEASURED.
+High effort recommended for analysis before proposing any further change.

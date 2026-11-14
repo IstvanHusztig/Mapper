@@ -1,5 +1,10 @@
 # Design
 
+Latest diagnostic authorization (2026-11-14): repair checked proposal/base-merit
+tracing and prepare a bounded frozen-call capture/replay path, preserving all
+guards and numerical policy. `solver-case-capture.md` defines its scope and
+validation. This is not the broader method interface or a full odometry restart.
+
 ## Authorized local detour
 
 The W298 factor/cell evidence is now recorded in `livox4-rotation-factor-trace.md`
