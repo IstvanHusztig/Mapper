@@ -219,3 +219,14 @@ external livox4-iteration-refresh-125s. OpenSpec ndt-iteration-refresh.md has
 fulltable/identities/limits; independentreviewdone. No further run authorized.
 Next existing-data focusW301–302; newtrace requiresapproval. High sufficient.
 Charlie3/19; noadoption. User likedshortcloud, notyetreviewed125scloud.
+
+Existing-data108s investigation completed: see ndt-refresh-108s-investigation.md
+and external refreshed125s/event108-analysis.json. Concrete known weakness:
+solver success +translation<1m accepts angles without objective/rotation check.
+W301/302 changing support/turnover supports association-feedback hypothesis;
+initiating factor NOTcaptured (traceendsW300). No staleownership defect, no
+rejectedsteps/maprebuilds, savedpitch farfromsingular; biasincrementalone too small.
+Independentreviewcompleted. No newrun/build/algorithm edits. Proposed nextdesign
+objective-consistent rotation-aware acceptance; newcapture requiresapproval.
+Highsufficient, Charlie3/19. User askedbestrecentfixes: Huber3+validity+refresh
+usefulcandidates but no completeoutdoorfix;125sangular gate stillfails.
