@@ -360,3 +360,15 @@ No push/default adoption. Charlie remains 3/19. No process remains running.
 User now requests careful existing-run/code examination of where the cap is
 exceeded, which values enter and why. Continue that investigation; no new replay
 or algorithm change is authorized by this request. Current high is sufficient.
+
+
+## Existing-data audit and local visual export (2026-11-14)
+
+See acceptance-108s-code-audit.md for the inspected input path, boundary
+exhaustion, lost retry damping between outer iterations, end-velocity seed
+inconsistency, and proposed proposal/evaluate/commit split. No algorithm
+change or new replay. A matched W297-300 local comparison is available in
+external livox4-step-acceptance-125s-v2/local-comparison; 157139 identical
+points, about1.44s before failure. It does not demonstrate map improvement
+or provide a completed map. Charlie3/19; no new-run approval. Astra high
+confirmed for this analysis.
