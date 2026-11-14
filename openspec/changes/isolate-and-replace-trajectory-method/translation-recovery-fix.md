@@ -128,3 +128,16 @@ Final logs are preserved with the external solver-case artifacts. Broader
 Charlie remains 3/19. Medium effort is sufficient for preparation/monitoring;
 request high before diagnosis of an unexpected new replay failure. A recording
 replay remains approval-pending under the user's standing instruction.
+
+User approved the 125-second replay on 2026-11-14. The first launch failed
+before loading input with Windows exit 0xC0000135 because the prepared bundle
+omitted freeglut.dll. Added the DLL from the same Release build and preserved
+the loader-failure logs. PID 10864 started loading inputs at 15:50:26 CET.
+
+The approved replay completed at 16:53 CET with exit 0 after about 63 minutes.
+It passed W301 and completed all 346 windows. The result is
+livox4-translation-recovery-125s/result/scan_lio_merged.laz (111480651 bytes).
+Run-health recorded no bends above 3 degrees and a maximum speed of 1.30 m/s.
+Velocity-jump chi-square triggered (median 153, p95 2374, 142 windows);
+conditional uncertainty coverage remains incomplete. Map accuracy and visual
+quality remain unassessed.
