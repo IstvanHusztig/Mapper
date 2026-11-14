@@ -105,3 +105,9 @@ fix. No parameter change or completed-map improvement is established here.
 
 The capture/reproduction gate is complete. Charlie remains 3/19. High remains
 appropriate for the constrained numerical analysis.
+
+Subsequent authorized fix: `translation-recovery-fix.md` records source d213b75
+and native acceptance of feasible translation at i51, with rotations/nuisance
+state held exactly fixed. Earlier i0/i5/i10 calls remain exact. This resolves
+the saved-call stall only; route completion and physical-map improvement still
+require the separately approved recording-validation gate.

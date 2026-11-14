@@ -194,3 +194,7 @@ Latest authorization: split checked proposal/trial/commit and fix the stale end
 velocity seed plus lost successful damping. Keep guards and refresh. Track this
 local work in acceptance-seed-damping-fix.md; no new recording replay authorized.
 The broader Charlie interface roadmap remains3/19.
+
+User authorized the feasible-translation recovery fix on 2026-11-14. See
+`translation-recovery-fix.md` for its bounded scope, independent review and local
+validation. This does not authorize a new recording replay or default adoption.

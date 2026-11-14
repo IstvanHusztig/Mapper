@@ -113,3 +113,7 @@ assertions each, Python9pass. Independent review completed and its findings
 addressed. See acceptance-seed-damping-fix.md for artifacts/limits. No new
 recording replay, cloud, push or adoption. Stop for approval before any run.
 Charlie3/19. Medium sufficient for preparation/monitoring; high for analysis.
+
+Current authorized local detour: `translation-recovery-fix.md` addresses the
+saved W301 i51 loss of feasible translation descent while preserving all guards.
+The broader interface tasks above remain unchanged; no recording replay approved.
