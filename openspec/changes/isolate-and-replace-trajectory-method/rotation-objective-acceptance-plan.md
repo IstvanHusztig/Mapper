@@ -314,3 +314,49 @@ prepared hashes, exclusive dMapper/cache ownership and free space checked. Nativ
 run.json/manifest statusrunning. Monitor and collect; no third replay authorized.
 Failed original bundle remains intact. Medium is sufficient for monitoring;
 high is appropriate for interpreting any unexpected acceptance failure.
+
+
+## Corrected replay outcome: bounded rejection at 108 seconds
+
+Source 16e4ae7; native exit 1 after 2974.488 s (49.57 min). Completed
+300/346 windows. W301 starts at log-time 108.00 s and accepts nine local
+iterations; iteration 9 exhausts six damping attempts times eight scales on
+prediction_rotation_bound. No snapshot or finished cloud was written. No third
+replay authorized. Guards and refreshed matches remain enabled.
+
+30,009 accepted updates pass the audit: finite resolved merit reduction, factor
+sum, per-step/cumulative rotation limits, covariance label, and unchanged
+source/target identities within each retry sequence. Maximum accepted step
+0.977744883 deg; maximum accepted correction 2.999868063 deg. 108 trial
+rejections: five per-step rotation and 103 cumulative rotation; one terminal
+cumulative rejection. Final 48 trials all exceed the cumulative cap. Smallest
+last trial step 0.000645466 deg would reach 3.000430104 deg. after=inf means
+angle rejection skipped cost evaluation, not numeric overflow.
+
+Last completed W300 yaw correction -2.775 deg; maximum completed end speed
+1.24728 m/s. Control W301/W302 were -8.600/-9.095 deg. Candidate W301 has no
+completed/exported result. Its nine accepted local updates are not a completed
+map insertion; the rejected candidates are not committed (code/test evidence,
+not a post-rejection full-state hash). No trajectory recovery is demonstrated.
+
+W301 iteration 0 merit decrease 153765 is mainly IMU -151726.6 plus NDT
+-2501.8, with motion +423.0. Do not attribute the first correction solely to
+NDT. Iterations 1-8 have NDT as the only decreasing physical component on each
+accepted coupled update. At i1: NDT -1162.77, motion +292.49, IMU +8.13,
+velocity +49.78, bias +0.104; total reduction 812.26. At i8: NDT -5.72475,
+motion +0.6160, IMU +0.0271, velocity +0.1035; reduction 4.97761, correction
+2.999868 deg. Thus the tested merit rewards continued updates toward the cap.
+These are coupled finite-cost changes, not isolated angular factor responses
+or proof of physically wrong correspondences. Do not sum across refreshed
+contexts as one objective. The 3-degree bound is provisional, not physical truth.
+
+Independent Codex review trace_review confirmed these counts, angle gates,
+cost interpretation and limits. Frozen external livox4-step-acceptance-125s-v2
+contains run.json, run.log, run-health.json/txt and acceptance-analysis.json.
+Run-health INCOMPLETE/exit 2; no map/overlay/robustness measurement possible.
+Log SHA256 62f95ec01177f4f26c2599071c01537a5a1b8088ba8b48dfeb20120c0e54fb0c.
+No push/default adoption. Charlie remains 3/19. No process remains running.
+
+User now requests careful existing-run/code examination of where the cap is
+exceeded, which values enter and why. Continue that investigation; no new replay
+or algorithm change is authorized by this request. Current high is sufficient.

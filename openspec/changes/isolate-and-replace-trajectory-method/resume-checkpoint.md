@@ -275,3 +275,12 @@ Latest state: compatibility correction16e4ae7 tested (Release147cases pass,
 livox4-step-acceptance-125s-v2 approved by user and running PID14700. Same settings/
 input as failed first attempt. Monitor/collect this run; no third replay approved.
 No cloud yet. Failed original attempt retained. Details in acceptance plan.
+
+
+Latest: corrected16e4ae7 replay stopped W301/108s iteration9 after2974.488s,
+300/346windows completed. Last accepted correction2.999868deg;48final trials
+exceed3deg. Guard works, recovery not achieved; no cloud/snapshot. All30009
+accepted steps pass merit/angle/support audit. Evidence in external v2
+acceptance-analysis.json/run-health. User requests careful existing-data/code
+analysis of incoming values and why the cap is exceeded. No new replay or code
+change authorized. Charlie3/19. See acceptance plan outcome.
