@@ -51,3 +51,8 @@ legacy removal remain separate user decisions; no push is authorized.
 
 - [ ] 6.1 Present the reviewed evidence and obtain the user's keep/reject/default decision; record the decision and unresolved limits in OpenSpec, with no automatic default switch or legacy removal.
 - [ ] 6.2 Apply only the chosen disposition, update the existing sensor-neutral HTML documentation and method guidance for accepted behavior, or remove rejected implementation/exclusive dependencies while preserving evidence; verify retained-method behavior and actionable removed-ID errors. Legacy removal requires explicit separate authorization.
+
+Acceptance-fix preparation: `rotation-objective-acceptance-plan.md` specifies the
+complete residual/trial/atomic-commit work and synthetic gates. Its checklist is
+unimplemented; existing diagnostic partial costs are not an acceptance objective.
+No new recording run is authorized. Broader roadmap remains3/19.

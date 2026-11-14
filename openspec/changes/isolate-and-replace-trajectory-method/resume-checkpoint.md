@@ -230,3 +230,14 @@ Independentreviewcompleted. No newrun/build/algorithm edits. Proposed nextdesign
 objective-consistent rotation-aware acceptance; newcapture requiresapproval.
 Highsufficient, Charlie3/19. User askedbestrecentfixes: Huber3+validity+refresh
 usefulcandidates but no completeoutdoorfix;125sangular gate stillfails.
+
+
+Acceptance fix PREPARATION ONLY: rotation-objective-acceptance-plan.md now has
+independently reviewed concrete contract and implementation/test checklist. No
+algorithm code/build/replay was performed. Need complete residual evaluator,
+private coupled trials, all-node step+prediction-relative rotation bounds,
+fixed-support external merit (projected proposal caveat), atomic covariance,
+and distinct stationarity/rejection. Experimental1deg/3deg caps,8scales,6damping
+attempts and numerical tolerances are proposed, not validated. Existing verify-run
+will report acceptance; fix belongs in optimizer, not a new verify skill.
+High sufficient for preparation; reassess implementation. Charlie3/19.

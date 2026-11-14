@@ -171,3 +171,11 @@ actionable error; never silently map old settings to a different method.
 
 Rollback before adoption is selecting `legacy`; rollback of the refactor is its
 isolated commit range. Preserve frozen binaries and evidence for either path.
+
+## Authorized acceptance-fix preparation
+
+The user requested preparation of rotation/objective acceptance while keeping
+cell guards and refresh. See `rotation-objective-acceptance-plan.md` for the
+concrete reviewed-design work, implementation sequence and required tests.
+This is optimizer behavior, not a verify skill. No implementation or new recording
+run is claimed by preparation; complete residual evaluation is a prerequisite.
