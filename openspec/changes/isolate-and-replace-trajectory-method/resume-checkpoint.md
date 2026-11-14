@@ -296,3 +296,20 @@ external livox4-step-acceptance-125s-v2/local-comparison; 157139 identical
 points, about1.44s before failure. It does not demonstrate map improvement
 or provide a completed map. Charlie3/19; no new-run approval. Astra high
 confirmed for this analysis.
+
+
+Latest authorization: split checked proposal/trial/commit and fix the stale end
+velocity seed plus lost successful damping. Keep guards and refresh. Track this
+local work in acceptance-seed-damping-fix.md; no new recording replay authorized.
+The broader Charlie interface roadmap remains3/19.
+
+
+Latest completed local fix: scratch ba0268c (clean) splits proposal/evaluation/
+commit, seeds the free end velocity from the position integrator in the enabled
+path, and carries accepted damping to the next iteration. Guards, refresh and
+rotation/merit limits retained; disabled processing unchanged; enabled snapshot
+policy v3. Release151cases pass (3skipped), focused Release+Debug14cases/997
+assertions each, Python9pass. Independent review completed and its findings
+addressed. See acceptance-seed-damping-fix.md for artifacts/limits. No new
+recording replay, cloud, push or adoption. Stop for approval before any run.
+Charlie3/19. Medium sufficient for preparation/monitoring; high for analysis.

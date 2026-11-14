@@ -183,3 +183,9 @@ run is claimed by preparation; complete residual evaluation is a prerequisite.
 Subsequent authorization (2026-11-14): implement and test this acceptance detour
 with independent review. See its checklist for actual validation status. No new
 recording replay, default change, or interface milestone is implied.
+
+
+Latest authorization: split checked proposal/trial/commit and fix the stale end
+velocity seed plus lost successful damping. Keep guards and refresh. Track this
+local work in acceptance-seed-damping-fix.md; no new recording replay authorized.
+The broader Charlie interface roadmap remains3/19.
