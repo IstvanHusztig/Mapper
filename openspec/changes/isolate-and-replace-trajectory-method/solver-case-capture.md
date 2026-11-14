@@ -40,9 +40,10 @@ No new recording replay is authorized by this work.
   accepted/rejected round trips, coupled state and malformed inputs.
 - [x] Independent review; resolve material findings.
 - [x] Freeze tested source/build and document concrete capture/replay commands.
-- [ ] Obtain separate run approval and capture actual W301 cases.
-- [ ] Verify captured-call replay agrees with original sequential call before
-  interpreting any alternative solve. Actual Livox4 equivalence NOT MEASURED.
+- [x] Obtain separate run approval and capture actual W301 cases.
+- [x] Verify captured-call replay agrees with original sequential call before
+  interpreting any alternative solve. All four cases match exactly, including
+  output state. See `solver-case-analysis.md`.
 
 ## Commands after a separately approved capture
 
@@ -103,3 +104,35 @@ bundle. The preceding pass took about 52 minutes; additional trace overhead is
 unmeasured. Stop for explicit approval before this run and any recorded-case
 solver replay. Medium is sufficient for approved execution; retain high for
 subsequent interpretation of gradients and constrained steps.
+
+## Approved Livox4 capture run
+
+User approved the 125-second prefix capture. Started 2026-11-14 13:11 CET,
+PID 3908, using the verified `39d57e4` Release binary, the same TOML and
+the same SHA256-verified LiDAR/IMU files as the prior run. Huber3 and
+`DMAPPER_CAPTURE_LIVOX4_SOLVER_CASE=1` are active. Bundle:
+`C:/Users/User/Downloads/dLidar/experiments/phase0b-2026-11-12/livox4-solver-capture-125s`.
+The launcher records native exit and finish time in `run.json`.
+
+At 14:01 CET, PID 3908 was absent and the log ended at window 130,
+iteration 70. The launcher metadata still said `running` and contained no
+native exit code. The stop reason is unconfirmed. Window 301 was not
+reached and no solver cases were extracted. A fresh prefix run is needed.
+
+The user approved a restart. Neither dMapper log showed an allocation error,
+and the queried Windows logs returned no resource exhaustion event or dMapper
+crash report. Before restart, free physical memory was about 14 GiB. This does
+not establish memory availability at the original stop.
+
+Retry started at 14:14 CET in `livox4-solver-capture-125s-retry`, PID 16804.
+The detached Windows launcher records process and system memory every 30 seconds,
+saves the native exit status and extracts solver cases after exit.
+
+Retry finished at 15:03:51 CET after about 49m43s. It completed 300/346
+windows and reproduced `merit_not_decreased` at W301 iteration 51.
+`cases/manifest.json` records four extracted cases (iterations 0, 5, 10, 51)
+with reference logs. The launcher recorded a null native exit code. The
+failure is confirmed by stderr. Last sampled free RAM was 13.1 GiB.
+Run health reports incomplete processing, zero completed-window bends above
+3 degrees, and velocity chi-square median/p95 of 95/1172 over 104 windows.
+Switch to high for analysis. Standalone reproduction remains pending.
