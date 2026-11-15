@@ -338,7 +338,20 @@ namespace
     {
         int last_iteration = 0; // index of the last Levenberg-Marquardt iteration
         double delta = 100000.0; // sum of the parameter updates of that iteration
+        int rejected_steps = 0;  // lm_step_check: steps taken back because they raised the cost
+        ScanToMapCost cost;      // lm_step_check: the cost of the final state
         IterationConvergence convergence; // only with log_iteration_convergence
+    };
+
+    // what one optimize_lidar_odometry call changes: the state it starts from and the covariances it computes there
+    struct LmState
+    {
+        std::vector<Eigen::Affine3d> poses;
+        VelocityState velocity;
+        GyroBiasState gyro_bias;
+        Eigen::Vector3d acc_offset;
+        Eigen::Matrix3d acc_offset_cov;
+        Eigen::Matrix3d lidar_translation_information;
     };
 
     // limits of log_iteration_convergence: poses count as settled within these of the last result; the fast-mode threshold
@@ -348,7 +361,10 @@ namespace
 
     // Levenberg-Marquardt iterations of optimize_lidar_odometry: until the update falls below convergence_delta_threshold,
     // nr_iter iterations ran, or the window took longer than real_time_threshold_seconds; the damping grows every 10
-    // iterations and after a step that was not applied (next_lm_factor)
+    // iterations and after a step that was not applied (next_lm_factor).
+    // lm_step_check: each call also returns the cost of the state it starts from; when that is higher than the cost of the
+    // last accepted state, the step that led there is taken back and the damping raised x10. After the loop the last step
+    // is checked too, so the window ends at the lowest-cost state it reached.
     WindowOptimization run_lm_iterations(std::vector<Point3Di> &intermediate_points, Window &window, OdometryState &state,
                                          const OdometryRunSetup &setup, AccTerm &acc_term, const MotionModelRotationOptions &window_rotation_options,
                                          const VelocityPrior &velocity_prior, Eigen::Vector3d &acc_offset, Eigen::Matrix3d &lidar_translation_information,
@@ -367,14 +383,60 @@ namespace
         std::vector<std::vector<Eigen::Affine3d>> poses_after;
         std::vector<double> deltas;
 
+        Eigen::Matrix3d *translation_information = params.log_window_diagnostics ? &lidar_translation_information : nullptr;
+        const auto optimize = [&](ScanToMapCost *cost, bool apply_step)
+        {
+            return optimize_lidar_odometry(intermediate_points, window, state.buckets_indoor, state.buckets_outdoor,
+                                           setup.scan_to_map, acc_term.motion_model, window_rotation_options, acc_term.options,
+                                           velocity_prior, lm_factor, delta, acc_offset, acc_term.offset_cov, logger,
+                                           translation_information, timing, &workspace, cost, apply_step);
+        };
+        const auto capture = [&]()
+        { return LmState{window.poses, window.velocity, window.gyro_bias, acc_offset, acc_term.offset_cov, lidar_translation_information}; };
+        const auto restore = [&](const LmState &s)
+        {
+            window.poses = s.poses;
+            window.velocity = s.velocity;
+            window.gyro_bias = s.gyro_bias;
+            acc_offset = s.acc_offset;
+            acc_term.offset_cov = s.acc_offset_cov;
+            lidar_translation_information = s.lidar_translation_information;
+        };
+        // lm_step_check: the state with the lowest cost so far, with the covariances computed at it
+        LmState accepted;
+        ScanToMapCost accepted_cost;
+        bool have_accepted = false;
+        int rejected_steps = 0;
+
         for (int iter = 0; iter < params.nr_iter; iter++)
         {
             iter_end = iter;
             delta = 100000.0;
-            const bool applied = optimize_lidar_odometry(intermediate_points, window, state.buckets_indoor, state.buckets_outdoor,
-                                    setup.scan_to_map, acc_term.motion_model, window_rotation_options, acc_term.options,
-                                    velocity_prior, lm_factor, delta, acc_offset, acc_term.offset_cov, logger,
-                                    params.log_window_diagnostics ? &lidar_translation_information : nullptr, timing, &workspace);
+            bool applied = false;
+            if (params.lm_step_check)
+            {
+                LmState before = capture();
+                ScanToMapCost cost;
+                applied = optimize(&cost, true);
+                if (have_accepted && cost.total > accepted_cost.total)
+                {
+                    // the previous step raised the cost: back to the state before it, with more damping
+                    restore(accepted);
+                    lm_factor *= 10.0;
+                    rejected_steps++;
+                    continue; // the rejected step says nothing about convergence
+                }
+                // the state this call started from is the best so far; keep it with the covariances computed there
+                before.gyro_bias.covariance = window.gyro_bias.covariance;
+                before.velocity.end_covariance = window.velocity.end_covariance;
+                before.acc_offset_cov = acc_term.offset_cov;
+                before.lidar_translation_information = lidar_translation_information;
+                accepted = std::move(before);
+                accepted_cost = cost;
+                have_accepted = true;
+            }
+            else
+                applied = optimize(nullptr, true);
             if (params.log_iteration_convergence)
             {
                 poses_after.push_back(window.poses);
@@ -396,6 +458,22 @@ namespace
         }
 
         WindowOptimization result;
+        if (params.lm_step_check)
+        {
+            // the last step: keep it only if it lowered the cost
+            const double last_delta = delta;
+            ScanToMapCost cost;
+            optimize(&cost, false);
+            delta = last_delta;
+            if (have_accepted && cost.total > accepted_cost.total)
+            {
+                restore(accepted);
+                rejected_steps++;
+                cost = accepted_cost;
+            }
+            result.cost = cost;
+        }
+        result.rejected_steps = rejected_steps;
         result.last_iteration = iter_end;
         result.delta = delta;
         if (params.log_iteration_convergence)
@@ -409,6 +487,10 @@ namespace
     {
         auto msg = log_info(logger);
         msg << "finished at iteration " << optimization.last_iteration + 1 << "/" << params.nr_iter;
+        if (params.lm_step_check)
+            msg << " (" << optimization.rejected_steps << " steps rejected, cost " << std::scientific << std::setprecision(4)
+                << optimization.cost.total << std::defaultfloat << ", matched " << optimization.cost.matched << ", unmatched "
+                << optimization.cost.unmatched << ")";
         msg << " optimizing window " << i + 1 << "/" << n_windows
             << " with acc_distance " << std::fixed << std::setprecision(2) << acc_distance << "[m] in "
             << std::fixed << std::setprecision(2) << elapsed_s

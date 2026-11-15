@@ -128,7 +128,8 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
                              const MotionModelTranslationImuOptions &translation_imu_options,
                              const VelocityPrior &velocity_prior, double lm_factor, double &delta,
                              Eigen::Vector3d &acc_offset, Eigen::Matrix3d &acc_offset_cov, Logger &logger,
-                             Eigen::Matrix3d *lidar_translation_information, ScanToMapTiming *timing, ScanToMapWorkspace *workspace)
+                             Eigen::Matrix3d *lidar_translation_information, ScanToMapTiming *timing, ScanToMapWorkspace *workspace,
+                             ScanToMapCost *cost, bool apply_step)
 {
     ScanToMapWorkspace local_workspace; // without a caller's workspace every call analyses its own patterns
     ScanToMapWorkspace &cache = workspace ? *workspace : local_workspace;
@@ -220,6 +221,32 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
         ndt_blocks.assign(window.poses.size(), Eigen::Matrix<double, 6, 6, Eigen::RowMajor>::Zero());
         ndt_rhs.assign(window.poses.size(), Eigen::Matrix<double, 6, 1>::Zero());
     }
+
+    // cost (lm_step_check): the NDT term per node (a point adds only to its own node's entry, see for_each_node), summed in
+    // node order afterwards, so it is the same with or without threads
+    std::vector<double> node_ndt_cost;
+    std::vector<int> node_matched, node_unmatched;
+    if (cost)
+    {
+        node_ndt_cost.assign(window.poses.size(), 0.0);
+        node_matched.assign(window.poses.size(), 0);
+        node_unmatched.assign(window.poses.size(), 0);
+    }
+    const auto count_unmatched = [&](const Point3Di &p)
+    {
+        if (cost)
+            node_unmatched[p.index_pose]++;
+    };
+    const auto count_matched = [&](const Point3Di &p, const Eigen::Vector3d &point_global, const Eigen::Vector3d &mean,
+                                   const Eigen::Matrix3d &infm, double w)
+    {
+        if (!cost)
+            return;
+        const Eigen::Vector3d r = point_global - mean;
+        node_ndt_cost[p.index_pose] += w * r.dot(infm * r);
+        node_matched[p.index_pose]++;
+    };
+    double motion_cost = 0.0; // the motion and IMU terms (only summed, never used in the solve)
     setup_timer.stop();
 
     const auto hessian_fun_indoor = [&](const Point3Di &intermediate_points_i, const TaitBryanPose &pose_s)
@@ -233,14 +260,20 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
         auto bucket_it = buckets_indoor.find(index_of_bucket);
         // no bucket found
         if (bucket_it == buckets_indoor.end())
+        {
+            count_unmatched(intermediate_points_i);
             return;
+        }
 
         auto &this_bucket = bucket_it->second;
 
         Eigen::Matrix3d inverse_scratch;
         const Eigen::Matrix3d *inverse = ndt_cell_inverse(this_bucket, inverse_scratch);
         if (inverse == nullptr)
+        {
+            count_unmatched(intermediate_points_i);
             return;
+        }
         const Eigen::Matrix3d &infm = *inverse;
 
         if (scan_to_map.use_view_point_and_normal_vectors)
@@ -249,7 +282,10 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
             Eigen::Vector3d &nv = this_bucket.normal_vector;
             Eigen::Vector3d viewport = window.poses[intermediate_points_i.index_pose].translation();
             if (nv.dot(viewport - this_bucket.mean) < 0)
+            {
+                count_unmatched(intermediate_points_i);
                 return;
+            }
         }
 
         const Eigen::Vector3d &p_s = intermediate_points_i.point;
@@ -299,6 +335,7 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
             AtPA *= w;
             AtPB *= w;
         }
+        count_matched(intermediate_points_i, point_global, this_bucket.mean, infm, (scan_to_map.use_planarity || scan_to_map.use_norm) ? w : 1.0);
 
         // only this point's node writes this block (see for_each_node), so no lock is needed
         if (keep_ndt_blocks)
@@ -382,14 +419,20 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
             auto bucket_it = buckets_outdoor.find(index_of_bucket);
             // no bucket found
             if (bucket_it == buckets_outdoor.end())
+            {
+                count_unmatched(intermediate_points_i);
                 return;
+            }
 
             auto &this_bucket = bucket_it->second;
 
             Eigen::Matrix3d inverse_scratch;
             const Eigen::Matrix3d *inverse = ndt_cell_inverse(this_bucket, inverse_scratch);
             if (inverse == nullptr)
+            {
+                count_unmatched(intermediate_points_i);
                 return;
+            }
             const Eigen::Matrix3d &infm = *inverse;
 
             if (scan_to_map.use_view_point_and_normal_vectors)
@@ -398,7 +441,10 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
                 Eigen::Vector3d &nv = this_bucket.normal_vector;
                 Eigen::Vector3d viewport = window.poses[intermediate_points_i.index_pose].translation();
                 if (nv.dot(viewport - this_bucket.mean) < 0)
+                {
+                    count_unmatched(intermediate_points_i);
                     return;
+                }
             }
 
             const Eigen::Vector3d &p_s = intermediate_points_i.point;
@@ -437,6 +483,7 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
                 AtPA *= planarity;
                 AtPB *= planarity;
             }
+            count_matched(intermediate_points_i, point_global, this_bucket.mean, infm, planarity);
 
             if (keep_ndt_blocks)
             {
@@ -656,6 +703,19 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
             AtPBndt(ic_2 + row, 0) -= AtPBodo(row + 6, 0);
         }
 
+        if (cost)
+        {
+            const TaitBryanPose &p1 = poses[odo_edges[i].first];
+            const TaitBryanPose &p2 = poses[odo_edges[i].second];
+            Eigen::Matrix<double, 6, 1> d;
+            relative_pose_obs_eq_tait_bryan_wc_case1_simplified_1(d, p1.px, p1.py, p1.pz, p1.om, p1.fi, p1.ka,
+                                                                  p2.px, p2.py, p2.pz, p2.om, p2.fi, p2.ka,
+                                                                  relative_pose_measurement_odo(0, 0), relative_pose_measurement_odo(1, 0), relative_pose_measurement_odo(2, 0),
+                                                                  relative_pose_measurement_odo(3, 0), relative_pose_measurement_odo(4, 0), relative_pose_measurement_odo(5, 0));
+            motion_cost += w_motion_model_x * d(0) * d(0) + w_motion_model_y * d(1) * d(1) + w_motion_model_z * d(2) * d(2) +
+                           w_om_c * d(3) * d(3) + w_fi_c * d(4) * d(4) + w_ka_c * d(5) * d(5);
+        }
+
         if (estimate_bias)
         {
             // rotation rows of delta = (m - (b - b0)*dt) - f(pose_1, pose_2): d(delta)/d(pose) = J, d(delta)/d(b) = -dt * I
@@ -702,6 +762,7 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
             for (int c = 0; c < 3; c++)
                 AtPAndt.add(ib + r, ib + c, prior_inf(r, c));
         AtPBndt.block<3, 1>(ib, 0) += prior_inf * prior_delta;
+        motion_cost += prior_delta.dot(prior_inf * prior_delta);
     }
 
     // velocity-continuity prior on world-frame translation (white-noise acceleration):
@@ -722,6 +783,7 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
 
             const int nodes[3] = {int(i) - 1, int(i), int(i) + 1};
             const double c[3] = {1.0 / dt1, -(1.0 / dt1 + 1.0 / dt2), 1.0 / dt2};
+            motion_cost += w * r.squaredNorm();
 
             for (int k = 0; k < 3; k++)
             {
@@ -745,6 +807,7 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
 
             const int nodes[2] = {0, 1};
             const double c[2] = {-1.0 / dt, 1.0 / dt};
+            motion_cost += w * r.squaredNorm();
 
             for (int k = 0; k < 3; k++)
             {
@@ -820,6 +883,7 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
                 blocks.push_back({velocity_column, Eigen::Matrix3d::Identity() * c_v});
 
             const double w = 1.0 / ((density2 / tau + floor2) * tau * tau);
+            motion_cost += w * r.squaredNorm();
             for (const auto &[ca, ja] : blocks)
             {
                 const Eigen::Vector3d g = w * ja.transpose() * r;
@@ -871,6 +935,7 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
         // start velocity prior: the previous window's end velocity
         const Eigen::Matrix3d velocity_inf = translation_imu_options.velocity_prior_cov.inverse();
         const Eigen::Vector3d velocity_rhs = velocity_inf * (translation_imu_options.velocity_prior_mean - window.velocity.start);
+        motion_cost += (translation_imu_options.velocity_prior_mean - window.velocity.start).dot(velocity_rhs);
         for (int r = 0; r < 3; r++)
         {
             for (int c = 0; c < 3; c++)
@@ -888,14 +953,18 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
                 AtPAndt.add(ie + r, ie + r, w);
                 AtPBndt(ie + r, 0) -= w * window.velocity.end(r);
             }
+            motion_cost += w * (window.velocity.start.squaredNorm() + window.velocity.end.squaredNorm());
         }
         // the end velocity must be determined even without its term (a gap at the end): a weak prior at the start velocity
         if (!end_tied)
+        {
             for (int r = 0; r < 3; r++)
             {
                 AtPAndt.add(ie + r, ie + r, 1.0);
                 AtPBndt(ie + r, 0) += window.velocity.start(r) - window.velocity.end(r);
             }
+            motion_cost += (window.velocity.start - window.velocity.end).squaredNorm();
+        }
 
         // offset prior carried over from the previous window
         const Eigen::Matrix3d prior_inf = translation_imu_options.offset_prior_cov.inverse();
@@ -903,9 +972,23 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
             for (int c = 0; c < 3; c++)
                 AtPAndt.add(io + r, io + c, prior_inf(r, c));
         AtPBndt.block<3, 1>(io, 0) += prior_inf * (translation_imu_options.offset_prior_mean - acc_offset);
+        motion_cost += (translation_imu_options.offset_prior_mean - acc_offset).dot(prior_inf * (translation_imu_options.offset_prior_mean - acc_offset));
     }
 
     motion_terms_timer.stop();
+
+    if (cost)
+    {
+        *cost = ScanToMapCost{};
+        for (size_t k = 0; k < node_ndt_cost.size(); k++)
+        {
+            cost->ndt += node_ndt_cost[k];
+            cost->matched += node_matched[k];
+            cost->unmatched += node_unmatched[k];
+        }
+        cost->ndt += scan_to_map.unmatched_point_cost * cost->unmatched;
+        cost->total = cost->ndt + motion_cost;
+    }
     PhaseTimer assembly_timer(phase(&ScanToMapTiming::assembly));
 
     // fix the origin: weight 1 / sigma^2 on the first node's six parameters (its right-hand side is zero)
@@ -988,6 +1071,8 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
     }
 
     covariance_timer.stop();
+    if (!apply_step)
+        return false;
     PhaseTimer solve_timer(phase(&ScanToMapTiming::solve));
 
     Eigen::SparseMatrix<double> AtPA_I(n_params, n_params);

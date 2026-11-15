@@ -973,3 +973,43 @@ TEST_CASE("scan-to-map, imu always on: the carried covariance takes no confidenc
     for (size_t i = 0; i < plain.poses.size(); i++)
         CHECK(plain.poses[i].matrix() == honest.poses[i].matrix());
 }
+
+// lm_step_check (candidate 2 of synthetic-retune 4.8, ported): the cost a call reports is the cost of the state it starts
+// from; a wrong state costs more than the truth, and a point that falls into no cell costs ndt_unmatched_point_cost
+TEST_CASE("scan-to-map: the window cost is lowest at the truth and counts points off the map")
+{
+    Options o = options_from(test_config());
+    o.scan_to_map.unmatched_point_cost = 16.0;
+    const Scene s = room();
+    Maps maps = build_maps(s, o.scan_to_map);
+    const std::vector<Eigen::Affine3d> truth = true_poses();
+    std::vector<Point3Di> points = observe(s, truth);
+    NullLogger logger;
+    const auto cost_at = [&](const std::vector<Eigen::Affine3d> &poses)
+    {
+        Window w = make_window(poses);
+        w.motion_model_poses = truth;
+        double delta = 0.0;
+        Eigen::Vector3d acc_offset = Eigen::Vector3d::Zero();
+        Eigen::Matrix3d acc_offset_cov = Eigen::Matrix3d::Identity();
+        ScanToMapCost c;
+        const bool applied = optimize_lidar_odometry(points, w, maps.indoor, maps.outdoor, o.scan_to_map, o.motion_model, o.rotation,
+                                                     o.translation_imu, o.velocity_prior, 5.0, delta, acc_offset, acc_offset_cov, logger,
+                                                     nullptr, nullptr, nullptr, &c, false);
+        CHECK_FALSE(applied); // apply_step = false: nothing applied
+        CHECK(w.poses[0].matrix() == poses[0].matrix());
+        return c;
+    };
+    std::vector<Eigen::Affine3d> shifted_poses = truth, far = truth;
+    for (auto &p : shifted_poses)
+        p.translation() += Eigen::Vector3d(0.08, -0.05, 0.03);
+    for (auto &p : far)
+        p.translation() += Eigen::Vector3d(500.0, 0.0, 0.0);
+    const ScanToMapCost at_truth = cost_at(truth), at_shift = cost_at(shifted_poses), at_far = cost_at(far);
+    MESSAGE("window cost: truth ", at_truth.total, " (", at_truth.matched, " matched, ", at_truth.unmatched, " unmatched), shifted ",
+            at_shift.total, ", 500 m away ", at_far.total, " (", at_far.unmatched, " unmatched)");
+    CHECK(at_truth.total < at_shift.total);
+    CHECK(at_far.matched == 0);
+    CHECK(at_far.unmatched > 0);
+    CHECK(at_far.ndt == doctest::Approx(16.0 * at_far.unmatched));
+}

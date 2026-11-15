@@ -227,6 +227,13 @@ struct OdometryConfig
     // normal-direction information (sum of n n^T / (n^T C n) against the sum of the cells' inverse covariances), so the
     // pull of points along a wall towards their cell's mean adds no confidence. The solve itself is unchanged.
     bool carried_covariance_normal_information_only = false;
+    // Levenberg-Marquardt step check: a step that raises the window's cost (ScanToMapCost: NDT plus every motion and IMU
+    // term) is taken back and the damping raised x10; the window ends at the lowest-cost state it reached. Off: every step
+    // that solves is taken.
+    bool lm_step_check = false;
+    // cost of a point in range that no NDT cell matches, so the window can't lower its cost by sliding points off the map
+    // (in r^T Sigma^-1 r units; only read by lm_step_check). 0 with the step check lets a window slide off the map.
+    double ndt_unmatched_point_cost = 0.0;
 
     // motion_model first trajectory node prior uncertainty
     double lidar_odometry_motion_model_fix_origin_x_1_sigma_m = 0.000001;

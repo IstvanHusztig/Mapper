@@ -19,6 +19,51 @@ selected by the user; L2 numerical results may change only with quality evidence
 | 5: loop closure and consistency | Revalidate matching/gates/corrections and downstream44 investigations with improved odometry | Pending. Correction size alone is not a pass/fail rule. |
 | 6: validate and ship | Full-recording robustness,44 s0/s1/s2 checks, before/after clouds, user visual acceptance, settings/baselines/docs | Pending. Push only on explicit authorization. |
 
+## Flyaway and passage-stall findings and next steps (2026-11-15, Claude; latest, supersedes the next-work list below)
+
+Branch `honest-degeneracy-measure` (local, not pushed). Evidence: `openspec/changes/isolate-and-replace-trajectory-method/checkpoint-mamba.md`.
+
+**Confirmed cause of the Livox 4 wall offset:** the 10 m walk through the narrow passage between the buildings
+(100-110 s) is measured as 5.3 m: dMapper's carried speed decays from 1.15 to 0.13 m/s while the user walks steadily.
+The user confirmed the route and the true positions on the plan.
+
+**Code findings (reviewed against the code; none measured on a recording yet):**
+
+| # | Finding | Effect |
+|---|---|---|
+| M1 | The LM loop never checks the cost; a step that raises it is applied | A window can slide in a wrong direction. Fix ported: `lm_step_check` (off by default) |
+| M2 | A point in no NDT cell costs nothing | Sliding points off the map looks better. Fix ported: `ndt_unmatched_point_cost` (off; cost 16 tested on 44 in October). Unit test: 16 is too small, a window 500 m off the map costs 96,000 against 337,000 for 8 cm off. Choose it from the per-point cost of a correct match |
+| M3 | One cell per point, cell mean = its first point (default statistics) | Target jumps at 15 cm cell borders; likely part of the run-to-run chaos on 44 |
+| M4 | The only guard is "no node more than 1 m from the guess"; the guess comes from the carried speed; no speed plausibility check | A runaway guess is never caught; large corrections are blocked and the window ends on its guess |
+| M5 | Above max_prior_velocity_mps (5 m/s) the carried speed is replaced by zero with sigma 1 m/s | A jolt to standstill, not a recovery |
+| M6 | Every window goes into the map unchecked | One wrong window corrupts the map; the next windows confirm it |
+| T1 | No setting for an IMU-LiDAR time offset (44 was restamped outside dMapper) | Every turn disagrees when a recording lags |
+| T2 | Points get the pose just before them (no interpolation); dropped if more than 10 ms after it | An IMU gap silently drops points |
+| T3 | First AHRS step assumes 200 Hz, a repeated timestamp 2 ms | Minor |
+| G1 | AHRS tilt correction is off for every sample outside 0.9-1.1 g (about 25-31 % while walking) | Tilt corrected from the quiet phase of each step only: a possible steady tilt error (hypothesis) |
+| G2 | e41bd08 made the gain switches take effect | Fixed; it changed the numbers and the baselines were not refreshed (see step 0) |
+| D1 | A window's internal speed profile is fixed once from the carried speed (motion model sigma 1e-4 m per edge) | A wrong carried speed is baked into the whole window |
+| P1 | The default degeneracy measure uses each cell's first-3-point normal | Reads a smooth passage as 0.15-0.27 (exact: about 0.005), so the projection stays off. Fix (a) `degenerate_projection_all_point_normals` written, off by default |
+| P2 | The carried velocity covariance includes the NDT's in-plane pull | The slowed speed is handed on as known to 5 mm/s. Fix (d) `carried_covariance_normal_information_only` written, off by default |
+
+**Tried on Livox 4 (125 s prefix, one run each):** exact cell statistics, projection 0.3/0.5, accelerometer floor 0.02,
+and (a): none fixes passage and gallery together. (a) runs away (62 m off by 100 s): without the in-plane pull the
+IMU carry alone holds the passage axis, and it drifts.
+
+**Next steps, in order:**
+0. Baselines: refresh 44 / 44_short for e41bd08 (in progress), so bit-identity checks work again.
+1. Step check on its own: `lm_step_check` with a well-chosen `ndt_unmatched_point_cost` (M1, M2) on Livox 4 and 44
+   s0/s1/s2, 45f, `/fp:fast`. Expected: fewer runaways (it stopped the `/fp:fast` runaway on 44 in October), not the
+   passage itself.
+2. IMU carry (c): estimate accelerometer bias and tilt over many seconds while the LiDAR sees, carry them with an honest,
+   growing uncertainty through blind stretches; check G1 (biased tilt correction) as part of it. Design work (Fable).
+3. With (c) in place: (a) honest degeneracy measure and (d) honest carried covariance, then the passage again.
+4. Guards: speed plausibility instead of the 5 m/s reset (M4, M5), a check before a window enters the map (M6).
+5. Smaller: IMU-LiDAR time-offset setting (T1), pose interpolation for points and a warning for dropped points (T2),
+   real dt for the first AHRS step (T3).
+6. Each step judged with tools/map_quality.py on 44 s0/s1/s2 (noise floor), Livox 4 against the user's marked
+   positions, and the stairwell of 44 (the opposite failure: runaway without the in-plane pull).
+
 ## Next concrete work
 
 The nine-run batch, two logging replays and two finite motion-prior checks are

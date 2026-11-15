@@ -27,6 +27,7 @@ struct ScanToMapOptions
     double degenerate_projection_ratio_full = 0.0;
     bool degenerate_projection_all_point_normals = false;    // see OdometryConfig
     bool carried_covariance_normal_information_only = false; // see OdometryConfig
+    double unmatched_point_cost = 0.0; // OdometryConfig::ndt_unmatched_point_cost (ScanToMapCost) [chi^2 units]
 };
 
 // motion model of a window: correction of the IMU frame and the sigmas of the consecutive-node and fix-origin priors
