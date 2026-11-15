@@ -227,3 +227,17 @@ unchanged 100->110 s 5.40 m, 110->124 s 20.44 m (runaway warnings >5 m/s at ~35 
 (a) 13.77 / 25.34 m, 62 m off the unchanged run by 100 s, 383 warnings: switching the NDT off along the weak
 axis without a reliable IMU carry runs away. (d) and (a)+(d) stopped by the user (not likely to help).
 Conclusion: (a) is unusable without (c), a reliable IMU carry (accelerometer bias and tilt). Next decision: the user's.
+
+## State when stopped (2026-11-15 evening)
+
+- Gyro trust: livox-vertical.toml still has L2 gyro ARW values with inflation k 7.09; the Livox gyro measured at rest
+  (livox/4, 2-20 s) is 0.0094 / 0.0224 / 0.0144 deg/sqrt(s). With those values, k 1, floor 0.0002 deg (scratch TOMLs
+  only, shipped settings unchanged), the attitude follows the gyro (worst 2 s error 7 deg against 105 deg).
+- Full runs with loop closure + consistency, all fixes (gyro values, (a), (d), lm_step_check, unmatched cost 16),
+  `experiments/phase0b-2026-11-12/livox{3,4}-allfixes-full`, compared with the current settings:
+  Livox 4: big jumps 83 -> 0, speed resets 25 -> 21, loop closure still discarded (21 -> 9.6 m implausible).
+  Livox 3 (indoor): big jumps 219 -> 0, resets 44 -> 17, loop closure discarded -> 16 loops accepted (3.5 m);
+  the current settings break Livox 3 (82 m vertical drift).
+- 125 s prefix: the gyro values alone give the passage 10.3 m (true ~10) but stall the gallery (2.9 m of ~12).
+- Livox 4 reference manifest tools/baseline/livox4.manifest.json (raw data/livox/4_baseline); 44 baselines refreshed.
+- Waiting for: the user's look at livox3-allfixes-full; then the IMU carry design (roadmap step 2).
