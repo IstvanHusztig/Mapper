@@ -140,3 +140,13 @@ Reviewed reading: a likely under-travel of about 2-4 m along the narrow passage
 between the buildings (plan x ~27-29) near 105-112 s, plus a ~7 deg heading mismatch
 against the gyro of unresolved cause. Neither is proven. Only one 5 s block is clearly
 low. Next decision is the user's.
+
+**User confirmation (2026-11-15):** the user walked through the passage and marked on
+`quality/route-localization/passage-overlay-e.png` where the sensor really was:
+110 s at about plan (27.7, 10.0), 125 s at about (39.7, 10.0). Map (gyro-deskew KISS):
+110 s (27.10, 13.79), 125 s (38.14, 13.51). So the full offset (~3.8 m south) exists
+by 110 s: in the passage 100-110 s the map moved ~6.2 m against ~10 m walked, almost
+standing still at 105-107.5 s (0.45 m) while the IMU shows steady steps. Along the
+covered gallery 110-125 s the map is also ~1 m short (11.0 m against ~12 m). dMapper's
+matched-gain control is ~3.3 m north there too (route-audit five-second-blocks), with
+`imu_always_on = true` in settings/livox-vertical.toml.
