@@ -115,3 +115,28 @@ rotation in deskew; prediction native `last_delta`) and heading comes from ICP, 
 axis error of this size cannot explain the 3.5 m / -2.8 deg wall offset here. It says
 nothing about dMapper, where the gyro is a rotation prior. Axis audit closed.
 Next: localize the deformation along the existing route to the confirmed wall.
+
+## Route localization (2026-11-15, Claude; independent Sonnet reviews)
+
+Scripts in `checkpoint-tools/` (route_block_plan_fit, plan_walls, step_vs_map,
+pdr_check), outputs in `quality/route-localization/`.
+
+- Per-block plan fit (5 s blocks onto plan pixels): failed its positive control
+  (does not recover the known 3.3 m at the wall; ambiguous in the start room). Plan
+  draws walls as double thin lines, so a thickness filter keeps text, not walls.
+  Only 75-95 s is usable: map within ~0.6 m of the plan, slow dy creep to ~0.6 m.
+- IMU steps vs map: cadence steady 1.6/s through 95-110 s; map path 105-110 s is
+  3.13 m against 4.77 m expected (ratio 0.65; other walking blocks 0.85-1.12).
+  100-112 s: 8.05 m against 10.14 m (step length 0.597 m from 60-95 s, +-10%).
+- Yaw map minus gyro-propagated (anchors 95/100 s): within 0.7 deg to 105 s, -3.8
+  at 107.5 s, -7.1 at 110 s, plateau ~-7 to 125 s. Not a lag (lag errors return to
+  zero). Map under-rotates the south-to-east turn, or gyro scale ~8 % off; unresolved.
+  This yaw part REDUCES the north offset (and the -2.8 deg line angle points the same
+  way), so it does not explain the wall.
+- PDR from 100 s (fixed body walking direction, 15-20 deg off the passage axis):
+  3.1-3.5 m south of the map at 112.5-115 s; mixes travel deficit and direction error.
+
+Reviewed reading: a likely under-travel of about 2-4 m along the narrow passage
+between the buildings (plan x ~27-29) near 105-112 s, plus a ~7 deg heading mismatch
+against the gyro of unresolved cause. Neither is proven. Only one 5 s block is clearly
+low. Next decision is the user's.
