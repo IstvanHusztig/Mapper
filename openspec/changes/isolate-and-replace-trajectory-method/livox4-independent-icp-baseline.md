@@ -279,3 +279,69 @@ Compare identical heldout raw IDs against fixed stationary-room geometry as well
 as gyro disagreement and source support. Changed map/threshold after the fork are
 downstream effects, not separately isolated factors. Script and synthetic checks
 require independent review before execution. No full replay or integration chosen.
+
+### Bounded rotation-source comparison completed
+
+Independent review cleared the exact translation-preserving deskew implementation;
+native synthetic reconstruction error8.88e-16m. All350 stock poses reproduce
+archive within2.67e-15, with identical registration/range counts. Each candidate
+reproduces all249 pre-fork poses/counts. All four score the same89,505 raw rows.
+Sequential processing costs10.01/9.90/7.65/6.80s (control/prediction/deskew/both),
+excluding shared loading/preparation. No full cloud export or production change.
+
+At F271 on the exact same pre-update map and threshold, gyro disagreement is
+7.645/7.659/3.424/3.268deg. At35s, fork-relative disagreement is
+15.267/15.306/11.077/9.738deg. Prediction alone changes little; measured rotational
+deskew has the principal local effect. This is not a map fix: whole25–35s
+heldout-room median distances are0.4305/0.4300/0.4366/0.4384m, p90
+2.537/2.531/2.492/2.480m. Leaving the reference room affects coverage, so mixed
+nearest-distance statistics cannot rank full-route quality. Fixed-section plots
+also do not show a decisive geometry improvement. Evidence: run `result/summary.json`,
+`paired-audit.json`, `geometry-comparison.png`; review checked timing/conventions.
+
+The exact F271 state is now persisted once in `fixed-map-case/frozen-F271.npz`,
+SHA25612aaf1f8af390d7a64d7d0fe3034259bf3546b7a78450bb167515fb2b7378a6f.
+Preroll271 frames matches archived poses within6.37e-16 and counts exactly;
+map162,356 points, raw frame18,920 returns, stock/gyro sources3,861/3,521;
+sigma1.5566417021. It includes poses, source IDs, gyro rotations and preprocessing
+arrays. No F271 registration or state mutation occurred during this capture.
+
+### Check search support before another solver implementation
+
+Terra's primary-source review identified a coupling in the resolution test:
+[KISS1.3 map search](https://raw.githubusercontent.com/PRBonn/kiss-icp/v1.3.0/cpp/kiss_icp/core/VoxelHashMap.cpp)
+uses only containing+26 adjacent cells, while
+[pipeline voxelization](https://raw.githubusercontent.com/PRBonn/kiss-icp/v1.3.0/python/kiss_icp/kiss_icp.py)
+derives source sampling from the same setting. Refining0.4 to0.1m increased
+source support but also reduced map search reach. With0.1m cells the cube cannot
+contain neighbors farther than~0.346m, even though current adaptive cutoff is
+~4.670m; it is not a radial0.1m cutoff. This is a hypothesis, not a proven cause.
+
+Before building translation-only ICP, perform a read-only exact frozen-map audit
+of closest points inside the27 cells versus global nearest points, preserving
+strict cutoff and separating no-candidate from worse-candidate cases. If material,
+one API-only bounded35s comparison can use0.4m map cells while keeping source
+voxelization0.15m/frame downsample0.05m and other behavior unchanged. This would
+also change capacity, representative spacing and pruning, not only search reach;
+judge independent geometry and support. No such candidate replay launched yet.
+
+Frozen support audit found498/3,861 stock-guess points without a local candidate,
+versus52/3,521 for gyro deskew+prediction; at fitted poses100/3,861 and44/3,521.
+Global nearest points all pass the same4.670m cutoff; no locally found point
+fails that cutoff. Missing stock-guess nearest distances have median0.274m and
+p900.452m: larger search admits farther, not necessarily correct, correspondences.
+Map bucket membership/order was checked by reinserting into the actual1.3 wheel;
+no1e-12 ties. Per-query exact positions/indices and distributions are preserved
+in `fixed-map-case/search-support/`. Independent review reproduced counts and
+virtual0.4m rebucketing recovers3,858/3,861 stock-guess candidates on identical
+points. This does not explain all gyro-assisted residual rotation.
+
+Reviewer supports one practical35s map-scale candidate before implementing a
+new ICP solver. Separate folder `livox4-kiss-map-scale-35s/`: native empty map
+voxel0.4m from frame zero, configuration voxel0.1m retained for fine source
+sampling; stock deskew and prediction. Preserve all other settings and timestamp
+bins. Compare the same89,505 source IDs, near-room geometry/coverage, angular
+behavior and motion, recording actual map occupancy/capacity effects. Thin runner
+requires review before launch; full-route continuation requires credible geometry
+and angular evidence together. This is an experimental API override, not stock
+configuration or dMapper integration. Current raw files/control are unchanged.
