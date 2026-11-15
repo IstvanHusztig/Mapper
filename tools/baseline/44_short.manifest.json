@@ -1,20 +1,20 @@
 {
   "dataset": "44_short",
   "params": "settings/l2-vertical.toml",
-  "commit": "e196692",
+  "commit": "42c1eef",
   "hd_cpu_optimization": "AUTO",
-  "created": "2026-11-12",
+  "created": "2026-11-15",
   "files": {
-    "dMapper_params_0.1.0_<DATETIME>.toml": "1a471d8e0a0e0eb634c1cf4736a98839e009bc65a3df4ac02587b186092bcbb1",
-    "dMapper_results_0.1.0_<DATETIME>.json": "47bb4255834242bbbf68f47d427f9e9b0b8d3783dbb0f287a58a75d33b10648d",
+    "dMapper_params_0.1.0_<DATETIME>.toml": "fed42196bafe93be0e9aa9b3622eb83b98e66f67d7984f6bde75ecaba49eca99",
+    "dMapper_results_0.1.0_<DATETIME>.json": "0658f12f58677e05d34fe0c19275e1139435fa43289d57680c6f95f7cda5cd75",
     "point_sizes_per_chunk.json": "b6e08154b974053f41ce9594e0fd93304cb8316a01b4d4156f915df491d9d9cf",
-    "scan_lio_0.laz": "2a9ccd6f4d046b5ca2abb0f7a4bce6ba74e7d9d663e56f5e6bf3b2fbffa7ea81",
-    "scan_lio_1.laz": "6d9c157974e694185eb898bb762aa2b362496449605e94f1148194b49e2168a0",
-    "scan_lio_merged.laz": "f113c561584dd0eaf459a744dc59e2ea189df577b10df14f80e0c42cadb2211d",
-    "session.mjs": "4d4b69eb4b322cbdbf020b48cc631f075fee7898a5414dc80550616d09aaa135",
-    "session_ini_poses.mri": "3b3a89477c129ba287c577c8b3fe81234f2b34d50413b4f7a6c1d491aacca648",
-    "session_poses.mrp": "3b3a89477c129ba287c577c8b3fe81234f2b34d50413b4f7a6c1d491aacca648",
-    "trajectory_lio_0.csv": "074db38c0c2fafdaff6881f994329c94996ef05052fad3e0cf72b0b9c6dea20d",
-    "trajectory_lio_1.csv": "256ba413e9d6f6d7f60599b38a245a53531c234af667dca4abcc1202b3fc36de"
+    "scan_lio_0.laz": "39d1d5bd66a4e9867820a3a2741ad172f9e50bbfa5a2f2e8351132786db0afde",
+    "scan_lio_1.laz": "614c8a44b2cb8b7df57ead0271d97d1fab022d4b0b14838bce2da046be9bf4ff",
+    "scan_lio_merged.laz": "cf66a92b86ad100dc4738dca439a44cd94b1d38e4537a6b67cb55cd2d86f312a",
+    "session.mjs": "17b61fa06117e1c0436fad3f80b31447dc304d11e77c1255f39b6f748bcb06a4",
+    "session_ini_poses.mri": "981ceafb49336e773de19092040fc389de53d5f9587747a73c5144e9d778d685",
+    "session_poses.mrp": "981ceafb49336e773de19092040fc389de53d5f9587747a73c5144e9d778d685",
+    "trajectory_lio_0.csv": "a79736db9ca2a69d18d75d6209e0bab1d8f905ce84d93175e390a1c16d1d5c24",
+    "trajectory_lio_1.csv": "4455c2fe068b9b25ae7014a6dc2f2ce670400eb6fd9ea5ae2fc61078284b9046"
   }
 }
