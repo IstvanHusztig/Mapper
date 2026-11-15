@@ -478,3 +478,25 @@ Seek independently verified revisit constraints if needed; no candidate retrieva
 or graph test has been selected. Reuse preserved controls and failed-case evidence;
 do not repeat the rejected single-edge graph, map-size or hard-rotation trials.
 Charlie remains3/19; this checkpoint does not complete the replacement interface.
+
+### Mamba alignment audit update
+
+Archived original fit source confirms no surveyed anchor,55% within10cm support
+and competing headings. No identified metre-scale units/frame error; measured
+anchor mismatch12.5mm/0.079deg, plan scale sanity~0.22%. Static south-region plane
+to marked late wall distance is3.508m (3.502m using same candidate early support),
+invariant to a common rigid transform. Mixed early surfaces prevent treating that
+alone as exact physical collinearity.
+
+The stronger start-room/wall check considers both planar alignment branches:
+matching the confirmed east wall's horizontal direction and y10.9 position puts
+the known start at y8.700, below Wohnen's traced south boundary11.07. The180deg
+alternative puts the wall west of the room. Trimmed/time-balanced checks preserve
+the conflict. Independently reviewed equations/inputs support rejecting a single
+planar registration as a solution under that correspondence, without identifying
+the corrupting time or claiming purely translational error. Reproducible scripts
+and JSON are in the candidate's `checkpoint-tools/` and `quality/` directories.
+
+The bounded existing-data axis audit has also finished and is saved; independent
+review pending. See `checkpoint-mamba.md` for exact artifacts, measurements and
+resume action. No new replay or correction was applied during these audits.

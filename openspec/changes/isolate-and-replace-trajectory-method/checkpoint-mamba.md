@@ -60,3 +60,40 @@ All prior agents completed; reactivate with followup_task. Root owns docs/qualit
 gravity_candidate owns the external worktree/tools; seed_damping_crosscheck is
 the independent reviewer; ndt_failure_next_step is the Terra research agent.
 Preserve unrelated dirty files. No processing was active when checkpoint saved.
+
+## Latest progress saved after wall confirmation
+
+The plan overlay was audited against its archived source. Initial fit used first
+15s and eight traced Wohnen segments, with no surveyed position/heading anchor
+and55% weighted support within10cm. Alignment is ambiguous, but no identified
+metre-scale unit/frame/time error: measured anchor mismatch12.5mm/0.079deg and
+whole-sheet plan scale sanity~0.22%.
+
+Two independently reviewed checks are saved in the candidate's `checkpoint-tools/`
+and `quality/`:
+
+- `relative_wall_check.py` / `relative-wall-check.json`: median3.508m separation
+  from the frozen initial south-region plane;3.502m using the same candidate early
+  support. A common rigid transform cannot change this internal separation.
+  Early windows/insets remain a physical-attribution caveat.
+- `wall_start_constraint.py` / `wall-start-constraint.json`: matching the confirmed
+  east wall's direction/location at plan y10.9 forces start y8.700, outside Wohnen
+  (south bound11.07). Reversing orientation puts the wall west of the room.
+  Independently trimmed/time-balanced checks give the same incompatibility.
+  One common planar alignment cannot satisfy both constraints under this approximate
+  correspondence. This does not locate the error or isolate translation/rotation.
+
+One bounded existing-data axis audit also completed, with synthetic SVD test:
+`checkpoint-tools/check_axis_consistency.py`, `quality/axis-consistency/comparison.json`.
+Fit a single proper gyro-to-LiDAR rotation on25-60s, test60-100s and100-125s,
+separately at lag0/-50ms. Fitted angles1.806/1.269deg; training/first-holdout RMS
+changes negligible, late holdout worsens1.930->1.942deg /2.391->2.419deg. Excitation
+is highly directional. Worker report only: independent review still pending;
+do not promote it to a calibration or sensor-fault verdict. No correction applied.
+
+All assigned computations are finished and saved. No new replay, installation,
+production modification or default change. Next resume step is review the saved
+axis audit and localize deformation along the existing route to the confirmed
+wall, using the reviewed rejection of a simple global alignment explanation.
+Preserve the positively received candidate and all failed branches. No new
+experiment is selected by this checkpoint.
