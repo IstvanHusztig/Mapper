@@ -205,3 +205,27 @@ physical updates. This is a sensitivity test, not a production beta0 proposal:
 `../ndt-information-probe/next-step-design.md` already warns that removing XYZ
 rows can leave unmatched intermediate translations unconstrained. No recording
 or production change yet. Independent reviewer checks the paired result.
+
+### XYZ-row and correction-basis results
+
+The isolated zero-XYZ solve reproduced the native control and exact unrelated
+factors. The removed matrix matches the expected XYZ contribution including
+angular cross-blocks. Peak tilt falls0.22228->0.08728deg, but eight nodes lose
+all translation constraints. A supported node moves0.364m; adjacent-node speed
+reaches198.7m/s. Better raw-map distance therefore comes with nonphysical deskew.
+Do not run this as a production candidate or repair it only at unmatched nodes.
+Artifacts: `W298/xyz-motion-probe/` and `xyz-motion-tools/`, helperf4babf49.
+
+An offline correction basis using the32 actual IMU translation anchors restores
+undamped rank (648 unknowns). Intermediate translation increments interpolate
+in time; the original nonlinear prediction stays unchanged. Final increment
+uses the last two anchors171/177, extrapolated to179 with coefficient0.286859.
+All rotations/nuisance variables and lifted pose-damping metric are preserved.
+Peak adjacent-node acceleration falls80.74->2.04m/s2, but tilt rises to0.24159deg.
+Keeping the original XYZ rows with the same basis gives essentially the same
+smoothness (2.014m/s2) and0.22638deg tilt. Thus the basis improves short-scale
+smoothness, not the measured initiating tilt. Independent review checked both
+matrix/trajectory conventions. See `W298/anchor-translation-probe/`.
+
+End this diagnostic family without promoting a new solver policy. The next
+independent method feasibility experiment is `livox4-independent-icp-baseline.md`.
