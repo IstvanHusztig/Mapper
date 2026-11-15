@@ -450,3 +450,31 @@ Default0.5m BEV pixels and31-pixel ORB border leave images under~31m with no
 usable interior; do not blindly process small indoor blocks. Internal ground
 alignment, source-to-query transform direction, 2D-only inliers and multifloor
 aliases require explicit pilot/3D verification. No install/retrieval selected.
+
+## Saved checkpoint: user confirmed wall and level
+
+2026-11-15: user confirms the marked strip is **a wall at apartment56's level**
+and must coincide with the wall they drew on the house plan. This resolves the
+pending physical-identity/level question. Do not explain away the displacement
+as a railing, another floor, or the user's wrong wall identification. The plan
+registration remains preliminary, so the measured3.343m offset is a discrepancy
+under that frozen alignment, not surveyed absolute error. The remaining mismatch
+still needs correction despite the user's positive assessment of the result.
+
+User requested saving work because usage is nearly exhausted, then named the
+checkpoint **mamba** and explicitly instructed continued work. Saving is not a
+pause. No new run, install, retrieval or algorithm change started at checkpoint.
+All agents completed their assigned tasks. Results, raw-ID cohorts, failed tests,
+scripts and provenance are retained in their respective external folders.
+Latest user-viewable candidate remains `livox4-kiss-gyro-deskew-125s/result/cloud.laz`.
+The cloud is20,272,168 points and its recorded SHA256 is above. It is a Python
+KISS-derived experiment, not the algorithm selected by dMapper's current
+`settings/livox-vertical.toml`. No accepted general fix or default change.
+
+Resume from the confirmed wall constraint: review the fixed initial plan
+registration and the existing trajectory/geometry leading to that wall, keeping
+the whole building alignment fixed rather than independently shifting the wall.
+Seek independently verified revisit constraints if needed; no candidate retrieval
+or graph test has been selected. Reuse preserved controls and failed-case evidence;
+do not repeat the rejected single-edge graph, map-size or hard-rotation trials.
+Charlie remains3/19; this checkpoint does not complete the replacement interface.
