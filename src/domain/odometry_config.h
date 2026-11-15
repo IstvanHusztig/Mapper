@@ -218,6 +218,15 @@ struct OdometryConfig
     // it and degenerate_projection_ratio_full the NDT information is scaled linearly. degenerate_projection_ratio_full = 0: off
     double degenerate_projection_ratio = 0.0;
     double degenerate_projection_ratio_full = 0.0;
+    // The normals n of that sum: by default each cell's normal_vector, which the previous cell statistics fix from the
+    // cell's first 3 points (a noisy direction: a smooth passage then reads a share of 0.15-0.27 along its axis). On:
+    // the normal from all of the cell's points (NdtBucket::all_points_normal); the same passage reads below 0.02.
+    bool degenerate_projection_all_point_normals = false;
+    // The covariance handed to the next window (end velocity, acceleration offset, gyro bias) comes from the window's
+    // normal matrix. On: for that covariance the NDT terms count along each direction only by their share of
+    // normal-direction information (sum of n n^T / (n^T C n) against the sum of the cells' inverse covariances), so the
+    // pull of points along a wall towards their cell's mean adds no confidence. The solve itself is unchanged.
+    bool carried_covariance_normal_information_only = false;
 
     // motion_model first trajectory node prior uncertainty
     double lidar_odometry_motion_model_fix_origin_x_1_sigma_m = 0.000001;

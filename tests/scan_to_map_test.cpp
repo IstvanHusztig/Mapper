@@ -726,6 +726,8 @@ namespace
         double translation_sigma_m = 1e-3;
         double offset_sigma = 0.01;      // acceleration offset prior: a carried bias, not a fresh one
         double rotation_sigma_deg = 0.0; // > 0: constant rotation sigmas instead of the gyro's (time-scaled ARW)
+        bool project_degenerate = true;         // the shipped degeneracy-aware NDT terms (0.1 / 0.2)
+        bool normal_only_covariance = false;    // carried_covariance_normal_information_only
     };
 
     // runs 30 iterations; the accelerometer reads the specific force R^T (a + g) in g
@@ -742,8 +744,9 @@ namespace
         }
         Options o = options_from(c);
         // the shipped degeneracy-aware NDT terms: without them, planar cells keep an in-plane pull along the corridor
-        o.scan_to_map.degenerate_projection_ratio = 0.1;
-        o.scan_to_map.degenerate_projection_ratio_full = 0.2;
+        o.scan_to_map.degenerate_projection_ratio = k.project_degenerate ? 0.1 : 0.0;
+        o.scan_to_map.degenerate_projection_ratio_full = k.project_degenerate ? 0.2 : 0.0;
+        o.scan_to_map.carried_covariance_normal_information_only = k.normal_only_covariance;
         Maps maps = build_maps(s, o.scan_to_map);
         std::vector<Point3Di> points = k.points ? observe(s, k.truth) : std::vector<Point3Di>{};
         Window w = make_window(k.guess);
@@ -911,4 +914,62 @@ TEST_CASE("scan-to-map, imu always on: a gap in the IMU samples drops the stretc
     MESSAGE("IMU gap: largest position error ", e.position * 1000.0, " mm; end velocity ", w.velocity.end.x(), " m/s");
     CHECK(e.position < 0.002);
     CHECK(std::isfinite(w.velocity.end.x()));
+}
+
+// change honest-degeneracy-measure (a): with the previous cell statistics a cell's normal_vector is fixed from its first 3
+// points, and the corridor's information then reads strong along its axis. The normals from all of a cell's points show the
+// blind direction, without changing the cells the points are matched to.
+TEST_CASE("scan-to-map: with the previous cell statistics, the normals from all points show the corridor's blind direction")
+{
+    const auto information = [](bool all_point_normals)
+    {
+        Options o = options_from(test_config());
+        o.scan_to_map.degenerate_projection_all_point_normals = all_point_normals;
+        const Scene s = corridor();
+        std::vector<Point3Di> map_points = sample_scene(s);
+        Maps maps;
+        update_rgd(o.scan_to_map.grid_indoor, maps.indoor, map_points, s.centre, false);
+        update_rgd(o.scan_to_map.grid_outdoor, maps.outdoor, map_points, s.centre, false);
+        const std::vector<Eigen::Affine3d> truth = true_poses();
+        std::vector<Point3Di> points = observe(s, truth);
+        Window w = make_window(truth);
+        NullLogger logger;
+        Eigen::Matrix3d info = Eigen::Matrix3d::Zero();
+        run_iterations(points, w, maps, o, 5.0, 1, logger, &info);
+        return info;
+    };
+    const Eigen::Matrix3d first_three = information(false), all_points = information(true);
+    const auto share = [](const Eigen::Matrix3d &info) { return info(0, 0) / std::max(info(1, 1), info(2, 2)); };
+    MESSAGE("corridor, previous statistics: share along the axis ", share(first_three), " with the first-3-point normals, ", share(all_points),
+            " with the normals from all points");
+    CHECK(share(first_three) > 0.2);  // reads as if the axis were constrained (above the projection thresholds)
+    CHECK(share(all_points) < 0.02);  // the axis is blind
+}
+
+// change honest-degeneracy-measure (d): the covariance handed to the next window counts the NDT terms only by their
+// normal-direction information. In the corridor without the projection, the points' pull along the walls makes the end
+// velocity along the axis look well known; with the setting it is about as uncertain as the accelerometer leaves it, while
+// across the axis, where the walls measure, it stays as it was. The poses are the same either way.
+TEST_CASE("scan-to-map, imu always on: the carried covariance takes no confidence from the pull along a wall")
+{
+    const auto run = [](bool normal_only)
+    {
+        AlwaysOnCase k;
+        k.truth = straight(1.0, 0.0);
+        k.guess = k.truth;
+        k.world_acceleration.assign(n_nodes, Eigen::Vector3d::Zero());
+        k.velocity_prior = Eigen::Vector3d(1.0, 0.0, 0.0);
+        k.velocity_prior_sigma = 0.5;
+        k.project_degenerate = false;
+        k.normal_only_covariance = normal_only;
+        return run_always_on(corridor(), k);
+    };
+    const Window plain = run(false), honest = run(true);
+    const auto sigma = [](const Window &w, int axis) { return std::sqrt(w.velocity.end_covariance(axis, axis)); };
+    MESSAGE("corridor, end velocity sigma along the axis ", sigma(plain, 0), " -> ", sigma(honest, 0), " m/s, across ", sigma(plain, 1), " -> ",
+            sigma(honest, 1), " m/s");
+    CHECK(sigma(honest, 0) > 2.0 * sigma(plain, 0)); // measured 5.9 -> 13.6 mm/s; across 3.9 -> 3.9 mm/s
+    CHECK(sigma(honest, 1) < 2.0 * sigma(plain, 1));
+    for (size_t i = 0; i < plain.poses.size(); i++)
+        CHECK(plain.poses[i].matrix() == honest.poses[i].matrix());
 }

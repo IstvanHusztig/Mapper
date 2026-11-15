@@ -40,6 +40,8 @@ handoff_tail_velocity_span_nr_samples = 20
 use_gyro_bias_estimation = true
 
 [imu_translation]
+carried_covariance_normal_information_only = false
+degenerate_projection_all_point_normals = false
 degenerate_projection_ratio = 0.0
 degenerate_projection_ratio_full = 0.0
 imu_acc_smoothing_s = 0.01
