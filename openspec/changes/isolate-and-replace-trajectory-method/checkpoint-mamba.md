@@ -150,3 +150,27 @@ standing still at 105-107.5 s (0.45 m) while the IMU shows steady steps. Along t
 covered gallery 110-125 s the map is also ~1 m short (11.0 m against ~12 m). dMapper's
 matched-gain control is ~3.3 m north there too (route-audit five-second-blocks), with
 `imu_always_on = true` in settings/livox-vertical.toml.
+
+## dMapper in the passage (2026-11-15, Claude; independent Sonnet review)
+
+Control run `livox4-matched-gain-fix-125s/run.log`, table in
+`quality/route-localization/dmapper-windows-99-114.txt` (`checkpoint-tools/window_table.py`).
+- Windows 287-302 (103.0-108.4 s): weak axis (0.72, 0.68, -0.08) along the passage;
+  info ratio 0.15-0.27 (288-290 at 0.19/0.15/0.19, so the projection ramp 0.1-0.2 is
+  partly active), 300-302 at 0.37-0.42.
+- End speed 1.15 -> 1.01 -> 0.99 -> 0.84 -> 0.60 -> 0.65 -> 0.37 -> 0.25 -> 0.13 m/s
+  (windows 286-294) while the user walks steadily; 0.2-0.5 m/s to 108.4 s; 304-310 still
+  0.5-0.8 m/s (results 0.14-0.28 m per window). Not recovered before ~111 s.
+- Start-velocity jump against the carried velocity: -0.05 to -0.10 m/s in 288-295
+  (chi2 92-423, prior sigma along the axis 0.006-0.007 m/s), ~0 in 296-299, positive in
+  300-302. Most of the collapse is in the carried guess itself (guess 0.395 -> 0.325 ->
+  0.30 m per window), each window ending 0.04-0.05 m below its guess: a compounding decay.
+  Implied deceleration 0.4-0.7 m/s^2, which the accelerometer term does not resist.
+- Sum over 287-302 of (0.395 - result move) = 3.7 m; including 304-310 gives ~5 m against
+  the measured 3.3-3.8 m (user may have slowed/turned near 110 s). Order of magnitude fits.
+- NDT profile along the weak axis: lower cost at +-2 m in several windows, but
+  `ndt_window_cost` skips points in no map cell, so shifting points off the map lowers the
+  cost without a better fit (cause 2 of synchronized-retune 4.8; candidate 2's
+  `ndt_unmatched_point_cost` addresses exactly this). Not proof of a wrong pull by itself.
+Next (proposed): code diagnosis of what lowers each window below its guess (motion model
+tied to the slower guess, NDT with escaping points, accelerometer weight); no fix chosen.
