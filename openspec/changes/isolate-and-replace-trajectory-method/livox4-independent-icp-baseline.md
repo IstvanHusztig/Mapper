@@ -345,3 +345,108 @@ behavior and motion, recording actual map occupancy/capacity effects. Thin runne
 requires review before launch; full-route continuation requires credible geometry
 and angular evidence together. This is an experimental API override, not stock
 configuration or dMapper integration. Current raw files/control are unchanged.
+
+### Wider map and fixed-rotation results: neither promoted
+
+The reviewed0.4m-map35s candidate completed. F271 initial support rises from
+3,363/3,861 to3,870/3,873, all3,873 at fitted pose; map points fall162,356 to11,208.
+Angular disagreement7.645 to7.252deg locally and15.267 to10.579deg at35s does
+not have a corresponding geometry gain. Identical89,505 rows: heldout median
+0.4305 to0.4315m, p902.537 to2.603m. Near-room25–27s essentially unchanged;
+27–30s heldout p900.53959 to0.54318m. Reviewer confirms joint gate fails; no
+full replay/export. Search support alone was insufficient. No map-size sweep.
+
+One already reviewed offline F271 test then fixed rotation to the measured gyro
+increment and optimized only translation on the same gyro-deskewed source/map.
+Rehydrated official native endpoint agrees with archive to3.3e-16m/3.8e-15deg;
+Python six-DOF reproduces native1.9e-15m/1.1e-14deg and exact selected rows.
+Same27-cell search, strict cutoff, GM IRLS and left-SE3 updates; fixed rotation
+is enforced during solving, not clamped afterward. Fixed versus free result:
+support3,468 versus3,477/3,521; all-source median/p9034.6/85.9mm versus16.8/38.3mm;
+speed0.962 versus0.907m/s. On15,399 withheld raw nonrepresentatives, heldout-room
+median0.2016 versus0.1998m; p900.6109 versus0.6347m; within10cm29.13% versus32.24%.
+The mixed tail does not outweigh worse central fit/support. No hard gyro lock
+selected. Case evidence: `fixed-map-case/rotation-constraint/comparison.json`.
+
+### Lag sensitivity separates constant-motion deskew from clock hypotheses
+
+Root `return-check/check_rotation_timing.py` compares stored LiDAR angular
+increments with the original raw gyro over shifts[-200,+200]ms. Full moving
+intervals favor-50 to-70ms across all five temporal blocks; aggregate median
+disagreement1.499 to1.120deg at-60ms. This is estimate-based sensitivity, NOT
+sensor clock calibration. Positive lag means IMU evaluated later than LiDAR.
+
+Crucially, identical25–35s intervals from the four controlled branches favor
+-50ms/-60ms for stock/prediction-only, but ZERO for measured rotational deskew
+and both. Zero-lag median per-frame disagreement1.412/1.352/0.211/0.199deg.
+Independent review confirms conventions and supports deskew-dependent effective
+lag rather than a recorder offset claim. Since gyro enters those corrected
+estimates, this remains a mechanism check, not independent ground truth.
+Preserve original timestamps; no retiming or bias adjustment. Evidence:
+`rotation-timeline/timing-sensitivity.json`, `timing-branches.json`.
+
+### Gyro-deskew-only125s geometry coverage test
+
+Independent review supports ONE expanded prefix to obtain geometry coverage
+beyond the35s room departure, not to declare that the prior joint gate passed.
+Run folder `livox4-kiss-gyro-deskew-125s/`, .1m map and stock prediction,
+registration and adaptation. Only per-return rotational deskew changes.
+F0 retains stock identity deskew because points begin before first IMU .00247s;
+F1 first gyro query .100005s is covered. Original full IMU supplies the final
+bracket [125.0005489,125.00272627] for last point125.00166s; its prefix bytes and
+startup0–23s bias match the verified input. No extrapolation, retiming or dropped
+leading points. All20,272,168 raw rows/attributes must survive compressed export.
+
+Before candidate launch, root froze `livox4-kiss-icp-fine-125s/quality/
+frozen-indoor-revisits.{npz,json}` with control-only plan boxes, same-side camera
+location and source-ID modulo19. South region has2,243 static2–10s and3,816
+later25–60s points. Static-only plane support62.2% within30mm; all broad-box
+points remain in scoring. Mixed window/surface attribution prevents surveyed-wall
+accuracy claims. Partition/north lack static coverage and are NOT MEASURED.
+The existing27,299 marked IDs and exact old rigid/plan alignment remain frozen.
+Reviewer accepts these plus the overview as a bounded diagnostic, not whole
+indoor preservation or adoption. Candidate positions must not reselect cohorts.
+
+Runner and freeze independently reviewed; launched once PID32420. Estimated
+2–4min including export/readback, no full route. Root evaluates fixed marked
+direction/offset/height/coverage and frozen-room distributions after completion.
+This remains an external experimental KISS-derived method; no dMapper algorithm
+or user settings switch. Wider-map and hard-rotation branches stay unpromoted.
+
+The125s run completed118.763s including export/readback; all1,250 frame boundaries
+and20,272,168 raw IDs/attributes verified. F0 pose bitwise equals stock. Cloud
+SHA2564506b2c0a4fbe87f435135f4cd35874370071523a6c2c99226f1b59399f78d73,
+`livox4-kiss-gyro-deskew-125s/result/cloud.laz`. Native range total20,250,275;
+per-frame range membership can change with deskew and was verified explicitly.
+
+Same marked27,299 returns: late offset p50/p903.343/3.535m versus stock fine
+3.642/3.758m; line angle-2.828 versus-0.794deg; median height0.525 versus0.966m.
+The frozen mixed south cohort25–60s abs median/p9044.5/150.4mm versus43.4/148.6mm,
+spread62.3 versus70.1mm, within10cm67.95% versus70.07%. For40–60s coverage falls
+76.90% to72.33%; early25–30s median improves28.3 to22.9mm. All15,369 frozen indoor
+IDs retained; north/partition static comparison remains NOT MEASURED. Root viewed
+overlay; reviewer crosschecked trade-offs. No joint whole-map pass or full-route
+gyro-deskew replay selected. Figure caption corrected to identify the gyro-deskew
+experiment, not stock KISS; initial report retained as `comparison.initial-label.json`.
+
+User feedback after these results: **"Thats a good result"**. Preserve this
+candidate and positive feedback; it does not constitute a default-adoption or
+fixed-map claim. Root requested the physical identity/level of the marked strip
+again because that reference remains uncertain. Existing-data work continues:
+four predefined complete raw frames F400/F450/F500/F550 against the static room,
+with gyro/stock rotation seeds, held-out coverage and all outcomes preserved,
+to seek a second non-endpoint geometry constraint. No new odometry is needed.
+
+All four predefined queries failed to support an initial-room loop. Best10cm
+whole/heldout overlap: F40025.1%/9.5%, F45017.1%/7.3%, F500zero with both seeds,
+F5509.6%/3.0%. All eight outcomes and raw-source identities preserved in
+`livox4-kiss-nonendpoint-revisits/`. No reverse test triggered and no edge added.
+Independent review confirms this rejects these specific queries, not existence
+of all non-endpoint revisits. Further discovery needs independent scene retrieval
+or a physically identified repeated region, not additional ad hoc timestamps.
+Terra assessed MapClosures2.2: pinned WindowsCP313 wheel exists but dependencies
+conflict with the frozen KISS environment, requiring a separate environment.
+Default0.5m BEV pixels and31-pixel ORB border leave images under~31m with no
+usable interior; do not blindly process small indoor blocks. Internal ground
+alignment, source-to-query transform direction, 2D-only inliers and multifloor
+aliases require explicit pilot/3D verification. No install/retrieval selected.
