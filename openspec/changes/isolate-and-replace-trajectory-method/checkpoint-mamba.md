@@ -216,3 +216,14 @@ Direction (no candidate proven): (a) honest degeneracy measure (reliable normals
 in-plane pull; (c) estimate accelerometer bias and tilt over a span long enough to cover a
 passage, so the IMU carry holds; (d) do not hand on a velocity confidence that comes from
 the NDT's in-plane terms. The user decides the next step.
+
+## (a) and (d) tried (2026-11-15, branch honest-degeneracy-measure, commit 80cf4c4)
+
+Settings `degenerate_projection_all_point_normals` (a) and `carried_covariance_normal_information_only` (d), both off
+by default; off is identical to the unchanged code on 44_short (apart from the parameters TOML). The unchanged branch
+code no longer matches the checked-in 44_short manifest (trajectory files differ; pre-existing, not investigated).
+Livox 4 125 s prefix, settings/livox-vertical.toml, loop closure and consistency off (`livox4-honest-*`):
+unchanged 100->110 s 5.40 m, 110->124 s 20.44 m (runaway warnings >5 m/s at ~35 s and ~112 s already);
+(a) 13.77 / 25.34 m, 62 m off the unchanged run by 100 s, 383 warnings: switching the NDT off along the weak
+axis without a reliable IMU carry runs away. (d) and (a)+(d) stopped by the user (not likely to help).
+Conclusion: (a) is unusable without (c), a reliable IMU carry (accelerometer bias and tilt). Next decision: the user's.
