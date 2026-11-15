@@ -174,3 +174,45 @@ Control run `livox4-matched-gain-fix-125s/run.log`, table in
   `ndt_unmatched_point_cost` addresses exactly this). Not proof of a wrong pull by itself.
 Next (proposed): code diagnosis of what lowers each window below its guess (motion model
 tied to the slower guess, NDT with escaping points, accelerometer weight); no fix chosen.
+
+## Code diagnosis and three one-setting variants (2026-11-15, Claude Fable; Sonnet review)
+
+Code (`scan_to_map.cpp`, `run_odometry.cpp`, `ndt_map.cpp`): only the NDT term can move a
+window off its guess. The motion model (sigma 1e-4 m) is centred on the guess; the
+accelerometer triples see only acceleration (floor 0.1 m/s^2, weak against a false
+0.5 m/s^2); the start-velocity prior is overruled (chi2 100-400). The end-velocity
+covariance handed to the next window comes from the undamped normal matrix INCLUDING the
+NDT terms, so the slowed speed is carried with ~5 mm/s confidence (self-reinforcing).
+Default cells: mean = first point, normal fixed from the first 3 points (never updated);
+the degeneracy projection uses exactly those normals (sum n n^T).
+
+Variants: the control's frozen binary and TOML with one setting changed, loop closure
+and consistency off, folders `livox4-passage-<name>/`, table in
+`quality/route-localization/passage-variants-summary.txt` (one run each, no noise floor):
+
+| run | 100->110 s (truth ~10 m) | 110->124 s (truth ~11-12 m) | passage info ratio |
+|---|---|---|---|
+| control | 5.30 | 11.05 | 0.15-0.27 |
+| use_exact_ndt_bucket_statistics | 7.34 | 8.80 | 0.001-0.016 |
+| projection 0.3 / 0.5 | 8.93 | 4.84 | as control |
+| imu_accel_floor_sigma 0.02 | 5.31 | 30.3 (runaway) | as control |
+
+- No setting fixes passage and gallery together. Exact statistics read the passage as
+  ~0.005 against 0.15-0.27 by default: the detector's reading depends on the cell normals
+  (likely the noisy first-3-point normal; real oblique surfaces not excluded; direct test:
+  the information matrix with exact normals on the same cells).
+- With the NDT off along the axis the speed still drifts about -0.1 to -0.25 m/s per
+  second (IMU-only carry), later the other way (2.6-2.9 m/s at 124 s, proj and exactstats).
+- Raw-IMU test (`imu_only_passage.py`: gyro + slow gravity correction, v0 and yaw fitted
+  on 96-103 or 93-102 s): 100->110 s from 0.9 to 29 m depending on gain and fit window.
+  This simple model cannot carry the passage; it fits no accelerometer bias or tilt, so it
+  does not show the IMU cannot.
+- History: point-to-plane NDT (archive 2026-10-11) removed the in-plane pull; 44 ran away
+  on the stairwell, its gallery stall shrank. Same trade-off: the in-plane pull prevents
+  runaway where the LiDAR has no real information along an axis and causes under-travel in
+  a passage.
+Direction (no candidate proven): (a) honest degeneracy measure (reliable normals);
+(b) along a detected weak axis keep only real information (surfaces facing along it), no
+in-plane pull; (c) estimate accelerometer bias and tilt over a span long enough to cover a
+passage, so the IMU carry holds; (d) do not hand on a velocity confidence that comes from
+the NDT's in-plane terms. The user decides the next step.
