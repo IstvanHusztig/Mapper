@@ -241,3 +241,13 @@ Conclusion: (a) is unusable without (c), a reliable IMU carry (accelerometer bia
 - 125 s prefix: the gyro values alone give the passage 10.3 m (true ~10) but stall the gallery (2.9 m of ~12).
 - Livox 4 reference manifest tools/baseline/livox4.manifest.json (raw data/livox/4_baseline); 44 baselines refreshed.
 - Waiting for: the user's look at livox3-allfixes-full; then the IMU carry design (roadmap step 2).
+
+**User verdict (2026-11-15, end of day):** both Livox 3 maps (current settings and all fixes) look horrible. The
+log-based measures (gyro agreement, loops accepted, warnings) did not reflect map quality; no "right direction" claim
+holds. The user remembers Livox 3 (indoor only) coming out well with dMapper earlier, so something between that
+version and today's branch broke it.
+
+**Next (agreed to continue 2026-11-16):** before any further fix, (1) identify the good Livox 3 result (ask the
+user; candidate folder experiments/phase0b-2026-11-12/livox3-indoor/), its build and settings; (2) rerun that version
+to confirm; (3) bisect code commits and settings (e.g. the 500 Hz Livox settings, master 5a17b7d) until the map turns
+bad, with the user judging maps by eye at each step. The IMU carry design waits for this.
