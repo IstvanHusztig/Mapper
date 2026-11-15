@@ -97,3 +97,21 @@ axis audit and localize deformation along the existing route to the confirmed
 wall, using the reviewed rejection of a simple global alignment explanation.
 Preserve the positively received candidate and all failed branches. No new
 experiment is selected by this checkpoint.
+
+## Axis audit reviewed (2026-11-15, Claude; independent Sonnet review agrees)
+
+`checkpoint-tools/axis_observability.py` (read-only, on the same inputs) splits the
+fitted rotation and its uncertainty. Lag 0: tilt 0.50 deg, about vertical -1.73 deg;
+lag -50 ms: 0.70 / -1.06 deg. Gyro excitation is almost only yaw (eigenvalues
+0.17 / 0.48 / 12.9 rad^2, dominant axis z), so rotation about z is barely observable.
+1-sigma (x, y, z): 0.48 / 0.48 / 2.15 deg for independent samples, about 0.77 / 0.77 /
+3.4 deg with the overlapping windows. Residual 1.74 deg per component per 0.5 s,
+dominated by LiDAR-odometry noise. Every fitted component is within 1 sigma.
+
+Result: no misalignment detected. The audit only bounds it to roughly 1 deg tilt and
+a few degrees about z; it is a gross check, not a calibration, with two lags only.
+In this KISS run the gyro only deskews within a frame (`run_kiss.py`: per-return
+rotation in deskew; prediction native `last_delta`) and heading comes from ICP, so an
+axis error of this size cannot explain the 3.5 m / -2.8 deg wall offset here. It says
+nothing about dMapper, where the gyro is a rotation prior. Axis audit closed.
+Next: localize the deformation along the existing route to the confirmed wall.

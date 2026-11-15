@@ -3,7 +3,7 @@
 Read openspec/changes/isolate-and-replace-trajectory-method/checkpoint-mamba.md.
 All assigned audits completed and files saved; no active run. Confirmed wall is
 at apartment56 level. Reviewed global SE2/start-room/wall constraints incompatible;
-axis audit saved but independent review pending. Resume from recorded next step,
+axis audit reviewed 2026-11-15: no misalignment detected, closed. Resume from recorded next step,
 not another global shift or repeated failed experiment. No new run selected.
 This supersedes old pending-question, active-audit and earlier checkpoint hashes.
 # Checkpoint mamba - latest authority
