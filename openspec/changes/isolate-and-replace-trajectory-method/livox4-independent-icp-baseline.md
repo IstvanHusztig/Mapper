@@ -186,3 +186,96 @@ Raw IMU checks confirm502Hz, no timestamp regressions/gaps/false offsets and
 time block must not be labeled stationary solely from the same-table report.
 Evaluate both raw-supported return geometry and trajectory displacement; no
 endpoint-fitting correction is applied to the output. Full result pending.
+
+## Full run completed
+
+All3,663 frames and60,037,017 source rows/attributes verified; exit0, empty
+stderr. Last frame processing/export clock521.389s; end-to-end572.063s.
+Cloud: `livox4-kiss-icp-fine-full/result/cloud.laz`, SHA256
+`c079f11d04d7b83492827f6f8ba37fe159bb3f5151ada486cfff611611b036d1`.
+The first1,250 frame times and input/range/voxel counts equal the prefix exactly.
+Maximum pose translation difference3.935e-14m and rotation2.316e-13deg: roundoff,
+not bitwise identity. Evidence: `tools/shared-prefix-comparison.json`.
+
+Full path length289.643m; first-to-last sensor displacement1.990m, maximum
+frame-interval speed4.177m/s. These are trajectory measurements, not proof of
+accuracy or a fixed map. The marked prefix wall measurements remain unchanged.
+Root inspected full top/side views and the fixed prefix overlay. Full-run
+`quality/comparison.json`, `plan-comparison.png`, `overview.png` preserve evidence.
+The user can inspect the full cloud; no dMapper production method has changed.
+
+Next existing-data check compares first2-10s room geometry with complete ending
+frames in their local sensor coordinates. The user reports a return to the same
+table, but the final IMU block is not independently classified stationary. Keep
+estimated map placement separate from a diagnostic local registration; retain
+source identity, overlap, geometric support and held-out checks, and do not apply
+an endpoint correction to the cloud. This determines whether a geometrically
+supported loop constraint is available. Questions about the marked physical
+surface and outdoor floor level remain pending; no annotation/reflection claim.
+
+## Return geometry and bounded graph test
+
+Existing raw-ID-preserving return samples independently support one room loop:
+identity and bias-corrected raw-gyro seeds converge to local relative translation
+28–32mm and rotation9.26–9.29deg. Against the accumulated KISS placement, this
+requires approximately2.02m and51.2deg correction (total rotation, not pure yaw).
+Disjoint-target/source holdout median improves1.29–1.32m to0.171–0.172m;
+whole sampled-source median improves~1.18m to~0.0205m. Target coverage differs,
+so neither is surveyed accuracy. Adjacent ending frames count as ONE constraint.
+KISS-orientation initialization remains in a worse basin. Evidence and scripts:
+`livox4-kiss-icp-fine-full/return-check/seeded-return-comparison.json`.
+Independent review checked conventions, heldout selection and seed sensitivity.
+
+One offline native graph test used actual KISS keyposes every22frames (~2.2s),
+fixed F19 gauge and exact F3660 ending pose, and that single measured edge.
+World correction C=Ti*Tfit*inverse(Tj), native measurement=inverse(Ti)*C*Tj.
+Archived graph weights were unchanged and explicitly uncalibrated for KISS.
+Native no-loop control differs by9.33e-15; known-rigid direction test passes;
+marked-point retract/place identity max7.11e-15m. Independent reviewer cleared
+the bounded solve with fixed early-room and marked-cohort gates before export.
+
+The trial FAILS those gates. Loop residual2.019m/51.192deg shrinks to
+0.00545m/0.11478deg, but maximum pose shift9.492m fails native plausibility.
+First60s shifts up to1.271m/8.786deg. Early room2–10s versus15–23s nearest
+p50/p90 worsens9.57/25.83mm to43.68/118.12mm; within10cm falls99.87% to83.27%.
+Marked wall median offset improves3.642 to1.906m while line angle worsens
+-0.794 to-18.179deg. No full corrected cloud was exported or original modified.
+Artifacts: `livox4-kiss-return-graph/{native-result.json,quality-gate.json,
+trial-frame-poses.npz,sampled-quality-geometry.npz,before-after-preview.png}`.
+Closing the endpoint by distributing the large error is insufficient.
+
+## Raw gyro disagreement timeline
+
+Existing-data Python `return-check/trace_rotation_drift.py` integrates body rates
+by right SO3 multiplication, with timestamp interpolation at every stored frame
+endpoint and no extrapolation beyond the final IMU. Bias uses quiet0–23s;
+two disjoint startup halves are sensitivity checks, not confidence intervals.
+Gyro is an independent diagnostic, not ground truth. Total KISS/gyro rotation
+disagreement exceeds5deg at27.200535s and10deg at33.700665s, before108s.
+Final covered disagreement44.569deg; half-bias variants43.904 and45.242deg
+with similar first crossings. Several later intervals add or reduce disagreement,
+so one isolated108s rotation jump does not explain this independent baseline.
+The return-scene correction51.2deg and gyro discrepancy44.6deg are different
+references and must not be conflated. Results/CSV/PNG in
+`livox4-kiss-icp-fine-full/return-check/rotation-timeline/`.
+Independent review verified units, body conventions, recorder shared time epoch
+and endpoint pairing. The earliest sharp case F271 at27.200535s has6.094deg
+gyro rotation versus9.252deg KISS rotation, with7.645deg relative disagreement
+(different rotation axes, so magnitude subtraction is not the discrepancy).
+The graph result and preview were also independently crosschecked: no export.
+
+Next bounded comparison: original-start0–35s, fork25s, four branches (control,
+gyro prediction rotation only, gyro deskew rotation only, both), external folder
+`livox4-kiss-gyro-source-35s/`. Every branch must reproduce archived poses and
+counts through the fork, and control through35s. Preserve stock configuration,
+translation prediction, adaptive threshold machinery, sampling and map update.
+For the deskew branch use per-return Rgyro(end)^-1*Rgyro(t), preserving the exact
+stock per-time translation curve obtained from native preprocessing of zeros.
+This separates measured rotation from the SE3 translation interpolation; merely
+replacing delta's endpoint rotation would alter both. Prediction rotation uses
+gyro between successive observed frame ends, retaining original delta translation.
+Stock ICP still freely estimates pose; this is no hard gyro constraint.
+Compare identical heldout raw IDs against fixed stationary-room geometry as well
+as gyro disagreement and source support. Changed map/threshold after the fork are
+downstream effects, not separately isolated factors. Script and synthetic checks
+require independent review before execution. No full replay or integration chosen.
