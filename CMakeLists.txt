@@ -201,6 +201,26 @@ target_include_directories(lo_infrastructure
           ${EXTERNAL_LIBRARIES_DIRECTORY}/Fusion/Fusion)
 target_link_libraries(lo_infrastructure PUBLIC lo_application PRIVATE ${PLATFORM_LASZIP_LIB} Fusion ${PLATFORM_MISCELLANEOUS_LIBS})
 
+# the build's identity (git commit, uncommitted changes, configuration) for the results JSON: build_info.h, refreshed at
+# every build by cmake/build_info.cmake
+string(TOUPPER "${CMAKE_BUILD_TYPE}" BUILD_TYPE_UPPER)
+get_directory_property(DMAPPER_DIRECTORY_DEFINITIONS COMPILE_DEFINITIONS)
+string(REPLACE ";" " " DMAPPER_DIRECTORY_DEFINITIONS "${DMAPPER_DIRECTORY_DEFINITIONS}")
+set(BUILD_INFO_HEADER ${CMAKE_BINARY_DIR}/generated/build_info.h)
+add_custom_target(build_info ALL
+  COMMAND ${CMAKE_COMMAND}
+          -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+          -DOUTPUT=${BUILD_INFO_HEADER}
+          -DBUILD_TYPE=${CMAKE_BUILD_TYPE}
+          "-DCOMPILER=${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}"
+          "-DCXX_FLAGS=${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${BUILD_TYPE_UPPER}}"
+          "-DCOMPILE_DEFINITIONS=${DMAPPER_DIRECTORY_DEFINITIONS}"
+          -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/build_info.cmake
+  BYPRODUCTS ${BUILD_INFO_HEADER}
+  COMMENT "build_info.h")
+add_dependencies(lo_infrastructure build_info)
+target_include_directories(lo_infrastructure PRIVATE ${CMAKE_BINARY_DIR}/generated)
+
 # presentation: the GUI's view-model (its state and actions). Only the infrastructure's include directories, no ImGui,
 # GLUT, GL or file dialogs, so it builds and is tested without a display
 add_library(lo_gui_view_model STATIC

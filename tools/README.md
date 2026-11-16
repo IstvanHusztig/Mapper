@@ -318,6 +318,7 @@ python tools/compare_baseline.py --write-manifest <out_dir> <manifest.json> --da
 - Every file is compared by SHA-256. The only things normalized are the values that change on every run:
   - the date-time in the `dMapper_params_*`/`dMapper_results_*` file names;
   - `elapsed time seconds`, `elapsed_time_seconds`, `processing_date` and `build_date`, plus the `# Created on` line of the params TOML;
+  - the results JSON's `git_commit` and `git_uncommitted_changes` (`build_info`: the build's flags and definitions are compared);
   - absolute paths of the output and input folders, which become `<OUT>` and `<IN>`.
 
   Everything else, including every LAZ and trajectory byte, must match.
@@ -355,3 +356,16 @@ python tools/rename_identifiers.py app -m intermediate_trajectory=poses -m gyro_
 - **Output:** line endings are kept. A summary per file and in total is printed.
 - **Exit codes:** 0 done, 2 usage error.
 - **Known limit:** raw string literals (`R"(...)"`) are treated as code.
+
+## function_sizes.py
+
+Lists the functions of a source tree longer than a limit, largest first: the "huge functions" of
+`docs/code-split-and-region-agents-plan.md` (stage 6), as a number that can be tracked.
+
+```
+python tools/function_sizes.py [src] [--min 80]
+```
+
+- A function runs from its first line at column 0 to the next line starting with `}` (dMapper's .cpp style); functions
+  inside an anonymous namespace are indented and not counted. The length includes blank lines and comments, so it is
+  approximate, and a class body defined at column 0 can show up under the name of its first member.

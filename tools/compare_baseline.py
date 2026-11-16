@@ -33,7 +33,8 @@ NAME_DATETIME = re.compile(r"_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}(?=\.(toml|json)$)")
 TEXT_FILE = re.compile(r"^(session\.mjs|dMapper_params_.*\.toml|dMapper_results_.*\.json)$")
 
 # run-dependent values, replaced by <IGNORED> (key = value / "key": value, up to the end of the value)
-NORMALIZE_JSON_KEYS = ["elapsed time seconds", "elapsed_time_seconds", "processing_date", "build_date"]
+NORMALIZE_JSON_KEYS = ["elapsed time seconds", "elapsed_time_seconds", "processing_date", "build_date",
+                       "git_commit", "git_uncommitted_changes"]
 NORMALIZE_TOML_KEYS = ["build_date"]
 NORMALIZE_TOML_LINES = [re.compile(r"^# Created on: .*$", re.M)]
 
