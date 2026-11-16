@@ -8,6 +8,7 @@
 #include "optimizer_options.h"
 #include "phase_timing.h"
 #include "scan_to_map.h"
+#include "window_loop.h"
 #include "window_steps.h"
 #include <point_placement.h>
 
@@ -18,60 +19,8 @@
 
 namespace
 {
-    // settings of the window loop, fixed for a run
-    struct OdometryRunSetup
-    {
-        MotionModelRotationOptions rotation_options; // bias_prior_* are set per window
-        ScanToMapOptions scan_to_map;
-        MotionModelOptions motion_model;
-        double bias_rw_rad = 0.0;
-        double bias_sigma0_rad = 0.0;
-        bool have_acc = false;     // raw accelerometer and AHRS orientation of every node
-        bool use_imu_pred = false; // IMU-aided translation prediction
-        bool use_zupt = false;     // zero-velocity detection
-        double gravity_norm = 1.0; // accelerometer reading of gravity [g]
-        bool always_on = false;    // accelerometer term in every window after the first, with velocity states (imu_always_on)
-        double acc_offset_sigma0 = 0.0;
-        bool use_acc_prior = false;               // velocity-continuity prior
-        bool uses_previous_velocity = false;      // the acc prior, IMU translation or the accelerometer term need it
-        PosePredictionOptions prediction;         // how the initial guess of a window is predicted
-    };
-
-    // log_stage_timing: where the window loop spends its time, summed over all windows
-    struct OdometryTiming
-    {
-        ScanToMapTiming lm;      // inside optimize_lidar_odometry
-        PhaseTime point_load;    // reading the window's points from the PointStore
-        PhaseTime lm_iterations; // run_lm_iterations as a whole
-        PhaseTime preview;       // send_preview
-        PhaseTime add_to_map;    // add_window_to_map (update_rgd, sliding-map rebuild)
-        PhaseTime window_total;  // one window, from loading its points to adding it to the map
-        std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now(); // the breakdown is relative to the time since
-    };
-
-    // what the window loop carries from one window to the next
-    struct WindowLoopCarry
-    {
-        GyroBiasState bias;                                     // the previous window's estimate, the prior of the next one
-        Eigen::Vector3d acc_gravity = Eigen::Vector3d::Zero();  // gravity in the odometry frame [accelerometer units]
-        Eigen::Matrix3d acc_offset_cov = Eigen::Matrix3d::Zero(); // prior of the next window's acceleration offset
-        double acc_distance = 0.0;                              // trajectory length since the last sliding-window reset [m]
-        std::vector<Point3Di> points_global;                    // map points since the last reset
-        int stationary_windows = 0;
-        int turn_windows = 0;
-        int map_rebuilds = 0;                                   // sliding_window_trajectory_length_threshold reached
-        int acc_term_windows = 0;
-        int rest_windows = 0;                                        // imu_always_on: windows at rest
-        bool velocity_valid = false;                                 // imu_always_on: the previous window estimated its end velocity
-        Eigen::Vector3d velocity_mean = Eigen::Vector3d::Zero();     // ... the prior of the next window's start velocity
-        Eigen::Matrix3d velocity_cov = Eigen::Matrix3d::Identity();
-        double velocity_time_s = 0.0;                                // ... at the previous window's last node
-        bool first_window_at_rest = false;
-        std::vector<IterationConvergence> convergence; // per window, with log_iteration_convergence
-        OdometryTiming timing;                         // with log_stage_timing
-    };
-
-    OdometryRunSetup prepare_run(const std::vector<Window> &windows, const OdometryConfig &params, Logger &logger)
+    // first: the run's first window (only its IMU data is read)
+    OdometryRunSetup prepare_run(const Window &first, const OdometryConfig &params, Logger &logger)
     {
         OdometryRunSetup s;
         s.rotation_options = get_motion_model_rotation_options(params);
@@ -81,8 +30,7 @@ namespace
         s.bias_sigma0_rad = params.gyro_bias_initial_sigma_deg_s * DEG_TO_RAD;
 
         // IMU-aided translation prediction: raw accelerometer and AHRS orientation of every node are needed
-        s.have_acc = !windows.empty() && windows[0].imu_acc.size() == windows[0].poses.size() &&
-                     windows[0].imu_angles.size() == windows[0].poses.size();
+        s.have_acc = first.imu_acc.size() == first.poses.size() && first.imu_angles.size() == first.poses.size();
         s.use_imu_pred = params.use_imu_translation_prediction && s.have_acc;
         s.use_zupt = params.use_zero_velocity_detection && s.have_acc;
         if ((params.use_imu_translation_prediction || params.use_zero_velocity_detection) && !s.have_acc)
@@ -91,9 +39,9 @@ namespace
         if (s.have_acc)
         {
             double sum = 0.0;
-            for (const auto &a : windows[0].imu_acc)
+            for (const auto &a : first.imu_acc)
                 sum += a.norm();
-            s.gravity_norm = sum / double(windows[0].imu_acc.size());
+            s.gravity_norm = sum / double(first.imu_acc.size());
         }
 
         s.always_on = params.imu_always_on && s.have_acc;
@@ -122,7 +70,7 @@ namespace
     }
 
     // the carried state before the first window (window 0 already placed)
-    WindowLoopCarry start_carry(const OdometryRunSetup &setup, const std::vector<Window> &windows)
+    WindowLoopCarry start_carry(const OdometryRunSetup &setup, const Window &first)
     {
         WindowLoopCarry c;
         c.bias.covariance = Eigen::Matrix3d::Identity() * (setup.bias_sigma0_rad * setup.bias_sigma0_rad);
@@ -130,22 +78,13 @@ namespace
         // (the recording starts at rest); the acceleration offset e is folded into it after every window
         if (setup.always_on)
         {
-            for (size_t k = 0; k < windows[0].imu_acc.size(); k++)
-                c.acc_gravity += rotation_of(windows[0].poses[k]) * windows[0].imu_acc[k];
-            c.acc_gravity /= double(windows[0].imu_acc.size());
+            for (size_t k = 0; k < first.imu_acc.size(); k++)
+                c.acc_gravity += rotation_of(first.poses[k]) * first.imu_acc[k];
+            c.acc_gravity /= double(first.imu_acc.size());
         }
         c.acc_offset_cov = Eigen::Matrix3d::Identity() * (setup.acc_offset_sigma0 * setup.acc_offset_sigma0);
         return c;
     }
-
-    // the accelerometer term of one window and the motion-model options that depend on it
-    struct AccTerm
-    {
-        MotionModelTranslationImuOptions options; // enabled only in windows that use the term
-        MotionModelOptions motion_model;          // the window's translation sigmas (loosened while the term is active)
-        Eigen::Matrix3d offset_cov;               // acceleration-offset covariance, updated by the optimization
-        double window_duration_s = 0.0;
-    };
 
     // accelerometer term (imu_always_on, from the second window on, like the bias): offset prior grown by its random walk
     AccTerm prepare_acc_term(const Window &window, bool after_first_window, const OdometryRunSetup &setup, const WindowLoopCarry &carry,
@@ -273,6 +212,8 @@ namespace
     // Levenberg-Marquardt iterations of optimize_lidar_odometry: until the update falls below convergence_delta_threshold,
     // nr_iter iterations ran, or the window took longer than real_time_threshold_seconds; the damping grows every 10
     // iterations and after a step that was not applied (next_lm_factor).
+    // forced_last_iteration >= 0 (a replay, window_replay.h): the iterations end after that one, as they did in the run that
+    // was captured, and the time limit is not checked, so the result doesn't depend on the computer's speed.
     // lm_step_check: each call also returns the cost of the state it starts from; when that is higher than the cost of the
     // last accepted state, the step that led there is taken back and the damping raised x10. After the loop the last step
     // is checked too, so the window ends at the lowest-cost state it reached.
@@ -280,7 +221,7 @@ namespace
                                          const OdometryRunSetup &setup, AccTerm &acc_term, const MotionModelRotationOptions &window_rotation_options,
                                          const VelocityPrior &velocity_prior, Eigen::Vector3d &acc_offset, Eigen::Matrix3d &lidar_translation_information,
                                          const OdometryConfig &params, bool debugMsg, Logger &logger, ScanToMapTiming *timing,
-                                         ScanToMapWorkspace &workspace)
+                                         ScanToMapWorkspace &workspace, int forced_last_iteration)
     {
         double delta = 100000.0;
         double lm_factor = params.lm_factor_initial;
@@ -319,7 +260,8 @@ namespace
         bool have_accepted = false;
         int rejected_steps = 0;
 
-        for (int iter = 0; iter < params.nr_iter; iter++)
+        const int last_iteration = forced_last_iteration >= 0 ? forced_last_iteration : params.nr_iter - 1;
+        for (int iter = 0; iter <= last_iteration; iter++)
         {
             iter_end = iter;
             delta = 100000.0;
@@ -364,7 +306,7 @@ namespace
             end = std::chrono::system_clock::now();
             std::chrono::duration<double> elapsed_seconds = end - start;
 
-            if (elapsed_seconds.count() > params.real_time_threshold_seconds)
+            if (forced_last_iteration < 0 && elapsed_seconds.count() > params.real_time_threshold_seconds)
                 break;
         }
 
@@ -906,6 +848,181 @@ namespace
     }
 } // namespace
 
+void start_window_loop(WindowLoop &loop, const Window &first, const OdometryConfig &params, Logger &logger)
+{
+    loop.setup = prepare_run(first, params, logger);
+    loop.carry = start_carry(loop.setup, first);
+}
+
+bool process_windows(WindowLoop &loop, std::vector<Window> &windows, size_t first, size_t last, const OdometryConfig &params,
+                     OdometryState &state, double &ts_failure, bool debugMsg, PointStore &point_store, PreviewSink &preview, Logger &logger,
+                     ProgressReporter &progress, const WindowRange &range)
+{
+    OdometryRunSetup &setup = loop.setup;
+    WindowLoopCarry &carry = loop.carry;
+    ScanToMapWorkspace &workspace = loop.workspace;
+
+    // log_stage_timing: the timers get a target only when the setting is on
+    const auto timed = [&params](PhaseTime &t) { return params.log_stage_timing ? &t : nullptr; };
+
+    for (size_t window_index = first; window_index <= last; window_index++)
+    {
+        const int i = static_cast<int>(window_index);
+        PhaseTimer window_timer(timed(carry.timing.window_total));
+        std::vector<Point3Di> intermediate_points;
+        PhaseTimer point_load_timer(timed(carry.timing.point_load));
+        point_store.load(PointSet::WindowIntermediate, i, intermediate_points);
+        remove_held_out(intermediate_points, params.holdout_block_s); // also out of the map update below
+        point_load_timer.stop();
+
+        progress.checkpoint();
+
+        // final world-frame velocity of the previous window (for the velocity-continuity prior)
+        PreviousVelocity previous;
+        if (setup.uses_previous_velocity && i > 0)
+        {
+            previous = estimate_previous_velocity(windows[i - 1], params.prior_velocity_span_nr_samples, params.max_prior_velocity_mps);
+            if (previous.dropped)
+                log_info(logger) << "window " << i + 1 << ": previous window velocity " << previous.speed
+                                 << " m/s > max_prior_velocity_mps " << params.max_prior_velocity_mps << ": not used as prior";
+        }
+
+        // initial guess: continue from the previous window's end
+        if ((i > 1 || (setup.uses_previous_velocity && i > 0)) && params.use_motion_from_previous_step)
+        {
+            const PosePrediction prediction = predict_window_poses(windows[i], windows[i - 1], i > 1 ? &windows[i - 2] : nullptr,
+                                                                   previous.velocity, setup.prediction);
+            if (prediction.mean_shift_dropped)
+                log_info(logger) << "!!!mean_shift.norm() > 1.0!!!";
+            if (prediction.stationary)
+            {
+                carry.stationary_windows++;
+                if (debugMsg)
+                    log_debug(logger) << "window " << i + 1 << " stationary (zero-velocity detection)\n";
+            }
+        }
+
+        // gyro bias: prior from the previous window, grown by the bias random walk over this window
+        if (setup.rotation_options.estimate_bias)
+        {
+            const GyroBiasState prior = apply_gyro_bias_prior(windows[i], carry.bias, setup.bias_rw_rad);
+            setup.rotation_options.bias_prior_mean = prior.mean;
+            setup.rotation_options.bias_prior_cov = prior.covariance;
+        }
+
+        // the first window is registered against the initial map, which is built from not yet optimized points
+        // (motion during the first threshold_initial_points is not compensated): its misfit must not enter the bias,
+        // so the bias is only estimated from the second window on
+        MotionModelRotationOptions window_rotation_options = setup.rotation_options;
+        window_rotation_options.estimate_bias = setup.rotation_options.estimate_bias && i > 0;
+
+        // tight turns: trust the gyro more (rotation about the vertical from the IMU-based initial guess)
+        if (params.rotation_sigma_inflation_k_turn > 0.0 && is_turn_window(windows[i], params.turn_rate_threshold_deg_s * DEG_TO_RAD))
+        {
+            window_rotation_options.inflation_k = params.rotation_sigma_inflation_k_turn;
+            carry.turn_windows++;
+        }
+
+        // accelerometer term (from the second window on, like the bias) and the window's translation sigmas
+        AccTerm acc_term = prepare_acc_term(windows[i], i > 0, setup, carry, params);
+        if (setup.always_on)
+        {
+            const bool at_rest = window_at_rest(windows[i], setup, params);
+            if (at_rest)
+                carry.rest_windows++;
+            if (i == 0)
+                carry.first_window_at_rest = at_rest;
+            prepare_velocity_state(windows[i], previous, at_rest, setup, carry, acc_term, params);
+            // the guess (and so the motion model) follows the accelerometer from the start velocity prior; a window at rest
+            // keeps its motionless guess
+            if (acc_term.options.enabled && !at_rest)
+                integrate_window_translations(windows[i], windows[i].velocity.start, carry.acc_gravity, acc_term.options.to_mps2);
+        }
+        Eigen::Matrix3d lidar_translation_information = Eigen::Matrix3d::Zero();
+        Eigen::Vector3d acc_offset = Eigen::Vector3d::Zero();
+        const VelocityPrior velocity_prior{previous.use, previous.velocity};
+
+        const auto window_start = std::chrono::system_clock::now();
+        const std::vector<Eigen::Affine3d> poses_before_optimization = windows[i].poses;
+
+        windows[i].motion_model_poses = windows[i].poses;
+
+        PhaseTimer lm_timer(timed(carry.timing.lm_iterations));
+        const int steps_skipped_before = workspace.steps_skipped;
+        const int big_jump_nodes_before = workspace.big_jump_nodes;
+        const WindowOptimization optimization = run_lm_iterations(intermediate_points, windows[i], state, setup, acc_term, window_rotation_options,
+                                                                  velocity_prior, acc_offset, lidar_translation_information, params, debugMsg, logger,
+                                                                  params.log_stage_timing ? &carry.timing.lm : nullptr, workspace,
+                                                                  range.forced_last_iteration ? (*range.forced_last_iteration)[window_index - first] : -1);
+        lm_timer.stop();
+        if (workspace.steps_skipped > steps_skipped_before)
+            log_warning(logger) << "window " << i + 1 << ": " << workspace.steps_skipped - steps_skipped_before
+                                << " solver step(s) not applied (the solve failed)";
+        if (workspace.big_jump_nodes > big_jump_nodes_before)
+            log_warning(logger) << "window " << i + 1 << ": " << workspace.big_jump_nodes - big_jump_nodes_before
+                                << " node(s) would have moved 1 m or more from their guess: those steps were not applied (big jump)";
+
+        const std::chrono::duration<double> window_seconds = std::chrono::system_clock::now() - window_start;
+        log_window_result(i, windows.size(), optimization, carry.acc_distance, window_seconds.count(), params, logger);
+        log_iteration_convergence(i, params, optimization, carry, logger);
+        log_window_diagnostics(i, windows, poses_before_optimization, optimization, previous, acc_term, lidar_translation_information, params, logger);
+        log_accelerometer_fit(i, windows[i], lidar_translation_information, acc_term, setup, carry, params, logger);
+        log_weak_axis_diagnostics(i, windows[i], intermediate_points, state, setup.scan_to_map, acc_term, lidar_translation_information, params,
+                                  logger);
+        log_heading_diagnostics(i, windows[i], poses_before_optimization, intermediate_points, state, setup.scan_to_map, params, logger);
+
+        update_gyro_bias_after_window(windows[i], i, setup, carry, params, logger);
+        update_acc_term_after_window(windows[i], i, acc_term, acc_offset, carry, logger);
+
+        // window hand-off; the initial guess was corrected with the prior bias, so the tail gets the update estimated in this window
+        {
+            const Eigen::Vector3d bias_update = setup.rotation_options.estimate_bias
+                                                    ? Eigen::Vector3d(windows[i].gyro_bias.mean - setup.rotation_options.bias_prior_mean)
+                                                    : Eigen::Vector3d::Zero();
+            repropagate_window_tail(windows[i], params.handoff_tail_nodes, params.handoff_tail_velocity_span_nr_samples, bias_update);
+        }
+
+        if (i % 100 == 0)
+        {
+            PhaseTimer preview_timer(timed(carry.timing.preview));
+            send_preview(i, intermediate_points, windows[i], params, preview);
+        }
+
+        if (!add_window_distance(windows[i], poses_before_optimization, carry, ts_failure, logger))
+        {
+            // the run stops here but is still saved: the remaining windows continue from this one's restored end
+            place_windows_after(windows, i + 1);
+            return false;
+        }
+
+        if (range.outcomes)
+            range.outcomes->push_back(WindowOutcome{optimization.last_iteration, windows[i].poses});
+
+        // reported only now: from here on the odometry doesn't change this window again (a viewer may read it)
+        progress.progress(i + 1, windows.size());
+
+        // the next window continues from the new end of this one; the windows after it are placed in their own turn,
+        // since no step reads a window's placement before the window before it is done
+        if (i + 1 < windows.size())
+            place_window_after(windows[i + 1], windows[i].poses[windows[i].poses.size() - 1]);
+
+        PhaseTimer add_to_map_timer(timed(carry.timing.add_to_map));
+        if (add_window_to_map(intermediate_points, windows[i], carry, state, params))
+            log_warning(logger) << "window " << i + 1 << ": reference map rebuilt from the newer half of its points "
+                                << "(sliding_window_trajectory_length_threshold " << params.sliding_window_trajectory_length_threshold << " m reached)";
+        add_to_map_timer.stop();
+
+        if (i > 1)
+        {
+            double translation = (windows[i - 1].poses[0].translation() -
+                                  windows[i - 2].poses[0].translation())
+                                     .norm();
+            state.consecutive_distance += translation;
+        }
+    }
+    return true;
+}
+
 bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params, OdometryState &state, double &ts_failure, bool debugMsg, PointStore &point_store, PreviewSink &preview, Logger &logger, ProgressReporter &progress)
 {
     if (windows.size() != 0)
@@ -916,165 +1033,12 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
         windows[0].motion_model_poses = windows[0].poses;
         seed_map(state, params);
 
-        OdometryRunSetup setup = prepare_run(windows, params, logger);
-        WindowLoopCarry carry = start_carry(setup, windows);
-        ScanToMapWorkspace workspace; // the Cholesky analyses, kept from window to window
+        WindowLoop loop;
+        start_window_loop(loop, windows[0], params, logger);
+        if (!process_windows(loop, windows, 0, windows.size() - 1, params, state, ts_failure, debugMsg, point_store, preview, logger, progress))
+            return false;
 
-        // log_stage_timing: the timers get a target only when the setting is on
-        const auto timed = [&params](PhaseTime &t) { return params.log_stage_timing ? &t : nullptr; };
-
-        for (int i = 0; i < windows.size(); i++)
-        {
-            PhaseTimer window_timer(timed(carry.timing.window_total));
-            std::vector<Point3Di> intermediate_points;
-            PhaseTimer point_load_timer(timed(carry.timing.point_load));
-            point_store.load(PointSet::WindowIntermediate, i, intermediate_points);
-            remove_held_out(intermediate_points, params.holdout_block_s); // also out of the map update below
-            point_load_timer.stop();
-
-            progress.checkpoint();
-
-            // final world-frame velocity of the previous window (for the velocity-continuity prior)
-            PreviousVelocity previous;
-            if (setup.uses_previous_velocity && i > 0)
-            {
-                previous = estimate_previous_velocity(windows[i - 1], params.prior_velocity_span_nr_samples, params.max_prior_velocity_mps);
-                if (previous.dropped)
-                    log_info(logger) << "window " << i + 1 << ": previous window velocity " << previous.speed
-                                     << " m/s > max_prior_velocity_mps " << params.max_prior_velocity_mps << ": not used as prior";
-            }
-
-            // initial guess: continue from the previous window's end
-            if ((i > 1 || (setup.uses_previous_velocity && i > 0)) && params.use_motion_from_previous_step)
-            {
-                const PosePrediction prediction = predict_window_poses(windows[i], windows[i - 1], i > 1 ? &windows[i - 2] : nullptr,
-                                                                       previous.velocity, setup.prediction);
-                if (prediction.mean_shift_dropped)
-                    log_info(logger) << "!!!mean_shift.norm() > 1.0!!!";
-                if (prediction.stationary)
-                {
-                    carry.stationary_windows++;
-                    if (debugMsg)
-                        log_debug(logger) << "window " << i + 1 << " stationary (zero-velocity detection)\n";
-                }
-            }
-
-            // gyro bias: prior from the previous window, grown by the bias random walk over this window
-            if (setup.rotation_options.estimate_bias)
-            {
-                const GyroBiasState prior = apply_gyro_bias_prior(windows[i], carry.bias, setup.bias_rw_rad);
-                setup.rotation_options.bias_prior_mean = prior.mean;
-                setup.rotation_options.bias_prior_cov = prior.covariance;
-            }
-
-            // the first window is registered against the initial map, which is built from not yet optimized points
-            // (motion during the first threshold_initial_points is not compensated): its misfit must not enter the bias,
-            // so the bias is only estimated from the second window on
-            MotionModelRotationOptions window_rotation_options = setup.rotation_options;
-            window_rotation_options.estimate_bias = setup.rotation_options.estimate_bias && i > 0;
-
-            // tight turns: trust the gyro more (rotation about the vertical from the IMU-based initial guess)
-            if (params.rotation_sigma_inflation_k_turn > 0.0 && is_turn_window(windows[i], params.turn_rate_threshold_deg_s * DEG_TO_RAD))
-            {
-                window_rotation_options.inflation_k = params.rotation_sigma_inflation_k_turn;
-                carry.turn_windows++;
-            }
-
-            // accelerometer term (from the second window on, like the bias) and the window's translation sigmas
-            AccTerm acc_term = prepare_acc_term(windows[i], i > 0, setup, carry, params);
-            if (setup.always_on)
-            {
-                const bool at_rest = window_at_rest(windows[i], setup, params);
-                if (at_rest)
-                    carry.rest_windows++;
-                if (i == 0)
-                    carry.first_window_at_rest = at_rest;
-                prepare_velocity_state(windows[i], previous, at_rest, setup, carry, acc_term, params);
-                // the guess (and so the motion model) follows the accelerometer from the start velocity prior; a window at rest
-                // keeps its motionless guess
-                if (acc_term.options.enabled && !at_rest)
-                    integrate_window_translations(windows[i], windows[i].velocity.start, carry.acc_gravity, acc_term.options.to_mps2);
-            }
-            Eigen::Matrix3d lidar_translation_information = Eigen::Matrix3d::Zero();
-            Eigen::Vector3d acc_offset = Eigen::Vector3d::Zero();
-            const VelocityPrior velocity_prior{previous.use, previous.velocity};
-
-            const auto window_start = std::chrono::system_clock::now();
-            const std::vector<Eigen::Affine3d> poses_before_optimization = windows[i].poses;
-
-            windows[i].motion_model_poses = windows[i].poses;
-
-            PhaseTimer lm_timer(timed(carry.timing.lm_iterations));
-            const int steps_skipped_before = workspace.steps_skipped;
-            const int big_jump_nodes_before = workspace.big_jump_nodes;
-            const WindowOptimization optimization = run_lm_iterations(intermediate_points, windows[i], state, setup, acc_term, window_rotation_options,
-                                                                      velocity_prior, acc_offset, lidar_translation_information, params, debugMsg, logger,
-                                                                      params.log_stage_timing ? &carry.timing.lm : nullptr, workspace);
-            lm_timer.stop();
-            if (workspace.steps_skipped > steps_skipped_before)
-                log_warning(logger) << "window " << i + 1 << ": " << workspace.steps_skipped - steps_skipped_before
-                                    << " solver step(s) not applied (the solve failed)";
-            if (workspace.big_jump_nodes > big_jump_nodes_before)
-                log_warning(logger) << "window " << i + 1 << ": " << workspace.big_jump_nodes - big_jump_nodes_before
-                                    << " node(s) would have moved 1 m or more from their guess: those steps were not applied (big jump)";
-
-            const std::chrono::duration<double> window_seconds = std::chrono::system_clock::now() - window_start;
-            log_window_result(i, windows.size(), optimization, carry.acc_distance, window_seconds.count(), params, logger);
-            log_iteration_convergence(i, params, optimization, carry, logger);
-            log_window_diagnostics(i, windows, poses_before_optimization, optimization, previous, acc_term, lidar_translation_information, params, logger);
-            log_accelerometer_fit(i, windows[i], lidar_translation_information, acc_term, setup, carry, params, logger);
-            log_weak_axis_diagnostics(i, windows[i], intermediate_points, state, setup.scan_to_map, acc_term, lidar_translation_information, params,
-                                      logger);
-            log_heading_diagnostics(i, windows[i], poses_before_optimization, intermediate_points, state, setup.scan_to_map, params, logger);
-
-            update_gyro_bias_after_window(windows[i], i, setup, carry, params, logger);
-            update_acc_term_after_window(windows[i], i, acc_term, acc_offset, carry, logger);
-
-            // window hand-off; the initial guess was corrected with the prior bias, so the tail gets the update estimated in this window
-            {
-                const Eigen::Vector3d bias_update = setup.rotation_options.estimate_bias
-                                                        ? Eigen::Vector3d(windows[i].gyro_bias.mean - setup.rotation_options.bias_prior_mean)
-                                                        : Eigen::Vector3d::Zero();
-                repropagate_window_tail(windows[i], params.handoff_tail_nodes, params.handoff_tail_velocity_span_nr_samples, bias_update);
-            }
-
-            if (i % 100 == 0)
-            {
-                PhaseTimer preview_timer(timed(carry.timing.preview));
-                send_preview(i, intermediate_points, windows[i], params, preview);
-            }
-
-            if (!add_window_distance(windows[i], poses_before_optimization, carry, ts_failure, logger))
-            {
-                // the run stops here but is still saved: the remaining windows continue from this one's restored end
-                place_windows_after(windows, i + 1);
-                return false;
-            }
-
-            // reported only now: from here on the odometry doesn't change this window again (a viewer may read it)
-            progress.progress(i + 1, windows.size());
-
-            // the next window continues from the new end of this one; the windows after it are placed in their own turn,
-            // since no step reads a window's placement before the window before it is done
-            if (i + 1 < windows.size())
-                place_window_after(windows[i + 1], windows[i].poses[windows[i].poses.size() - 1]);
-
-            PhaseTimer add_to_map_timer(timed(carry.timing.add_to_map));
-            if (add_window_to_map(intermediate_points, windows[i], carry, state, params))
-                log_warning(logger) << "window " << i + 1 << ": reference map rebuilt from the newer half of its points "
-                                    << "(sliding_window_trajectory_length_threshold " << params.sliding_window_trajectory_length_threshold << " m reached)";
-            add_to_map_timer.stop();
-
-            if (i > 1)
-            {
-                double translation = (windows[i - 1].poses[0].translation() -
-                                      windows[i - 2].poses[0].translation())
-                                         .norm();
-                state.consecutive_distance += translation;
-            }
-        }
-
-        finish_run(windows, start, setup, carry, state, params, workspace, logger);
+        finish_run(windows, start, loop.setup, loop.carry, state, params, loop.workspace, logger);
     }
 
     return true;
