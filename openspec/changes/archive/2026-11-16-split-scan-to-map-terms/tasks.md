@@ -41,5 +41,5 @@
 
 ## 4. End of stage
 
-- [ ] 4.1 Full 44 and Livox 3 against their manifests.
-- [ ] 4.2 Debug build and `ctest`.
+- [x] 4.1 Full 44 and Livox 3 against their manifests. Result (6b83387): both IDENTICAL, 35 of 35 files.
+- [x] 4.2 Debug build and `ctest`. Result: pass (10 min).
