@@ -2,6 +2,12 @@
 
 Status: **agreed 2026-11-16** (decisions below). Branch `honest-degeneracy-measure`, nothing pushed.
 
+Progress:
+- Stage 0 done 2026-11-16 (43748c7 .. c365fdd): three switches, robust mode and Consistency2 removed (retired settings
+  still load), build identity in the results JSON, `tools/function_sizes.py`; 44, 44_short and Livox 3 bit-identical.
+- Stage 1 code done 2026-11-16 (46c56b2, 6a75686): `process_windows`, capture (`capture_windows_from_s` / `_to_s`),
+  `dMapper --replay`; 44_short windows 50-70 replay 21 of 21 identical in 35 s.
+
 ## Why
 
 Livox 4 has two faults left, both inside the per-window optimizer: the passage stall (100–125 s, about 5 m of a true
