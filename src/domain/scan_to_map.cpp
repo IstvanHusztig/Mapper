@@ -7,6 +7,7 @@
 
 #include "angle_units.h"
 #include "normal_equations.h"
+#include "window_equations.h"
 #include <algorithm>
 #include <atomic>
 #include <cassert>
@@ -159,18 +160,13 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
     const auto phase = [timing](PhaseTime ScanToMapTiming::*p) { return timing ? &(timing->*p) : nullptr; };
     PhaseTimer setup_timer(phase(&ScanToMapTiming::setup));
 
-    const bool have_dt = window.timestamps.size() == window.poses.size();
-    const bool time_scaled_sigma = rotation_options.time_scaled_sigma && have_dt;
-    const bool estimate_bias = rotation_options.estimate_bias && have_dt;
-    const int n_pose_params = static_cast<int>(window.poses.size()) * 6;
-    const bool acc_term = translation_imu_options.enabled && have_dt && translation_imu_options.acc &&
-                          translation_imu_options.acc->size() == window.poses.size();
-    // [pose_0 .. pose_n-1 | b_om b_fi b_ka (gyro bias) | e_x e_y e_z (acceleration offset) | v_start | v_end (accelerometer term)]
-    const int n_params = n_pose_params + (estimate_bias ? 3 : 0) + (acc_term ? 9 : 0);
-    const int ib = n_pose_params;                        // first bias column
-    const int io = n_pose_params + (estimate_bias ? 3 : 0); // first acceleration offset column
-    const int iv = io + 3;                               // start velocity (accelerometer term)
-    const int ie = iv + 3;                               // end velocity (accelerometer term)
+    const WindowUnknowns unknowns = layout_window_unknowns(window, rotation_options, translation_imu_options);
+    const bool time_scaled_sigma = unknowns.time_scaled_sigma;
+    const bool estimate_bias = unknowns.estimate_bias;
+    const int n_pose_params = unknowns.n_pose_params;
+    const bool acc_term = unknowns.acc_term;
+    const int n_params = unknowns.n_params;
+    const int ib = unknowns.ib, io = unknowns.io, iv = unknowns.iv, ie = unknowns.ie;
 
     double sigma_motion_model_om = motion_model.om_sigma_deg * DEG_TO_RAD;
     double sigma_motion_model_fi = motion_model.fi_sigma_deg * DEG_TO_RAD;
@@ -192,31 +188,11 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
         w_motion_model_z *= translation_imu_options.position_information_scale;
     }
 
-    // The accelerometer term's anchors (nodes about span_s apart) and the band of the normal matrix: the pose-pose coupling
-    // reaches 17 parameters (two nodes) without the term, and (last - first node) * 6 + 5 for its widest term. Both depend
-    // only on the timestamps, so the band is known before anything is added.
-    std::vector<int> anchors;
-    int pose_band_offset = 17;
-    if (acc_term)
-    {
-        const int n = static_cast<int>(window.poses.size());
-        anchors.push_back(0);
-        for (int k = 1; k < n; k++)
-            if (window.timestamps[k].first - window.timestamps[anchors.back()].first >= translation_imu_options.span_s)
-                anchors.push_back(k);
-        for (size_t j = 1; j + 1 < anchors.size(); j++)
-            pose_band_offset = std::max(pose_band_offset, (anchors[j + 1] - anchors[j - 1]) * 6 + 5);
-        if (anchors.size() > 1)
-            pose_band_offset = std::max(pose_band_offset, anchors[1] * 6 + 5);
-    }
-    // the end velocity is tied to the last two anchors, with the accelerometer from their midpoint to the last node
-    if (acc_term && anchors.size() > 1)
-        pose_band_offset = std::max(pose_band_offset, (static_cast<int>(window.poses.size()) - 1 - anchors[anchors.size() - 2]) * 6 + 5);
+    const std::vector<int> &anchors = unknowns.anchors;
 
-    // the normal matrix, stored by band (only the band is ever used)
-    BandedNormalMatrix AtPAndt(n_pose_params, n_params - n_pose_params, pose_band_offset);
-    Eigen::MatrixXd AtPBndt(n_params, 1);
-    AtPBndt.setZero();
+    WindowEquations equations(unknowns);
+    BandedNormalMatrix &AtPAndt = equations.matrix;
+    Eigen::MatrixXd &AtPBndt = equations.rhs;
     Eigen::Vector3d b_indoor(scan_to_map.grid_indoor.resolution_X, scan_to_map.grid_indoor.resolution_Y, scan_to_map.grid_indoor.resolution_Z);
 
     // sum of n * n^T over the surface normals the points are matched to (per node): geometric constraint of the
@@ -285,7 +261,7 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
             AtPB *= scan_to_map.information_scale;
         }
     };
-    double motion_cost = 0.0; // the motion and IMU terms (only summed, never used in the solve)
+    double &motion_cost = equations.motion_cost;
     setup_timer.stop();
 
     const auto hessian_fun_indoor = [&](const Point3Di &intermediate_points_i, const TaitBryanPose &pose_s)
