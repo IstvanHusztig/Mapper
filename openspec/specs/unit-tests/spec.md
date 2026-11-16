@@ -71,7 +71,7 @@ The unit-test executable SHALL contain loop-closure scenarios that run the loop 
 - **THEN** the loop closure returns 0 and every pose is unchanged
 
 ### Requirement: Consistency pass tested on synthetic data
-The unit tests SHALL run the consistency pass, in both of its variants (a single Gaussian per cell, and several per cell over time), on a synthetic recording with a known true trajectory, without recorded data, and SHALL check the result against that truth. The tests SHALL set the consistency options themselves.
+The unit tests SHALL run the consistency pass on a synthetic recording with a known true trajectory, without recorded data, and SHALL check the result against that truth. The tests SHALL set the consistency options themselves.
 
 #### Scenario: Offsets between windows
 - **WHEN** each window's poses are moved by a small rigid offset, as the seams between odometry windows leave them
@@ -82,5 +82,18 @@ The unit tests SHALL run the consistency pass, in both of its variants (a single
 - **THEN** every node stays within 5 mm and 0.1° of the truth after the pass
 
 #### Scenario: A missed expectation
-- **WHEN** a variant does not meet one of these expectations
+- **WHEN** the pass does not meet one of these expectations
 - **THEN** that case is marked as an expected failure that names the cause, so that it is reported once it starts to pass
+
+### Requirement: Window capture tested on synthetic data
+The unit tests SHALL run the window loop on the synthetic loop recording with a capture, without recorded data, and SHALL
+check that the capture leaves the run unchanged, that the capture file gives the capture back, and that a replay with the
+same settings repeats every captured window bit for bit.
+
+#### Scenario: Capture, file and replay
+- **WHEN** one lap of the loop recording is run with a capture of 5–12 s, the capture is written to a file, read back and replayed with the same settings
+- **THEN** the poses of the run equal those of a run without capture, and every replayed window equals the captured one
+
+#### Scenario: The range of a capture
+- **WHEN** windows start at 0, 2, 4, 6 and 8 s and the capture range is 1–5 s
+- **THEN** the captured windows are those starting at 2 and 4 s, and a range in which no window starts captures nothing
