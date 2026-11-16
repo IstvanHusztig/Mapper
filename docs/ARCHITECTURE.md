@@ -73,7 +73,7 @@ infrastructure and UI at the edge, and all source dependencies pointing inward.
 - ✅ `optimize_lidar_odometry` took about 35 positional arguments → since step 5b it takes a
   `Window` and option structs built from the config (15 parameters).
 - ✅ `lidar_odometry_utils_optimizers.cpp` (about 3,000 lines) mixed optimizer math, the window loop,
-  state hand-off and I/O → since step 6a one file per service: `scan_to_map`, `robust_lidar_odometry`,
+  state hand-off and I/O → since step 6a one file per service: `scan_to_map`, `robust_lidar_odometry` (removed 2026-11-16),
   `consistency`, `imu_kinematics`, `normal_equations` and the window loop in `run_odometry`.
 - `core/` mixes pure math (NDT, ICP, pose graph) with I/O (LAZ export, session, file dialogs)
   → ✅ step 11: dMapper took over the few parts it used, and `core/` is gone.
@@ -157,7 +157,7 @@ Each step is one OpenSpec change, validated against the baseline.
      `odometry_config.h` and `odometry_state.h`, and every file includes what it uses. Found on the way: `core`'s
      `ndt.h` includes `point_cloud.h` (and with it `GL/freeglut.h`) and `session.h`; the four NDT value structs moved to
      `core/include/ndt_types.h`, with aliases left in class `NDT`. A `/showIncludes` check confirmed that `scan_to_map`,
-     `normal_equations`, `imu_kinematics`, `window_steps`, `ndt_map`, `optimizer_options` and `robust_lidar_odometry`
+     `normal_equations`, `imu_kinematics`, `window_steps`, `ndt_map`, `optimizer_options` and `robust_lidar_odometry` (removed 2026-11-16)
      reach no LASzip, json, GL, `session.h` or Fusion. The window loop still does: Fusion through `input_ports.h` (step 9)
      and `session.h` through `export_laz.h` in `run_odometry.cpp`.
    - 7b. ✅ **Folders and libraries** (done 2026-10-04, `layer-folders`): `app/` became `src/domain`,
@@ -182,7 +182,7 @@ Steps 8–11 were added on 2026-10-03. They cover the goals that steps 0–7 sti
      more than 15 minutes in Debug, so they are skipped in the regular run and run with `--no-skip` (user decision).
    - **Consistency** reduces window seams in both variants, but moves the truth by 6.4 mm (`Consistency`, even
      NDT-fit noise) and 16 mm / 0.46° (`Consistency2`, whose 0.01° rotation smoothness pulls against every change of
-     turn rate, so the error sits at the corners).
+     turn rate, so the error sits at the corners; `Consistency2` was removed on 2026-11-16).
 9. ✅ **Remaining ports** (done 2026-10-04, `remaining-ports`): `OrientationEstimator` (Fusion AHRS)
    and `ParallelExecutor` (TBB) in `src/application/service_ports.h`, with their adapters
    (`FusionOrientationEstimator`, `TbbExecutor`) in infrastructure, passed to the pipeline as
@@ -235,10 +235,9 @@ Steps 8–11 were added on 2026-10-03. They cover the goals that steps 0–7 sti
 - **Parallelism is behind a port.** Domain and application code never include TBB; they use the
   `ParallelExecutor` port. The TBB adapter lives in infrastructure, and tests can use a serial,
   deterministic executor. What remains: the domain's parallel loops use `<execution>` from the standard
-  library directly (`scan_to_map` and `robust_lidar_odometry`, always parallel since `deterministic-multithread` and
+  library directly (`scan_to_map`, always parallel since `deterministic-multithread` and
   `builtin-multithread`; there is no setting). They are deterministic: `scan_to_map` sums each trajectory node's point terms
-  in point order, with the nodes in parallel, and `robust_lidar_odometry` sums per-point blocks in index
-  order, so the results are the same bits with or without threads. `consistency` has its own flags and runs
+  in point order, with the nodes in parallel, so the results are the same bits with or without threads. `consistency` has its own flags and runs
   serially. Eigen, manif and observation_equations are allowed in the domain.
 - **`core/` was wrapped and moved on touch** until step 11, which retired it (2026-10-05): what
   dMapper used lives in the layers, and new code doesn't take anything from HDMapping's `core` again.

@@ -11,7 +11,7 @@
 #include <random>
 #include <string>
 
-// run_consistency (Consistency, and Consistency2 with use_mutliple_gaussian) on the loop recording (see
+// run_consistency (Consistency) on the loop recording (see
 // synthetic_recording.h) against its true trajectory. The options are those of settings/l2-vertical.toml, except the
 // number of passes; they are set here, so tuning the shipped file doesn't change the tests.
 
@@ -21,15 +21,11 @@ namespace
 {
     const double deg = DEG_TO_RAD;
 
-    std::string variant(bool multiple_gaussian) { return multiple_gaussian ? "Consistency2" : "Consistency"; }
-
-    OdometryConfig consistency_config(bool multiple_gaussian)
+    OdometryConfig consistency_config()
     {
         OdometryConfig c;
         c.use_consistency = true;
         c.num_constistency_iter = 3; // (shipped: 10)
-        c.use_mutliple_gaussian = multiple_gaussian;
-        c.consistency_min_distance = 0.4;
         c.in_out_params_indoor.resolution_X = c.in_out_params_indoor.resolution_Y = c.in_out_params_indoor.resolution_Z = 0.15;
         c.use_exact_ndt_bucket_statistics = false;
         return c;
@@ -71,28 +67,28 @@ namespace
         return {mean_error(poses, truth), max_error(poses, truth), occupied_voxels(r.windows, r.points, 0.03)};
     }
 
-    double run(Recording &r, bool multiple_gaussian)
+    double run(Recording &r)
     {
         MemoryPointStore store;
         for (size_t w = 0; w < r.points.size(); w++)
             store.save(PointSet::WindowIntermediate, w, r.points[w]);
         NullLogger logger;
         const auto start = std::chrono::steady_clock::now();
-        run_consistency(r.windows, consistency_config(multiple_gaussian), store, logger);
+        run_consistency(r.windows, consistency_config(), store, logger);
         return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
     }
 
     // seams of +-3 cm / +-0.2 deg per window: the mean pose error and the map's excess of occupied 3 cm voxels over the
     // truth's must shrink (the excess by at least 15 %, see the measurements at the test cases)
-    void check_seams(bool multiple_gaussian)
+    void check_seams()
     {
         Recording r = loop_recording(2);
         const Measured truth_map = measure(r);
         add_window_offsets(r, 0.03, 0.2 * deg);
         const Measured before = measure(r);
-        const double ms = run(r, multiple_gaussian);
+        const double ms = run(r);
         const Measured after = measure(r);
-        MESSAGE(variant(multiple_gaussian), " seams: mean error ", before.mean.position * 1000.0, " mm / ", before.mean.rotation / deg,
+        MESSAGE("Consistency seams: mean error ", before.mean.position * 1000.0, " mm / ", before.mean.rotation / deg,
                 " deg -> ", after.mean.position * 1000.0, " mm / ", after.mean.rotation / deg, " deg; largest ",
                 before.largest.position * 1000.0, " -> ", after.largest.position * 1000.0, " mm; 3 cm voxels ", before.voxels, " -> ",
                 after.voxels, " (truth ", truth_map.voxels, "); ", ms, " ms");
@@ -102,12 +98,12 @@ namespace
     }
 
     // poses equal to the truth: every node must stay within 5 mm and 0.1 deg
-    void check_truth(bool multiple_gaussian)
+    void check_truth()
     {
         Recording r = loop_recording(2);
-        const double ms = run(r, multiple_gaussian);
+        const double ms = run(r);
         const Measured after = measure(r);
-        MESSAGE(variant(multiple_gaussian), " truth: largest change ", after.largest.position * 1000.0, " mm / ",
+        MESSAGE("Consistency truth: largest change ", after.largest.position * 1000.0, " mm / ",
                 after.largest.rotation / deg, " deg, mean ", after.mean.position * 1000.0, " mm; ", ms, " ms");
         CHECK(after.largest.position <= 0.005);
         CHECK(after.largest.rotation <= 0.1 * deg);
@@ -166,9 +162,9 @@ namespace
 // and from one with window seams, and the result must be repeatable bit for bit.
 TEST_CASE("consistency: the gyro rotation term keeps the node-to-node rotation")
 {
-    OdometryConfig with = consistency_config(false);
+    OdometryConfig with = consistency_config();
     with.consistency_gyro_rotation_term = true;
-    const OdometryConfig without = consistency_config(false);
+    const OdometryConfig without = consistency_config();
     for (const bool seams : {false, true})
     {
         Recording a = loop_recording(2);
@@ -206,7 +202,7 @@ namespace
         for (size_t w = 0; w < r.points.size(); w++)
             store.save(PointSet::WindowIntermediate, w, r.points[w]);
         NullLogger logger;
-        const OdometryConfig config = consistency_config(false);
+        const OdometryConfig config = consistency_config();
         ConsistencyData data;
         data.chunk_points = chunk_points;
         for (int pass = 0; pass < config.num_constistency_iter; pass++)
@@ -256,16 +252,7 @@ TEST_CASE("consistency: Consistency with several chunks is repeatable and reduce
 // as before C10, whose double-height cell held the floor with twice the points; 16.8 mm / 0.128 deg); 0.5 s
 TEST_CASE("consistency: Consistency reduces the offsets between windows")
 {
-    check_seams(false);
-}
-
-// Measured 2026-10-04 (Release, 3 passes): mean error 27.9 mm / 0.207 deg -> 14.6 mm / 0.125 deg, 3 cm voxels
-// 127,956 -> 126,324 (truth 125,898); 0.6 s (scene at the world origin, see above).
-// Measured 2026-10-14 with the scene at grid_offset: 27.9 mm / 0.207 deg -> 12.9 mm / 0.103 deg, voxels 127,982 -> 125,702
-// (truth 121,634): the excess shrinks by 36 % (51 % with the cell index truncated, 12.7 mm / 0.095 deg); 0.8 s
-TEST_CASE("consistency: Consistency2 reduces the offsets between windows")
-{
-    check_seams(true);
+    check_seams();
 }
 
 // Expected to fail (found 2026-10-04): the pass moves the true trajectory by up to 6.4 mm / 0.075 deg (mean 2.1 mm),
@@ -275,16 +262,6 @@ TEST_CASE("consistency: Consistency2 reduces the offsets between windows")
 // grid_offset, C10): up to 6.3 mm / 0.067 deg.
 TEST_CASE("consistency: Consistency leaves a trajectory that is already right" * doctest::should_fail())
 {
-    check_truth(false);
+    check_truth();
 }
 
-// Expected to fail (found 2026-10-04): the pass moves the true trajectory by up to 16 mm / 0.46 deg (mean 5.2 mm). The
-// rotation changes sit in the corner windows (0.2-0.46 deg there, about 0.05 deg on the straights): the smoothness
-// term holds the change of turn rate from node to node to 0.01 deg (Consistency: 0.1 deg), and the fixture's turn rate
-// ramps by 0.29 deg per node in and out of each corner. With a 1 s ramp (half the change per node) the corner windows
-// drop to 0.18 deg, and an even 5-12 mm / 0.1 deg remains in every window. Measured 2026-10-14 (scene at grid_offset,
-// C10): up to 10.7 mm / 0.35 deg.
-TEST_CASE("consistency: Consistency2 leaves a trajectory that is already right" * doctest::should_fail())
-{
-    check_truth(true);
-}

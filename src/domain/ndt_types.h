@@ -41,22 +41,4 @@ struct NdtBucket
 	bool inverse_usable = false;
 };
 
-struct NdtBucketCoef
-{
-	Eigen::Vector3d mean;
-	Eigen::Matrix3d cov;
-	Eigen::Vector3d normal_vector;
-	std::vector<long long unsigned int> point_indexes;
-	bool valid = false;
-};
-
-struct NdtBucket2
-{
-	int classification = 0; // 1 - ceiling, 2 - floor
-	long long unsigned int index_begin_inclusive;
-	long long unsigned int index_end_exclusive;
-	// long long unsigned int number_of_points;
-	std::unordered_map<long long unsigned int, NdtBucketCoef> buckets;
-};
-
 #endif

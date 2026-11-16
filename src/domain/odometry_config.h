@@ -76,8 +76,6 @@ struct OdometryConfig
     //consistency
     bool use_consistency = false;   // run the whole-trajectory consistency pass after the odometry (CLI; the GUI has a button)
     int num_constistency_iter = 10;
-    bool use_mutliple_gaussian = false;
-    double consistency_min_distance = 0.4; // points closer (3D norm) are skipped in Consistency2 (masks the operator's body)
     // gyro rotation term in Consistency: consecutive nodes of a window keep the IMU's relative rotation (orientation
     // increments minus the window's gyro bias), sigma = consistency_gyro_sigma_scale x the odometry's time-scaled rotation
     // sigma; a window whose IMU rotation differs from its odometry result by more than consistency_gyro_gate_deg gets none
@@ -243,24 +241,6 @@ struct OdometryConfig
 
     // motion model correction (experimental --> not recommended yet)
     TaitBryanPose motion_model_correction;
-
-    // robust lidar odometry control (experimental --> not recommended yet)
-    bool use_robust_and_accurate_lidar_odometry = false;
-    double distance_bucket = 0.2;
-    double polar_angle_deg = 10.0;
-    double azimutal_angle_deg = 10.0;
-    int robust_and_accurate_lidar_odometry_iterations = 20;
-    double distance_bucket_rigid_sf = 0.5;
-    double polar_angle_deg_rigid_sf = 10.0;
-    double azimutal_angle_deg_rigid_sf = 10.0;
-    int robust_and_accurate_lidar_odometry_rigid_sf_iterations = 30;
-    double max_distance_lidar_rigid_sf = 70.0;
-    double rgd_sf_sigma_x_m = 0.001;
-    double rgd_sf_sigma_y_m = 0.001;
-    double rgd_sf_sigma_z_m = 0.001;
-    double rgd_sf_sigma_om_deg = 0.01;
-    double rgd_sf_sigma_fi_deg = 0.01;
-    double rgd_sf_sigma_ka_deg = 0.01;
 
     bool use_remove_imu_bias_from_first_stationary_scan = true;
     // start-up gyro bias: the per-axis median of the first N IMU samples (set N for the sensor's IMU rate, about 1 s of

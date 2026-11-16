@@ -425,9 +425,9 @@ bool compute_step_1(
 void run_consistency(std::vector<Window> &windows, const OdometryConfig &params, PointStore &point_store, Logger &logger)
 {
     log_info(logger) << "Point cloud consistency and trajectory smoothness START";
-    // log_stage_timing: the phases of Consistency, summed over the passes (the second variant has no timers)
+    // log_stage_timing: the phases of Consistency, summed over the passes
     ConsistencyTiming timing;
-    ConsistencyTiming *timing_target = params.log_stage_timing && !params.use_mutliple_gaussian ? &timing : nullptr;
+    ConsistencyTiming *timing_target = params.log_stage_timing ? &timing : nullptr;
     ConsistencyData data; // the points and the analysis, kept from pass to pass (freed when the run ends)
     for (int i = 0; i < params.num_constistency_iter; i++)
     {
@@ -436,14 +436,7 @@ void run_consistency(std::vector<Window> &windows, const OdometryConfig &params,
         {
             windows[ii].motion_model_poses = windows[ii].poses;
         }
-        if (!params.use_mutliple_gaussian)
-        {
-            Consistency(windows, params, point_store, logger, timing_target, &data);
-        }
-        else
-        {
-            Consistency2(windows, params, point_store, logger);
-        }
+        Consistency(windows, params, point_store, logger, timing_target, &data);
     }
     log_info(logger) << "Point cloud consistency and trajectory smoothness FINISHED";
     if (timing_target)

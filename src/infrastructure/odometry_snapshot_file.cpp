@@ -156,8 +156,9 @@ std::uint64_t odometry_settings_hash(const OdometryConfig &config)
 
     // settings added after snapshots existed: each changes the odometry, but at its default (off) it adds nothing, so
     // they count only when set, and snapshots made before they existed still match (degenerate_projection_all_point_normals,
-    // carried_covariance_normal_information_only and ndt_unmatched_point_cost, removed 2026-11-16, were in this list too:
-    // snapshots made with them at their defaults still match)
+    // carried_covariance_normal_information_only and ndt_unmatched_point_cost, removed 2026-11-16, were in this list too).
+    // The [robust_lidar_odometry] settings, removed the same day, were always hashed: snapshots written before their
+    // removal are refused.
     static const std::set<std::string> added_later = {
         "holdout_block_s", "lm_step_check", "ndt_huber_cutoff", "ndt_information_scale", "imu_position_information_scale"};
     static const OdometryConfig defaults{};
