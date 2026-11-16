@@ -32,6 +32,10 @@ NAME_DATETIME = re.compile(r"_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}(?=\.(toml|json)$)")
 # text files whose content is normalized; every other file is hashed as raw bytes
 TEXT_FILE = re.compile(r"^(session\.mjs|dMapper_params_.*\.toml|dMapper_results_.*\.json)$")
 
+# files the analysis tools add to a result folder (map_quality.py / eval_odometry.py export the clouds as
+# scan_lio_<n>.asc); dMapper itself writes no .asc file there, so they are neither hashed nor compared
+FOREIGN_FILE = re.compile(r"\.asc$")
+
 # run-dependent values, replaced by <IGNORED> (key = value / "key": value, up to the end of the value)
 NORMALIZE_JSON_KEYS = ["elapsed time seconds", "elapsed_time_seconds", "processing_date", "build_date",
                        "git_commit", "git_uncommitted_changes"]
@@ -87,12 +91,12 @@ def normalize_text(name, data, out_prefix, in_prefix):
 
 
 def hash_folder(folder):
-    """{normalized file name: sha256 of the normalized content} for every file in the folder."""
+    """{normalized file name: sha256 of the normalized content} for every file in the folder that dMapper writes."""
     out_prefix, in_prefix = find_prefixes(folder)
     hashes = {}
     for name in sorted(os.listdir(folder)):
         path = os.path.join(folder, name)
-        if not os.path.isfile(path):
+        if not os.path.isfile(path) or FOREIGN_FILE.search(name):
             continue
         with open(path, "rb") as f:
             data = f.read()
