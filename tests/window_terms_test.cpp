@@ -2,6 +2,7 @@
 
 #include "accelerometer_term.h"
 #include "motion_model_terms.h"
+#include "ndt_term.h"
 #include "window_equations.h"
 #include "window_solver.h"
 #include <transformations.h>
@@ -391,4 +392,71 @@ TEST_CASE("window terms: the acceleration-offset prior's right-hand side is minu
     const WindowUnknowns &u = k.unknowns;
     const auto term = [&](WindowEquations &e, const AccState &s) { add_acceleration_offset_prior(e, u, k.imu, s.offset); };
     check_acc_gradient(u, k.state, term, {u.io, u.io + 1, u.io + 2}, 1e-6, 1e-5);
+}
+
+TEST_CASE("window terms: the degeneracy projection passes strong directions and removes weak ones")
+{
+    const Window w = straight_window(3, 0.002);
+    MotionModelRotationOptions rotation;
+    rotation.estimate_bias = false;
+    const WindowUnknowns u = layout_window_unknowns(w, rotation, {});
+    std::mt19937 rng(9);
+    std::uniform_real_distribution<double> value(-1.0, 1.0);
+    NdtSums sums;
+    for (int k = 0; k < 3; k++)
+    {
+        Eigen::Matrix<double, 6, 6> a;
+        for (int i = 0; i < 36; i++)
+            a.data()[i] = value(rng);
+        sums.blocks.push_back(a * a.transpose() + Eigen::Matrix<double, 6, 6>::Identity());
+        Eigen::Matrix<double, 6, 1> g;
+        for (int i = 0; i < 6; i++)
+            g(i) = value(rng);
+        sums.rhs.push_back(g);
+    }
+    ScanToMapOptions options;
+    options.degenerate_projection_ratio = 0.1;
+    options.degenerate_projection_ratio_full = 0.2;
+    SUBCASE("every direction strong: the blocks unchanged")
+    {
+        sums.normal_information.assign(3, Eigen::Vector3d(1.0, 0.8, 0.6).asDiagonal());
+        WindowEquations e(u);
+        add_projected_ndt_blocks(e, sums, options);
+        for (int k = 0; k < 3; k++)
+            for (int r = 0; r < 6; r++)
+            {
+                CHECK(e.rhs(k * 6 + r, 0) == sums.rhs[k](r));
+                for (int c = 0; c < 6; c++)
+                    CHECK(e.matrix(k * 6 + r, k * 6 + c) == sums.blocks[k](r, c));
+            }
+    }
+    SUBCASE("z weak (share 0.05 < 0.1): its translation row and column removed, rotation untouched")
+    {
+        sums.normal_information.assign(3, Eigen::Vector3d(1.0, 0.8, 0.05).asDiagonal());
+        WindowEquations e(u);
+        add_projected_ndt_blocks(e, sums, options);
+        Eigen::Matrix<double, 6, 6> M = Eigen::Matrix<double, 6, 6>::Identity();
+        M(2, 2) = 0.0;
+        for (int k = 0; k < 3; k++)
+        {
+            const Eigen::Matrix<double, 6, 6> expected = M * sums.blocks[k] * M;
+            const Eigen::Matrix<double, 6, 1> expected_rhs = M * sums.rhs[k];
+            for (int r = 0; r < 6; r++)
+            {
+                CHECK(std::abs(e.rhs(k * 6 + r, 0) - expected_rhs(r)) < 1e-12);
+                for (int c = 0; c < 6; c++)
+                    CHECK(std::abs(e.matrix(k * 6 + r, k * 6 + c) - expected(r, c)) < 1e-12);
+            }
+        }
+    }
+    SUBCASE("projection off: nothing added")
+    {
+        sums.normal_information.assign(3, Eigen::Matrix3d::Identity());
+        options.degenerate_projection_ratio_full = 0.0;
+        WindowEquations e(u);
+        add_projected_ndt_blocks(e, sums, options);
+        CHECK(e.rhs.isZero());
+        CHECK(e.matrix(0, 0) == 0.0);
+    }
+    CHECK(window_translation_information(sums).isApprox(3.0 * sums.normal_information[0]));
 }

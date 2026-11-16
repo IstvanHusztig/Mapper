@@ -1,7 +1,9 @@
 #include <doctest/doctest.h>
 
 #include "angle_units.h"
+#include "ndt_term.h"
 #include "scan_to_map.h"
+#include "window_equations.h"
 #include "window_steps.h"
 #include <transformations.h>
 #include "synthetic_recording.h"
@@ -1131,4 +1133,69 @@ TEST_CASE("scan-to-map characterization: every output over the option branches, 
     }
     out.close();
     MESSAGE("characterization written to ", file);
+}
+
+// stage 2 of docs/code-split-and-region-agents-plan.md: the NDT point terms on their own. With the projection off they go
+// straight into the normal equations, and the right-hand side must be minus half the numeric gradient of their cost, with
+// and without the Huber kernel and the information scale (the Huber weight is the derivative of the Huber cost). The step
+// is tiny, so no point changes its cell.
+TEST_CASE("window terms: the NDT point terms' right-hand side is minus half their cost's gradient")
+{
+    for (bool huber : {false, true})
+    {
+        CAPTURE(huber);
+        OdometryConfig c = test_config();
+        c.degenerate_projection_ratio = c.degenerate_projection_ratio_full = 0.0;
+        if (huber)
+        {
+            c.ndt_huber_cutoff = 3.0;
+            c.ndt_information_scale = 0.1;
+        }
+        const Options o = options_from(c);
+        const Scene s = room();
+        Maps maps = build_maps(s, o.scan_to_map);
+        const std::vector<Eigen::Affine3d> truth = true_poses();
+        const std::vector<Point3Di> points = observe(s, truth);
+        std::vector<Eigen::Affine3d> guess = truth;
+        for (int i = 0; i < n_nodes; i++)
+        {
+            guess[i].translation() += Eigen::Vector3d(0.02, -0.01, 0.008);
+            guess[i].linear() = Eigen::AngleAxisd(0.004, Eigen::Vector3d::UnitZ()).toRotationMatrix() * guess[i].linear();
+        }
+        const Window w = make_window(guess);
+        MotionModelRotationOptions rotation = o.rotation;
+        rotation.estimate_bias = false;
+        const WindowUnknowns u = layout_window_unknowns(w, rotation, {});
+        const auto evaluate = [&](const Window &win, WindowEquations &e)
+        {
+            const NdtSums sums = sum_ndt_point_terms(e, win, points, maps.indoor, maps.outdoor, o.scan_to_map, false, true, nullptr);
+            double cost = 0.0;
+            for (double v : sums.node_cost)
+                cost += v;
+            return cost;
+        };
+        WindowEquations e0(u);
+        const double cost0 = evaluate(w, e0);
+        REQUIRE(cost0 > 0.0);
+        const double h = 1e-7;
+        for (int node : {0, 10, 25, n_nodes - 1})
+            for (int p = 0; p < 6; p++)
+            {
+                const int column = node * 6 + p;
+                CAPTURE(column);
+                const auto cost_at = [&](double step)
+                {
+                    Window moved = w;
+                    TaitBryanPose pose = pose_tait_bryan_from_affine_matrix(moved.poses[node]);
+                    double *const parameter[6] = {&pose.px, &pose.py, &pose.pz, &pose.om, &pose.fi, &pose.ka};
+                    *parameter[p] += step;
+                    moved.poses[node] = affine_matrix_from_pose_tait_bryan(pose);
+                    WindowEquations e(u);
+                    return evaluate(moved, e);
+                };
+                const double gradient = (cost_at(h) - cost_at(-h)) / (2.0 * h);
+                const double scale = std::max({std::abs(gradient), std::abs(e0.rhs(column, 0)), 1e-6 * cost0});
+                CHECK(std::abs(e0.rhs(column, 0) + 0.5 * gradient) <= 1e-3 * scale);
+            }
+    }
 }
