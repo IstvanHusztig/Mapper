@@ -172,7 +172,8 @@ add_library(lo_application STATIC
   src/application/lidar_odometry.cpp
   src/application/run_odometry.cpp
   src/application/loop_closure.cpp
-  src/application/consistency.cpp)
+  src/application/consistency.cpp
+  src/application/window_replay.cpp)
 target_include_directories(lo_application PUBLIC src/application)
 target_link_libraries(lo_application PUBLIC lo_domain)
 
@@ -192,6 +193,7 @@ add_library(lo_infrastructure STATIC
   src/infrastructure/toml_io.cpp
   src/infrastructure/toml_config_repository.cpp
   src/infrastructure/odometry_snapshot_file.cpp
+  src/infrastructure/window_capture_file.cpp
   src/infrastructure/console_reporting.cpp)
 target_include_directories(lo_infrastructure
   PUBLIC src/infrastructure

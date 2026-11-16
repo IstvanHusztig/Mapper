@@ -4,6 +4,7 @@
 #include "odometry_snapshot.h"
 #include "output_ports.h"
 #include "run_reporting.h"
+#include "window_capture.h"
 
 #include <string>
 #include <vector>
@@ -29,6 +30,8 @@ public:
     bool load();
     // LiDAR odometry over all windows; false on failure
     bool run_odometry();
+    // where run_odometry writes a window capture (capture_windows_from_s / _to_s); none if not set
+    void set_window_capture(WindowCaptureSink *sink) { capture_ = sink; }
     // what the later stages read from the odometry (the windows and three values of the run state)
     OdometrySnapshot snapshot() const;
     // in place of run_odometry, after load: takes the windows and run state from a snapshot of an earlier run with the same
@@ -59,6 +62,7 @@ private:
     Logger *logger_;
     ProgressReporter *progress_;
     bool debug_;
+    WindowCaptureSink *capture_ = nullptr;
     RunInputs inputs_;
     RunServices services_;
 };

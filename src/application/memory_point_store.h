@@ -1,6 +1,7 @@
 #pragma once
 
-// PointStore kept in memory, for tests that run the pipeline's algorithms on synthetic windows
+// PointStore kept in memory: for tests that run the pipeline's algorithms on synthetic windows, and for a replay of a
+// window capture (window_replay.h)
 
 #include "input_ports.h"
 

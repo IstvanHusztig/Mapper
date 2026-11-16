@@ -1023,7 +1023,55 @@ bool process_windows(WindowLoop &loop, std::vector<Window> &windows, size_t firs
     return true;
 }
 
-bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params, OdometryState &state, double &ts_failure, bool debugMsg, PointStore &point_store, PreviewSink &preview, Logger &logger, ProgressReporter &progress)
+bool capture_range(const std::vector<Window> &windows, double from_s, double to_s, std::size_t &first, std::size_t &last)
+{
+    if (windows.empty() || from_s < 0.0 || to_s < from_s)
+        return false;
+    const double t0 = windows[0].timestamps.front().first;
+    bool found = false;
+    for (std::size_t i = 0; i < windows.size(); i++)
+    {
+        const double t = windows[i].timestamps.front().first - t0;
+        if (t < from_s || t > to_s)
+            continue;
+        if (!found)
+            first = i;
+        last = i;
+        found = true;
+    }
+    return found;
+}
+
+namespace
+{
+    // the capture of windows first..last before the first of them is processed (the outcomes are added as they come)
+    WindowCapture start_capture(const std::vector<Window> &windows, std::size_t first, std::size_t last, const WindowLoop &loop,
+                                const OdometryState &state, PointStore &point_store)
+    {
+        WindowCapture c;
+        c.n_windows = windows.size();
+        c.first = first;
+        c.last = last;
+        c.first_window = windows[0];
+        c.windows_begin = first >= 2 ? first - 2 : 0;
+        const std::size_t end = std::min(last + 1, windows.size() - 1);
+        c.windows.assign(windows.begin() + c.windows_begin, windows.begin() + end + 1);
+        c.points.resize(last - first + 1);
+        for (std::size_t i = first; i <= last; i++)
+            point_store.load(PointSet::WindowIntermediate, i, c.points[i - first]);
+        c.state.m_g = state.m_g;
+        c.state.consecutive_distance = state.consecutive_distance;
+        c.state.reference_points = state.reference_points;
+        c.state.total_length_of_calculated_trajectory = state.total_length_of_calculated_trajectory;
+        c.state.buckets_indoor = state.buckets_indoor;
+        c.state.buckets_outdoor = state.buckets_outdoor;
+        c.carry = loop.carry;
+        return c;
+    }
+}
+
+bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params, OdometryState &state, double &ts_failure, bool debugMsg, PointStore &point_store, PreviewSink &preview, Logger &logger, ProgressReporter &progress,
+                      WindowCaptureSink *capture)
 {
     if (windows.size() != 0)
     {
@@ -1035,8 +1083,38 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
 
         WindowLoop loop;
         start_window_loop(loop, windows[0], params, logger);
-        if (!process_windows(loop, windows, 0, windows.size() - 1, params, state, ts_failure, debugMsg, point_store, preview, logger, progress))
-            return false;
+        const std::size_t n = windows.size();
+        const auto run = [&](std::size_t first, std::size_t last, const WindowRange &range)
+        { return first > last || process_windows(loop, windows, first, last, params, state, ts_failure, debugMsg, point_store, preview, logger, progress, range); };
+
+        std::size_t capture_first = 0, capture_last = 0;
+        const bool capturing = capture && capture_range(windows, params.capture_windows_from_s, params.capture_windows_to_s, capture_first, capture_last);
+        if (capture && !capturing && params.capture_windows_from_s >= 0.0)
+            log_warning(logger) << "window capture: no window starts between " << params.capture_windows_from_s << " and "
+                                << params.capture_windows_to_s << " s";
+        if (!capturing)
+        {
+            if (!run(0, n - 1, {}))
+                return false;
+        }
+        else
+        {
+            // the same windows in the same order as without the capture, in three parts: before, in and after the range
+            if (capture_first > 0 && !run(0, capture_first - 1, {}))
+                return false;
+            WindowCapture c = start_capture(windows, capture_first, capture_last, loop, state, point_store);
+            WindowRange range;
+            range.outcomes = &c.outcomes;
+            if (!run(capture_first, capture_last, range))
+                return false;
+            std::string why;
+            if (capture->write(c, why))
+                log_info(logger) << "window capture written: windows " << capture_first + 1 << " to " << capture_last + 1;
+            else
+                log_error(logger) << "window capture not written: " << why;
+            if (capture_last + 1 < n && !run(capture_last + 1, n - 1, {}))
+                return false;
+        }
 
         finish_run(windows, start, loop.setup, loop.carry, state, params, loop.workspace, logger);
     }

@@ -9,10 +9,13 @@
 #include "odometry_snapshot_file.h"
 #include "run_services.h"
 #include "toml_config_repository.h"
+#include "window_capture_file.h"
+#include "window_replay.h"
 
 #include <chrono>
 #include <ctime>
 #include <filesystem>
+#include <iomanip>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -48,6 +51,8 @@ int run_cli(int argc, char *argv[])
 
     ConsoleReporter reporter;
     OdometryPipeline pipeline(config, reporter, reporter, make_folder_inputs(input_file_names, reporter), make_run_services(), paths);
+    FolderWindowCaptureSink capture(argv[3], config);
+    pipeline.set_window_capture(&capture);
     if (pipeline.load())
         log_info(reporter) << "step_1_done";
 
@@ -86,5 +91,51 @@ int run_cli(int argc, char *argv[])
 
     FolderResultSink sink(argv[3], config_repository, reporter);
     pipeline.save(sink, gui, elapsed_seconds.count());
+    return 0;
+}
+
+int run_replay(const char *capture_file, const char *params_file)
+{
+    OdometryConfig config{};
+    RunPaths paths;
+    GuiPreferences gui;
+    TomlConfigRepository config_repository;
+    if (!fs::is_regular_file(params_file) || !config_repository.load(params_file, config, paths, gui))
+    {
+        std::cerr << "Cannot load parameters from: '" << params_file << "'" << std::endl;
+        return 1;
+    }
+    ConsoleReporter reporter;
+    WindowCapture capture;
+    std::uint64_t hash = 0;
+    std::string why;
+    if (!read_window_capture(capture_file, capture, hash, why))
+    {
+        log_error(reporter) << "Cannot read the window capture: " << why;
+        return 1;
+    }
+    const bool same_settings = hash == odometry_settings_hash(config);
+    const std::size_t n = capture.last - capture.first + 1;
+    log_info(reporter) << "replay of windows " << capture.first + 1 << " to " << capture.last + 1 << " of " << capture.n_windows << " ("
+                       << (same_settings ? "the capture's own odometry settings: iterations as captured" : "OTHER odometry settings than the capture's")
+                       << ")";
+    const auto start = std::chrono::steady_clock::now();
+    const WindowReplayResult r = replay_window_capture(capture, config, same_settings, reporter);
+    const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+
+    std::size_t iterations_differ = 0;
+    for (int d : r.iteration_differences)
+        iterations_differ += d != 0;
+    log_info(reporter) << "replay: " << r.outcomes.size() << " of " << n << " windows in " << std::fixed << std::setprecision(1) << seconds
+                       << " s" << (r.cancelled ? " (cancelled)" : "") << "; identical with the capture: " << r.identical << " of " << n
+                       << "; largest difference " << std::setprecision(6) << r.largest_position_difference_m << " m / "
+                       << r.largest_rotation_difference_deg << " deg" << "; last iteration differs in " << iterations_differ << " windows";
+    if (r.first_different_window >= 0)
+        log_info(reporter) << "replay: first window that differs: " << r.first_different_window + 1;
+    if (same_settings && (r.identical != n || r.cancelled))
+    {
+        log_error(reporter) << "replay: the capture's own settings did not reproduce the run";
+        return 1;
+    }
     return 0;
 }

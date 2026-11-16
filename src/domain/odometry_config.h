@@ -71,6 +71,13 @@ struct OdometryConfig
     // after the odometry the CLI writes odometry_snapshot.bin to the output folder, so that the post-processing can be run
     // again from it (dMapper <input> <params.toml> <output> --from-snapshot <file>) without running the odometry again
     bool save_odometry_snapshot = false;
+    // window capture (CLI): the loop's state before the first window that starts at or after capture_windows_from_s, the
+    // windows up to the last one that starts at or before capture_windows_to_s (seconds from the first window's start, as
+    // time_s of log_window_diagnostics), their points and what the run made of them, written to
+    // window_capture_<from>-<to>s.bin in the output folder. dMapper --replay <file> <params.toml> runs the range again in
+    // seconds. Off while capture_windows_to_s < capture_windows_from_s or capture_windows_from_s < 0.
+    double capture_windows_from_s = -1.0;
+    double capture_windows_to_s = -1.0;
     int calibration_validation_points = 1000000;
 
     //consistency

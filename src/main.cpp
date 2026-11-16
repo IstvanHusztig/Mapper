@@ -1,4 +1,5 @@
-// composition root: 3 arguments (or 3 + --from-snapshot <file>) run the command line, anything else opens the GUI
+// composition root: 3 arguments (or 3 + --from-snapshot <file>) run the command line, --replay <capture> <params> replays a
+// window capture, anything else opens the GUI
 
 #include "cli.h"
 
@@ -15,6 +16,8 @@ int main(int argc, char *argv[])
 {
     try
     {
+        if (argc == 4 && std::string(argv[1]) == "--replay")
+            return run_replay(argv[2], argv[3]);
         if (argc == 4 || (argc == 6 && std::string(argv[4]) == "--from-snapshot")) // running from the command line
             return run_cli(argc, argv);
         return run_gui(argc, argv);
