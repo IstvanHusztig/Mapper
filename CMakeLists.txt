@@ -161,7 +161,8 @@ add_library(lo_domain STATIC
   src/domain/scan_to_map.cpp
   src/domain/window_equations.cpp
   src/domain/window_solver.cpp
-  src/domain/motion_model_terms.cpp)
+  src/domain/motion_model_terms.cpp
+  src/domain/accelerometer_term.cpp)
 target_include_directories(lo_domain PUBLIC
   src/domain
   ${EIGEN3_INCLUDE_DIR}

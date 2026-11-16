@@ -1,5 +1,6 @@
 #include <doctest/doctest.h>
 
+#include "accelerometer_term.h"
 #include "motion_model_terms.h"
 #include "window_equations.h"
 #include "window_solver.h"
@@ -244,4 +245,150 @@ TEST_CASE("window terms: the motion-model edges' right-hand side is minus half t
             };
             check_gradient(u, w, term, columns, [&](Window &win, int c, double h) { shift_pose_or_bias(win, c, h, u); }, 1e-7, false);
         }
+}
+
+namespace
+{
+    // the accelerometer functions read the window and the acceleration offset
+    struct AccState
+    {
+        Window window;
+        Eigen::Vector3d offset = Eigen::Vector3d::Zero();
+    };
+
+    void shift_acc_state(AccState &s, int column, double h, const WindowUnknowns &u)
+    {
+        if (column >= u.io && column < u.io + 3)
+            s.offset(column - u.io) += h;
+        else if (column >= u.iv && column < u.iv + 3)
+            s.window.velocity.start(column - u.iv) += h;
+        else if (column >= u.ie && column < u.ie + 3)
+            s.window.velocity.end(column - u.ie) += h;
+        else
+            shift_pose_or_bias(s.window, column, h, u);
+    }
+
+    // as check_gradient, on an AccState; tolerance relative to the larger of the two sides
+    void check_acc_gradient(const WindowUnknowns &u, const AccState &state, const std::function<void(WindowEquations &, const AccState &)> &term,
+                            const std::vector<int> &columns, double h, double tolerance)
+    {
+        WindowEquations e0(u);
+        term(e0, state);
+        for (int c : columns)
+        {
+            CAPTURE(c);
+            AccState plus = state, minus = state;
+            shift_acc_state(plus, c, h, u);
+            shift_acc_state(minus, c, -h, u);
+            WindowEquations ep(u), em(u);
+            term(ep, plus);
+            term(em, minus);
+            const double gradient = (ep.motion_cost - em.motion_cost) / (2.0 * h);
+            const double scale = std::max({std::abs(gradient), std::abs(e0.rhs(c, 0)), 1e-9 * e0.motion_cost, 1e-12});
+            CHECK(std::abs(e0.rhs(c, 0) + 0.5 * gradient) <= tolerance * scale);
+        }
+    }
+
+    // a window of 30 nodes 2 ms apart with a measured specific force that doesn't quite match the motion, a start and end
+    // velocity and an offset away from their priors
+    struct AccCase
+    {
+        AccState state;
+        std::vector<Eigen::Vector3d> acc;
+        MotionModelTranslationImuOptions imu;
+        WindowUnknowns unknowns;
+    };
+
+    void make_acc_case(AccCase &k)
+    {
+        constexpr int n = 30;
+        k.state.window = straight_window(n, 0.002);
+        std::mt19937 rng(5);
+        std::uniform_real_distribution<double> noise(-1.0, 1.0);
+        for (int i = 0; i < n; i++)
+        {
+            Window &w = k.state.window;
+            w.poses[i].linear() = (Eigen::AngleAxisd(0.3 * i * 0.002, Eigen::Vector3d::UnitZ()) * Eigen::AngleAxisd(0.01, Eigen::Vector3d::UnitX())).toRotationMatrix();
+            w.poses[i].translation() += Eigen::Vector3d(noise(rng), noise(rng), noise(rng)) * 1e-4;
+            k.acc.push_back(Eigen::Vector3d(0.02 * noise(rng), 0.02 * noise(rng), 1.0 + 0.01 * noise(rng)));
+        }
+        k.state.window.velocity.start = Eigen::Vector3d(0.95, 0.03, -0.01);
+        k.state.window.velocity.end = Eigen::Vector3d(1.04, -0.02, 0.02);
+        k.state.offset = Eigen::Vector3d(0.01, -0.02, 0.005);
+        k.imu.enabled = true;
+        k.imu.acc = &k.acc;
+        k.imu.gravity = Eigen::Vector3d(0.0, 0.0, 1.0);
+        k.imu.to_mps2 = 9.80665;
+        k.imu.span_s = 0.005;
+        k.imu.noise_density_mps2_sqrt_hz = 0.0013;
+        k.imu.floor_sigma_mps2 = 0.1;
+        k.imu.velocity_prior_mean = Eigen::Vector3d(1.0, 0.0, 0.0);
+        Eigen::Matrix3d a;
+        a << 1.0, 0.1, 0.0, 0.1, 1.2, 0.05, 0.0, 0.05, 0.8;
+        k.imu.velocity_prior_cov = a * 4e-4;
+        k.imu.offset_prior_mean = Eigen::Vector3d(0.0, -0.01, 0.0);
+        k.imu.offset_prior_cov = a * 1e-4;
+        k.imu.zero_velocity_sigma_mps = 0.01;
+        MotionModelRotationOptions rotation;
+        rotation.estimate_bias = false;
+        k.unknowns = layout_window_unknowns(k.state.window, rotation, k.imu);
+    }
+}
+
+TEST_CASE("window terms: the acceleration terms' right-hand side is minus half their cost's gradient")
+{
+    AccCase k;
+    make_acc_case(k);
+    const WindowUnknowns &u = k.unknowns;
+    REQUIRE(u.acc_term);
+    const auto term = [&](WindowEquations &e, const AccState &s) { add_acceleration_terms(e, u, s.window, k.imu, s.offset); };
+    std::vector<int> linear, rotation;
+    for (int node = 0; node < u.n_nodes; node++)
+        for (int p = 0; p < 6; p++)
+            (p < 3 ? linear : rotation).push_back(node * 6 + p);
+    for (int r = 0; r < 3; r++)
+    {
+        linear.push_back(u.io + r);
+        linear.push_back(u.iv + r);
+        linear.push_back(u.ie + r);
+    }
+    check_acc_gradient(u, k.state, term, linear, 1e-6, 1e-5);
+    // the rotation part of the Jacobian is itself a central difference (tait_bryan_rotation_jacobian), and d(R f) = -[R f]x
+    // d(theta) is first order: a looser tolerance
+    check_acc_gradient(u, k.state, term, rotation, 1e-6, 1e-3);
+}
+
+TEST_CASE("window terms: the velocity priors' right-hand side is minus half their cost's gradient")
+{
+    AccCase k;
+    make_acc_case(k);
+    const WindowUnknowns &u = k.unknowns;
+    SUBCASE("start prior and rest, end velocity tied by its term")
+    {
+        k.imu.at_rest = true;
+        const auto term = [&](WindowEquations &e, const AccState &s) { add_velocity_priors(e, u, s.window, k.imu, true); };
+        check_acc_gradient(u, k.state, term, {u.iv, u.iv + 1, u.iv + 2, u.ie, u.ie + 1, u.ie + 2}, 1e-6, 1e-5);
+    }
+    SUBCASE("weak end tie: it treats the start velocity as fixed, so only the end velocity is checked")
+    {
+        const auto term = [&](WindowEquations &e, const AccState &s)
+        {
+            // the tie alone: its cost and right-hand side without the start prior's
+            WindowEquations with(u), without(u);
+            add_velocity_priors(with, u, s.window, k.imu, false);
+            add_velocity_priors(without, u, s.window, k.imu, true);
+            e.motion_cost = with.motion_cost - without.motion_cost;
+            e.rhs = with.rhs - without.rhs;
+        };
+        check_acc_gradient(u, k.state, term, {u.ie, u.ie + 1, u.ie + 2}, 1e-6, 1e-5);
+    }
+}
+
+TEST_CASE("window terms: the acceleration-offset prior's right-hand side is minus half its cost's gradient")
+{
+    AccCase k;
+    make_acc_case(k);
+    const WindowUnknowns &u = k.unknowns;
+    const auto term = [&](WindowEquations &e, const AccState &s) { add_acceleration_offset_prior(e, u, k.imu, s.offset); };
+    check_acc_gradient(u, k.state, term, {u.io, u.io + 1, u.io + 2}, 1e-6, 1e-5);
 }
