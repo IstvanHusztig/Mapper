@@ -218,22 +218,10 @@ struct OdometryConfig
     // it and degenerate_projection_ratio_full the NDT information is scaled linearly. degenerate_projection_ratio_full = 0: off
     double degenerate_projection_ratio = 0.0;
     double degenerate_projection_ratio_full = 0.0;
-    // The normals n of that sum: by default each cell's normal_vector, which the previous cell statistics fix from the
-    // cell's first 3 points (a noisy direction: a smooth passage then reads a share of 0.15-0.27 along its axis). On:
-    // the normal from all of the cell's points (NdtBucket::all_points_normal); the same passage reads below 0.02.
-    bool degenerate_projection_all_point_normals = false;
-    // The covariance handed to the next window (end velocity, acceleration offset, gyro bias) comes from the window's
-    // normal matrix. On: for that covariance the NDT terms count along each direction only by their share of
-    // normal-direction information (sum of n n^T / (n^T C n) against the sum of the cells' inverse covariances), so the
-    // pull of points along a wall towards their cell's mean adds no confidence. The solve itself is unchanged.
-    bool carried_covariance_normal_information_only = false;
     // Levenberg-Marquardt step check: a step that raises the window's cost (ScanToMapCost: NDT plus every motion and IMU
     // term) is taken back and the damping raised x10; the window ends at the lowest-cost state it reached. Off: every step
     // that solves is taken.
     bool lm_step_check = false;
-    // cost of a point in range that no NDT cell matches, so the window can't lower its cost by sliding points off the map
-    // (in r^T Sigma^-1 r units; only read by lm_step_check). 0 with the step check lets a window slide off the map.
-    double ndt_unmatched_point_cost = 0.0;
     // Huber kernel on the NDT point terms: a point whose Mahalanobis distance d = sqrt(r^T Sigma^-1 r) to its cell
     // exceeds this cutoff is weighted cutoff / d (constant pull instead of one growing with d), and costs
     // 2 cutoff d - cutoff^2 instead of d^2. 0 = off. Codex's diagnostic DMAPPER_DIAGNOSTIC_NDT_HUBER3 (cbca36d) used 3.

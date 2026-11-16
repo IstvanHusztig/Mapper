@@ -25,9 +25,6 @@ struct ScanToMapOptions
     // degeneracy-aware NDT terms (see OdometryConfig::degenerate_projection_ratio); ratio_full = 0: off
     double degenerate_projection_ratio = 0.0;
     double degenerate_projection_ratio_full = 0.0;
-    bool degenerate_projection_all_point_normals = false;    // see OdometryConfig
-    bool carried_covariance_normal_information_only = false; // see OdometryConfig
-    double unmatched_point_cost = 0.0; // OdometryConfig::ndt_unmatched_point_cost (ScanToMapCost) [chi^2 units]
     double huber_cutoff = 0.0;         // OdometryConfig::ndt_huber_cutoff; 0 = off
     double information_scale = 1.0;    // OdometryConfig::ndt_information_scale; 1 = off
 };

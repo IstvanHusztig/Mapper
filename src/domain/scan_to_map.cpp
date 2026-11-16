@@ -227,24 +227,7 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
     const bool project_degenerate = scan_to_map.degenerate_projection_ratio_full > 0.0;
     if (lidar_translation_information || project_degenerate)
         normal_information.assign(window.poses.size(), Eigen::Matrix3d::Zero());
-    // carried_covariance_normal_information_only: the covariance of the extra unknowns counts the NDT terms only by
-    // their normal-direction information. It needs the NDT terms summed per node as well, and per node the sum of
-    // n n^T / (n^T C n) over the matched cells (C the cell's covariance, n its normal from all points): what the cells
-    // say about a displacement along their normals. A point's NDT translation information is C^-1, never less than that.
-    const bool normal_only_covariance = scan_to_map.carried_covariance_normal_information_only && n_params > n_pose_params;
-    const bool keep_ndt_blocks = project_degenerate || normal_only_covariance;
-    std::vector<Eigen::Matrix3d> normal_direction_information;
-    if (normal_only_covariance)
-        normal_direction_information.assign(window.poses.size(), Eigen::Matrix3d::Zero());
-    const auto add_normal_direction_information = [&](const NdtBucket &cell, double weight, int node)
-    {
-        const Eigen::Vector3d n = cell.all_points_normal.cast<double>();
-        if (n.squaredNorm() < 0.5)
-            return;
-        const double variance = n.dot(cell.cov * n);
-        if (variance > 0.0)
-            normal_direction_information[node] += (weight / variance) * n * n.transpose();
-    };
+    const bool keep_ndt_blocks = project_degenerate;
     std::vector<Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> ndt_blocks;
     std::vector<Eigen::Matrix<double, 6, 1>> ndt_rhs;
     if (keep_ndt_blocks)
@@ -281,14 +264,11 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
     };
     // ndt_huber_cutoff: the point's IRLS weight from its distance to the cell (1 when off or within the cutoff), then
     // ndt_information_scale; in this order, as in Codex's build (cbca36d: Huber weight, then scale_ndt_point)
-    // Returns the factor applied (Huber weight times scale; 1 when both are off), so the normal-direction information of
-    // carried_covariance_normal_information_only counts the point as much as its block does. A non-finite distance with
-    // Huber on sets invalid_ndt_distance (the run stops after the loop, as in Codex's cbca36d).
+    // A non-finite distance with Huber on sets invalid_ndt_distance (the run stops after the loop, as in Codex's cbca36d).
     std::atomic<bool> invalid_ndt_distance{false};
     const auto apply_huber_and_scale = [&](Eigen::Matrix<double, 6, 6, Eigen::RowMajor> &AtPA, Eigen::Matrix<double, 6, 1> &AtPB,
                                            const Eigen::Vector3d &point_global, const Eigen::Vector3d &mean, const Eigen::Matrix3d &infm)
     {
-        double factor = 1.0;
         if (scan_to_map.huber_cutoff > 0.0)
         {
             const Eigen::Vector3d r = point_global - mean;
@@ -298,15 +278,12 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
             const double weight = ndt_huber(s, scan_to_map.huber_cutoff).weight;
             AtPA *= weight;
             AtPB *= weight;
-            factor = weight;
         }
         if (scan_to_map.information_scale != 1.0)
         {
             AtPA *= scan_to_map.information_scale;
             AtPB *= scan_to_map.information_scale;
-            factor *= scan_to_map.information_scale;
         }
-        return factor;
     };
     double motion_cost = 0.0; // the motion and IMU terms (only summed, never used in the solve)
     setup_timer.stop();
@@ -398,7 +375,7 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
             AtPB *= w;
         }
         count_matched(intermediate_points_i, point_global, this_bucket.mean, infm, (scan_to_map.use_planarity || scan_to_map.use_norm) ? w : 1.0);
-        const double point_factor = apply_huber_and_scale(AtPA, AtPB, point_global, this_bucket.mean, infm);
+        apply_huber_and_scale(AtPA, AtPB, point_global, this_bucket.mean, infm);
 
         // only this point's node writes this block (see for_each_node), so no lock is needed
         if (keep_ndt_blocks)
@@ -411,19 +388,8 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
             AtPAndt.add_diagonal_block6(c, AtPA);
             AtPBndt.block<6, 1>(c, 0) -= AtPB;
         }
-        if (!normal_information.empty())
-        {
-            if (scan_to_map.degenerate_projection_all_point_normals)
-            {
-                const Eigen::Vector3d n = this_bucket.all_points_normal.cast<double>();
-                if (n.squaredNorm() > 0.5)
-                    normal_information[intermediate_points_i.index_pose] += n * n.transpose();
-            }
-            else if (this_bucket.normal_vector.squaredNorm() > 0.5)
-                normal_information[intermediate_points_i.index_pose] += this_bucket.normal_vector * this_bucket.normal_vector.transpose();
-        }
-        if (normal_only_covariance)
-            add_normal_direction_information(this_bucket, point_factor != 1.0 ? w * point_factor : w, intermediate_points_i.index_pose);
+        if (!normal_information.empty() && this_bucket.normal_vector.squaredNorm() > 0.5)
+            normal_information[intermediate_points_i.index_pose] += this_bucket.normal_vector * this_bucket.normal_vector.transpose();
     };
 
     PhaseTimer indoor_timer(phase(&ScanToMapTiming::ndt_indoor));
@@ -549,7 +515,7 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
                 AtPB *= planarity;
             }
             count_matched(intermediate_points_i, point_global, this_bucket.mean, infm, planarity);
-            const double point_factor = apply_huber_and_scale(AtPA, AtPB, point_global, this_bucket.mean, infm);
+            apply_huber_and_scale(AtPA, AtPB, point_global, this_bucket.mean, infm);
 
             if (keep_ndt_blocks)
             {
@@ -561,8 +527,6 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
                 AtPAndt.add_diagonal_block6(c, AtPA);
                 AtPBndt.block<6, 1>(c, 0) -= AtPB;
             }
-            if (normal_only_covariance)
-                add_normal_direction_information(this_bucket, point_factor != 1.0 ? planarity * point_factor : planarity, intermediate_points_i.index_pose);
         };
 
         PhaseTimer outdoor_timer(phase(&ScanToMapTiming::ndt_outdoor));
@@ -578,7 +542,6 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
     // down to nothing (scale s from 0 below degenerate_projection_ratio to 1 at degenerate_projection_ratio_full), so the
     // motion model alone places the window there. With M = diag(P, I), P = sum(s_k * v_k * v_k^T), a node's block B and
     // right-hand side g become M B M and M g. Nothing is multiplied when every direction keeps s = 1.
-    Eigen::Matrix3d ndt_translation_information = Eigen::Matrix3d::Zero(); // sum of the nodes' NDT translation blocks, unprojected
     if (project_degenerate)
     {
         Eigen::Matrix3d info = Eigen::Matrix3d::Zero();
@@ -601,8 +564,6 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
         M.topLeftCorner<3, 3>() = P;
         for (int k = 0; k < n_nodes; k++)
         {
-            if (normal_only_covariance)
-                ndt_translation_information += ndt_blocks[k].topLeftCorner<3, 3>();
             if (all_kept)
             {
                 AtPAndt.add_diagonal_block6(k * 6, ndt_blocks[k]);
@@ -613,18 +574,7 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
                 const Eigen::Matrix<double, 6, 6, Eigen::RowMajor> projected = M * ndt_blocks[k] * M;
                 AtPAndt.add_diagonal_block6(k * 6, projected);
                 AtPBndt.block<6, 1>(k * 6, 0) += M * ndt_rhs[k];
-                if (normal_only_covariance)
-                    ndt_blocks[k] = projected; // the block as it stands in the normal matrix
             }
-        }
-    }
-    else if (normal_only_covariance)
-    {
-        for (int k = 0; k < n_nodes; k++)
-        {
-            ndt_translation_information += ndt_blocks[k].topLeftCorner<3, 3>();
-            AtPAndt.add_diagonal_block6(k * 6, ndt_blocks[k]);
-            AtPBndt.block<6, 1>(k * 6, 0) += ndt_rhs[k];
         }
     }
 
@@ -1054,9 +1004,6 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
             cost->matched += node_matched[k];
             cost->unmatched += node_unmatched[k];
         }
-        // an off-map point costs as much as a matched point at that distance would: scaled like the matched terms
-        const double unmatched = scan_to_map.unmatched_point_cost * cost->unmatched;
-        cost->ndt += scan_to_map.information_scale != 1.0 ? scan_to_map.information_scale * unmatched : unmatched;
         cost->total = cost->ndt + motion_cost;
     }
     PhaseTimer assembly_timer(phase(&ScanToMapTiming::assembly));
@@ -1083,43 +1030,7 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
     {
         // marginal covariance of the extra unknowns (gyro bias, acceleration offset):
         // their block of the inverse of the undamped normal matrix
-        if (normal_only_covariance)
-        {
-            // For this covariance the NDT terms count along each direction only by their share of normal-direction
-            // information: share c_j = v_j^T R v_j / v_j^T T v_j along the eigenvectors v_j of R (the window's sum of
-            // n n^T / (n^T C n)), T the sum of the NDT translation blocks. Each node's block B becomes Mc B Mc with
-            // Mc = diag(sum sqrt(c_j) v_j v_j^T, I): the points' pull along a surface adds no confidence.
-            Eigen::Matrix3d real = Eigen::Matrix3d::Zero();
-            for (const auto &r : normal_direction_information)
-                real += r;
-            const Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eig(real);
-            Eigen::Matrix3d scale = Eigen::Matrix3d::Zero();
-            for (int j = 0; j < 3; j++)
-            {
-                const Eigen::Vector3d v = eig.eigenvectors().col(j);
-                const double total = v.dot(ndt_translation_information * v);
-                const double share = total > 0.0 ? std::clamp(eig.eigenvalues()(j) / total, 0.0, 1.0) : 1.0;
-                scale += std::sqrt(share) * v * v.transpose();
-            }
-            Eigen::Matrix<double, 6, 6> Mc = Eigen::Matrix<double, 6, 6>::Identity();
-            Mc.topLeftCorner<3, 3>() = scale;
-            std::vector<Eigen::Triplet<double>> difference;
-            difference.reserve(static_cast<size_t>(n_nodes) * 36);
-            for (int k = 0; k < n_nodes; k++)
-            {
-                const Eigen::Matrix<double, 6, 6> block = ndt_blocks[k];
-                const Eigen::Matrix<double, 6, 6> d = Mc * block * Mc - block;
-                for (int r = 0; r < 6; r++)
-                    for (int c = 0; c < 6; c++)
-                        difference.emplace_back(k * 6 + r, k * 6 + c, d(r, c));
-            }
-            Eigen::SparseMatrix<double> D(n_params, n_params);
-            D.setFromTriplets(difference.begin(), difference.end());
-            const Eigen::SparseMatrix<double> AtPA_covariance = AtPA + D;
-            cache.covariance.compute(AtPA_covariance);
-        }
-        else
-            cache.covariance.compute(AtPA);
+        cache.covariance.compute(AtPA);
         const PatternCachedCholesky::Solver &solver_cov = cache.covariance.solver();
         if (solver_cov.info() == Eigen::Success)
         {

@@ -155,10 +155,11 @@ std::uint64_t odometry_settings_hash(const OdometryConfig &config)
             excluded.insert(keys.begin(), keys.end());
 
     // settings added after snapshots existed: each changes the odometry, but at its default (off) it adds nothing, so
-    // they count only when set, and snapshots made before they existed still match
+    // they count only when set, and snapshots made before they existed still match (degenerate_projection_all_point_normals,
+    // carried_covariance_normal_information_only and ndt_unmatched_point_cost, removed 2026-11-16, were in this list too:
+    // snapshots made with them at their defaults still match)
     static const std::set<std::string> added_later = {
-        "holdout_block_s", "degenerate_projection_all_point_normals", "carried_covariance_normal_information_only",
-        "lm_step_check", "ndt_unmatched_point_cost", "ndt_huber_cutoff", "ndt_information_scale", "imu_position_information_scale"};
+        "holdout_block_s", "lm_step_check", "ndt_huber_cutoff", "ndt_information_scale", "imu_position_information_scale"};
     static const OdometryConfig defaults{};
 
     Hash h;

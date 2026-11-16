@@ -51,8 +51,8 @@ double next_lm_factor(double lm_factor, int iter, bool step_applied);
 // timing (log_stage_timing): when not null, the time of each phase is added to it
 // workspace: when not null, the Cholesky analyses are kept in it between calls (the results are the same without it)
 // returns whether the step was applied (false: the solve failed, or a big jump rejected the whole step)
-// The window's cost at the state a call starts from (lm_step_check): the NDT term (w r^T Sigma^-1 r per matched point, plus
-// ndt_unmatched_point_cost per point in range that no cell matches) and every motion and IMU term (r^T W r with the
+// The window's cost at the state a call starts from (lm_step_check): the NDT term (w r^T Sigma^-1 r per matched point;
+// a point in range that no cell matches costs nothing and is only counted) and every motion and IMU term (r^T W r with the
 // weights of the call). Unprojected: the degeneracy projection changes the step, not what a state costs.
 struct ScanToMapCost
 {

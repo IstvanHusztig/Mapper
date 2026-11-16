@@ -56,68 +56,12 @@ std::vector<Point3Di> decimate(const std::vector<Point3Di>& points, double bucke
 
 namespace
 {
-    constexpr double initial_cell_sigma_m = 0.03;   // the isotropic covariance of a cell's first point
     constexpr double ambiguous_normal_ratio = 3.0;  // no normal if the two smallest spreads are closer than this factor
-
-    Eigen::Matrix3d all_points_covariance(const NdtBucket &bucket)
-    {
-        const auto &c = bucket.all_points_cov;
-        Eigen::Matrix3d m;
-        m << c(0), c(1), c(2), c(1), c(3), c(4), c(2), c(4), c(5);
-        return m;
-    }
-
-    // the statistics of all of a cell's points beside the previous ones (NdtBucket::all_points_*): the running mean and
-    // the covariance about it, as the exact statistics compute them
-    void start_all_points_statistics(NdtBucket &bucket)
-    {
-        const float v = static_cast<float>(initial_cell_sigma_m * initial_cell_sigma_m);
-        bucket.all_points_normal.setZero();
-        bucket.all_points_mean_offset.setZero();
-        bucket.all_points_cov << v, 0.0f, 0.0f, v, 0.0f, v;
-        bucket.all_points_count = 1;
-    }
-
-    void add_to_all_points_statistics(NdtBucket &bucket, const Eigen::Vector3d &point, const Eigen::Vector3d &viewport)
-    {
-        // the far side of a thin wall: a normal from an earlier call that faces away from this call's viewport (a zero
-        // normal passes)
-        if (bucket.all_points_normal.cast<double>().dot(viewport - bucket.mean) < 0.0)
-            return;
-        const double n = static_cast<double>(bucket.all_points_count);
-        Eigen::Vector3d mean_offset = bucket.all_points_mean_offset.cast<double>();
-        const Eigen::Vector3d d = (point - bucket.mean) - mean_offset;
-        mean_offset += d / (n + 1.0);
-        const Eigen::Matrix3d cov = (n * all_points_covariance(bucket) + (n / (n + 1.0)) * d * d.transpose()) / (n + 1.0);
-        bucket.all_points_mean_offset = mean_offset.cast<float>();
-        bucket.all_points_cov << static_cast<float>(cov(0, 0)), static_cast<float>(cov(0, 1)), static_cast<float>(cov(0, 2)),
-            static_cast<float>(cov(1, 1)), static_cast<float>(cov(1, 2)), static_cast<float>(cov(2, 2));
-        bucket.all_points_count++;
-    }
-
-    // the direction of the smallest spread, flipped towards the viewport; none below 3 points or if the two smallest
-    // spreads are too close to tell apart
-    void refresh_all_points_normal(NdtBucket &bucket, const Eigen::Vector3d &viewport)
-    {
-        if (bucket.all_points_count < 3)
-            return;
-        const Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eigen_solver(all_points_covariance(bucket), Eigen::ComputeEigenvectors);
-        if (eigen_solver.eigenvalues()(1) < ambiguous_normal_ratio * eigen_solver.eigenvalues()(0))
-        {
-            bucket.all_points_normal.setZero();
-            return;
-        }
-        Eigen::Vector3d nv = eigen_solver.eigenvectors().col(0).normalized();
-        if (nv.dot(viewport - bucket.mean) < 0.0)
-            nv *= -1.0;
-        bucket.all_points_normal = nv.cast<float>();
-    }
 }
 
 // the previous cell statistics, kept unchanged behind use_exact_ndt_bucket_statistics = false: the mean is the cell's
 // first point, the normal is fixed from the first 3 points, and later points update the covariance only if they pass
-// the view-point test against that normal. Beside them the cell keeps the statistics of all its points (all_points_*),
-// which change nothing here: they give the cell a normal that later points improve
+// the view-point test against that normal
 static void update_rgd_legacy(const NdtGridParameters &rgd_params, NDTBucketMapType &buckets,
                               std::vector<Point3Di> &points_global, Eigen::Vector3d viewport)
 {
@@ -179,7 +123,6 @@ static void update_rgd_legacy(const NdtGridParameters &rgd_params, NDTBucketMapT
                                       cov_update * (this_bucket.number_of_points - 1) / (this_bucket.number_of_points * this_bucket.number_of_points);
                 }
             }
-            add_to_all_points_statistics(this_bucket, points_global[i].point, viewport);
         }
         else
         {
@@ -191,7 +134,6 @@ static void update_rgd_legacy(const NdtGridParameters &rgd_params, NDTBucketMapT
             bucket_to_add.index_end = 0;
             // no normal until the 3rd point; must not be left uninitialized (it is read by the viewpoint check)
             bucket_to_add.normal_vector = Eigen::Vector3d::Zero();
-            start_all_points_statistics(bucket_to_add);
             buckets.emplace(index_of_bucket, bucket_to_add);
         }
     }
@@ -202,7 +144,6 @@ static void update_rgd_legacy(const NdtGridParameters &rgd_params, NDTBucketMapT
     {
         NdtBucket &bucket = buckets.at(index);
         refresh_cell_inverse(bucket);
-        refresh_all_points_normal(bucket, viewport);
     }
 }
 
@@ -268,14 +209,12 @@ void update_rgd(const NdtGridParameters &rgd_params, NDTBucketMapType &buckets,
         if (eigen_solver.eigenvalues()(1) < ambiguous_normal_ratio * eigen_solver.eigenvalues()(0))
         {
             bucket.normal_vector = Eigen::Vector3d::Zero();
-            bucket.all_points_normal.setZero();
             continue;
         }
         Eigen::Vector3d nv = eigen_solver.eigenvectors().col(0).normalized();
         if (nv.dot(viewport - bucket.mean) < 0.0)
             nv *= -1.0;
         bucket.normal_vector = nv;
-        bucket.all_points_normal = nv.cast<float>(); // the exact statistics are those of all points
     }
 
     // the cells this call added or changed get their inverse covariance (a cell only changes its cov through the loop above)

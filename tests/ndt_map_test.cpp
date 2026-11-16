@@ -185,16 +185,11 @@ TEST_CASE("update_rgd previous statistics: first point as mean, normal fixed fro
     CHECK(cell.normal_vector == three.begin()->second.normal_vector);
     // the first 3 points are collinear, so that normal is far off the plane
     CHECK(angle_deg(cell.normal_vector, Eigen::Vector3d::UnitZ()) > 30.0);
-    // beside it the cell keeps the normal from all of its points, oriented towards the viewport
-    CHECK(angle_deg(cell.all_points_normal.cast<double>(), Eigen::Vector3d::UnitZ()) < 5.0);
-    CHECK(cell.all_points_count == points.size());
-    CHECK(three.begin()->second.all_points_normal == Eigen::Vector3f::Zero()); // 3 points on a line single out no direction
 
     // the exact statistics find the plane from the same points
     NDTBucketMapType exact;
     update_rgd(grid(0.5), exact, points, viewport, true);
     CHECK(angle_deg(exact.begin()->second.normal_vector, Eigen::Vector3d::UnitZ()) < 5.0);
-    CHECK(exact.begin()->second.all_points_normal == exact.begin()->second.normal_vector.cast<float>());
 }
 
 TEST_CASE("update_rgd exact: cells with fewer than 3 points have no normal")
