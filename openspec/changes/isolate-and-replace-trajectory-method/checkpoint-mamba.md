@@ -251,3 +251,23 @@ version and today's branch broke it.
 user; candidate folder experiments/phase0b-2026-11-12/livox3-indoor/), its build and settings; (2) rerun that version
 to confirm; (3) bisect code commits and settings (e.g. the 500 Hz Livox settings, master 5a17b7d) until the map turns
 bad, with the user judging maps by eye at each step. The IMU carry design waits for this.
+
+## 2026-11-16: the good Livox 3 base found, ported, and the gain switching removed
+
+- The user's good Livox 3 map (`livox3-indoor/huber3-baseline`) came from Codex's side build cbca36d with three
+  behaviours not on the main line: a Huber kernel (cutoff 3) on the NDT point terms (env variable), NDT information x0.1
+  and the motion-model position weights x0.1 while the accelerometer term is active (compile-time defines, visible only
+  in that run's bundle.json / CMakeCache.txt), and without the Fusion gain fix e41bd08.
+- Ported as settings under `[imu_translation]`: `ndt_huber_cutoff`, `ndt_information_scale`,
+  `imu_position_information_scale` (off: 0 / 1 / 1). Run E (port, gain fix off) is byte-identical to the good run.
+  With the settings off 44_short is identical except the params file's three new keys.
+- Gain fix check: C2/D2 (Huber only) and E/F (all three). With all three, the gain fix left the odometry almost unchanged
+  but loop closure corrected up to 1.48 m (0.33 m without) and the final route grew 313 -> 355 m. Option B: the dynamic
+  gain switch (and `OrientationEstimator::set_gain`) removed, the adapter keeps e41bd08's correct settings handling.
+- Run G (option B, all three settings): user verdict "the best so far". 0 bent windows, largest bend 1.8 deg, loop closure
+  77 loops, largest correction 0.15 m; within 0.22 m of E. `settings/livox-vertical.toml` now carries the three settings.
+- Port flaws fixed after review: (d) weighted by Huber x scale; unmatched cost scaled; strict TOML loader (unknown or
+  misplaced keys and wrong types refuse the file; run C was lost to a misplaced key); snapshot hash skips settings added
+  later while off; non-finite NDT distance stops the run; GUI run errors reported instead of a crash.
+- Open: 44 with option B (baselines), Livox 3 reference manifest from G, then Livox 4. Owed: plan for splitting the
+  optimizer and the other huge functions (SOLID) and for region agents with a noise-budget owner.

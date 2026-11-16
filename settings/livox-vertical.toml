@@ -67,6 +67,11 @@ loop_closure_cross_floor_min_fitness = 0.3
 loop_closure_cross_floor_max_angle_deg = 10.0
 
 [imu_translation]
+# Livox 3's good map (user's verdict 2026-11-16, run G): Huber kernel on the NDT points, NDT information and the
+# position pull towards the guess both x0.1 (from Codex's build cbca36d), with the AHRS gain constant
+ndt_huber_cutoff = 3.0
+ndt_information_scale = 0.1
+imu_position_information_scale = 0.1
 degenerate_projection_ratio = 0.1
 degenerate_projection_ratio_full = 0.2
 imu_always_on = true
