@@ -48,4 +48,7 @@ struct WindowEquations
     // the motion and IMU terms' cost at the state the call starts from, one running sum in the terms' order (only summed,
     // never used in the solve)
     double motion_cost = 0.0;
+    // whether the cost is wanted (lm_step_check): the motion-model edges compute theirs only then; the other terms always add
+    // theirs (cheap)
+    bool with_cost = false;
 };

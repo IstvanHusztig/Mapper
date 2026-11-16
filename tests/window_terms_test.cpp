@@ -3,6 +3,7 @@
 #include "motion_model_terms.h"
 #include "window_equations.h"
 #include "window_solver.h"
+#include <transformations.h>
 
 #include <cmath>
 #include <functional>
@@ -41,11 +42,11 @@ namespace
             w.gyro_bias.mean(column - u.ib) += h;
             return;
         }
-        Eigen::Affine3d &p = w.poses[column / 6];
-        if (column % 6 < 3)
-            p.translation()(column % 6) += h;
-        else
-            FAIL("rotation columns are not shifted by this helper");
+        // the optimizer's parameters of a node: x, y, z, om, fi, ka (Tait-Bryan)
+        TaitBryanPose p = pose_tait_bryan_from_affine_matrix(w.poses[column / 6]);
+        double *const parameter[6] = {&p.px, &p.py, &p.pz, &p.om, &p.fi, &p.ka};
+        *parameter[column % 6] += h;
+        w.poses[column / 6] = affine_matrix_from_pose_tait_bryan(p);
     }
 
     // The term's right-hand side must be minus half the gradient of its cost (central differences, step h), and with
@@ -193,4 +194,54 @@ TEST_CASE("window terms: the velocity continuity's right-hand side is minus half
         const Term term = [&](WindowEquations &e, const Window &win) { add_velocity_continuity(e, u, win, m, prior); };
         check_gradient(u, w, term, columns, shift, 1e-5, true);
     }
+}
+
+TEST_CASE("window terms: the motion-model edges' right-hand side is minus half their cost's gradient, with the bias coupling")
+{
+    // a turning window whose poses differ from the motion model by small random offsets, with uneven timestamps
+    constexpr int n = 8;
+    Window w = straight_window(n, 0.002);
+    std::mt19937 rng(11);
+    std::uniform_real_distribution<double> offset(-0.002, 0.002), angle(-0.003, 0.003);
+    for (int k = 0; k < n; k++)
+    {
+        const double t = k * 0.002 + (k % 2) * 0.0004;
+        w.timestamps[k] = {t, t};
+        w.motion_model_poses[k].linear() = Eigen::AngleAxisd(0.05 * k, Eigen::Vector3d::UnitZ()).toRotationMatrix();
+        w.poses[k] = w.motion_model_poses[k];
+        w.poses[k].translation() += Eigen::Vector3d(offset(rng), offset(rng), offset(rng));
+        w.poses[k].linear() = (Eigen::AngleAxisd(angle(rng), Eigen::Vector3d::UnitX()) * Eigen::AngleAxisd(angle(rng), Eigen::Vector3d::UnitY()) *
+                               Eigen::AngleAxisd(angle(rng), Eigen::Vector3d::UnitZ())).toRotationMatrix() * w.poses[k].linear();
+    }
+    w.gyro_bias.mean = Eigen::Vector3d(0.02, -0.01, 0.03);
+    MotionModelOptions m;
+    m.x_sigma_m = m.y_sigma_m = m.z_sigma_m = 1e-3;
+    m.om_sigma_deg = m.fi_sigma_deg = m.ka_sigma_deg = 0.1;
+    m.correction.om = 0.001;
+    MotionModelRotationOptions rotation;
+    rotation.inflation_k = 7.0;
+    rotation.arw_rad_sqrt_s = Eigen::Vector3d(0.028, 0.042, 0.057) * (M_PI / 180.0);
+    rotation.sigma_floor_rad = 0.0035 * (M_PI / 180.0);
+    rotation.bias_prior_mean = Eigen::Vector3d(0.01, -0.012, 0.025);
+    for (bool time_scaled : {false, true})
+        for (bool bias : {false, true})
+        {
+            CAPTURE(time_scaled);
+            CAPTURE(bias);
+            rotation.time_scaled_sigma = time_scaled;
+            rotation.estimate_bias = bias;
+            const WindowUnknowns u = layout_window_unknowns(w, rotation, {});
+            std::vector<int> columns;
+            for (int c = 0; c < u.n_pose_params; c++)
+                columns.push_back(c);
+            if (bias)
+                for (int r = 0; r < 3; r++)
+                    columns.push_back(u.ib + r);
+            const Term term = [&](WindowEquations &e, const Window &win)
+            {
+                e.with_cost = true;
+                add_motion_edge_terms(e, u, win, m, rotation, {});
+            };
+            check_gradient(u, w, term, columns, [&](Window &win, int c, double h) { shift_pose_or_bias(win, c, h, u); }, 1e-7, false);
+        }
 }
