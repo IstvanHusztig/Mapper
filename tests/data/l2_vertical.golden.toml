@@ -15,10 +15,8 @@ build_date = "GOLDEN"
 consistency_gyro_gate_deg = 3.0
 consistency_gyro_rotation_term = false
 consistency_gyro_sigma_scale = 3.0
-consistency_min_distance = 0.4
 num_constistency_iter = 10
 use_consistency = true
-use_mutliple_gaussian = false
 
 [evaluation]
 holdout_block_s = 0.0
@@ -195,21 +193,3 @@ working_directory_preview = 'C:\Users\User\Downloads\dLidar\raw data\42\preview'
 
 [performance]
 real_time_threshold_seconds = 10.0
-
-[robust_lidar_odometry]
-azimutal_angle_deg = 10.0
-azimutal_angle_deg_rigid_sf = 10.0
-distance_bucket = 0.2
-distance_bucket_rigid_sf = 0.5
-max_distance_lidar_rigid_sf = 25.0
-polar_angle_deg = 10.0
-polar_angle_deg_rigid_sf = 10.0
-rgd_sf_sigma_fi_deg = 0.01
-rgd_sf_sigma_ka_deg = 0.01
-rgd_sf_sigma_om_deg = 0.01
-rgd_sf_sigma_x_m = 0.001
-rgd_sf_sigma_y_m = 0.001
-rgd_sf_sigma_z_m = 0.001
-robust_and_accurate_lidar_odometry_iterations = 20
-robust_and_accurate_lidar_odometry_rigid_sf_iterations = 30
-use_robust_and_accurate_lidar_odometry = false
