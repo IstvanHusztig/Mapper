@@ -24,12 +24,6 @@ void FusionOrientationEstimator::reset(AxesConvention convention, float gain)
     FusionAhrsSetSettings(&ahrs_, &settings_);
 }
 
-void FusionOrientationEstimator::set_gain(float gain)
-{
-    settings_.gain = gain;
-    FusionAhrsSetSettings(&ahrs_, &settings_);
-}
-
 void FusionOrientationEstimator::update(const Eigen::Vector3f &gyro_deg_s, const Eigen::Vector3f &acc_g, float dt_s)
 {
     const FusionVector gyroscope = {gyro_deg_s.x(), gyro_deg_s.y(), gyro_deg_s.z()};

@@ -26,8 +26,6 @@ public:
     virtual ~OrientationEstimator() = default;
     // starts a fresh filter
     virtual void reset(AxesConvention convention, float gain) = 0;
-    // the accelerometer's weight from the next update on (0: gyroscope only)
-    virtual void set_gain(float gain) = 0;
     // one sample: angular velocity [deg/s], acceleration [g], time since the previous sample [s]
     virtual void update(const Eigen::Vector3f &gyro_deg_s, const Eigen::Vector3f &acc_g, float dt_s) = 0;
     virtual Eigen::Quaternionf orientation() const = 0;

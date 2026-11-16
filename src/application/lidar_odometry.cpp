@@ -196,18 +196,10 @@ void calculate_trajectory(
         const Eigen::Vector3f gyroscope(static_cast<float>(static_cast<float>(gyr.x() * RAD_TO_DEG) - bias_gyr_x),
                                         static_cast<float>(static_cast<float>(gyr.y() * RAD_TO_DEG) - bias_gyr_y),
                                         static_cast<float>(static_cast<float>(gyr.z() * RAD_TO_DEG) - bias_gyr_z));
+        // The gain stays at ahrs_gain throughout. A switch to 0 while |a| was outside 0.9-1.1 g used to be here; it never
+        // took effect until the Fusion adapter fix (e41bd08), and once effective it made Livox 3's map worse (loop closure
+        // corrected up to 1.48 m instead of 0.33 m, 2026-11-16), so it was removed.
         const Eigen::Vector3f accelerometer(acc.x(), acc.y(), acc.z());
-     
-        // DYNAMIC AHRS GAIN: Check accelerometer magnitude against 1.0G
-        double acc_mag = std::sqrt(acc.x() * acc.x() + acc.y() * acc.y() + acc.z() * acc.z());
-        if (acc_mag < 0.9 || acc_mag > 1.1)
-        {
-            ahrs.set_gain(0.0f); // Drop gain to prevent linear acceleration pitch/roll drift
-        }
-        else
-        {
-            ahrs.set_gain(ahrs_gain); // Restore user gain when stable
-        }
 
         if (first)
         {

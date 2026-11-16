@@ -11,7 +11,7 @@
 
 // calculate_trajectory (the IMU orientation step) through the OrientationEstimator port, with a fake estimator that
 // records every call: which convention and gain it starts with, the gyroscope it gets (bias removed, in degrees), when
-// the gain drops, the time steps, and that its orientation becomes the trajectory.
+// the gain stays constant, the time steps, and that its orientation becomes the trajectory.
 
 namespace
 {
@@ -39,7 +39,6 @@ namespace
             convention = c;
             initial_gain = gain = g;
         }
-        void set_gain(float g) override { gain = g; }
         void update(const Eigen::Vector3f &gyro, const Eigen::Vector3f &acc, float dt) override { updates.push_back({gyro, acc, dt, gain}); }
         Eigen::Quaternionf orientation() const override { return fixed; }
     };
@@ -171,7 +170,7 @@ TEST_CASE("orientation: the gyroscope goes in degrees, with the bias of the firs
     }
 }
 
-TEST_CASE("orientation: the gain drops to 0 while the acceleration is away from 1 g")
+TEST_CASE("orientation: the gain stays at ahrs_gain, also while the acceleration is away from 1 g")
 {
     Imu imu = still_imu(4, Eigen::Vector3f::Zero());
     imu[1].acc = Eigen::Vector3f(0.0f, 0.0f, 1.5f);
@@ -179,10 +178,8 @@ TEST_CASE("orientation: the gain drops to 0 while the acceleration is away from 
     ImuTrajectory trajectory;
     const RecordingEstimator e = run(imu, trajectory, {}, 0.5);
     REQUIRE(e.updates.size() == 4);
-    CHECK(e.updates[0].gain == 0.5f);
-    CHECK(e.updates[1].gain == 0.0f);
-    CHECK(e.updates[2].gain == 0.0f);
-    CHECK(e.updates[3].gain == 0.5f);
+    for (const Update &u : e.updates)
+        CHECK(u.gain == 0.5f);
     CHECK(e.updates[1].acc_g.z() == 1.5f);
 }
 
