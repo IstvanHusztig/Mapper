@@ -159,7 +159,8 @@ add_library(lo_domain STATIC
   src/domain/window_steps.cpp
   src/domain/optimizer_options.cpp
   src/domain/scan_to_map.cpp
-  src/domain/window_equations.cpp)
+  src/domain/window_equations.cpp
+  src/domain/window_solver.cpp)
 target_include_directories(lo_domain PUBLIC
   src/domain
   ${EIGEN3_INCLUDE_DIR}

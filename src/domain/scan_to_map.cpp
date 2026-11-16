@@ -8,6 +8,7 @@
 #include "angle_units.h"
 #include "normal_equations.h"
 #include "window_equations.h"
+#include "window_solver.h"
 #include <algorithm>
 #include <atomic>
 #include <cassert>
@@ -984,15 +985,7 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
     }
     PhaseTimer assembly_timer(phase(&ScanToMapTiming::assembly));
 
-    // fix the origin: weight 1 / sigma^2 on the first node's six parameters (its right-hand side is zero)
-    const double fix_origin_weights[6] = {1.0 / (motion_model.fix_origin_x_sigma_m * motion_model.fix_origin_x_sigma_m),
-                                          1.0 / (motion_model.fix_origin_y_sigma_m * motion_model.fix_origin_y_sigma_m),
-                                          1.0 / (motion_model.fix_origin_z_sigma_m * motion_model.fix_origin_z_sigma_m),
-                                          1.0 / (motion_model.fix_origin_om_sigma_deg * motion_model.fix_origin_om_sigma_deg),
-                                          1.0 / (motion_model.fix_origin_fi_sigma_deg * motion_model.fix_origin_fi_sigma_deg),
-                                          1.0 / (motion_model.fix_origin_ka_sigma_deg * motion_model.fix_origin_ka_sigma_deg)};
-    for (int k = 0; k < 6; k++)
-        AtPAndt.add(k, k, fix_origin_weights[k]);
+    fix_origin(equations, motion_model);
 
     assert(AtPAndt.dropped_writes() == 0); // a write outside the band would mean the band was chosen too narrow
     Eigen::SparseMatrix<double> AtPA = AtPAndt.to_sparse();
@@ -1000,98 +993,24 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
 
     assembly_timer.stop();
     PhaseTimer covariance_timer(phase(&ScanToMapTiming::covariance_solve));
-
-    const int n_extra = n_params - n_pose_params;
-    if (n_extra > 0)
+    const ExtraCovariances covariances = extra_unknowns_covariance(AtPA, unknowns, cache.covariance);
+    if (covariances.solved)
     {
-        // marginal covariance of the extra unknowns (gyro bias, acceleration offset):
-        // their block of the inverse of the undamped normal matrix
-        cache.covariance.compute(AtPA);
-        const PatternCachedCholesky::Solver &solver_cov = cache.covariance.solver();
-        if (solver_cov.info() == Eigen::Success)
+        if (estimate_bias)
+            window.gyro_bias.covariance = covariances.gyro_bias;
+        if (acc_term)
         {
-            Eigen::MatrixXd unit = Eigen::MatrixXd::Zero(n_params, n_extra);
-            for (int r = 0; r < n_extra; r++)
-                unit(n_pose_params + r, r) = 1.0;
-            const Eigen::MatrixXd cols = solver_cov.solve(unit);
-            if (solver_cov.info() == Eigen::Success)
-            {
-                if (estimate_bias)
-                    window.gyro_bias.covariance = cols.block<3, 3>(ib, ib - n_pose_params);
-                if (acc_term)
-                {
-                    acc_offset_cov = cols.block<3, 3>(io, io - n_pose_params);
-                    window.velocity.end_covariance = cols.block<3, 3>(ie, ie - n_pose_params);
-                }
-            }
+            acc_offset_cov = covariances.acceleration_offset;
+            window.velocity.end_covariance = covariances.end_velocity;
         }
     }
-
     covariance_timer.stop();
     if (!apply_step)
         return false;
+
     PhaseTimer solve_timer(phase(&ScanToMapTiming::solve));
-
-    Eigen::SparseMatrix<double> AtPA_I(n_params, n_params);
-    if (n_extra > 0)
-    {
-        // LM damping on the pose parameters only: lm_factor grows to ~1e10, which is negligible against the pose
-        // curvature (~1e8+) but would freeze the bias (curvature ~1e3); the bias is kept well-posed by its prior
-        std::vector<Eigen::Triplet<double>> damping;
-        damping.reserve(n_pose_params);
-        for (int k = 0; k < n_pose_params; k++)
-            damping.emplace_back(k, k, 1.0);
-        AtPA_I.setFromTriplets(damping.begin(), damping.end());
-    }
-    else
-        AtPA_I.setIdentity();
-    AtPA_I *= lm_factor;
-    AtPA += (AtPA_I);
-
-    cache.damped.compute(AtPA);
-    Eigen::SparseMatrix<double> x = cache.damped.solver().solve(AtPB);
-    const bool solved = cache.damped.solver().info() == Eigen::Success;
-    const std::vector<double> h_x = solution_by_row(x, n_params);
+    const WindowStep step = solve_window_step(AtPA, AtPB, unknowns, lm_factor, cache.damped);
     solve_timer.stop();
     PhaseTimer update_timer(phase(&ScanToMapTiming::update));
-
-    delta = 1000000.0;
-    // the nodes' new poses; a node that would end 1 m or more from its guess ("big jump") rejects the whole step
-    SteppedPoses stepped;
-    if (solved)
-    {
-        stepped = stepped_poses(window, h_x, 1.0, logger);
-        cache.big_jump_nodes += stepped.big_jump_nodes;
-    }
-    if (solved && stepped.big_jump_nodes == 0)
-    {
-        if (acc_term)
-            for (int r = 0; r < 3; r++)
-                acc_offset(r) += h_x[io + r];
-        if (acc_term)
-            for (int r = 0; r < 3; r++)
-            {
-                window.velocity.start(r) += h_x[iv + r];
-                window.velocity.end(r) += h_x[ie + r];
-            }
-
-        if (estimate_bias)
-        {
-            for (int r = 0; r < 3; r++)
-            {
-                window.gyro_bias.mean(r) += h_x[ib + r];
-                if (rotation_options.bias_max_rad_s > 0.0)
-                    window.gyro_bias.mean(r) = std::clamp(window.gyro_bias.mean(r), -rotation_options.bias_max_rad_s, rotation_options.bias_max_rad_s);
-            }
-        }
-
-        for (size_t i = 0; i < window.poses.size(); i++)
-            window.poses[i] = affine_matrix_from_pose_tait_bryan(stepped.poses[i]);
-        delta = 0.0;
-        for (int i = 0; i < h_x.size(); i++)
-            delta += sqrt(h_x[i] * h_x[i]);
-    }
-    else if (!solved)
-        cache.steps_skipped++;
-    return solved && stepped.big_jump_nodes == 0;
+    return apply_window_step(window, step, unknowns, rotation_options, acc_offset, delta, cache, logger);
 }
