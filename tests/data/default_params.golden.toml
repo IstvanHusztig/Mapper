@@ -110,6 +110,8 @@ use_motion_from_previous_step = true
 
 [lidar_odometry_debug_info]
 calibration_validation_points = 1000000
+capture_windows_from_s = -1.0
+capture_windows_to_s = -1.0
 log_iteration_convergence = false
 log_stage_timing = false
 log_window_diagnostics = false
