@@ -5,8 +5,9 @@ Status: **agreed 2026-11-16** (decisions below). Branch `honest-degeneracy-measu
 Progress:
 - Stage 0 done 2026-11-16 (43748c7 .. c365fdd): three switches, robust mode and Consistency2 removed (retired settings
   still load), build identity in the results JSON, `tools/function_sizes.py`; 44, 44_short and Livox 3 bit-identical.
-- Stage 1 code done 2026-11-16 (46c56b2, 6a75686): `process_windows`, capture (`capture_windows_from_s` / `_to_s`),
-  `dMapper --replay`; 44_short windows 50-70 replay 21 of 21 identical in 35 s.
+- Stage 1 done 2026-11-16 (46c56b2 .. 133f63a): `process_windows`, capture (`capture_windows_from_s` / `_to_s`),
+  `dMapper --replay`; replays identical: 44_short 21 of 21 windows in 35 s, Livox 3 84 of 84 in 93 s.
+- Stage 2 designed 2026-11-16 (below), not started.
 
 ## Why
 
@@ -91,41 +92,157 @@ replays the synthetic loop recording.
 
 ## Stage 2: split `optimize_lidar_odometry` (pure refactor)
 
-Today's function, by its line ranges, and the function each part becomes:
+Design of 2026-11-16, from the function as it stands after stage 0 (`src/domain/scan_to_map.cpp`, lines 147–1121, 975
+lines), reviewed against the code. It replaces the first sketch of this stage.
 
-| Lines today | Part | Becomes |
+### What the function does today, in order
+
+| Lines | Part | What it reads beyond the window |
 |---|---|---|
-| 159–220 | Layout of the unknowns, anchors, band of the matrix | `layout_window_unknowns` → `WindowUnknowns` |
-| 222–637 | NDT point terms: matching, Jacobian, Huber and scale, per-node parallel sum, degeneracy projection, translation information | `add_ndt_terms`, one function per sub-step, returning `NdtTermResult` |
-| 640–835 | Motion-model edges (rotation and position together), gyro-bias coupling and prior | `add_motion_edge_terms`, `add_gyro_bias_prior` |
-| 836–890 | Velocity continuity | `add_velocity_continuity` |
-| 892–1047 | Accelerometer term | `add_accelerometer_terms` |
-| 1048–1081 | Cost, origin fix | `window_cost`, `fix_origin` |
-| 1082–1171 | Solve, covariance of the extra unknowns | `solve_window_step` |
-| 1172–1210 | New poses, big-jump rejection | `apply_window_step` |
+| 157–219 | Layout: which unknowns exist (poses; gyro bias; acceleration offset, start and end velocity), their column indices, the accelerometer anchors, the band of the matrix; the matrix and right-hand side | rotation and accelerometer options |
+| 175–193 | The motion-model weights from the sigmas, and the position scale (used only by the edges) | motion model, accelerometer options |
+| 220–536 | NDT point terms, indoor then outdoor grid: per node in parallel, each point's block is summed into its node's block (or straight into the matrix when the projection is off), with the normal information (indoor only) and the cost counts | points, both maps, scan-to-map options |
+| 545–579 | Degeneracy projection of the node blocks into the matrix | scan-to-map options |
+| 581–587 | The window's translation information (only when the caller asks for it) | |
+| 589–772 | Motion-model edges between consecutive nodes: rotation and position in one generated 12×12 block, and inside the same loop the gyro-bias coupling | motion model, rotation options |
+| 774–784 | Gyro-bias prior | rotation options |
+| 786–840 | Velocity continuity (only in windows without the accelerometer term), with the tie to the previous window's velocity | motion model, velocity prior |
+| 846–994 | Accelerometer term: the acceleration terms over the anchors, start and end velocity terms, start-velocity prior, zero velocity at rest, a weak end-velocity tie when its term was dropped, offset prior | accelerometer options, acceleration offset |
+| 998–1008 | Cost: NDT cost and counts summed over the nodes, plus the motion cost | |
+| 1011–1023 | Origin fix; band to sparse matrix | motion model |
+| 1028–1052 | Covariance of the extra unknowns (undamped matrix); writes the bias, offset and end-velocity covariances | |
+| 1055–1056 | Return here when the caller only wanted the cost and the covariances (`apply_step = false`); `delta` stays untouched | |
+| 1059–1079 | Damping, solve | LM factor |
+| 1082–1120 | New poses, big-jump rejection, update of bias / offset / velocities, delta | rotation options (bias clamp) |
 
-- Each term is a free function `add_<term>(problem, normal_equations)`. `optimize_lidar_odometry` stays as a conductor
-  of about 100 lines that calls them in today's order. No class hierarchy of terms: there is one optimizer, and a list
-  of functions is enough until a second user exists.
-- **Bit-identity rule:** every matrix entry receives the same additions in the same order as today. The terms are
-  moved, never reordered, and the per-node parallel sum keeps its structure.
-- **Rotation and position edges stay one function.** One generated call builds each edge's 12×12 block from all six
-  weights, so two functions would round differently. The gyro-bias coupling sits in the same per-edge loop and stays
-  there as a sub-function. The per-term log (stage 3) still reports rotation and position separately: it computes its
-  own figures and doesn't have to match the matrix bit for bit.
-- **The solve depends on NDT results.** The covariance of the extra unknowns reads the NDT blocks after projection and
-  the normal-direction information; the cost reads the matched and unmatched counts. `add_ndt_terms` returns them in
-  one struct (`NdtTermResult`) instead of the solver reaching into NDT internals.
-- **The indoor and outdoor point functions are not copies.** They differ in the distance limit, in the weight (indoor:
-  planarity × norm, capped at 10; outdoor: planarity only) and in the normal information (indoor only, so the
-  degeneracy measure sees indoor points only). They are merged into one function with a per-grid policy as the last
-  commit of the stage, and only if the bits stay; otherwise they stay two.
-- The phase timers cut across the new functions and are passed in.
-- One term per commit, the simplest first (origin fix, velocity continuity, gyro-bias prior, motion model,
-  accelerometer, NDT last). Files: one per term group in `src/domain/` (`ndt_term`, `motion_model_terms`,
-  `accelerometer_term`, `window_solver`).
-- Each term gets a unit test on a synthetic window: its residual is zero at the true state, and its analytic Jacobian
-  matches a numeric one.
+Since stage 0 removed the normal-only carried covariance, nothing after line 587 reads an NDT-internal value except the
+cost block: the NDT part hands on only the cost counts and the translation information.
+
+### Two things that carry bits across the terms
+
+1. **The matrix and the right-hand side.** Every entry must receive the same additions in the same order. The terms are
+   called in today's order and keep their loops; nothing is reordered. The parts are strictly sequential today, except
+   the gyro-bias coupling, which sits inside the edge loop and stays there.
+2. **The motion cost is one running sum.** `motion_cost` is added to in this order: edges, bias prior, velocity
+   continuity and its tie, each acceleration term, start-velocity prior, zero velocity at rest, weak end tie, offset
+   prior. Summing per term and adding the totals afterwards would round differently, and with `lm_step_check` on a
+   different cost can flip a step decision. So the terms add to one shared accumulator in today's order. The
+   accumulator also keeps a per-term subtotal beside the running sum; stage 3 reads the subtotals, the step check keeps
+   reading the running sum.
+
+### The types the terms share (`src/domain/window_equations.h`)
+
+- **`WindowUnknowns`**: `n_nodes`, `n_pose_params`, `n_params`, the flags `have_dt`, `time_scaled_sigma`,
+  `estimate_bias`, `acc_term`, the columns `ib`, `io`, `iv`, `ie`, the `anchors` and `pose_band_offset`. Built by
+  `layout_window_unknowns(window, rotation_options, translation_imu_options)`.
+- **`WindowEquations`**: the banded matrix, the right-hand side, and the cost accumulator (running sum and per-term
+  subtotals). Terms write only through it.
+- **`NdtSums`**: what the point loops leave for the conductor: the node blocks and right-hand sides (when the projection
+  is on), the per-node normal information, and the per-node cost and matched / unmatched counts.
+- Each term function takes exactly the inputs it reads (the window, the layout, its own options, the acceleration
+  offset where it reads it) and the `WindowEquations`. No "everything" struct: a term's signature shows what it depends
+  on, and its test builds only that.
+
+### The functions
+
+| File (`src/domain/`) | Function | Lines today |
+|---|---|---|
+| `window_equations.{h,cpp}` | `layout_window_unknowns` | 162–174, 195–214 |
+| `ndt_term.{h,cpp}` | `sum_ndt_point_terms`: both grids, parallel per node. With the projection on it fills the node blocks of `NdtSums`; with it off it adds each point straight into the matrix, as today | 220–536 |
+| | `add_projected_ndt_blocks` | 545–579 |
+| | `window_translation_information` | 581–587 |
+| `motion_model_terms.{h,cpp}` | `add_motion_edge_terms`: the weights, rotation, position and bias coupling in one loop, as today | 175–193, 589–772 |
+| | `add_gyro_bias_prior` | 774–784 |
+| | `add_velocity_continuity` | 786–840 |
+| `accelerometer_term.{h,cpp}` | `add_acceleration_terms` (anchors, start and end velocity terms; returns whether the end velocity was tied) | 846–951 |
+| | `add_velocity_priors` (start prior, zero velocity at rest, weak end tie) | 953–985 |
+| | `add_acceleration_offset_prior` | 987–993 |
+| `window_solver.{h,cpp}` | `fix_origin` | 1011–1019 |
+| | `extra_unknowns_covariance` (returns the bias, offset and end-velocity covariances when the solve succeeds) | 1028–1052 |
+| | `solve_window_step` (damping, solve) | 1059–1079 |
+| | `apply_window_step` (new poses, big-jump rejection, updates, delta) | 1082–1120 |
+| `scan_to_map.cpp` | `optimize_lidar_odometry`: the conductor, about 100 lines: the calls in today's order, the cost block, the return for `apply_step = false`, and the phase timers around the calls | |
+
+The two NDT point lambdas stay two functions at first. They differ in the distance limit, the grid, the weight and the
+normal information:
+
+| | Indoor | Outdoor |
+|---|---|---|
+| Weight | planarity × range | planarity |
+| Cap at 10 | yes | no |
+| Applied when | planarity or range weight is on | planarity is on |
+| Normal information | added | not added |
+
+One function with these four as a per-grid policy performs the same operations (for the outdoor grid the range factor is
+1.0, and × 1.0 is exact). The merge is the last commit of the stage and stays only if the guard below shows no change.
+
+The timers stay the phases they are; the projection is still timed with the motion terms.
+
+### The guard: which branches the runs don't reach
+
+The replays and baselines only exercise the shipped settings. Not reached by any run:
+
+- the cost code and the cost-only call (`lm_step_check` is off);
+- planarity and range weights (both off);
+- the path without the projection, and without the outdoor grid or the view-point test (both always on);
+- constant rotation sigmas, no bias estimation in a later window, windows without timestamps;
+- the translation information output (only with `log_window_diagnostics`);
+- rare data-dependent paths: an accelerometer term dropped by an IMU gap, the weak end-velocity tie, the bias clamp, a
+  failed solve, a big jump.
+
+So the first commit of the stage adds a **characterization check**: a skipped doctest case that runs
+`optimize_lidar_odometry` on the synthetic room and corridor windows over a matrix of these options (and constructs the
+rare cases: an IMU gap, a bias at the clamp, a guess more than 1 m off) and writes every output (poses, bias,
+velocities, offset, covariances, translation information, cost fields, delta, the return value) as hexadecimal doubles
+to a file, plus a script that compares two such files. It is recorded once from today's code; every commit of stages 2
+to 5 must reproduce it exactly. It is a development guard, not a regression test of values: the file is not committed,
+because the bits may differ between compilers and between Release and Debug.
+
+### Checks per commit
+
+| Check | Covers | Time |
+|---|---|---|
+| Characterization file identical | every option branch, on synthetic windows | seconds |
+| Unit tests | | 15 s |
+| Replay of the 44_short capture (21 windows) and the Livox 3 capture (84 windows) | the shipped paths on real data, Huber and scales included | 35 s + 93 s |
+| `44_short` against its manifest | the whole run, first window included | 2 min |
+
+End of stage: the full 44 and Livox 3 against their manifests, Debug build and `ctest`.
+
+### Commit order
+
+1. The characterization check and its script.
+2. `WindowUnknowns` and `WindowEquations` introduced; the function body uses them, nothing moves yet.
+3. `fix_origin`, `extra_unknowns_covariance`, `solve_window_step`, `apply_window_step`.
+4. `add_gyro_bias_prior`, `add_velocity_continuity`.
+5. `add_motion_edge_terms`.
+6. The three accelerometer functions.
+7. `sum_ndt_point_terms`, `add_projected_ndt_blocks`, `window_translation_information`.
+8. The merge of the two NDT point functions (kept only if the guard is unchanged).
+
+### A test per term
+
+Each move commit adds a test of the moved term on a synthetic window. For the terms with a cost it is the same test:
+**the right-hand side is minus half the gradient of the term's cost.** The test moves each unknown the term touches by
+±h, reads the term's cost from the accumulator, and compares the numeric gradient with the right-hand side the term
+wrote. One check covers the residual, the Jacobian, the weight and their signs together, without exposing the Jacobians.
+Where the residual is linear in the unknowns (velocity continuity, the priors, the translation part of the accelerometer
+term) the test also compares the matrix with half the numeric second derivative.
+
+The relation holds for the NDT points, the edges with their bias coupling, the bias prior, the velocity continuity, the
+acceleration terms, the start-velocity prior, the zero velocity at rest and the offset prior. Special cases:
+
+- **NDT points:** tested with the projection off; the step stays inside the cells (a point that changes cell makes the
+  cost jump). The Huber weight is covered: its cost 2c√s − c² has the derivative c/√s, which is the weight.
+- **Projection:** its own test: with every direction kept the blocks pass unchanged; with one direction removed a block
+  B becomes M B M and its right-hand side M g.
+- **Weak end-velocity tie:** it treats the start velocity as fixed, so the gradient is compared for the end velocity
+  only.
+- **Origin fix:** no cost and no right-hand side; the test checks the six weights on the first node's diagonal.
+- **Acceleration terms:** the rotation part of the Jacobian is itself a central difference, so the comparison has a
+  tolerance.
+
+These tests are also the base of stage 3: the per-term cost, weight and pull come from the same accumulator.
 
 ## Stage 3: per-term log
 
