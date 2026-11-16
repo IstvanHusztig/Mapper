@@ -87,17 +87,29 @@ NdtSums sum_ndt_point_terms(WindowEquations &equations, const Window &window, co
         }
     };
 
-    const auto hessian_fun_indoor = [&](const Point3Di &intermediate_points_i, const TaitBryanPose &pose_s)
+    // One point term for both grids. A grid has its cells, cell size and nearest range, and three things only the indoor
+    // grid does: the range weight (use_norm), the cap of the weight at 10, and the normal information. For the outdoor grid
+    // the weight is planarity * 1.0, which is planarity exactly, so both grids compute what their two copies computed.
+    struct Grid
     {
-        if (intermediate_points_i.point.norm() < scan_to_map.min_distance || intermediate_points_i.point.norm() > scan_to_map.max_distance)
+        NDTBucketMapType &buckets;
+        Eigen::Vector3d b;
+        double min_distance;
+        bool range_weight;
+        bool cap;
+        bool normal_information;
+    };
+    const auto point_term = [&](const Grid &grid, const Point3Di &intermediate_points_i, const TaitBryanPose &pose_s)
+    {
+        if (intermediate_points_i.point.norm() < grid.min_distance || intermediate_points_i.point.norm() > scan_to_map.max_distance)
             return;
 
         Eigen::Vector3d point_global = window.poses[intermediate_points_i.index_pose] * intermediate_points_i.point;
-        auto index_of_bucket = ndt_cell_index(point_global, b_indoor);
+        auto index_of_bucket = ndt_cell_index(point_global, grid.b);
 
-        auto bucket_it = buckets_indoor.find(index_of_bucket);
+        auto bucket_it = grid.buckets.find(index_of_bucket);
         // no bucket found
-        if (bucket_it == buckets_indoor.end())
+        if (bucket_it == grid.buckets.end())
         {
             count_unmatched(intermediate_points_i);
             return;
@@ -161,19 +173,20 @@ NdtSums sum_ndt_point_terms(WindowEquations &equations, const Window &window, co
         }
 
         double norm = 1.0;
-        if (scan_to_map.use_norm)
+        if (grid.range_weight)
             norm = p_s.norm();
 
         double w = planarity * norm;
-        if (w > 10.0)
+        if (grid.cap && w > 10.0)
             w = 10.0;
 
-        if (scan_to_map.use_planarity || scan_to_map.use_norm)
+        const bool weighted = scan_to_map.use_planarity || grid.range_weight;
+        if (weighted)
         {
             AtPA *= w;
             AtPB *= w;
         }
-        count_matched(intermediate_points_i, point_global, this_bucket.mean, infm, (scan_to_map.use_planarity || scan_to_map.use_norm) ? w : 1.0);
+        count_matched(intermediate_points_i, point_global, this_bucket.mean, infm, weighted ? w : 1.0);
         apply_huber_and_scale(AtPA, AtPB, point_global, this_bucket.mean, infm);
 
         // only this point's node writes this block (see for_each_node), so no lock is needed
@@ -187,7 +200,7 @@ NdtSums sum_ndt_point_terms(WindowEquations &equations, const Window &window, co
             AtPAndt.add_diagonal_block6(c, AtPA);
             AtPBndt.block<6, 1>(c, 0) -= AtPB;
         }
-        if (!normal_information.empty() && this_bucket.normal_vector.squaredNorm() > 0.5)
+        if (grid.normal_information && !normal_information.empty() && this_bucket.normal_vector.squaredNorm() > 0.5)
             normal_information[intermediate_points_i.index_pose] += this_bucket.normal_vector * this_bucket.normal_vector.transpose();
     };
 
@@ -228,7 +241,8 @@ NdtSums sum_ndt_point_terms(WindowEquations &equations, const Window &window, co
             std::for_each(nodes.begin(), nodes.end(), node_terms);
     };
 
-    for_each_node(hessian_fun_indoor);
+    const Grid indoor{buckets_indoor, b_indoor, scan_to_map.min_distance, scan_to_map.use_norm, true, true};
+    for_each_node([&](const Point3Di &p, const TaitBryanPose &pose) { point_term(indoor, p, pose); });
     if (invalid_ndt_distance.load(std::memory_order_relaxed))
         throw std::domain_error("non-finite NDT distance (ndt_huber_cutoff) in the indoor grid");
     indoor_timer.stop();
@@ -237,99 +251,10 @@ NdtSums sum_ndt_point_terms(WindowEquations &equations, const Window &window, co
     {
         Eigen::Vector3d b_outdoor(scan_to_map.grid_outdoor.resolution_X, scan_to_map.grid_outdoor.resolution_Y, scan_to_map.grid_outdoor.resolution_Z);
 
-        const auto hessian_fun_outdoor = [&](const Point3Di &intermediate_points_i, const TaitBryanPose &pose_s)
-        {
-            if (intermediate_points_i.point.norm() < scan_to_map.min_distance_outdoor_grid ||
-                intermediate_points_i.point.norm() > scan_to_map.max_distance)
-                return;
-
-            Eigen::Vector3d point_global = window.poses[intermediate_points_i.index_pose] * intermediate_points_i.point;
-            auto index_of_bucket = ndt_cell_index(point_global, b_outdoor);
-
-            auto bucket_it = buckets_outdoor.find(index_of_bucket);
-            // no bucket found
-            if (bucket_it == buckets_outdoor.end())
-            {
-                count_unmatched(intermediate_points_i);
-                return;
-            }
-
-            auto &this_bucket = bucket_it->second;
-
-            Eigen::Matrix3d inverse_scratch;
-            const Eigen::Matrix3d *inverse = ndt_cell_inverse(this_bucket, inverse_scratch);
-            if (inverse == nullptr)
-            {
-                count_unmatched(intermediate_points_i);
-                return;
-            }
-            const Eigen::Matrix3d &infm = *inverse;
-
-            if (scan_to_map.use_view_point_and_normal_vectors)
-            {
-                // check nv
-                Eigen::Vector3d &nv = this_bucket.normal_vector;
-                Eigen::Vector3d viewport = window.poses[intermediate_points_i.index_pose].translation();
-                if (nv.dot(viewport - this_bucket.mean) < 0)
-                {
-                    count_unmatched(intermediate_points_i);
-                    return;
-                }
-            }
-
-            const Eigen::Vector3d &p_s = intermediate_points_i.point;
-
-            Eigen::Matrix<double, 6, 6, Eigen::RowMajor> AtPA;
-            point_to_point_source_to_target_tait_bryan_wc_AtPA_simplified(
-                AtPA,
-                pose_s.px, pose_s.py, pose_s.pz, pose_s.om, pose_s.fi, pose_s.ka,
-                p_s.x(), p_s.y(), p_s.z(),
-                infm(0, 0), infm(0, 1), infm(0, 2), infm(1, 0), infm(1, 1), infm(1, 2), infm(2, 0), infm(2, 1), infm(2, 2));
-
-            Eigen::Matrix<double, 6, 1> AtPB;
-            point_to_point_source_to_target_tait_bryan_wc_AtPB_simplified(
-                AtPB,
-                pose_s.px, pose_s.py, pose_s.pz, pose_s.om, pose_s.fi, pose_s.ka,
-                p_s.x(), p_s.y(), p_s.z(),
-                infm(0, 0), infm(0, 1), infm(0, 2), infm(1, 0), infm(1, 1), infm(1, 2), infm(2, 0), infm(2, 1), infm(2, 2),
-                this_bucket.mean.x(), this_bucket.mean.y(), this_bucket.mean.z());
-
-            int c = intermediate_points_i.index_pose * 6;
-
-            double planarity = 1.0;
-
-            if (scan_to_map.use_planarity)
-            {
-                // planarity
-                Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eigen_solver(this_bucket.cov, Eigen::ComputeEigenvectors);
-                auto eigen_values = eigen_solver.eigenvalues();
-                auto eigen_vectors = eigen_solver.eigenvectors();
-                double ev1 = eigen_values.x();
-                double ev2 = eigen_values.y();
-                double ev3 = eigen_values.z();
-                double sum_ev = ev1 + ev2 + ev3;
-                planarity = 1 - ((3 * ev1 / sum_ev) * (3 * ev2 / sum_ev) * (3 * ev3 / sum_ev));
-
-                AtPA *= planarity;
-                AtPB *= planarity;
-            }
-            count_matched(intermediate_points_i, point_global, this_bucket.mean, infm, planarity);
-            apply_huber_and_scale(AtPA, AtPB, point_global, this_bucket.mean, infm);
-
-            if (keep_ndt_blocks)
-            {
-                ndt_blocks[intermediate_points_i.index_pose] += AtPA;
-                ndt_rhs[intermediate_points_i.index_pose] -= AtPB;
-            }
-            else
-            {
-                AtPAndt.add_diagonal_block6(c, AtPA);
-                AtPBndt.block<6, 1>(c, 0) -= AtPB;
-            }
-        };
+        const Grid outdoor{buckets_outdoor, b_outdoor, scan_to_map.min_distance_outdoor_grid, false, false, false};
 
         PhaseTimer outdoor_timer(phase(&ScanToMapTiming::ndt_outdoor));
-        for_each_node(hessian_fun_outdoor);
+        for_each_node([&](const Point3Di &p, const TaitBryanPose &pose) { point_term(outdoor, p, pose); });
         if (invalid_ndt_distance.load(std::memory_order_relaxed))
             throw std::domain_error("non-finite NDT distance (ndt_huber_cutoff) in the outdoor grid");
     }
