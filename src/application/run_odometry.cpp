@@ -180,6 +180,7 @@ namespace
             t.offset_cov = t.options.offset_prior_cov;
             t.options.noise_density_mps2_sqrt_hz = params.imu_accel_noise_density_mps2_sqrt_hz;
             t.options.floor_sigma_mps2 = params.imu_accel_floor_sigma_mps2;
+            t.options.position_information_scale = params.imu_position_information_scale;
             t.options.zero_velocity_sigma_mps = params.imu_zero_velocity_sigma_mps;
         }
         return t;

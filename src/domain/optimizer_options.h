@@ -28,6 +28,8 @@ struct ScanToMapOptions
     bool degenerate_projection_all_point_normals = false;    // see OdometryConfig
     bool carried_covariance_normal_information_only = false; // see OdometryConfig
     double unmatched_point_cost = 0.0; // OdometryConfig::ndt_unmatched_point_cost (ScanToMapCost) [chi^2 units]
+    double huber_cutoff = 0.0;         // OdometryConfig::ndt_huber_cutoff; 0 = off
+    double information_scale = 1.0;    // OdometryConfig::ndt_information_scale; 1 = off
 };
 
 // motion model of a window: correction of the IMU frame and the sigmas of the consecutive-node and fix-origin priors
@@ -86,6 +88,7 @@ struct MotionModelTranslationImuOptions
     Eigen::Matrix3d offset_prior_cov = Eigen::Matrix3d::Identity();
     double noise_density_mps2_sqrt_hz = 0.0;
     double floor_sigma_mps2 = 0.0;
+    double position_information_scale = 1.0; // OdometryConfig::imu_position_information_scale: x/y/z motion-model weights while the term is active
     Eigen::Vector3d velocity_prior_mean = Eigen::Vector3d::Zero();     // [m/s]
     Eigen::Matrix3d velocity_prior_cov = Eigen::Matrix3d::Identity(); // [(m/s)^2]
     bool at_rest = false;

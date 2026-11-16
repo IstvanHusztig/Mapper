@@ -234,6 +234,16 @@ struct OdometryConfig
     // cost of a point in range that no NDT cell matches, so the window can't lower its cost by sliding points off the map
     // (in r^T Sigma^-1 r units; only read by lm_step_check). 0 with the step check lets a window slide off the map.
     double ndt_unmatched_point_cost = 0.0;
+    // Huber kernel on the NDT point terms: a point whose Mahalanobis distance d = sqrt(r^T Sigma^-1 r) to its cell
+    // exceeds this cutoff is weighted cutoff / d (constant pull instead of one growing with d), and costs
+    // 2 cutoff d - cutoff^2 instead of d^2. 0 = off. Codex's diagnostic DMAPPER_DIAGNOSTIC_NDT_HUBER3 (cbca36d) used 3.
+    double ndt_huber_cutoff = 0.0;
+    // Multiplier on every NDT point term's information (solve and cost), applied after the Huber weight. 1 = off.
+    // Codex's good Livox 3 build (cbca36d) had 0.1, as the compile-time define DMAPPER_EXPERIMENT_NDT_SCALE ("alpha").
+    double ndt_information_scale = 1.0;
+    // Multiplier on the x/y/z motion-model position weights in windows where the accelerometer term is active. 1 = off.
+    // Codex's good Livox 3 build had 0.1, as DMAPPER_EXPERIMENT_MOTION_XYZ_SCALE ("beta").
+    double imu_position_information_scale = 1.0;
 
     // motion_model first trajectory node prior uncertainty
     double lidar_odometry_motion_model_fix_origin_x_1_sigma_m = 0.000001;

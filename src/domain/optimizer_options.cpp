@@ -19,6 +19,8 @@ ScanToMapOptions get_scan_to_map_options(const OdometryConfig &config)
     o.degenerate_projection_all_point_normals = config.degenerate_projection_all_point_normals;
     o.carried_covariance_normal_information_only = config.carried_covariance_normal_information_only;
     o.unmatched_point_cost = config.ndt_unmatched_point_cost;
+    o.huber_cutoff = config.ndt_huber_cutoff;
+    o.information_scale = config.ndt_information_scale;
     return o;
 }
 

@@ -8,8 +8,11 @@
 #include "angle_units.h"
 #include "normal_equations.h"
 #include <algorithm>
+#include <atomic>
 #include <cassert>
+#include <cmath>
 #include <numeric>
+#include <stdexcept>
 
 namespace
 {
@@ -31,6 +34,21 @@ namespace
             e.col(j) = Eigen::Vector3d(d(2, 1) - d(1, 2), d(0, 2) - d(2, 0), d(1, 0) - d(0, 1)) * 0.5 / (2.0 * h);
         }
         return e;
+    }
+
+    // Huber kernel on an NDT point term with squared Mahalanobis distance s = r^T Sigma^-1 r: weight 1 and cost s up to
+    // the cutoff c, beyond it weight c / sqrt(s) (IRLS) and cost 2 c sqrt(s) - c^2. Same formula as Codex's diagnostic
+    // (cbca36d, ndt_huber_evaluate).
+    struct HuberTerm
+    {
+        double weight, cost;
+    };
+    HuberTerm ndt_huber(double s, double c)
+    {
+        if (c <= 0.0 || s <= c * c)
+            return {1.0, s};
+        const double d = std::sqrt(s);
+        return {c / d, 2.0 * c * d - c * c};
     }
 
     Eigen::Matrix3d skew(const Eigen::Vector3d &v)
@@ -112,12 +130,17 @@ double ndt_window_cost(const std::vector<Point3Di> &intermediate_points, const s
                 w *= range;
             w = std::min(w, 10.0);
             const Eigen::Vector3d r = g - cell.mean;
-            cost += w * r.dot(*inverse * r);
+            if (scan_to_map.huber_cutoff > 0.0)
+                cost += w * ndt_huber(r.dot(*inverse * r), scan_to_map.huber_cutoff).cost;
+            else
+                cost += w * r.dot(*inverse * r);
         }
     };
     grid_cost(buckets_indoor, scan_to_map.grid_indoor, scan_to_map.min_distance);
     if (scan_to_map.use_hierarchical_rgd)
         grid_cost(buckets_outdoor, scan_to_map.grid_outdoor, scan_to_map.min_distance_outdoor_grid);
+    if (scan_to_map.information_scale != 1.0)
+        cost *= scan_to_map.information_scale;
     return cost;
 }
 
@@ -160,6 +183,14 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
     double w_motion_model_x = 1.0 / (motion_model.x_sigma_m * motion_model.x_sigma_m);
     double w_motion_model_y = 1.0 / (motion_model.y_sigma_m * motion_model.y_sigma_m);
     double w_motion_model_z = 1.0 / (motion_model.z_sigma_m * motion_model.z_sigma_m);
+    // imu_position_information_scale: the x/y/z rows (with their attitude coupling) weaker while the accelerometer term is
+    // active (Codex's "beta", DMAPPER_EXPERIMENT_MOTION_XYZ_SCALE in cbca36d)
+    if (acc_term && translation_imu_options.position_information_scale != 1.0)
+    {
+        w_motion_model_x *= translation_imu_options.position_information_scale;
+        w_motion_model_y *= translation_imu_options.position_information_scale;
+        w_motion_model_z *= translation_imu_options.position_information_scale;
+    }
 
     // The accelerometer term's anchors (nodes about span_s apart) and the band of the normal matrix: the pose-pose coupling
     // reaches 17 parameters (two nodes) without the term, and (last - first node) * 6 + 5 for its widest term. Both depend
@@ -243,8 +274,39 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
         if (!cost)
             return;
         const Eigen::Vector3d r = point_global - mean;
-        node_ndt_cost[p.index_pose] += w * r.dot(infm * r);
+        const double s = r.dot(infm * r);
+        const double point_cost = w * (scan_to_map.huber_cutoff > 0.0 ? ndt_huber(s, scan_to_map.huber_cutoff).cost : s);
+        node_ndt_cost[p.index_pose] += scan_to_map.information_scale != 1.0 ? scan_to_map.information_scale * point_cost : point_cost;
         node_matched[p.index_pose]++;
+    };
+    // ndt_huber_cutoff: the point's IRLS weight from its distance to the cell (1 when off or within the cutoff), then
+    // ndt_information_scale; in this order, as in Codex's build (cbca36d: Huber weight, then scale_ndt_point)
+    // Returns the factor applied (Huber weight times scale; 1 when both are off), so the normal-direction information of
+    // carried_covariance_normal_information_only counts the point as much as its block does. A non-finite distance with
+    // Huber on sets invalid_ndt_distance (the run stops after the loop, as in Codex's cbca36d).
+    std::atomic<bool> invalid_ndt_distance{false};
+    const auto apply_huber_and_scale = [&](Eigen::Matrix<double, 6, 6, Eigen::RowMajor> &AtPA, Eigen::Matrix<double, 6, 1> &AtPB,
+                                           const Eigen::Vector3d &point_global, const Eigen::Vector3d &mean, const Eigen::Matrix3d &infm)
+    {
+        double factor = 1.0;
+        if (scan_to_map.huber_cutoff > 0.0)
+        {
+            const Eigen::Vector3d r = point_global - mean;
+            const double s = r.dot(infm * r);
+            if (!std::isfinite(s))
+                invalid_ndt_distance.store(true, std::memory_order_relaxed);
+            const double weight = ndt_huber(s, scan_to_map.huber_cutoff).weight;
+            AtPA *= weight;
+            AtPB *= weight;
+            factor = weight;
+        }
+        if (scan_to_map.information_scale != 1.0)
+        {
+            AtPA *= scan_to_map.information_scale;
+            AtPB *= scan_to_map.information_scale;
+            factor *= scan_to_map.information_scale;
+        }
+        return factor;
     };
     double motion_cost = 0.0; // the motion and IMU terms (only summed, never used in the solve)
     setup_timer.stop();
@@ -336,6 +398,7 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
             AtPB *= w;
         }
         count_matched(intermediate_points_i, point_global, this_bucket.mean, infm, (scan_to_map.use_planarity || scan_to_map.use_norm) ? w : 1.0);
+        const double point_factor = apply_huber_and_scale(AtPA, AtPB, point_global, this_bucket.mean, infm);
 
         // only this point's node writes this block (see for_each_node), so no lock is needed
         if (keep_ndt_blocks)
@@ -360,7 +423,7 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
                 normal_information[intermediate_points_i.index_pose] += this_bucket.normal_vector * this_bucket.normal_vector.transpose();
         }
         if (normal_only_covariance)
-            add_normal_direction_information(this_bucket, w, intermediate_points_i.index_pose);
+            add_normal_direction_information(this_bucket, point_factor != 1.0 ? w * point_factor : w, intermediate_points_i.index_pose);
     };
 
     PhaseTimer indoor_timer(phase(&ScanToMapTiming::ndt_indoor));
@@ -401,6 +464,8 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
     };
 
     for_each_node(hessian_fun_indoor);
+    if (invalid_ndt_distance.load(std::memory_order_relaxed))
+        throw std::domain_error("non-finite NDT distance (ndt_huber_cutoff) in the indoor grid");
     indoor_timer.stop();
 
     if (scan_to_map.use_hierarchical_rgd)
@@ -484,6 +549,7 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
                 AtPB *= planarity;
             }
             count_matched(intermediate_points_i, point_global, this_bucket.mean, infm, planarity);
+            const double point_factor = apply_huber_and_scale(AtPA, AtPB, point_global, this_bucket.mean, infm);
 
             if (keep_ndt_blocks)
             {
@@ -496,11 +562,13 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
                 AtPBndt.block<6, 1>(c, 0) -= AtPB;
             }
             if (normal_only_covariance)
-                add_normal_direction_information(this_bucket, planarity, intermediate_points_i.index_pose);
+                add_normal_direction_information(this_bucket, point_factor != 1.0 ? planarity * point_factor : planarity, intermediate_points_i.index_pose);
         };
 
         PhaseTimer outdoor_timer(phase(&ScanToMapTiming::ndt_outdoor));
         for_each_node(hessian_fun_outdoor);
+        if (invalid_ndt_distance.load(std::memory_order_relaxed))
+            throw std::domain_error("non-finite NDT distance (ndt_huber_cutoff) in the outdoor grid");
     }
 
     PhaseTimer motion_terms_timer(phase(&ScanToMapTiming::motion_terms));
@@ -986,7 +1054,9 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
             cost->matched += node_matched[k];
             cost->unmatched += node_unmatched[k];
         }
-        cost->ndt += scan_to_map.unmatched_point_cost * cost->unmatched;
+        // an off-map point costs as much as a matched point at that distance would: scaled like the matched terms
+        const double unmatched = scan_to_map.unmatched_point_cost * cost->unmatched;
+        cost->ndt += scan_to_map.information_scale != 1.0 ? scan_to_map.information_scale * unmatched : unmatched;
         cost->total = cost->ndt + motion_cost;
     }
     PhaseTimer assembly_timer(phase(&ScanToMapTiming::assembly));

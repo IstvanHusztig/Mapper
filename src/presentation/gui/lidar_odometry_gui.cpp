@@ -62,6 +62,19 @@ public:
         exit(1);
     }
 
+    // tells the user; the program stays open (nothing was saved)
+    void run_failed(const std::string &reason) override
+    {
+        const std::string message_info = "The run stopped with an error and nothing was saved:\n" + reason;
+        std::cout << message_info << std::endl;
+        [[maybe_unused]]
+        pfd::message message(
+            "Error",
+            message_info.c_str(),
+            pfd::choice::ok, pfd::icon::error);
+        message.result();
+    }
+
     void run_saved(const std::string &working_directory, double trajectory_length_m, double elapsed_seconds) override
     {
         std::ostringstream oss;

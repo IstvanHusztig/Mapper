@@ -21,8 +21,10 @@ namespace
     struct RecordingNotifier : RunNotifier
     {
         std::vector<std::string> load_failures;
+        std::vector<std::string> run_failures;
         int saved = 0;
         void load_failed(const std::string &folder) override { load_failures.push_back(folder); }
+        void run_failed(const std::string &reason) override { run_failures.push_back(reason); }
         void run_saved(const std::string &, double, double) override { saved++; }
     };
 

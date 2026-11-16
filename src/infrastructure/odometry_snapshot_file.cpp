@@ -154,14 +154,24 @@ std::uint64_t odometry_settings_hash(const OdometryConfig &config)
         if (not_odometry.count(category))
             excluded.insert(keys.begin(), keys.end());
 
+    // settings added after snapshots existed: each changes the odometry, but at its default (off) it adds nothing, so
+    // they count only when set, and snapshots made before they existed still match
+    static const std::set<std::string> added_later = {
+        "holdout_block_s", "degenerate_projection_all_point_normals", "carried_covariance_normal_information_only",
+        "lm_step_check", "ndt_unmatched_point_cost", "ndt_huber_cutoff", "ndt_information_scale", "imu_position_information_scale"};
+    static const OdometryConfig defaults{};
+
     Hash h;
     for (const auto &[name, member] : io.POINTERS) // a std::map: always in the same order
     {
         if (excluded.count(name))
             continue;
-        // the hold-out mode changes the odometry, but off it adds nothing, so snapshots made before it existed still match
-        if (name == "holdout_block_s" && config.holdout_block_s == 0.0)
-            continue;
+        if (added_later.count(name))
+        {
+            const bool at_default = std::visit([&](auto pointer) { return config.*pointer == defaults.*pointer; }, member);
+            if (at_default)
+                continue;
+        }
         h.text(name);
         std::visit(
             [&](auto pointer)
