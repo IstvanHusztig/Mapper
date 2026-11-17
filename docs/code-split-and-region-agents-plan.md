@@ -817,7 +817,7 @@ Every commit: build, tests, characterization guard, loop guard, the two replays 
 7. `log_window_noise`, the `noise budget` line, the feature columns; golden TOMLs in their own commit.
 8. Docs (`CLAUDE.md`, the guide's debug settings and the Fundamentals' sigma entry, `tools/README.md`), manifests.
 
-### Decisions (for the user)
+### Decisions (user, 2026-11-17: all as recommended)
 
 1. **Scope: the window problem only.** Loop closure and consistency keep their own weights; consistency's time-scaled
    rotation σ (`consistency.cpp:82-91`) calls the model's formula function, which returns the σ (max(k·ARW·√dt,
