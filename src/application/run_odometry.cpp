@@ -554,7 +554,7 @@ namespace
         const OdometryRunSetup &setup;
         const AccTerm &acc_term;
         const MotionModelRotationOptions &rotation;
-        const VelocityPrior &velocity_prior;
+        const WindowNoiseModel &noise;
         const Eigen::Vector3d &acc_offset;
         const WindowOptimization &optimization;
         bool at_rest;
@@ -573,10 +573,10 @@ namespace
         last_along = window_travel_direction(window.poses, last_along);
         const Eigen::Vector3d no_offset = Eigen::Vector3d::Zero(); // the acceleration offset starts at zero in every window
         const WindowTermInputs at_guess{s.points, s.guess, s.state.buckets_indoor, s.state.buckets_outdoor, s.setup.scan_to_map,
-                                        s.setup.motion_model, s.rotation, s.acc_term.options, s.velocity_prior, no_offset,
+                                        s.setup.motion_model, s.rotation, s.acc_term.options, s.noise, no_offset,
                                         params.lm_factor_initial, last_along};
         const WindowTermInputs at_result{s.points, window, s.state.buckets_indoor, s.state.buckets_outdoor, s.setup.scan_to_map,
-                                         s.setup.motion_model, s.rotation, s.acc_term.options, s.velocity_prior, s.acc_offset,
+                                         s.setup.motion_model, s.rotation, s.acc_term.options, s.noise, s.acc_offset,
                                          s.optimization.lm_factor, last_along};
         WindowTermRecord r;
         r.window = i + 1;
@@ -1147,7 +1147,7 @@ namespace
         log_heading_diagnostics(i, c.windows[i], w.poses_before_optimization, w.intermediate_points, c.state, setup.scan_to_map, params, c.logger);
         std::optional<WindowTermRecord> record =
             record_window_terms(i, c.windows,
-                                WindowTermSources{w.intermediate_points, w.guess, c.state, setup, w.acc_term, w.rotation_options, w.velocity_prior,
+                                WindowTermSources{w.intermediate_points, w.guess, c.state, setup, w.acc_term, w.rotation_options, w.noise,
                                                   w.acc_offset, w.optimization, w.at_rest, w.turn_window},
                                 params, c.last_along, c.logger);
 

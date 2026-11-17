@@ -1246,7 +1246,8 @@ namespace
                              const MotionModelTranslationImuOptions &imu, const MotionModelRotationOptions &rotation)
     {
         const Eigen::Vector3d offset = Eigen::Vector3d::Zero();
-        const WindowTermInputs in{points, w, maps.indoor, maps.outdoor, o.scan_to_map, o.motion_model, rotation, imu, o.velocity_prior, offset,
+        const WindowNoiseModel noise = build_window_noise_model(w, o.scan_to_map, o.motion_model, rotation, imu, o.velocity_prior);
+        const WindowTermInputs in{points, w, maps.indoor, maps.outdoor, o.scan_to_map, o.motion_model, rotation, imu, noise, offset,
                                   5.0, Eigen::Vector3d::UnitX()};
         return window_term_table(in);
     }

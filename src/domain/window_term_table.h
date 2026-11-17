@@ -18,6 +18,7 @@
 #include "ndt_map.h"
 #include "optimizer_options.h"
 #include "window.h"
+#include "window_noise_model.h"
 #include <structures.h>
 
 #include <Eigen/Dense>
@@ -64,7 +65,8 @@ struct WindowTermInputs
     const MotionModelOptions &motion_model;
     const MotionModelRotationOptions &rotation_options;
     const MotionModelTranslationImuOptions &translation_imu_options;
-    const VelocityPrior &velocity_prior;
+    const WindowNoiseModel &noise; // the window's noise model: its fixed weights depend on the timestamps only, so the guess
+                                   // and the result share it
     const Eigen::Vector3d &acc_offset;
     double lm_factor;         // the damping this state was (or would be) solved with
     Eigen::Vector3d along;    // horizontal unit vector of the travel direction

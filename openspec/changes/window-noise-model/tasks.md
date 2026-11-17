@@ -60,8 +60,11 @@
   `ablation_study_use_norm` and planarity off, so the weight is 1 in both grids and the cap never acts. The fix only
   changes the diagnostic with `use_norm` on (no range weight and cap in the outdoor grid, as in the term). Step checks and
   the per-term table identical.
-- [ ] 3.6 The per-term table: `WindowTermInputs` takes the model; guess and result share it. Verify: step checks; the
+- [x] 3.6 The per-term table: `WindowTermInputs` takes the model; guess and result share it. Verify: step checks; the
   table of the 44_short replay before and after the commit is identical.
+  Result: `WindowTermInputs::velocity_prior` became `noise`; `record_window_terms` passes the window's model from
+  `prepare_window` to both rows. The table (`window_terms.csv`, `window_features.csv`) identical with the reference recorded
+  before task 3.2; step checks identical.
 - [ ] 3.7 Consistency's time-scaled rotation sigma calls the model's sigma function. Verify: step checks (the 44_short
   run has `use_consistency` on in the shipped settings, so its manifest covers consistency).
 

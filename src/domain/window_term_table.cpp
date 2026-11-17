@@ -289,8 +289,7 @@ WindowTermTable window_term_table(const WindowTermInputs &in)
     table.directions = {in.along, up.cross(in.along).normalized(), up};
     try
     {
-        const WindowNoiseModel noise = build_window_noise_model(in.window, in.scan_to_map, in.motion_model, in.rotation_options,
-                                                                in.translation_imu_options, in.velocity_prior);
+        const WindowNoiseModel &noise = in.noise;
         const WindowUnknowns &u = noise.unknowns;
         const std::vector<Eigen::VectorXd> m = window_motion_vectors(in.window, u, table.directions, table.turn_defined);
         table.rows = term_rows(in, noise, m, table);
