@@ -421,6 +421,58 @@ TEST_CASE("window terms: the acceleration-offset prior's right-hand side is minu
     check_acc_gradient(u, k.state, term, {u.io, u.io + 1, u.io + 2}, 1e-6, 1e-5);
 }
 
+TEST_CASE("window terms: each term counts the scalar residuals it adds")
+{
+    SUBCASE("accelerometer term, velocity priors, offset prior")
+    {
+        AccCase k;
+        make_acc_case(k);
+        const WindowUnknowns &u = k.unknowns;
+        REQUIRE(u.anchors.size() >= 3);
+        WindowEquations acc(u);
+        const bool end_tied = add_acceleration_terms(acc, u, k.state.window, k.imu, k.state.offset);
+        REQUIRE(end_tied);
+        // a triple per inner anchor, the start and the end velocity term: 3 residuals each
+        CHECK(acc.residuals == 3 * static_cast<int>(u.anchors.size() - 2 + 2));
+        k.imu.at_rest = true;
+        WindowEquations rest(u);
+        add_velocity_priors(rest, u, k.state.window, k.imu, true);
+        CHECK(rest.residuals == 3 + 6); // start prior, both velocities zero
+        k.imu.at_rest = false;
+        WindowEquations untied(u);
+        add_velocity_priors(untied, u, k.state.window, k.imu, false);
+        CHECK(untied.residuals == 3 + 3); // start prior, weak end tie
+        WindowEquations offset(u);
+        add_acceleration_offset_prior(offset, u, k.imu, k.state.offset);
+        CHECK(offset.residuals == 3);
+    }
+    SUBCASE("edges, gyro-bias prior, velocity continuity, origin fix")
+    {
+        const Window w = straight_window(12, 0.002);
+        MotionModelRotationOptions rotation;
+        rotation.estimate_bias = true;
+        const WindowUnknowns u = layout_window_unknowns(w, rotation, {});
+        MotionModelOptions m;
+        m.x_sigma_m = m.y_sigma_m = m.z_sigma_m = 1e-3;
+        m.om_sigma_deg = m.fi_sigma_deg = m.ka_sigma_deg = 0.1;
+        m.fix_origin_x_sigma_m = m.fix_origin_y_sigma_m = m.fix_origin_z_sigma_m = 1e-3;
+        m.fix_origin_om_sigma_deg = m.fix_origin_fi_sigma_deg = m.fix_origin_ka_sigma_deg = 1e-2;
+        m.acc_sigma_mps2 = 1.0;
+        WindowEquations edges(u);
+        add_motion_edge_terms(edges, u, w, m, rotation, {});
+        CHECK(edges.residuals == 6 * 11); // position and rotation, per edge
+        WindowEquations bias(u);
+        add_gyro_bias_prior(bias, u, w, rotation);
+        CHECK(bias.residuals == 3);
+        WindowEquations continuity(u);
+        add_velocity_continuity(continuity, u, w, m, VelocityPrior{true, Eigen::Vector3d(1.0, 0.0, 0.0)});
+        CHECK(continuity.residuals == 3 * 10 + 3); // one per inner node, and the tie to the previous window
+        WindowEquations origin(u);
+        fix_origin(origin, m);
+        CHECK(origin.residuals == 6);
+    }
+}
+
 TEST_CASE("window terms: the degeneracy projection passes strong directions and removes weak ones")
 {
     const Window w = straight_window(3, 0.002);

@@ -21,6 +21,7 @@ void add_gyro_bias_prior(WindowEquations &equations, const WindowUnknowns &unkno
             AtPAndt.add(ib + r, ib + c, prior_inf(r, c));
     AtPBndt.block<3, 1>(ib, 0) += prior_inf * prior_delta;
     equations.motion_cost += prior_delta.dot(prior_inf * prior_delta);
+    equations.residuals += 3;
 }
 
 void add_velocity_continuity(WindowEquations &equations, const WindowUnknowns &unknowns, const Window &window,
@@ -46,6 +47,7 @@ void add_velocity_continuity(WindowEquations &equations, const WindowUnknowns &u
         const int nodes[3] = {int(i) - 1, int(i), int(i) + 1};
         const double c[3] = {1.0 / dt1, -(1.0 / dt1 + 1.0 / dt2), 1.0 / dt2};
         motion_cost += w * r.squaredNorm();
+        equations.residuals += 3;
 
         for (int k = 0; k < 3; k++)
         {
@@ -70,6 +72,7 @@ void add_velocity_continuity(WindowEquations &equations, const WindowUnknowns &u
         const int nodes[2] = {0, 1};
         const double c[2] = {-1.0 / dt, 1.0 / dt};
         motion_cost += w * r.squaredNorm();
+        equations.residuals += 3;
 
         for (int k = 0; k < 3; k++)
         {
@@ -248,6 +251,7 @@ void add_motion_edges(WindowEquations &equations, const WindowUnknowns &unknowns
         const int ic_2 = static_cast<int>(second) * 6;
 
         add_edge_block(equations, poses[first], poses[second], ic_1, ic_2, m, weights, w_rot);
+        equations.residuals += 6;
         if (equations.with_cost)
             equations.motion_cost += edge_cost(poses[first], poses[second], m, weights, w_rot);
         if (unknowns.estimate_bias)

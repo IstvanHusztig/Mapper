@@ -123,6 +123,7 @@ namespace
 
         const double w = 1.0 / ((x.density2 / shape.tau + x.floor2) * shape.tau * shape.tau);
         x.equations.motion_cost += w * r.squaredNorm();
+        x.equations.residuals += 3;
         for (const auto &[ca, ja] : blocks)
         {
             const Eigen::Vector3d g = w * ja.transpose() * r;
@@ -218,6 +219,7 @@ void add_start_velocity_prior(WindowEquations &equations, const WindowUnknowns &
     const Eigen::Matrix3d velocity_inf = translation_imu_options.velocity_prior_cov.inverse();
     const Eigen::Vector3d velocity_rhs = velocity_inf * (translation_imu_options.velocity_prior_mean - window.velocity.start);
     equations.motion_cost += (translation_imu_options.velocity_prior_mean - window.velocity.start).dot(velocity_rhs);
+    equations.residuals += 3;
     for (int r = 0; r < 3; r++)
     {
         for (int c = 0; c < 3; c++)
@@ -241,6 +243,7 @@ void add_zero_velocity(WindowEquations &equations, const WindowUnknowns &unknown
         equations.rhs(ie + r, 0) -= w * window.velocity.end(r);
     }
     equations.motion_cost += w * (window.velocity.start.squaredNorm() + window.velocity.end.squaredNorm());
+    equations.residuals += 6;
 }
 
 void add_weak_end_velocity_tie(WindowEquations &equations, const WindowUnknowns &unknowns, const Window &window, bool end_tied)
@@ -254,6 +257,7 @@ void add_weak_end_velocity_tie(WindowEquations &equations, const WindowUnknowns 
         equations.rhs(ie + r, 0) += window.velocity.start(r) - window.velocity.end(r);
     }
     equations.motion_cost += (window.velocity.start - window.velocity.end).squaredNorm();
+    equations.residuals += 3;
 }
 
 void add_velocity_priors(WindowEquations &equations, const WindowUnknowns &unknowns, const Window &window,
@@ -280,4 +284,5 @@ void add_acceleration_offset_prior(WindowEquations &equations, const WindowUnkno
             AtPAndt.add(io + r, io + c, prior_inf(r, c));
     AtPBndt.block<3, 1>(io, 0) += prior_inf * (translation_imu_options.offset_prior_mean - acc_offset);
     motion_cost += (translation_imu_options.offset_prior_mean - acc_offset).dot(prior_inf * (translation_imu_options.offset_prior_mean - acc_offset));
+    equations.residuals += 3;
 }

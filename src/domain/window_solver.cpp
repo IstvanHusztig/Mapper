@@ -14,6 +14,7 @@ void fix_origin(WindowEquations &equations, const MotionModelOptions &motion_mod
                                           1.0 / (motion_model.fix_origin_ka_sigma_deg * motion_model.fix_origin_ka_sigma_deg)};
     for (int k = 0; k < 6; k++)
         equations.matrix.add(k, k, fix_origin_weights[k]);
+    equations.residuals += 6;
 }
 
 ExtraCovariances extra_unknowns_covariance(const Eigen::SparseMatrix<double> &AtPA, const WindowUnknowns &unknowns, PatternCachedCholesky &solver)

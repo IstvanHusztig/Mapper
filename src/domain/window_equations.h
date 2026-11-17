@@ -51,4 +51,7 @@ struct WindowEquations
     // whether the cost is wanted (lm_step_check): the motion-model edges compute theirs only then; the other terms always add
     // theirs (cheap)
     bool with_cost = false;
+    // the scalar residuals the motion and IMU terms and the origin fix added (the NDT points are counted in NdtSums); only
+    // counted, never used in the solve (the per-term table's cost per residual)
+    int residuals = 0;
 };
