@@ -117,17 +117,14 @@ namespace
         return t;
     }
 
-    // imu_always_on: is the window at rest? The zero-velocity detection of predict_window_poses on the window's guess
+    // imu_always_on: is the window at rest? The rest test of predict_window_poses (window_rests) on the window's guess
     bool window_at_rest(const Window &window, const OdometryRunSetup &setup, const OdometryConfig &params)
     {
         if (window.imu_acc.size() != window.poses.size() || window.imu_angles.size() != window.poses.size() ||
             window.timestamps.size() != window.poses.size())
             return false;
-        constexpr double zupt_smoothing_half_width_s = 0.025; // as predict_window_poses
-        return is_window_stationary(window.poses, window.timestamps,
-                                    world_acceleration(window.poses, window.timestamps, window.imu_acc, window.imu_angles, setup.gravity_norm,
-                                                       zupt_smoothing_half_width_s),
-                                    params.zero_velocity_acc_threshold_mps2, params.zero_velocity_gyro_threshold_deg_s * DEG_TO_RAD);
+        return window_rests(window.poses, window.timestamps, window.imu_acc, window.imu_angles, setup.gravity_norm,
+                            params.zero_velocity_acc_threshold_mps2, params.zero_velocity_gyro_threshold_deg_s * DEG_TO_RAD);
     }
 
     // imu_always_on: the start velocity prior (the previous window's end velocity, its covariance grown over the gap; in the first
@@ -480,11 +477,8 @@ namespace
         double max_gap = 0.0;
         for (int k = 1; k < n; k++)
             max_gap = std::max(max_gap, window.timestamps[k].first - window.timestamps[k - 1].first);
-        constexpr double zupt_smoothing_half_width_s = 0.025; // as predict_window_poses
-        const bool at_rest = is_window_stationary(window.poses, window.timestamps,
-                                                  world_acceleration(window.poses, window.timestamps, window.imu_acc, window.imu_angles,
-                                                                     setup.gravity_norm, zupt_smoothing_half_width_s),
-                                                  params.zero_velocity_acc_threshold_mps2, params.zero_velocity_gyro_threshold_deg_s * DEG_TO_RAD);
+        const bool at_rest = window_rests(window.poses, window.timestamps, window.imu_acc, window.imu_angles, setup.gravity_norm,
+                                          params.zero_velocity_acc_threshold_mps2, params.zero_velocity_gyro_threshold_deg_s * DEG_TO_RAD);
         const Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eig(lidar_translation_information);
         const double ratio = eig.eigenvalues().maxCoeff() > 0.0 ? eig.eigenvalues().minCoeff() / eig.eigenvalues().maxCoeff() : 0.0;
         const auto v = [](const Eigen::Vector3d &x) { std::ostringstream o; o << std::fixed << std::setprecision(4) << x.x() << " " << x.y() << " " << x.z(); return o.str(); };

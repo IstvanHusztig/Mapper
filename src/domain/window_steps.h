@@ -25,6 +25,15 @@ struct PreviousVelocity
 // final velocity of previous over its last span_nodes nodes; a velocity faster than max_speed_mps is dropped
 PreviousVelocity estimate_previous_velocity(const Window &previous, int span_nodes, double max_speed_mps);
 
+// the zero-velocity test of a window: the world-frame acceleration on a 50 ms average (the accelerometer noise of a 10 ms
+// average already reaches ~0.3 m/s^2 at rest, while walking accelerations of 1-3 m/s^2 at ~2 Hz survive the longer
+// average) and is_window_stationary on it, which reads the node rotations, not the positions. The caller checks that
+// poses, timestamps, imu_acc and imu_angles have one entry per node.
+constexpr double rest_smoothing_half_width_s = 0.025;
+bool window_rests(const std::vector<Eigen::Affine3d> &poses, const std::vector<std::pair<double, double>> &timestamps,
+                  const std::vector<Eigen::Vector3d> &imu_acc, const std::vector<Eigen::Vector3d> &imu_angles, double gravity_norm,
+                  double acc_threshold_mps2, double gyro_threshold_rad_s);
+
 // how predict_window_poses guesses the motion of a window
 struct PosePredictionOptions
 {

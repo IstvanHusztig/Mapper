@@ -359,3 +359,22 @@ TEST_CASE("integrate_window_translations follows the accelerometer from the star
     Window no_imu = moving_window(5, 1.0, 0.0);
     CHECK_FALSE(integrate_window_translations(no_imu, v0, Eigen::Vector3d(0.0, 0.0, 1.0), g));
 }
+
+TEST_CASE("window_rests: still with gravity only, not while walking")
+{
+    // 200 nodes 2 ms apart, level and not turning; the accelerometer reads gravity (1 g up), and in the second case a
+    // walking acceleration of 2 m/s^2 at 2 Hz along x on top
+    constexpr int n = 200;
+    std::vector<Eigen::Affine3d> poses(n, Eigen::Affine3d::Identity());
+    std::vector<std::pair<double, double>> ts;
+    std::vector<Eigen::Vector3d> angles(n, Eigen::Vector3d::Zero()), still, walking;
+    for (int k = 0; k < n; k++)
+    {
+        const double t = 0.002 * k;
+        ts.push_back({t, t});
+        still.push_back(Eigen::Vector3d(0.0, 0.0, 1.0));
+        walking.push_back(Eigen::Vector3d(2.0 / 9.80665 * std::sin(2.0 * 3.14159265358979323846 * 2.0 * t), 0.0, 1.0));
+    }
+    CHECK(window_rests(poses, ts, still, angles, 1.0, 0.1, 0.01));
+    CHECK_FALSE(window_rests(poses, ts, walking, angles, 1.0, 0.1, 0.01));
+}

@@ -18,15 +18,17 @@
 
 ## 2. Guards
 
-- [ ] 2.1 Record the characterization reference, the loop guard's reference and the per-term table of the 44_short replay
+- [x] 2.1 Record the characterization reference, the loop guard's reference and the per-term table of the 44_short replay
   from the code at the change's start, and the fit diagnostic's lines (`accelerometer fit`) of the 44_short replay with
-  `log_window_diagnostics`. Verify: the guards equal stage 5's references (the code is unchanged since).
+  `log_window_diagnostics`. Verify: the guards equal stage 5's references (the code is unchanged since). Result: recorded
+  twice at b4a91ea, identical with stage 5's; 21 `accelerometer fit` lines.
 
 ## 3. The split (pure refactors)
 
-- [ ] 3.1 `window_rests` (`window_steps`) with the named half width; `predict_window_poses`, `window_at_rest` and
+- [x] 3.1 `window_rests` (`window_steps`) with the named half width; `predict_window_poses`, `window_at_rest` and
   `log_accelerometer_fit` call it, their size checks and the threshold conversion unchanged. Test: a still and a walking
-  window. Verify: step checks; the `accelerometer fit` lines identical with task 2.1's.
+  window. Verify: step checks; the `accelerometer fit` lines identical with task 2.1's. Result: step checks and the
+  per-term table identical; the 21 fit lines identical; the test passes.
 - [ ] 3.2 `predict_window_poses` in four steps: `mean_shift_of`, the chaining through `place_window_after` (with the
   empty-window guard), the rest test, `guess_window_translations`. Tests of each step (mean shift and its drop, chaining
   bit-identical with `place_window_after`, the four translation branches). Verify: step checks; the existing

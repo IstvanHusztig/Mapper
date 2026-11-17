@@ -54,6 +54,15 @@ PreviousVelocity estimate_previous_velocity(const Window &previous, int span_nod
     return r;
 }
 
+bool window_rests(const std::vector<Eigen::Affine3d> &poses, const std::vector<std::pair<double, double>> &timestamps,
+                  const std::vector<Eigen::Vector3d> &imu_acc, const std::vector<Eigen::Vector3d> &imu_angles, double gravity_norm,
+                  double acc_threshold_mps2, double gyro_threshold_rad_s)
+{
+    return is_window_stationary(poses, timestamps,
+                                world_acceleration(poses, timestamps, imu_acc, imu_angles, gravity_norm, rest_smoothing_half_width_s),
+                                acc_threshold_mps2, gyro_threshold_rad_s);
+}
+
 PosePrediction predict_window_poses(Window &window, const Window &previous, const Window *before_previous,
                                     const Eigen::Vector3d &prev_velocity, const PosePredictionOptions &options)
 {
@@ -97,13 +106,8 @@ PosePrediction predict_window_poses(Window &window, const Window &previous, cons
     if (imu_sizes_ok)
     {
         a = world_acceleration(new_trajectory, ts, acc, window.imu_angles, options.gravity_norm, options.acc_smoothing_half_width_s);
-        // rest detection on a 50 ms average: the accelerometer noise of a 10 ms average already reaches ~0.3 m/s^2
-        // at rest, while walking accelerations (1-3 m/s^2 at ~2 Hz) survive the longer average
-        constexpr double zupt_smoothing_half_width_s = 0.025;
-        r.stationary = options.use_zupt && is_window_stationary(new_trajectory, ts,
-                                                                world_acceleration(new_trajectory, ts, acc, window.imu_angles, options.gravity_norm, zupt_smoothing_half_width_s),
-                                                                options.zupt_acc_threshold_mps2,
-                                                                options.zupt_gyro_threshold_rad_s);
+        r.stationary = options.use_zupt && window_rests(new_trajectory, ts, acc, window.imu_angles, options.gravity_norm,
+                                                        options.zupt_acc_threshold_mps2, options.zupt_gyro_threshold_rad_s);
     }
 
     if (imu_sizes_ok && (options.use_imu_pred || r.stationary))
