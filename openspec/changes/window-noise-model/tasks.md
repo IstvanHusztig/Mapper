@@ -92,12 +92,14 @@
   Result: CLAUDE.md (the noise model in the pipeline paragraph, the log bullet), the guide's `log_window_noise` row and
   the Fundamentals' sigma entry, `tools/README.md` (the `noise_*` columns), the plan's progress. The guide's step 6 gets
   the optimizer's changes at the end of the plan (user).
-- [ ] 5.2 Manifests (44, 44_short, Livox 3): the params TOML entry, in their own commit. Verify: the stage end runs
-  compare IDENTICAL.
+- [x] 5.2 Manifests (44, 44_short, Livox 3): the params TOML entry, in their own commit. Verify: the stage end runs
+  compare IDENTICAL. Result: 4b48184; 44 35 files, Livox 3 35, 44_short 11, all IDENTICAL.
 
 ## 6. End of stage
 
-- [ ] 6.1 Full 44 and Livox 3 against their manifests with the shipped settings (sequential, in the background).
+- [x] 6.1 Full 44 and Livox 3 against their manifests with the shipped settings (sequential, in the background).
   Verify: identical except the params TOML before task 5.2, IDENTICAL after it; the odometry time reported against
-  stage 4's (1214 s and 697 s).
-- [ ] 6.2 Debug build and `ctest`. Verify: pass.
+  stage 4's (1214 s and 697 s). Result: 44, Livox 3 and 44_short differ only in the params TOML before 5.2, IDENTICAL
+  after it. Odometry 909 s (44), 717 s (Livox 3), 109 s (44_short); single runs on a machine whose speed varies (stage 4:
+  1040-1214 s on 44), so no speed claim.
+- [x] 6.2 Debug build and `ctest`. Verify: pass. Result: Debug build exit 0, ctest 100 % passed (660 s).
