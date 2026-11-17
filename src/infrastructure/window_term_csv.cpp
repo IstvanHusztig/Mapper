@@ -40,6 +40,15 @@ namespace
                 h += std::string(",change_") + term_motion_name(m) + "_" + term_direction_name(d);
         h += ",verdict_bent,verdict_bent_severely,verdict_fast,verdict_bias_high,heading_bend_deg,roll_bend_deg,pitch_bend_deg,speed_mps,"
              "max_bias_deg_s,velocity_chi2,stop,rejected_steps,steps_not_applied,big_jump_nodes,remaining_step_m,lidar_share_along";
+        // the window's noise model as sigmas (empty where the window has no such weight)
+        h += ",noise_translation_x_m,noise_translation_y_m,noise_translation_z_m";
+        for (const char *stat : {"min", "median", "max"})
+            for (const char *axis : {"om", "fi", "ka"})
+                h += std::string(",noise_rotation_") + stat + "_" + axis + "_deg";
+        h += ",noise_velocity_continuity_min_mps,noise_velocity_continuity_max_mps,noise_accelerometer_min_mps,noise_accelerometer_max_mps,"
+             "noise_velocity_prior_1_mps,noise_velocity_prior_2_mps,noise_velocity_prior_3_mps,noise_bias_prior_1_deg_s,noise_bias_prior_2_deg_s,"
+             "noise_bias_prior_3_deg_s,noise_offset_prior_1_mps2,noise_offset_prior_2_mps2,noise_offset_prior_3_mps2,noise_zero_velocity_mps,"
+             "noise_ndt_information_scale,noise_ndt_huber_cutoff";
         return h;
     }
 
@@ -102,6 +111,15 @@ void FolderWindowTermSink::write(const WindowTermRecord &r)
               << "," << opt(e.heading_bend_deg) << "," << opt(e.roll_bend_deg) << "," << opt(e.pitch_bend_deg) << "," << opt(e.speed_mps) << ","
               << opt(e.max_bias_deg_s) << "," << opt(e.velocity_chi2) << "," << lm_stop_name(e.stop) << "," << e.rejected_steps << ","
               << e.steps_not_applied << "," << e.big_jump_nodes << "," << opt(e.remaining_step_m) << "," << opt(e.lidar_share_along);
+    const WindowNoiseSigmas &n = r.noise;
+    const auto sigma = [](double x) { return std::isfinite(x) ? number(x) : std::string(); };
+    for (const Eigen::Vector3d *v : {&n.translation_m, &n.rotation_min_deg, &n.rotation_median_deg, &n.rotation_max_deg})
+        features_ << "," << sigma(v->x()) << "," << sigma(v->y()) << "," << sigma(v->z());
+    features_ << "," << sigma(n.velocity_continuity_min_mps) << "," << sigma(n.velocity_continuity_max_mps) << "," << sigma(n.accelerometer_min_mps)
+              << "," << sigma(n.accelerometer_max_mps);
+    for (const Eigen::Vector3d *v : {&n.velocity_prior_mps, &n.bias_prior_deg_s, &n.offset_prior_mps2})
+        features_ << "," << sigma(v->x()) << "," << sigma(v->y()) << "," << sigma(v->z());
+    features_ << "," << sigma(n.zero_velocity_mps) << "," << sigma(n.ndt_information_scale) << "," << sigma(n.ndt_huber_cutoff);
     features_ << "\n";
     terms_.flush();
     features_.flush();

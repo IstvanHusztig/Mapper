@@ -13,12 +13,17 @@
 // - the NDT term's rules, applied per point and per iteration because they depend on the current poses (the Huber
 //   weight, the degeneracy projection) or on the map (the cell information): the model holds their parameters.
 
+#include "odometry_config.h"
 #include "optimizer_options.h"
+#include "run_reporting.h"
 #include "window.h"
 #include "window_equations.h"
 
 #include <array>
+#include <limits>
 #include <vector>
+
+constexpr double kNoiseNaN = std::numeric_limits<double>::quiet_NaN();
 
 // the time-scaled rotation sigma of a motion edge: the gyro's angle random walk over dt, inflated by k, floored for
 // near-zero dt [rad]
@@ -132,3 +137,29 @@ Eigen::Matrix3d velocity_prior_cov_over_gap(const Eigen::Matrix3d &carried, doub
 WindowNoiseModel build_window_noise_model(const Window &window, const ScanToMapOptions &scan_to_map, const MotionModelOptions &motion_model,
                                           const MotionModelRotationOptions &rotation_options,
                                           const MotionModelTranslationImuOptions &translation_imu_options, const VelocityPrior &velocity_prior);
+
+// a window's noise model as sigmas (1 / sqrt(weight); for the priors the square roots of their covariance's eigenvalues,
+// smallest first); NaN where the window has no such weight. For the "window noise" log line and the feature columns.
+struct WindowNoiseSigmas
+{
+    Eigen::Vector3d translation_m = Eigen::Vector3d::Constant(kNoiseNaN);    // the motion edges' x, y, z
+    Eigen::Vector3d rotation_min_deg = Eigen::Vector3d::Constant(kNoiseNaN); // om, fi, ka over the edges
+    Eigen::Vector3d rotation_median_deg = Eigen::Vector3d::Constant(kNoiseNaN);
+    Eigen::Vector3d rotation_max_deg = Eigen::Vector3d::Constant(kNoiseNaN);
+    double velocity_continuity_min_mps = kNoiseNaN, velocity_continuity_max_mps = kNoiseNaN;
+    double accelerometer_min_mps = kNoiseNaN, accelerometer_max_mps = kNoiseNaN; // over its terms (the residual is a velocity)
+    Eigen::Vector3d velocity_prior_mps = Eigen::Vector3d::Constant(kNoiseNaN);
+    Eigen::Vector3d bias_prior_deg_s = Eigen::Vector3d::Constant(kNoiseNaN);
+    Eigen::Vector3d offset_prior_mps2 = Eigen::Vector3d::Constant(kNoiseNaN);
+    double zero_velocity_mps = kNoiseNaN; // only at rest
+    double ndt_information_scale = kNoiseNaN;
+    double ndt_huber_cutoff = kNoiseNaN;
+};
+WindowNoiseSigmas window_noise_sigmas(const WindowNoiseModel &noise);
+
+// log_window_noise: one line "window noise <n>: ..." with the window's sigmas ("-" where the window has none)
+void log_window_noise(int window, const WindowNoiseSigmas &sigmas, Logger &logger);
+
+// every run and replay: one "noise budget" line at the start of the odometry with the constants the settings give (the
+// sigmas before the time scaling, the accelerometer's noise, the random walks, the scales)
+void log_noise_budget(const OdometryConfig &params, Logger &logger);

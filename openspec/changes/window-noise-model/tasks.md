@@ -73,11 +73,14 @@
 
 ## 4. The log
 
-- [ ] 4.1 `log_window_noise` (`OdometryConfig`, `TomlIO::POINTERS` and the `[lidar_odometry_debug_info]` category,
+- [x] 4.1 `log_window_noise` (`OdometryConfig`, `TomlIO::POINTERS` and the `[lidar_odometry_debug_info]` category,
   the three settings files, `false`); the `window noise <n>:` line in `report_window`; the `noise budget` line at the
   start of the odometry; the model's values as `window_features.csv` columns. Verify: step checks; 44_short with
   `log_window_noise` on has 70 lines and is identical except the params TOML; the `noise budget` line in every run and
   replay.
+  Result: 44_short with `log_window_noise` on: 70 `window noise` lines, one `noise budget` line, every file but the params
+  TOML identical with the manifest; the replay logs the budget too. `window_features.csv` gains 28 `noise_*` columns, the
+  old 65 columns identical. Step checks identical; the three golden TOML tests fail until task 4.2.
 - [ ] 4.2 Golden TOMLs (`LO_UPDATE_GOLDEN=1`) in their own commit. Verify: unit tests.
 
 ## 5. Docs and manifests

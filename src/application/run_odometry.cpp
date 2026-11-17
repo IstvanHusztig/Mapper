@@ -893,6 +893,7 @@ namespace
 void start_window_loop(WindowLoop &loop, const Window &first, const OdometryConfig &params, Logger &logger)
 {
     loop.setup = prepare_run(first, params, logger);
+    log_noise_budget(params, logger);
     loop.carry = start_carry(loop.setup, first);
 }
 
@@ -1151,6 +1152,8 @@ namespace
                                                   w.acc_offset, w.optimization, w.at_rest, w.turn_window},
                                 params, c.last_along, c.logger);
 
+        if (params.log_window_noise)
+            log_window_noise(i + 1, window_noise_sigmas(w.noise), c.logger);
         const WindowVerdict verdict = judge_window(window_evidence(c, w, record ? &*record : nullptr));
         carry.verdicts.push_back(verdict);
         if (params.log_window_verdict && verdict.any())
@@ -1158,6 +1161,7 @@ namespace
         if (record && c.range.terms)
         {
             record->verdict = verdict;
+            record->noise = window_noise_sigmas(w.noise);
             c.range.terms->write(*record);
         }
     }

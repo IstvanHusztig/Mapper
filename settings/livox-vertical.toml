@@ -141,6 +141,7 @@ log_stage_timing = false
 log_window_diagnostics = false
 log_window_terms = false
 log_window_verdict = false
+log_window_noise = false
 save_calibration_validation = false
 
 [lidar_imu_extrinsics]

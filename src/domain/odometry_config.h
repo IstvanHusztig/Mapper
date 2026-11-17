@@ -76,6 +76,9 @@ struct OdometryConfig
     // diagnostics only: one "window verdict" line per window that has a flag (bent against the gyro, fast, gyro bias
     // high), with all its readings; the run's verdict summary is logged in every run (results unchanged)
     bool log_window_verdict = false;
+    // diagnostics only: one "window noise" line per window with its noise model as sigmas (window_noise_model.h); the run's
+    // "noise budget" line is logged in every run (results unchanged)
+    bool log_window_noise = false;
     // after the odometry the CLI writes odometry_snapshot.bin to the output folder, so that the post-processing can be run
     // again from it (dMapper <input> <params.toml> <output> --from-snapshot <file>) without running the odometry again
     bool save_odometry_snapshot = false;

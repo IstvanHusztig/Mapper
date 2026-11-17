@@ -1,5 +1,10 @@
 #include "window_noise_model.h"
 #include "angle_units.h"
+#include "window_verdict.h"
+
+#include <iomanip>
+#include <sstream>
+#include <string>
 
 #include <algorithm>
 #include <cmath>
@@ -197,4 +202,113 @@ WindowNoiseModel build_window_noise_model(const Window &window, const ScanToMapO
 
     m.ndt = ndt_noise(scan_to_map);
     return m;
+}
+
+namespace
+{
+    double sigma_of(double weight) { return weight > 0.0 ? 1.0 / std::sqrt(weight) : kNoiseNaN; }
+
+    // square roots of a covariance's eigenvalues, smallest first
+    Eigen::Vector3d sigmas_of(const Eigen::Matrix3d &cov)
+    {
+        const Eigen::Vector3d ev = Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d>(cov).eigenvalues();
+        return ev.cwiseMax(0.0).cwiseSqrt();
+    }
+
+    std::string text(double v, int precision)
+    {
+        if (!std::isfinite(v))
+            return "-";
+        std::ostringstream o;
+        o << std::setprecision(precision) << v;
+        return o.str();
+    }
+
+    std::string triple(const Eigen::Vector3d &v, int precision)
+    {
+        return text(v.x(), precision) + " " + text(v.y(), precision) + " " + text(v.z(), precision);
+    }
+}
+
+WindowNoiseSigmas window_noise_sigmas(const WindowNoiseModel &m)
+{
+    WindowNoiseSigmas s;
+    s.translation_m = Eigen::Vector3d(sigma_of(m.edges.x), sigma_of(m.edges.y), sigma_of(m.edges.z));
+    if (!m.edges.rotation.empty())
+        for (int axis = 0; axis < 3; axis++)
+        {
+            std::vector<double> deg;
+            for (const Eigen::Vector3d &w : m.edges.rotation)
+                deg.push_back(sigma_of(w(axis)) / DEG_TO_RAD);
+            s.rotation_min_deg(axis) = *std::min_element(deg.begin(), deg.end());
+            s.rotation_median_deg(axis) = percentile_linear(deg, 50.0);
+            s.rotation_max_deg(axis) = *std::max_element(deg.begin(), deg.end());
+        }
+    if (!m.velocity_continuity_weights.empty())
+    {
+        const auto [lo, hi] = std::minmax_element(m.velocity_continuity_weights.begin(), m.velocity_continuity_weights.end());
+        s.velocity_continuity_min_mps = sigma_of(*hi); // the largest weight is the smallest sigma
+        s.velocity_continuity_max_mps = sigma_of(*lo);
+    }
+    for (const AccelerometerTermSpan &t : m.accelerometer_terms)
+    {
+        const double sigma = sigma_of(t.weight);
+        if (!std::isfinite(sigma))
+            continue;
+        s.accelerometer_min_mps = std::isfinite(s.accelerometer_min_mps) ? std::min(s.accelerometer_min_mps, sigma) : sigma;
+        s.accelerometer_max_mps = std::isfinite(s.accelerometer_max_mps) ? std::max(s.accelerometer_max_mps, sigma) : sigma;
+    }
+    if (m.unknowns.acc_term)
+    {
+        s.velocity_prior_mps = sigmas_of(m.velocity_prior_cov);
+        s.offset_prior_mps2 = sigmas_of(m.offset_prior_cov);
+        if (m.at_rest)
+            s.zero_velocity_mps = sigma_of(m.zero_velocity_weight);
+    }
+    if (m.unknowns.estimate_bias)
+        s.bias_prior_deg_s = sigmas_of(m.bias_prior_cov) / DEG_TO_RAD;
+    s.ndt_information_scale = m.ndt.information_scale;
+    s.ndt_huber_cutoff = m.ndt.huber_cutoff;
+    return s;
+}
+
+void log_window_noise(int window, const WindowNoiseSigmas &s, Logger &logger)
+{
+    log_info(logger) << "window noise " << window << ": edge translation sigma " << triple(s.translation_m, 4)
+                     << " m, edge rotation sigma om/fi/ka [deg] min " << triple(s.rotation_min_deg, 4) << ", median " << triple(s.rotation_median_deg, 4)
+                     << ", max " << triple(s.rotation_max_deg, 4) << "; velocity continuity sigma " << text(s.velocity_continuity_min_mps, 4) << ".."
+                     << text(s.velocity_continuity_max_mps, 4) << " m/s; accelerometer sigma " << text(s.accelerometer_min_mps, 4) << ".."
+                     << text(s.accelerometer_max_mps, 4) << " m/s; start velocity prior sigma " << triple(s.velocity_prior_mps, 4)
+                     << " m/s; gyro bias prior sigma " << triple(s.bias_prior_deg_s, 4) << " deg/s; acceleration offset prior sigma "
+                     << triple(s.offset_prior_mps2, 4) << " m/s^2; zero velocity sigma " << text(s.zero_velocity_mps, 4)
+                     << " m/s; ndt information scale " << text(s.ndt_information_scale, 4) << ", huber cutoff " << text(s.ndt_huber_cutoff, 4);
+}
+
+void log_noise_budget(const OdometryConfig &p, Logger &logger)
+{
+    const auto v = [](double x) { return text(x, 6); };
+    std::ostringstream rotation;
+    if (p.use_time_scaled_rotation_sigma)
+        rotation << "time-scaled max(k * ARW * sqrt(dt), floor), k " << v(p.rotation_sigma_inflation_k) << " (turn windows "
+                 << (p.rotation_sigma_inflation_k_turn > 0.0 ? v(p.rotation_sigma_inflation_k_turn) : std::string("off")) << "), ARW x/y/z " << v(p.gyro_arw_x_deg_sqrt_s) << " " << v(p.gyro_arw_y_deg_sqrt_s) << " "
+                 << v(p.gyro_arw_z_deg_sqrt_s) << " deg/sqrt(s), floor " << v(p.rotation_sigma_floor_deg) << " deg";
+    else
+        rotation << "om/fi/ka " << v(p.lidar_odometry_motion_model_om_1_sigma_deg) << " " << v(p.lidar_odometry_motion_model_fi_1_sigma_deg) << " "
+                 << v(p.lidar_odometry_motion_model_ka_1_sigma_deg) << " deg";
+    log_info(logger) << "noise budget: edge translation sigma x/y/z " << v(p.lidar_odometry_motion_model_x_1_sigma_m) << " "
+                     << v(p.lidar_odometry_motion_model_y_1_sigma_m) << " " << v(p.lidar_odometry_motion_model_z_1_sigma_m) << " m (weight x "
+                     << v(p.imu_position_information_scale) << " with the accelerometer term); edge rotation sigma " << rotation.str()
+                     << "; velocity continuity " << v(p.lidar_odometry_motion_model_acc_1_sigma_mps2) << " m/s^2 (without the accelerometer term); "
+                     << "accelerometer term " << (p.imu_always_on ? "on" : "off") << ", density " << v(p.imu_accel_noise_density_mps2_sqrt_hz)
+                     << " m/s^2/sqrt(Hz), floor " << v(p.imu_accel_floor_sigma_mps2) << " m/s^2, span " << v(p.imu_acceleration_span_s)
+                     << " s; zero velocity sigma " << v(p.imu_zero_velocity_sigma_mps) << " m/s; first start velocity sigma "
+                     << v(p.imu_velocity_initial_sigma_mps) << " m/s; gyro bias " << (p.use_gyro_bias_estimation ? "estimated" : "off")
+                     << ", initial sigma " << v(p.gyro_bias_initial_sigma_deg_s) << " deg/s, random walk " << v(p.gyro_bias_rw_deg_s_sqrt_s)
+                     << " deg/s/sqrt(s); acceleration offset initial sigma " << v(p.imu_acceleration_offset_initial_sigma_mps2)
+                     << " m/s^2, random walk " << v(p.imu_acceleration_offset_rw_mps2_sqrt_s) << " m/s^2/sqrt(s); ndt information scale "
+                     << v(p.ndt_information_scale) << ", huber cutoff " << v(p.ndt_huber_cutoff) << "; origin fix sigma x/y/z "
+                     << v(p.lidar_odometry_motion_model_fix_origin_x_1_sigma_m) << " " << v(p.lidar_odometry_motion_model_fix_origin_y_1_sigma_m)
+                     << " " << v(p.lidar_odometry_motion_model_fix_origin_z_1_sigma_m) << " m, om/fi/ka "
+                     << v(p.lidar_odometry_motion_model_fix_origin_om_1_sigma_deg) << " " << v(p.lidar_odometry_motion_model_fix_origin_fi_1_sigma_deg)
+                     << " " << v(p.lidar_odometry_motion_model_fix_origin_ka_1_sigma_deg) << " (used as radians, tracker C37)";
 }

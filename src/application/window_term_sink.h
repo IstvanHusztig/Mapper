@@ -4,6 +4,7 @@
 // observes: nothing here feeds back into the odometry.
 
 #include "window_term_table.h"
+#include "window_noise_model.h"
 #include "window_verdict.h"
 
 #include <Eigen/Dense>
@@ -32,6 +33,7 @@ struct WindowTermRecord
     WindowTermTable guess;  // at the state the first iteration starts from
     WindowTermTable result; // after the last iteration
     WindowVerdict verdict;  // the window verdict (window_verdict.h): flags and readings
+    WindowNoiseSigmas noise; // the window's noise model as sigmas (window_noise_model.h)
 };
 
 class WindowTermSink
