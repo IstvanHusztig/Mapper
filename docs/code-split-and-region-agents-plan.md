@@ -703,10 +703,142 @@ iterations end; any limit for the new readings.
 ## Stage 5: one place for the weights
 
 Today the weights come from many places: sigmas in the options, the time-scaled rotation sigma, the accelerometer
-noise formula, the two 0.1 scales, the NDT cell covariances, the sigma raise for degenerate windows in
-`optimize_windows`. One function builds a window's complete noise model from the settings and the window; the terms
-receive weights and never compute them. Pure refactor. With stage 3 this is the "noise budget": every weight in one
-struct, and its effect in one log line.
+noise formula, the two 0.1 scales, the NDT cell covariances. One function builds a window's complete noise model from
+the settings and the window; the terms receive weights and never compute them. Pure refactor. With stage 3 this is the
+"noise budget": every weight in one struct, and its effect in one log line.
+
+Designed 2026-11-17 (Opus, high), from an inventory of the code (every weight of the window problem, with its formula,
+inputs and lifetime).
+
+### Where the weights are today
+
+Each `WindowProblem::linearize` (once per iteration) computes them again inside the terms, from the options, the
+window's timestamps and the carried state:
+
+| Weight | Where | Lifetime |
+|---|---|---|
+| Motion edges: translation 1/σ² (× `imu_position_information_scale` with the accelerometer term), rotation 1/σ² constant or time-scaled max(k·ARW·√dt, floor), k for turn windows | `motion_edge_weights` (`motion_model_terms.cpp:95-135`) | constant per window, recomputed per iteration |
+| Velocity continuity σ = acc·½(dt₁+dt₂), and the first-step velocity prior σ = acc·dt (path without the accelerometer term); its dt clamped at 1e-4 s, the edges' dt at 0 | `motion_model_terms.cpp:35-68` | constant per window, per node triple, recomputed |
+| Bias coupling of the motion edges: the edge's rotation weight with its dt | `add_edge_bias_coupling` (`motion_model_terms.cpp:207-230`) | per edge, from the edge weights |
+| Gyro-bias prior: covariance grown by the random walk; information = inverse | grown in `apply_gyro_bias_prior`, inverted in `motion_model_terms.cpp:17` | per window; inverse per iteration |
+| Accelerometer term 1/((density²/τ + floor²)·τ²) per term span τ | `accelerometer_term.cpp:124, 205-206` | constant per window, per term, recomputed |
+| Start-velocity prior: carried covariance grown over the gap, or the initial / rest sigma; information = inverse | covariance in `run_odometry.cpp:146-162`, inverse in `accelerometer_term.cpp:219` | per window; inverse per iteration |
+| Zero velocity 1/σ²; the weak end-velocity tie, weight 1.0 written in the code | `accelerometer_term.cpp:237, 249-260` | per iteration |
+| Acceleration-offset prior: carried covariance grown by the random walk; information = inverse; its mean is always zero (`optimizer_options.h:84`) | `run_odometry.cpp:89, 115`, `accelerometer_term.cpp:281` | per window; inverse per iteration |
+| Origin fix 1/σ² | `fix_origin` (`window_solver.cpp:9-16`) | per iteration |
+| NDT: cell information (inverse cell covariance, in the map), planarity, range weight and its cap of 10 (fine grid only), Huber weight, `ndt_information_scale`, degeneracy projection | `ndt_term.cpp:106-333`, `ndt_map.h:20-38` | per point and per iteration; the Huber weight and the projection depend on the current poses |
+
+The degenerate-window sigma raise this stage was planned around no longer exists; what is left of it is a reset of the
+motion model's x/y/z sigmas to their configured values in `prepare_acc_term` (`run_odometry.cpp:102-105`), which changes
+nothing. `CLAUDE.md` still describes the raise.
+
+### The noise model
+
+`WindowNoiseModel` (`src/domain/window_noise_model.{h,cpp}`) holds every weight of one window, in two kinds:
+
+- **Values, fixed for the window**, computed once by `build_window_noise_model` in `prepare_window`, before the first
+  iteration, with the same expressions in the same operand order as today, and under the same conditions: the model
+  holds the window's layout (`layout_window_unknowns`: which unknowns and terms exist, from the timestamps and the
+  options), built once, and computes a weight only where today's term would (the velocity continuity only without the
+  accelerometer term, no bias weights in the first window, both dt clamps as they are):
+  - the motion edges' weights, one per edge (translation and rotation, the scale and the turn-window k applied);
+  - the velocity-continuity weights per node triple and the first-step prior's weight;
+  - the gyro-bias prior (mean, covariance, information);
+  - the accelerometer terms' weights, one per term, with their τ (from the timestamps and the anchors only);
+  - the start-velocity prior and the acceleration-offset prior (mean, covariance, information);
+  - the zero-velocity weight and the weak end-velocity tie (its 1.0 becomes a named constant);
+  - the origin fix's six weights.
+- **Rules applied per point and per iteration**, kept in the NDT term because they depend on the current poses or the
+  map: planarity, the range weight and its cap per grid, the Huber cutoff, `ndt_information_scale`, the projection's
+  ratios. The model holds their parameters (per grid); the term applies them in today's order (the generated product
+  with the cell information, then the range weight, then the Huber weight, then the scale: separate multiplications,
+  because folding them into one factor changes the bits). The cell information stays in the map: it changes with every
+  map update.
+
+The terms take the model (`const WindowNoiseModel&`) instead of options they compute weights from. `WindowProblem`,
+the per-term table (`WindowTermInputs` gains the model; its guess and result share it, since the fixed weights depend on
+the timestamps only) and `ndt_window_cost` (the weak-axis diagnostic) all read the same model. The current state (the
+bias update, the poses) stays in the terms. Captures need no new format: a replay runs `process_windows`, so
+`prepare_window` rebuilds the model from the carried state, also with other settings.
+
+**Why it stays bit-identical.** Every fixed value depends only on settings, timestamps and carried state, which don't
+change during the iterations (the posteriors written by `take_covariance` go to the next window, never into this
+window's priors; rest detection and the turn decision happen before the first iteration). Computing the same expression
+once instead of every iteration, or inverting the same matrix once, gives the same bits. The weight enters each term
+where it enters today (`w * jaᵀ * r`, `prior_inf * delta`, the generated motion-edge code), never folded into a
+Jacobian.
+
+**It is a little faster**, not slower: the inverses and per-edge weights are computed once per window instead of 100
+times. Not a goal; reported.
+
+### The log line
+
+`log_window_noise = true` (`[lidar_odometry_debug_info]`, outside the settings hash) adds one line per window,
+`window noise <n>:` with the model as sigmas (σ = 1/√w): the motion edges' translation σ and rotation σ (smallest,
+median, largest over the edges, per axis), the velocity-continuity σ, the accelerometer σ (range over its terms), the
+start-velocity prior's σ (square roots of the covariance's eigenvalues), the bias and offset priors' σ, the zero-velocity
+σ when at rest, and the NDT parameters (scale, Huber cutoff). With `log_window_terms` the same values are columns of
+`window_features.csv` (the learned-tuner data). Every run logs one `noise budget` line at its start: the settings-derived
+constants (σ before the time scaling, density, floor, random walks, scales). Results unchanged.
+
+### Findings the refactor keeps as they are
+
+1. **The origin fix's rotation weights use the sigma in degrees as if it were radians** (`window_solver.cpp:12-14`: no
+   `DEG_TO_RAD`). With 1e-6 the weight is 1e12 instead of 3.3e15; both hold the first node practically fixed. Kept
+   bit-identical, with a comment; fixing it changes numbers, so it goes to the code-review tracker.
+2. **`ndt_window_cost` disagrees with the NDT term**: it applies `use_norm` and `min(w, 10)` to both grids
+   (`scan_to_map.cpp:70-72`), the term `grid.range_weight` and `grid.cap`, set for the fine grid only
+   (`ndt_term.cpp:14-26, 164-168`). It only feeds `log_weak_axis_diagnostics`. With the model it reads the term's per-grid
+   rules, so the diagnostic agrees with the term; that diagnostic's log numbers change, the results don't.
+3. **The no-op sigma reset** in `prepare_acc_term` is removed (no dead code), and `CLAUDE.md` loses the sigma raise.
+
+### Tests
+
+- `build_window_noise_model` on a synthetic window with known timestamps: each weight equals its formula, and equals
+  what the terms compute today (checked before the terms switch, in commit 2) (time-scaled
+  rotation σ with its floor, the turn window's k, the accelerometer σ for a given τ, the priors' growth by the random
+  walk and the gap); a window at rest gets the zero-velocity weight; the first window has no accelerometer or velocity
+  prior.
+- The existing term tests (`tests/window_terms_test.cpp`) take their weights from a model built for their windows.
+- The characterization guard, the loop guard and the replays carry the bit-identity.
+
+### Checks and commit order
+
+Every commit: build, tests, characterization guard, loop guard, the two replays (44_short 20–40 s, Livox 3 100–130 s),
+44_short against its manifest. End of stage: full 44 and Livox 3 against their manifests (the params TOML gains
+`log_window_noise`, new manifests in their own commit), Debug build and `ctest` (the model's vectors change lifetimes).
+
+1. Remove the no-op sigma reset; `CLAUDE.md` without the sigma raise.
+2. `WindowNoiseModel`, `build_window_noise_model` and its tests (not used yet).
+3. The motion edges and the velocity continuity take the model.
+4. The accelerometer term, the zero velocity and the three priors take the model.
+5. The origin fix and the NDT term's parameters from the model; `ndt_window_cost` reads the same rules.
+6. The per-term table reads the model.
+7. `log_window_noise`, the `noise budget` line, the feature columns; golden TOMLs in their own commit.
+8. Docs (`CLAUDE.md`, the guide's debug settings and the Fundamentals' sigma entry, `tools/README.md`), manifests.
+
+### Decisions (for the user)
+
+1. **Scope: the window problem only.** Loop closure and consistency keep their own weights; consistency's time-scaled
+   rotation σ (`consistency.cpp:82-91`) calls the model's formula function, which returns the σ (max(k·ARW·√dt,
+   floor)), and multiplies by its own scale as today: sharing the σ is bit-identical, sharing a weight would not be.
+   Recommended.
+2. **The per-point NDT rules stay in the term, with their parameters in the model** (not precomputed weights), because
+   the Huber weight and the projection depend on the current poses and the cell information on the map. Recommended;
+   the alternative, a per-iteration model, would mix the window's fixed noise with the solver's state.
+3. **The log: per-window line behind `log_window_noise`, the same values as feature columns with `log_window_terms`, and
+   one `noise budget` line in every run.** Recommended. Alternative: no new setting, the per-window values only in the
+   CSV.
+4. **The origin-fix quirk is kept and recorded** (finding 1); a later numeric change may fix it with a measurement.
+   Recommended: it holds the first node either way.
+5. **`ndt_window_cost` follows the term's per-grid rules** (finding 2): the weak-axis diagnostic's numbers change, no
+   result does. Recommended: a diagnostic that disagrees with the term misleads.
+6. **The velocity chi² question from stage 4 is not answered here**: the stage puts the velocity prior's covariance in
+   one place and in the log line, so the question (prior too tight, or process noise missing) can be measured after it,
+   as its own change. Recommended: a pure refactor changes no number.
+7. **The model is built once per window in `prepare_window`, with the layout**, and `WindowProblem` takes it
+   (const); `linearize` no longer rebuilds the layout. Recommended. Alternative: the problem builds the model on its
+   first linearize (keeps today's call order, but the model then lives inside the solver).
 
 ## Stage 6: the other huge functions
 
