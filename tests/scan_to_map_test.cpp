@@ -5,6 +5,7 @@
 #include "scan_to_map.h"
 #include "window_equations.h"
 #include "window_solver.h"
+#include "window_problem.h"
 #include "window_term_table.h"
 #include "accelerometer_term.h"
 #include "motion_model_terms.h"
@@ -171,28 +172,28 @@ namespace
         double delta = 0.0;
     };
 
-    // the iteration loop of run_lm_iterations (app/run_odometry.cpp): lm_factor starts at lm_factor_initial and grows as
-    // next_lm_factor says; after_iteration (optional) sees the window after each iteration; returns the last delta
+    // the run's iterations (lm_solve on the window's WindowProblem, as run_lm_iterations in app/run_odometry.cpp does), with
+    // a fixed count: no convergence stop, no time limit, no step check; after_iteration (optional) sees the window after
+    // each iteration; returns the last delta
     double run_iterations(std::vector<Point3Di> &points, Window &window, Maps &maps, const Options &o, double lm_factor_initial,
                           int iterations, Logger &logger, Eigen::Matrix3d *translation_information = nullptr,
                           const std::function<void(const IterationResult &, const Window &)> &after_iteration = {},
                           ScanToMapWorkspace *workspace = nullptr)
     {
-        double lm_factor = lm_factor_initial;
-        double delta = 0.0;
         Eigen::Vector3d acc_offset = Eigen::Vector3d::Zero();
         Eigen::Matrix3d acc_offset_cov = Eigen::Matrix3d::Identity();
-        for (int iter = 0; iter < iterations; iter++)
-        {
-            delta = 100000.0;
-            const bool applied = optimize_lidar_odometry(points, window, maps.indoor, maps.outdoor, o.scan_to_map, o.motion_model,
-                                                         o.rotation, o.translation_imu, o.velocity_prior, lm_factor, delta, acc_offset,
-                                                         acc_offset_cov, logger, translation_information, nullptr, workspace);
-            if (after_iteration)
-                after_iteration({iter, delta}, window);
-            lm_factor = next_lm_factor(lm_factor, iter, applied);
-        }
-        return delta;
+        ScanToMapWorkspace local_workspace;
+        ScanToMapWorkspace &cache = workspace ? *workspace : local_workspace;
+        WindowProblem problem(points, window, maps.indoor, maps.outdoor, o.scan_to_map, o.motion_model, o.rotation, o.translation_imu,
+                              o.velocity_prior, acc_offset, acc_offset_cov, logger, translation_information, nullptr, cache);
+        LmOptions options;
+        options.last_iteration = iterations - 1;
+        options.initial_factor = lm_factor_initial;
+        options.convergence_delta_threshold = -1.0; // the update is never below it
+        int iter = 0;
+        if (after_iteration)
+            options.after_iteration = [&](double delta) { after_iteration({iter++, delta}, window); };
+        return lm_solve(problem, options, LmWorkspace{cache.covariance, cache.damped}).delta;
     }
 
     // signed heading (yaw) of a's last node relative to b's last node [rad]
