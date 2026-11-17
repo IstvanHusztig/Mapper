@@ -1,11 +1,11 @@
 {
   "dataset": "livox3",
   "params": "settings/livox-vertical.toml",
-  "commit": "249acac",
+  "commit": "f6e25fe",
   "hd_cpu_optimization": "AUTO",
-  "created": "2026-11-16",
+  "created": "2026-11-17",
   "files": {
-    "dMapper_params_0.1.0_<DATETIME>.toml": "c80bbf65f6405240181c03818933009fcfe3e4fe511c89bc3abd6387f2bbf290",
+    "dMapper_params_0.1.0_<DATETIME>.toml": "3514d3ca7356c73e80ed3ca1a2e38782c89897e25eff0638a2131e4ff89ae795",
     "dMapper_results_0.1.0_<DATETIME>.json": "66e78cf276e67861798c79bf5b5bd7a11cc62b068e06bec228563d8e8c5723f4",
     "point_sizes_per_chunk.json": "10cfc134c55ca93c9acd0fb83fdc6cce8ab0eb6a33bde489c75e6823d4d10825",
     "scan_lio_0.laz": "6f8a7201deb4e552cf6bf1f9cfda21a03adc790df489b210f9e240763faf0c6a",
