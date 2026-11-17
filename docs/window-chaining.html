@@ -103,10 +103,15 @@ IMU rate; 180 in <code>livox-vertical.toml</code>, 0.36 s).</p>
 trajectory: a list of poses (<code>Window::poses</code>), one node every few milliseconds. On <code>raw data/44</code> there are
 <strong>690 windows of 360 nodes</strong> (248,400 nodes in all).</p>
 
-<p>Before the odometry, each window's poses come from the IMU alone, and the windows don't join up: each one starts somewhere
-on its own. The window loop <code>optimize_windows</code> (<code>src/application/run_odometry.cpp</code>) processes the windows in order, and
-each window has to start where the one before it ended. Moving a window so that it starts at a given pose while keeping its
-shape is <strong>placing</strong> it:</p>
+<p>Before the odometry, each window's poses come from the IMU alone. The IMU data is one time-ordered stream and the
+windows are consecutive pieces of it, so their <em>orientations</em> join up: the AHRS filter runs over all samples in
+order. Their <em>positions</em> don't exist yet: the IMU trajectory holds orientations only, and every node sits at
+(0, 0, 0).</p>
+<p>The window loop <code>optimize_windows</code> (<code>src/application/run_odometry.cpp</code>) processes the windows in
+order, and the optimization moves each window: it gives it positions, and it corrects its orientation, which drifts away
+from the IMU's. The next window must continue from that <em>optimized</em> end, not from where the IMU put it. Moving a
+window so that it starts at a given pose while keeping its shape (the IMU's motion from node to node) is
+<strong>placing</strong> it:</p>
 
 <pre><span class="cm">// src/domain/window_steps.cpp</span>
 void place_window_after(Window &amp;window, const Eigen::Affine3d &amp;start)
