@@ -13,6 +13,7 @@ add_executable(lidar_odometry_tests
   window_capture_test.cpp
   window_terms_test.cpp
   lm_solver_test.cpp
+  window_verdict_test.cpp
   window_cut_test.cpp
   imu_kinematics_test.cpp
   normal_equations_test.cpp
