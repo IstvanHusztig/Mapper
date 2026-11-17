@@ -68,6 +68,11 @@ struct OdometryConfig
     // diagnostics only: one line per window with its time, iterations, displacement against the guess and the previous
     // velocity, and the state of the accelerometer term (results unchanged)
     bool log_window_diagnostics = false;
+    // diagnostics only: per window and per term of the optimization its cost, and how strongly it holds the window and
+    // where it pulls it for four motions (shift, stretch, curve, turn) along travel, sideways and vertical, at the guess and
+    // at the result (window_term_table.h); one log line per window, window_terms.csv and window_features.csv in the output
+    // folder (results unchanged)
+    bool log_window_terms = false;
     // after the odometry the CLI writes odometry_snapshot.bin to the output folder, so that the post-processing can be run
     // again from it (dMapper <input> <params.toml> <output> --from-snapshot <file>) without running the odometry again
     bool save_odometry_snapshot = false;
