@@ -18,14 +18,12 @@ struct PreviousVelocity
 {
     bool use = false;
     Eigen::Vector3d velocity = Eigen::Vector3d::Zero(); // [m/s]
-    double age_s = 0.0;   // from the centre of the velocity span to the window's first node
     bool dropped = false; // faster than the limit: not used
     double speed = 0.0;   // the dropped speed [m/s]
 };
 
-// final velocity of previous over its last span_nodes nodes, and its age at window's first node;
-// a velocity faster than max_speed_mps is dropped
-PreviousVelocity estimate_previous_velocity(const Window &previous, const Window &window, int span_nodes, double max_speed_mps);
+// final velocity of previous over its last span_nodes nodes; a velocity faster than max_speed_mps is dropped
+PreviousVelocity estimate_previous_velocity(const Window &previous, int span_nodes, double max_speed_mps);
 
 // how predict_window_poses guesses the motion of a window
 struct PosePredictionOptions

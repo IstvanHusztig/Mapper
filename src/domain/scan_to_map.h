@@ -51,6 +51,19 @@ double next_lm_factor(double lm_factor, int iter, bool step_applied);
 // timing (log_stage_timing): when not null, the time of each phase is added to it
 // workspace: when not null, the Cholesky analyses are kept in it between calls (the results are the same without it)
 // returns whether the step was applied (false: the solve failed, or a big jump rejected the whole step)
+// The window's cost at the state a call starts from (lm_step_check): the NDT term (w r^T Sigma^-1 r per matched point;
+// a point in range that no cell matches costs nothing and is only counted) and every motion and IMU term (r^T W r with the
+// weights of the call). Unprojected: the degeneracy projection changes the step, not what a state costs.
+struct ScanToMapCost
+{
+    double total = 0.0;
+    double ndt = 0.0;
+    int matched = 0;   // point terms that found a cell (indoor and outdoor grid counted separately)
+    int unmatched = 0; // point terms in range that found none
+};
+
+// cost: when not null, the cost at the state the call starts from; apply_step = false only computes it (and the
+// covariances) and returns false
 bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window &window,
                              NDTBucketMapType &buckets_indoor, NDTBucketMapType &buckets_outdoor,
                              const ScanToMapOptions &scan_to_map, const MotionModelOptions &motion_model,
@@ -58,5 +71,6 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
                              const MotionModelTranslationImuOptions &translation_imu_options,
                              const VelocityPrior &velocity_prior, double lm_factor, double &delta,
                              Eigen::Vector3d &acc_offset, Eigen::Matrix3d &acc_offset_cov, Logger &logger,
-                             Eigen::Matrix3d *lidar_translation_information, ScanToMapTiming *timing = nullptr, ScanToMapWorkspace *workspace = nullptr);
+                             Eigen::Matrix3d *lidar_translation_information, ScanToMapTiming *timing = nullptr, ScanToMapWorkspace *workspace = nullptr,
+                             ScanToMapCost *cost = nullptr, bool apply_step = true);
 

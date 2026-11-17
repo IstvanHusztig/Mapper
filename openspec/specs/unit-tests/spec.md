@@ -71,7 +71,7 @@ The unit-test executable SHALL contain loop-closure scenarios that run the loop 
 - **THEN** the loop closure returns 0 and every pose is unchanged
 
 ### Requirement: Consistency pass tested on synthetic data
-The unit tests SHALL run the consistency pass, in both of its variants (a single Gaussian per cell, and several per cell over time), on a synthetic recording with a known true trajectory, without recorded data, and SHALL check the result against that truth. The tests SHALL set the consistency options themselves.
+The unit tests SHALL run the consistency pass on a synthetic recording with a known true trajectory, without recorded data, and SHALL check the result against that truth. The tests SHALL set the consistency options themselves.
 
 #### Scenario: Offsets between windows
 - **WHEN** each window's poses are moved by a small rigid offset, as the seams between odometry windows leave them
@@ -82,5 +82,37 @@ The unit tests SHALL run the consistency pass, in both of its variants (a single
 - **THEN** every node stays within 5 mm and 0.1° of the truth after the pass
 
 #### Scenario: A missed expectation
-- **WHEN** a variant does not meet one of these expectations
+- **WHEN** the pass does not meet one of these expectations
 - **THEN** that case is marked as an expected failure that names the cause, so that it is reported once it starts to pass
+
+### Requirement: Window capture tested on synthetic data
+The unit tests SHALL run the window loop on the synthetic loop recording with a capture, without recorded data, and SHALL
+check that the capture leaves the run unchanged, that the capture file gives the capture back, and that a replay with the
+same settings repeats every captured window bit for bit.
+
+#### Scenario: Capture, file and replay
+- **WHEN** one lap of the loop recording is run with a capture of 5–12 s, the capture is written to a file, read back and replayed with the same settings
+- **THEN** the poses of the run equal those of a run without capture, and every replayed window equals the captured one
+
+#### Scenario: The range of a capture
+- **WHEN** windows start at 0, 2, 4, 6 and 8 s and the capture range is 1–5 s
+- **THEN** the captured windows are those starting at 2 and 4 s, and a range in which no window starts captures nothing
+
+### Requirement: Window optimization terms tested one by one
+The unit tests SHALL test each term of the window optimization on its own, on a synthetic window, without recorded data:
+- **The cost relation:** for every term with a cost, the right-hand side the term adds SHALL equal minus half the
+  numeric gradient of its cost, over every unknown the term touches. For a term whose residual is linear in the
+  unknowns, the matrix diagonal SHALL equal half the numeric second derivative.
+- **The NDT point terms:** checked with the degeneracy projection off, with and without the Huber kernel and the
+  information scale.
+- **The degeneracy projection:** it SHALL pass the node blocks unchanged when every direction is strong, remove a weak
+  translation direction from them, and add nothing when it is off.
+- **The origin fix:** it SHALL weigh only the first node's six parameters.
+
+#### Scenario: A term's gradient
+- **WHEN** the motion-model edges are built on a turning window whose poses differ from the motion model, with bias estimation on
+- **THEN** each pose parameter's and each bias component's right-hand side equals minus half the central-difference gradient of the edges' cost
+
+#### Scenario: The degeneracy projection
+- **WHEN** the window's normal information has a share of 0.05 along z, below `degenerate_projection_ratio` 0.1
+- **THEN** each node block B enters the matrix as M B M and its right-hand side g as M g, with M removing the z translation

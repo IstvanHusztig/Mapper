@@ -130,24 +130,11 @@ itself (the inverse covariances) looks strong even in a corridor, because the sm
 <em>along</em> a flat wall, so its ratio doesn't reveal the blindness.</p>
 
 <h2>3. How dMapper uses it</h2>
-<p>Walking produces only about 0.2 m/s² of acceleration, while a 1° tilt error already leaves 0.17 m/s² of gravity in the
-accelerometer. So the accelerometer is a poor position sensor, and it is used only where the LiDAR is blind
-(<a href="index.html#p-imu"><code>[imu_translation]</code></a>):</p>
-<ol>
-  <li>After each window, the ratio of its information is computed. Below <code>imu_degenerate_information_ratio</code> (0.3),
-  the window counts as <b>degenerate</b>.</li>
-  <li>The <em>next</em> window then switches on the accelerometer term (the measured change of velocity between nodes), and
-  loosens the translation prior from 1e-4 m to <code>imu_degenerate_translation_sigma_m</code> (3e-4 m), so the
-  accelerometer can actually move the nodes along the blind direction.</li>
-  <li>After <code>imu_degenerate_max_duration_s</code> (15 s) in one degenerate stretch, the term switches off again,
-  because the accelerometer error grows with time.</li>
-  <li>Outside degenerate stretches, the gravity vector and an acceleration offset are calibrated from the LiDAR trajectory,
-  so they are ready for the next blind stretch.</li>
-</ol>
-<p>This needs <code>use_imu_acceleration_term = true</code> and <code>imu_acceleration_only_when_degenerate = true</code>;
-both are set in <code>settings/l2-vertical.toml</code>. There, however, <code>imu_always_on = true</code> replaces this gate:
-the accelerometer works in every window, weighted by its noise and a vibration floor, so the ratio no longer switches it
-(see <a href="index.html#p-imu">[imu_translation]</a>). The ratio still drives the degeneracy-aware NDT terms (section 5b).</p>
+<p>The accelerometer term (<code>imu_always_on</code>, <a href="index.html#p-imu"><code>[imu_translation]</code></a>)
+works in every window, weighted by the sensor's noise and a vibration floor, so the ratio does not switch it. The ratio
+drives the degeneracy-aware NDT terms (section 5b). An older variant used the accelerometer only in the window after a
+degenerate one, for at most 15 s, with a loosened translation prior; its on/off switch tipped on rounding and drew a ghost
+wall, and it was removed in 2026-11.</p>
 
 <h3>Measured values</h3>
 <div class="table-wrap"><table>
@@ -206,9 +193,7 @@ statistics behind the setting <code>use_exact_ndt_bucket_statistics</code> (<cod
 </table></div>
 <p>With correct normals, the ratios on real data are much lower, and the threshold of 0.3, tuned on the wrong normals, then
 marks most windows of a real recording as degenerate and switches the accelerometer term on far more often. The map came out less sharp,
-but that mixes the new statistics with the much more frequent accelerometer term. The switch stays off for now.
-The next step would be a run with <code>imu_degenerate_information_ratio</code> lowered until about as many
-windows count as degenerate as before (roughly 0.1–0.15). The test suite already runs on the exact statistics, so the corridor
+but that mixes the new statistics with the much more frequent accelerometer term. The switch stays off for now. (That gate has since been removed; the accelerometer term now works in every window.) The test suite already runs on the exact statistics, so the corridor
 test is a normal passing test.</p>
 
 <h2>5b. Ghost walls in blind passages and the degeneracy-aware NDT terms</h2>

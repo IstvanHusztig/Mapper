@@ -2,6 +2,7 @@
 #include "odometry_state.h"
 
 #include <dmapper_version.h>
+#include <build_info.h>
 #include "laz_export.h"
 #include <laszip/laszip_api.h>
 #include <nlohmann/json.hpp>
@@ -377,6 +378,13 @@ void FolderResultSink::processing_results(const OdometryConfig &config, const Od
         results["processing_info"]["build_date"] = config.build_date;
         results["processing_info"]["processing_date"] = datetime_str;
         results["processing_info"]["elapsed_time_seconds"] = elapsed_seconds;
+        // the build that made this result (build_info.h, written at build time)
+        results["build_info"]["git_commit"] = DMAPPER_GIT_COMMIT;
+        results["build_info"]["git_uncommitted_changes"] = DMAPPER_GIT_UNCOMMITTED_CHANGES;
+        results["build_info"]["build_type"] = DMAPPER_BUILD_TYPE;
+        results["build_info"]["compiler"] = DMAPPER_COMPILER;
+        results["build_info"]["cxx_flags"] = DMAPPER_CXX_FLAGS;
+        results["build_info"]["compile_definitions"] = DMAPPER_COMPILE_DEFINITIONS;
 
         // Processing results and computed values
         results["trajectory_results"]["total_length_calculated"] = state.total_length_of_calculated_trajectory;

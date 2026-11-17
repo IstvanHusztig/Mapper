@@ -1,5 +1,6 @@
 #include "toml_io.h"
 #include <iostream>
+#include <optional>
 #include <sstream>
 
 bool TomlIO::SaveParametersToTomlFile(const std::string &filepath, const OdometryConfig &params, const RunPaths &paths, const GuiPreferences &gui)
@@ -133,6 +134,148 @@ void TomlIO::read_grid_params(NdtGridParameters &grid, const toml::table *grid_t
     set_if_exists(grid, grid_tbl, "resolution_Z", &NdtGridParameters::resolution_Z);
 }
 
+namespace
+{
+    // Settings removed from dMapper. A file written before a removal still loads: the key is ignored if its value is
+    // the one the code kept (std::nullopt: any value, the setting only tuned a removed feature), and refused otherwise,
+    // because the behaviour it asks for no longer exists. Booleans compare as 0 / 1.
+    const std::map<std::string, std::optional<double>> RETIRED_KEYS = {
+        // 2026-11-16, stage 0 of docs/code-split-and-region-agents-plan.md
+        {"degenerate_projection_all_point_normals", 0.0},
+        {"carried_covariance_normal_information_only", 0.0},
+        {"ndt_unmatched_point_cost", 0.0},
+        {"use_mutliple_gaussian", 0.0},
+        {"consistency_min_distance", std::nullopt},
+        {"use_robust_and_accurate_lidar_odometry", 0.0},
+        {"distance_bucket", std::nullopt},
+        {"polar_angle_deg", std::nullopt},
+        {"azimutal_angle_deg", std::nullopt},
+        {"robust_and_accurate_lidar_odometry_iterations", std::nullopt},
+        {"distance_bucket_rigid_sf", std::nullopt},
+        {"polar_angle_deg_rigid_sf", std::nullopt},
+        {"azimutal_angle_deg_rigid_sf", std::nullopt},
+        {"robust_and_accurate_lidar_odometry_rigid_sf_iterations", std::nullopt},
+        {"max_distance_lidar_rigid_sf", std::nullopt},
+        {"rgd_sf_sigma_x_m", std::nullopt},
+        {"rgd_sf_sigma_y_m", std::nullopt},
+        {"rgd_sf_sigma_z_m", std::nullopt},
+        {"rgd_sf_sigma_om_deg", std::nullopt},
+        {"rgd_sf_sigma_fi_deg", std::nullopt},
+        {"rgd_sf_sigma_ka_deg", std::nullopt}};
+    // sections whose every key was retired
+    const std::set<std::string> RETIRED_SECTIONS = {"robust_lidar_odometry"};
+
+    // a retired key: true if handled (an error or an ignored entry added), false if `name` is not retired
+    bool check_retired(const std::string &name, const toml::node &v, const std::string &section, std::vector<std::string> &errors,
+                       std::vector<std::string> *ignored)
+    {
+        const auto it = RETIRED_KEYS.find(name);
+        if (it == RETIRED_KEYS.end())
+            return false;
+        std::optional<double> value;
+        if (v.is_boolean())
+            value = *v.value<bool>() ? 1.0 : 0.0;
+        else if (v.is_floating_point() || v.is_integer())
+            value = *v.value<double>();
+        if (!it->second || (value && *value == *it->second))
+        {
+            if (ignored)
+                ignored->push_back("'" + name + "' in [" + section + "]: setting removed from dMapper, ignored");
+        }
+        else
+            errors.push_back("'" + name + "' in [" + section + "]: setting removed from dMapper; only " +
+                             (*it->second == 0.0 ? std::string("false / 0") : std::to_string(*it->second)) +
+                             " (the behaviour that remains) is accepted");
+        return true;
+    }
+}
+
+std::vector<std::string> TomlIO::check_keys(const toml::table &tbl, std::vector<std::string> *ignored) const
+{
+    static const std::set<std::string> grid_keys = {
+        "bounding_box_min_X", "bounding_box_min_Y", "bounding_box_min_Z", "bounding_box_max_X", "bounding_box_max_Y",
+        "bounding_box_max_Z", "bounding_box_extension", "number_of_buckets_X", "number_of_buckets_Y", "number_of_buckets_Z",
+        "number_of_buckets", "resolution_X", "resolution_Y", "resolution_Z"};
+    std::map<std::string, std::string> section_of;
+    for (const auto &[category, attributes] : CATEGORIES)
+        for (const auto &attribute : attributes)
+            section_of[attribute] = category;
+
+    std::vector<std::string> errors;
+    const auto is_number = [](const toml::node &n) { return n.is_floating_point() || n.is_integer(); };
+    for (const auto &[key, node] : tbl)
+    {
+        const std::string section(key.str());
+        const toml::table *sub = node.as_table();
+        if (!sub)
+        {
+            errors.push_back("'" + section + "' is not a [section]");
+            continue;
+        }
+        if (section == "in_out_params_indoor" || section == "in_out_params_outdoor")
+        {
+            for (const auto &[gk, gv] : *sub)
+                if (!grid_keys.count(std::string(gk.str())))
+                    errors.push_back("unknown key '" + std::string(gk.str()) + "' in [" + section + "]");
+                else if (!is_number(gv))
+                    errors.push_back("'" + std::string(gk.str()) + "' in [" + section + "] is not a number");
+            continue;
+        }
+        if (RETIRED_SECTIONS.count(section))
+        {
+            for (const auto &[k, v] : *sub)
+                if (!check_retired(std::string(k.str()), v, section, errors, ignored))
+                    errors.push_back("unknown key '" + std::string(k.str()) + "' in [" + section + "]");
+            continue;
+        }
+        const auto category = CATEGORIES.find(section);
+        if (category == CATEGORIES.end())
+        {
+            errors.push_back("unknown section [" + section + "]");
+            continue;
+        }
+        const std::set<std::string> allowed(category->second.begin(), category->second.end());
+        for (const auto &[k, v] : *sub)
+        {
+            const std::string name(k.str());
+            if (!allowed.count(name))
+            {
+                if (check_retired(name, v, section, errors, ignored))
+                    continue;
+                const auto home = section_of.find(name);
+                errors.push_back(home != section_of.end()
+                                     ? "'" + name + "' is in [" + section + "] but belongs in [" + home->second + "]"
+                                     : "unknown key '" + name + "' in [" + section + "]");
+                continue;
+            }
+            bool ok = true;
+            if (name == "clear_color")
+                ok = v.is_array();
+            else if (RUN_PATH_POINTERS.count(name))
+                ok = v.is_string();
+            else if (MOTION_MODEL_CORRECTION_POINTERS.count(name))
+                ok = is_number(v);
+            else if (const auto it = POINTERS.find(name); it != POINTERS.end())
+                std::visit([&](auto ptr)
+                           {
+                               using MemberType = std::remove_reference_t<decltype(std::declval<OdometryConfig &>().*ptr)>;
+                               if constexpr (std::is_same_v<MemberType, bool>)
+                                   ok = v.is_boolean();
+                               else if constexpr (std::is_same_v<MemberType, int>)
+                                   ok = v.is_integer();
+                               else if constexpr (std::is_same_v<MemberType, double>)
+                                   ok = is_number(v);
+                               else
+                                   ok = v.is_string();
+                           },
+                           it->second);
+            if (!ok)
+                errors.push_back("'" + name + "' in [" + section + "] has the wrong type");
+        }
+    }
+    return errors;
+}
+
 bool TomlIO::LoadParametersFromTomlFile(const std::string &filepath, OdometryConfig &params, RunPaths &paths, GuiPreferences &gui)
 {
     toml::table tbl;
@@ -146,6 +289,18 @@ bool TomlIO::LoadParametersFromTomlFile(const std::string &filepath, OdometryCon
                   << err << "\n";
         return false;
     }
+    // a key the loader would not read (unknown, in the wrong section, or of the wrong type) refuses the whole file: before
+    // this check it was skipped or read as 0 without a word, so a run could silently use other settings than written
+    std::vector<std::string> ignored;
+    if (const std::vector<std::string> errors = check_keys(tbl, &ignored); !errors.empty())
+    {
+        std::cerr << "Settings file refused: " << filepath << "\n";
+        for (const auto &e : errors)
+            std::cerr << "  " << e << "\n";
+        return false;
+    }
+    for (const auto &i : ignored)
+        std::cerr << "Settings file " << filepath << ": " << i << "\n";
     for (const auto &[category, attributes] : CATEGORIES)
     {
         auto cat_it = tbl.find(category);

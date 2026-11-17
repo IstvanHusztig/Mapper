@@ -71,13 +71,18 @@ struct OdometryConfig
     // after the odometry the CLI writes odometry_snapshot.bin to the output folder, so that the post-processing can be run
     // again from it (dMapper <input> <params.toml> <output> --from-snapshot <file>) without running the odometry again
     bool save_odometry_snapshot = false;
+    // window capture (CLI): the loop's state before the first window that starts at or after capture_windows_from_s, the
+    // windows up to the last one that starts at or before capture_windows_to_s (seconds from the first window's start, as
+    // time_s of log_window_diagnostics), their points and what the run made of them, written to
+    // window_capture_<from>-<to>s.bin in the output folder. dMapper --replay <file> <params.toml> runs the range again in
+    // seconds. Off while capture_windows_to_s < capture_windows_from_s or capture_windows_from_s < 0.
+    double capture_windows_from_s = -1.0;
+    double capture_windows_to_s = -1.0;
     int calibration_validation_points = 1000000;
 
     //consistency
     bool use_consistency = false;   // run the whole-trajectory consistency pass after the odometry (CLI; the GUI has a button)
     int num_constistency_iter = 10;
-    bool use_mutliple_gaussian = false;
-    double consistency_min_distance = 0.4; // points closer (3D norm) are skipped in Consistency2 (masks the operator's body)
     // gyro rotation term in Consistency: consecutive nodes of a window keep the IMU's relative rotation (orientation
     // increments minus the window's gyro bias), sigma = consistency_gyro_sigma_scale x the odometry's time-scaled rotation
     // sigma; a window whose IMU rotation differs from its odometry result by more than consistency_gyro_gate_deg gets none
@@ -197,41 +202,16 @@ struct OdometryConfig
     double zero_velocity_acc_threshold_mps2 = 0.3; // max |world acceleration| inside the window
     double zero_velocity_gyro_threshold_deg_s = 3.0; // max rotation rate inside the window
 
-    // accelerometer as a soft measurement inside the window optimization: the change of world-frame velocity between
-    // nodes ~imu_acceleration_span_s apart must match the measured acceleration R * f - g minus an offset e;
-    // e (3 unknowns per window, absorbs tilt and accelerometer bias errors) is carried across windows as a prior.
-    // The prediction stays constant velocity. Usually combined with looser lidar_odometry_motion_model_x/y/z_1_sigma_m.
-    bool use_imu_acceleration_term = false;
-    double imu_acceleration_sigma_mps2 = 0.5;                 // accuracy of the measured acceleration
+    // the accelerometer in every window after the first: the change of world-frame velocity between nodes
+    // ~imu_acceleration_span_s apart must match the measured acceleration R * f - g minus an offset e (3 unknowns per window,
+    // absorbs tilt and accelerometer bias errors, carried across windows as a prior). Each term is weighted by the sensor's
+    // noise, sigma^2 = density^2 / span + floor^2; the window's start and end velocities are unknowns, the start with a prior
+    // carried from the previous window's end (its marginal covariance, grown over the gap); a window at rest gets a
+    // zero-velocity measurement. Off: no accelerometer term (only the velocity-continuity prior).
+    bool imu_always_on = false;
     double imu_acceleration_span_s = 0.01;                    // node spacing of the velocity-change terms
     double imu_acceleration_offset_initial_sigma_mps2 = 0.5;  // prior sigma of e in the first window
     double imu_acceleration_offset_rw_mps2_sqrt_s = 0.05;     // e prior sigma grows by rw * sqrt(window duration)
-    // IMU samples the trajectory velocities of the gravity calibration are averaged over (observed_acceleration_offset);
-    // counted in samples like threshold_nr_poses, so set per sensor for its IMU rate (20 = 20 ms at 1 kHz)
-    int imu_acceleration_offset_span_nr_samples = 20;
-    // use the accelerometer term only where the LiDAR geometry does not constrain the translation in some direction
-    // (smallest / largest eigenvalue of sum(n * n^T) over the surface normals the points are matched to, below
-    // imu_degenerate_information_ratio; decided from the previous window),
-    // for at most imu_degenerate_max_duration_s per such stretch; outside, e is calibrated from the LiDAR trajectory
-    bool imu_acceleration_only_when_degenerate = false;
-    double imu_degenerate_information_ratio = 0.05;
-    double imu_degenerate_max_duration_s = 15.0;
-    double imu_degenerate_translation_sigma_m = 3e-4; // lidar_odometry_motion_model_x/y/z_1_sigma_m while the term is active
-    // continuous weight instead of the on/off gate: with imu_degenerate_weight_ratio_full above imu_degenerate_information_ratio,
-    // the term's weight is 1 at or below imu_degenerate_information_ratio, 0 at or above imu_degenerate_weight_ratio_full and
-    // linear in between, from the median ratio of the last imu_degenerate_smoothing_windows windows; the accelerometer sigma is
-    // divided by sqrt(weight) and the translation sigma moves from the normal one towards imu_degenerate_translation_sigma_m.
-    // 0 = the on/off gate (previous window's ratio below imu_degenerate_information_ratio)
-    double imu_degenerate_weight_ratio_full = 0.0;
-    int imu_degenerate_smoothing_windows = 5;
-    // keep the acceleration offset where it is along the window's weakest LiDAR direction while the term is active (it is not
-    // observable there: the LiDAR can't see the motion it would explain)
-    bool imu_acceleration_offset_freeze_blind = false;
-    // the accelerometer in every window after the first (implies use_imu_acceleration_term; the degenerate gate, its time limit,
-    // its loosened translation sigma and the gravity calibration are not used): each term weighted by the sensor's noise,
-    // sigma^2 = density^2 / span + floor^2; the window's start and end velocities are unknowns, the start with a prior carried from
-    // the previous window's end (its marginal covariance, grown over the gap); a window at rest gets a zero-velocity measurement
-    bool imu_always_on = false;
     double imu_accel_noise_density_mps2_sqrt_hz = 0.0013; // the sensor's accelerometer noise density, measured at rest (largest axis); set per sensor in its TOML
     double imu_accel_floor_sigma_mps2 = 0.1;               // walking vibration and unmodelled effects; set per sensor in its TOML
     double imu_velocity_initial_sigma_mps = 1.0;           // velocity prior of the first window with the term, if not at rest
@@ -243,6 +223,20 @@ struct OdometryConfig
     // it and degenerate_projection_ratio_full the NDT information is scaled linearly. degenerate_projection_ratio_full = 0: off
     double degenerate_projection_ratio = 0.0;
     double degenerate_projection_ratio_full = 0.0;
+    // Levenberg-Marquardt step check: a step that raises the window's cost (ScanToMapCost: NDT plus every motion and IMU
+    // term) is taken back and the damping raised x10; the window ends at the lowest-cost state it reached. Off: every step
+    // that solves is taken.
+    bool lm_step_check = false;
+    // Huber kernel on the NDT point terms: a point whose Mahalanobis distance d = sqrt(r^T Sigma^-1 r) to its cell
+    // exceeds this cutoff is weighted cutoff / d (constant pull instead of one growing with d), and costs
+    // 2 cutoff d - cutoff^2 instead of d^2. 0 = off. Codex's diagnostic DMAPPER_DIAGNOSTIC_NDT_HUBER3 (cbca36d) used 3.
+    double ndt_huber_cutoff = 0.0;
+    // Multiplier on every NDT point term's information (solve and cost), applied after the Huber weight. 1 = off.
+    // Codex's good Livox 3 build (cbca36d) had 0.1, as the compile-time define DMAPPER_EXPERIMENT_NDT_SCALE ("alpha").
+    double ndt_information_scale = 1.0;
+    // Multiplier on the x/y/z motion-model position weights in windows where the accelerometer term is active. 1 = off.
+    // Codex's good Livox 3 build had 0.1, as DMAPPER_EXPERIMENT_MOTION_XYZ_SCALE ("beta").
+    double imu_position_information_scale = 1.0;
 
     // motion_model first trajectory node prior uncertainty
     double lidar_odometry_motion_model_fix_origin_x_1_sigma_m = 0.000001;
@@ -254,24 +248,6 @@ struct OdometryConfig
 
     // motion model correction (experimental --> not recommended yet)
     TaitBryanPose motion_model_correction;
-
-    // robust lidar odometry control (experimental --> not recommended yet)
-    bool use_robust_and_accurate_lidar_odometry = false;
-    double distance_bucket = 0.2;
-    double polar_angle_deg = 10.0;
-    double azimutal_angle_deg = 10.0;
-    int robust_and_accurate_lidar_odometry_iterations = 20;
-    double distance_bucket_rigid_sf = 0.5;
-    double polar_angle_deg_rigid_sf = 10.0;
-    double azimutal_angle_deg_rigid_sf = 10.0;
-    int robust_and_accurate_lidar_odometry_rigid_sf_iterations = 30;
-    double max_distance_lidar_rigid_sf = 70.0;
-    double rgd_sf_sigma_x_m = 0.001;
-    double rgd_sf_sigma_y_m = 0.001;
-    double rgd_sf_sigma_z_m = 0.001;
-    double rgd_sf_sigma_om_deg = 0.01;
-    double rgd_sf_sigma_fi_deg = 0.01;
-    double rgd_sf_sigma_ka_deg = 0.01;
 
     bool use_remove_imu_bias_from_first_stationary_scan = true;
     // start-up gyro bias: the per-axis median of the first N IMU samples (set N for the sensor's IMU rate, about 1 s of

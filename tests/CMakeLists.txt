@@ -10,6 +10,8 @@ add_executable(lidar_odometry_tests
   optimizer_options_test.cpp
   window_steps_test.cpp
   holdout_test.cpp
+  window_capture_test.cpp
+  window_terms_test.cpp
   window_cut_test.cpp
   imu_kinematics_test.cpp
   normal_equations_test.cpp
@@ -23,6 +25,7 @@ add_executable(lidar_odometry_tests
   loop_closure_test.cpp
   consistency_test.cpp
   orientation_test.cpp
+  fusion_orientation_test.cpp
   gui_view_model_test.cpp)
 
 # the code under test comes from the layer libraries (lo_gui_view_model brings lo_infrastructure, lo_application and
@@ -32,6 +35,7 @@ target_link_libraries(lidar_odometry_tests PRIVATE lo_gui_view_model lo_infrastr
 target_include_directories(
   lidar_odometry_tests
   PRIVATE ${EXTERNAL_LIBRARIES_DIRECTORY}/doctest
+          ${EXTERNAL_LIBRARIES_DIRECTORY}/Fusion/Fusion
           ${EXTERNAL_LIBRARIES_DIRECTORY}
           ${EIGEN3_INCLUDE_DIR}
           ${EXTERNAL_LIBRARIES_DIRECTORY}/json/include

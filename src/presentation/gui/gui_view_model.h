@@ -21,6 +21,8 @@ struct RunNotifier
     virtual ~RunNotifier() = default;
     // the recording could not be loaded; the run ends here
     virtual void load_failed(const std::string &folder) = 0;
+    // the run threw (e.g. a non-finite NDT distance): nothing is saved
+    virtual void run_failed(const std::string &reason) = 0;
     // the result is saved next to the recording, in its next lio_result_<n>
     virtual void run_saved(const std::string &working_directory, double trajectory_length_m, double elapsed_seconds) = 0;
 };

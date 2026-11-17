@@ -83,39 +83,6 @@ std::vector<Eigen::Vector3d> world_acceleration(const std::vector<Eigen::Affine3
     return smoothed;
 }
 
-// acceleration offset e [m/s^2] seen in an optimized window: (integral of the IMU acceleration - change of the
-// trajectory velocity) / T, both over the nodes k1..k2; the velocities are averaged over span nodes (false if span < 1)
-bool observed_acceleration_offset(const std::vector<Eigen::Affine3d> &trajectory,
-                                  const std::vector<std::pair<double, double>> &timestamps,
-                                  const std::vector<Eigen::Vector3d> &acc, const Eigen::Vector3d &gravity,
-                                  double to_mps2, int tail_nodes, int span, Eigen::Vector3d &offset)
-{
-    if (span < 1)
-        return false;
-    const int n = static_cast<int>(trajectory.size());
-    const int k1 = span;
-    const int k2 = n - 1 - std::max(tail_nodes, 0); // tail nodes are re-propagated, not optimized
-    if (k2 - k1 < 2 * span || static_cast<int>(timestamps.size()) != n || static_cast<int>(acc.size()) != n)
-        return false;
-    auto velocity_at = [&](int k)
-    {
-        const double dt = timestamps[k].first - timestamps[k - span].first;
-        return dt > 0.0 ? Eigen::Vector3d((trajectory[k].translation() - trajectory[k - span].translation()) / dt) : Eigen::Vector3d::Zero();
-    };
-    // velocities are averages over [k - span, k]: integrate the acceleration between their centres
-    Eigen::Vector3d dv_imu = Eigen::Vector3d::Zero();
-    for (int k = k1 - span / 2; k < k2 - span / 2; k++)
-    {
-        const double dt = timestamps[k + 1].first - timestamps[k].first;
-        dv_imu += (Eigen::Quaterniond(trajectory[k].linear()).normalized() * acc[k] - gravity) * to_mps2 * dt;
-    }
-    const double T = timestamps[k2 - span / 2].first - timestamps[k1 - span / 2].first;
-    if (T <= 0.0)
-        return false;
-    offset = (dv_imu - (velocity_at(k2) - velocity_at(k1))) / T;
-    return true;
-}
-
 // true if the device rests during the whole window: small world acceleration and small rotation rate
 bool is_window_stationary(const std::vector<Eigen::Affine3d> &trajectory,
                           const std::vector<std::pair<double, double>> &timestamps,

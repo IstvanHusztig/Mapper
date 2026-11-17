@@ -26,7 +26,7 @@ void place_windows_after(std::vector<Window> &windows, size_t first)
         place_window_after(windows[j], windows[j - 1].poses[windows[j - 1].poses.size() - 1]);
 }
 
-PreviousVelocity estimate_previous_velocity(const Window &previous, const Window &window, int span_nodes, double max_speed_mps)
+PreviousVelocity estimate_previous_velocity(const Window &previous, int span_nodes, double max_speed_mps)
 {
     PreviousVelocity r;
     const auto &prev_tr = previous.poses;
@@ -40,9 +40,6 @@ PreviousVelocity estimate_previous_velocity(const Window &previous, const Window
         {
             r.velocity = (prev_tr[n - 1].translation() - prev_tr[n - 1 - k].translation()) / dt;
             r.use = true;
-            const auto &ts_i = window.timestamps;
-            if (!ts_i.empty())
-                r.age_s = std::max(ts_i[0].first - 0.5 * (prev_ts[n - 1].first + prev_ts[n - 1 - k].first), 0.0);
         }
     }
 

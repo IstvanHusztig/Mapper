@@ -25,6 +25,8 @@ struct ScanToMapOptions
     // degeneracy-aware NDT terms (see OdometryConfig::degenerate_projection_ratio); ratio_full = 0: off
     double degenerate_projection_ratio = 0.0;
     double degenerate_projection_ratio_full = 0.0;
+    double huber_cutoff = 0.0;         // OdometryConfig::ndt_huber_cutoff; 0 = off
+    double information_scale = 1.0;    // OdometryConfig::ndt_information_scale; 1 = off
 };
 
 // motion model of a window: correction of the IMU frame and the sigmas of the consecutive-node and fix-origin priors
@@ -69,23 +71,21 @@ struct MotionModelRotationOptions
 
 MotionModelRotationOptions get_motion_model_rotation_options(const OdometryConfig &params);
 
-// translation part of the motion model: accelerometer as a soft measurement of the change of velocity (see OdometryConfig)
+// translation part of the motion model: the accelerometer term (imu_always_on, see OdometryConfig). Noise from the sensor,
+// the node rotations in the term, the window's start and end velocity as unknowns (Window::velocity), the start with a
+// prior; a window at rest gets a zero-velocity measurement on both
 struct MotionModelTranslationImuOptions
 {
     bool enabled = false;
     const std::vector<Eigen::Vector3d> *acc = nullptr;           // raw accelerometer of each node, body frame [accelerometer units]
     Eigen::Vector3d gravity = Eigen::Vector3d::Zero();           // gravity in the odometry frame [accelerometer units]
     double to_mps2 = 9.80665;                                    // [m/s^2] per accelerometer unit
-    double sigma_mps2 = 0.5;
     double span_s = 0.01;
-    double prev_velocity_age_s = 0.0;                            // time from the centre of prev_velocity to the first node
     Eigen::Vector3d offset_prior_mean = Eigen::Vector3d::Zero(); // [m/s^2]
     Eigen::Matrix3d offset_prior_cov = Eigen::Matrix3d::Identity();
-    // imu_always_on: noise from the sensor, rotations in the term, the window's start and end velocity as unknowns
-    // (Window::velocity), the start with a prior; a window at rest gets a zero-velocity measurement on both
-    bool always_on = false;
     double noise_density_mps2_sqrt_hz = 0.0;
     double floor_sigma_mps2 = 0.0;
+    double position_information_scale = 1.0; // OdometryConfig::imu_position_information_scale: x/y/z motion-model weights while the term is active
     Eigen::Vector3d velocity_prior_mean = Eigen::Vector3d::Zero();     // [m/s]
     Eigen::Matrix3d velocity_prior_cov = Eigen::Matrix3d::Identity(); // [(m/s)^2]
     bool at_rest = false;

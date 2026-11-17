@@ -12,7 +12,6 @@
 #include <structures.h>
 
 using NDTBucketMapType = std::unordered_map<uint64_t, NdtBucket>;
-using NDTBucketMapType2 = std::unordered_map<uint64_t, NdtBucket2>;
 
 // The inverse covariance of a cell as the point loops use it, and whether the cell may be used at all (an entry of the
 // inverse beyond +-100000 means a nearly flat cell and the cell is skipped). update_rgd stores both in the cell once, so
@@ -51,8 +50,5 @@ std::vector<Point3Di> decimate(const std::vector<Point3Di> &points, double bucke
 // false the previous ones
 void update_rgd(const NdtGridParameters &rgd_params, NDTBucketMapType &buckets,
                 std::vector<Point3Di> &points_global, Eigen::Vector3d viewport, bool exact);
-
-void update_rgd_spherical_coordinates(const NdtGridParameters &rgd_params, NDTBucketMapType &buckets,
-                                      std::vector<Point3Di> &points_global, std::vector<Eigen::Vector3d> &points_global_spherical);
 
 #endif

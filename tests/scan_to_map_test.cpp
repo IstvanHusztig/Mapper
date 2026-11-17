@@ -1,7 +1,9 @@
 #include <doctest/doctest.h>
 
 #include "angle_units.h"
+#include "ndt_term.h"
 #include "scan_to_map.h"
+#include "window_equations.h"
 #include "window_steps.h"
 #include <transformations.h>
 #include "synthetic_recording.h"
@@ -9,6 +11,10 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <functional>
 #include <random>
 #include <string>
@@ -726,6 +732,7 @@ namespace
         double translation_sigma_m = 1e-3;
         double offset_sigma = 0.01;      // acceleration offset prior: a carried bias, not a fresh one
         double rotation_sigma_deg = 0.0; // > 0: constant rotation sigmas instead of the gyro's (time-scaled ARW)
+        bool project_degenerate = true;         // the shipped degeneracy-aware NDT terms (0.1 / 0.2)
     };
 
     // runs 30 iterations; the accelerometer reads the specific force R^T (a + g) in g
@@ -742,8 +749,8 @@ namespace
         }
         Options o = options_from(c);
         // the shipped degeneracy-aware NDT terms: without them, planar cells keep an in-plane pull along the corridor
-        o.scan_to_map.degenerate_projection_ratio = 0.1;
-        o.scan_to_map.degenerate_projection_ratio_full = 0.2;
+        o.scan_to_map.degenerate_projection_ratio = k.project_degenerate ? 0.1 : 0.0;
+        o.scan_to_map.degenerate_projection_ratio_full = k.project_degenerate ? 0.2 : 0.0;
         Maps maps = build_maps(s, o.scan_to_map);
         std::vector<Point3Di> points = k.points ? observe(s, k.truth) : std::vector<Point3Di>{};
         Window w = make_window(k.guess);
@@ -766,7 +773,6 @@ namespace
             o.translation_imu.to_mps2 = g_mps2;
             o.translation_imu.span_s = 0.008; // one term per node: anchors 10 ms apart, well inside the 2 * span_s gap limit
             o.translation_imu.offset_prior_cov = Eigen::Matrix3d::Identity() * k.offset_sigma * k.offset_sigma;
-            o.translation_imu.always_on = true;
             o.translation_imu.noise_density_mps2_sqrt_hz = 0.0013;
             o.translation_imu.floor_sigma_mps2 = 0.1;
             o.translation_imu.velocity_prior_mean = k.velocity_prior;
@@ -912,4 +918,284 @@ TEST_CASE("scan-to-map, imu always on: a gap in the IMU samples drops the stretc
     MESSAGE("IMU gap: largest position error ", e.position * 1000.0, " mm; end velocity ", w.velocity.end.x(), " m/s");
     CHECK(e.position < 0.002);
     CHECK(std::isfinite(w.velocity.end.x()));
+}
+
+// lm_step_check (candidate 2 of synthetic-retune 4.8, ported): the cost a call reports is the cost of the state it starts
+// from; a wrong state costs more than the truth, and a point that falls into no cell costs nothing but is counted
+TEST_CASE("scan-to-map: the window cost is lowest at the truth and counts points off the map")
+{
+    Options o = options_from(test_config());
+    const Scene s = room();
+    Maps maps = build_maps(s, o.scan_to_map);
+    const std::vector<Eigen::Affine3d> truth = true_poses();
+    std::vector<Point3Di> points = observe(s, truth);
+    NullLogger logger;
+    const auto cost_at = [&](const std::vector<Eigen::Affine3d> &poses)
+    {
+        Window w = make_window(poses);
+        w.motion_model_poses = truth;
+        double delta = 0.0;
+        Eigen::Vector3d acc_offset = Eigen::Vector3d::Zero();
+        Eigen::Matrix3d acc_offset_cov = Eigen::Matrix3d::Identity();
+        ScanToMapCost c;
+        const bool applied = optimize_lidar_odometry(points, w, maps.indoor, maps.outdoor, o.scan_to_map, o.motion_model, o.rotation,
+                                                     o.translation_imu, o.velocity_prior, 5.0, delta, acc_offset, acc_offset_cov, logger,
+                                                     nullptr, nullptr, nullptr, &c, false);
+        CHECK_FALSE(applied); // apply_step = false: nothing applied
+        CHECK(w.poses[0].matrix() == poses[0].matrix());
+        return c;
+    };
+    std::vector<Eigen::Affine3d> shifted_poses = truth, far = truth;
+    for (auto &p : shifted_poses)
+        p.translation() += Eigen::Vector3d(0.08, -0.05, 0.03);
+    for (auto &p : far)
+        p.translation() += Eigen::Vector3d(500.0, 0.0, 0.0);
+    const ScanToMapCost at_truth = cost_at(truth), at_shift = cost_at(shifted_poses), at_far = cost_at(far);
+    MESSAGE("window cost: truth ", at_truth.total, " (", at_truth.matched, " matched, ", at_truth.unmatched, " unmatched), shifted ",
+            at_shift.total, ", 500 m away ", at_far.total, " (", at_far.unmatched, " unmatched)");
+    CHECK(at_truth.total < at_shift.total);
+    CHECK(at_far.matched == 0);
+    CHECK(at_far.unmatched > 0);
+    CHECK(at_far.ndt == 0.0);
+}
+
+
+// Characterization guard of stages 2-5 of docs/code-split-and-region-agents-plan.md (split of optimize_lidar_odometry):
+// runs the optimizer over a matrix of option branches that no shipped run reaches (cost, planarity and range weights, no
+// projection, no outdoor grid or view-point test, constant rotation sigmas, no bias estimation, no timestamps, the
+// translation information, Huber and the information scales, velocity continuity, the accelerometer term with rest, an
+// IMU gap and an untied end velocity, the bias clamp, a big jump, the cost-only call) and writes every output, as exact
+// hexadecimal doubles, to a file. A refactor must reproduce the file byte for byte (compare with fc /b or cmp). Not a
+// regression test of values: the bits may differ between compilers and between Release and Debug, so the file is not
+// committed. Run: lidar_odometry_tests -tc="scan-to-map characterization*" --no-skip; the file is
+// LO_CHARACTERIZATION_OUT, or scan_to_map_characterization.txt in the temp folder.
+namespace
+{
+    struct Characterization
+    {
+        std::string name;
+        std::function<void(OdometryConfig &)> config;
+        std::function<void(Options &, Window &, std::vector<Point3Di> &)> setup; // after the options and the window are made
+        bool imu = false;
+        bool at_rest = false;
+        bool gap = false;          // a 50 ms gap in the IMU after node 24, and 50 ms more before the last node
+        bool no_timestamps = false;
+        bool cost = false;         // the cost is asked for (lm_step_check)
+        bool cost_only = false;    // apply_step = false on every call
+        bool information = false;  // the translation information is asked for (log_window_diagnostics)
+    };
+
+    void write_hex(std::ostream &out, double v)
+    {
+        char buffer[64];
+        std::snprintf(buffer, sizeof(buffer), "%a ", v);
+        out << buffer;
+    }
+
+    template <typename M>
+    void write_matrix(std::ostream &out, const char *label, const M &m)
+    {
+        out << label << ' ';
+        for (int i = 0; i < m.size(); i++)
+            write_hex(out, m.data()[i]);
+        out << '\n';
+    }
+}
+
+TEST_CASE("scan-to-map characterization: every output over the option branches, as exact bits" * doctest::skip())
+{
+    const auto base = [](OdometryConfig &c)
+    {
+        c.use_gyro_bias_estimation = true;
+        c.degenerate_projection_ratio = 0.1;
+        c.degenerate_projection_ratio_full = 0.2;
+    };
+    const std::vector<Characterization> cases = {
+        {"base", base, {}},
+        {"no projection", [&](OdometryConfig &c) { base(c); c.degenerate_projection_ratio = c.degenerate_projection_ratio_full = 0.0; }, {}},
+        {"planarity and range weights", [&](OdometryConfig &c) { base(c); c.ablation_study_use_planarity = c.ablation_study_use_norm = true; }, {}},
+        {"planarity weight", [&](OdometryConfig &c) { base(c); c.ablation_study_use_planarity = true; }, {}},
+        {"range weight", [&](OdometryConfig &c) { base(c); c.ablation_study_use_norm = true; }, {}},
+        {"range weight, no projection", [&](OdometryConfig &c) { base(c); c.ablation_study_use_norm = true; c.degenerate_projection_ratio_full = 0.0; }, {}},
+        {"no outdoor grid, no view-point test", [&](OdometryConfig &c) { base(c); c.ablation_study_use_hierarchical_rgd = false; c.ablation_study_use_view_point_and_normal_vectors = false; }, {}},
+        {"constant rotation sigmas", [&](OdometryConfig &c) { base(c); c.use_time_scaled_rotation_sigma = false; }, {}},
+        {"no bias estimation", [](OdometryConfig &c) { c.degenerate_projection_ratio = 0.1; c.degenerate_projection_ratio_full = 0.2; }, {}},
+        {"Huber and scales", [&](OdometryConfig &c) { base(c); c.ndt_huber_cutoff = 3.0; c.ndt_information_scale = 0.1; }, {}},
+        {"motion model correction", [&](OdometryConfig &c) { base(c); c.motion_model_correction.om = 0.01; c.motion_model_correction.ka = -0.02; }, {}},
+        {"cost", base, {}, false, false, false, false, true},
+        {"cost, Huber and scales, no projection", [&](OdometryConfig &c) { base(c); c.ndt_huber_cutoff = 3.0; c.ndt_information_scale = 0.1; c.degenerate_projection_ratio_full = 0.0; }, {}, false, false, false, false, true},
+        {"cost only", base, {}, false, false, false, false, true, true},
+        {"translation information", base, {}, false, false, false, false, false, false, true},
+        {"no timestamps", base, {}, false, false, false, true},
+        {"velocity continuity with the previous velocity", base,
+         [](Options &o, Window &, std::vector<Point3Di> &) { o.velocity_prior = VelocityPrior{true, Eigen::Vector3d(1.0, 0.05, 0.0)}; }},
+        {"accelerometer", base, {}, true},
+        {"accelerometer, position scale, cost", base,
+         [](Options &o, Window &, std::vector<Point3Di> &) { o.translation_imu.position_information_scale = 0.1; }, true, false, false, false, true},
+        {"accelerometer at rest", base, {}, true, true},
+        {"accelerometer, IMU gaps", base, {}, true, false, true},
+        {"bias clamp", [&](OdometryConfig &c) { base(c); c.gyro_bias_max_deg_s = 0.001; },
+         [](Options &, Window &w, std::vector<Point3Di> &) { w.gyro_bias.mean = Eigen::Vector3d(0.0, 0.0, 0.05); }},
+        // the motion-model poses 1.5 m from the guess (the origin fix holds the window where it is): every step is a big jump
+        {"big jump", base, [](Options &, Window &w, std::vector<Point3Di> &) { for (auto &p : w.motion_model_poses) p.translation().x() += 1.5; }},
+    };
+
+    const char *env = std::getenv("LO_CHARACTERIZATION_OUT");
+    const std::string file = env ? std::string(env) : (std::filesystem::temp_directory_path() / "scan_to_map_characterization.txt").string();
+    std::ofstream out(file, std::ios::binary | std::ios::trunc);
+    REQUIRE(out);
+    const Scene s = room();
+    const std::vector<Eigen::Affine3d> truth = true_poses();
+    NullLogger logger;
+    for (const Characterization &k : cases)
+    {
+        OdometryConfig c = test_config();
+        k.config(c);
+        Options o = options_from(c);
+        Maps maps = build_maps(s, o.scan_to_map);
+        std::vector<Point3Di> points = observe(s, truth);
+        // the guess: the truth with a growing offset and a small yaw drift, so every call takes a step
+        std::vector<Eigen::Affine3d> guess = truth;
+        for (int i = 0; i < n_nodes; i++)
+        {
+            guess[i].translation() += Eigen::Vector3d(0.03, -0.018, 0.009) * (double(i) / (n_nodes - 1));
+            guess[i].linear() = Eigen::AngleAxisd(0.002 * i, Eigen::Vector3d::UnitZ()).toRotationMatrix() * guess[i].linear();
+        }
+        Window w = make_window(guess);
+        if (k.gap)
+            for (int i = 0; i < n_nodes; i++)
+            {
+                const double t = i * node_dt + (i >= 25 ? 0.05 : 0.0) + (i == n_nodes - 1 ? 0.05 : 0.0);
+                w.timestamps[i] = {t, t};
+            }
+        std::vector<Eigen::Vector3d> acc;
+        for (int i = 0; i < n_nodes; i++)
+            acc.push_back(truth[i].linear().transpose() * Eigen::Vector3d(0.0, 0.0, g_mps2) / g_mps2);
+        if (k.imu)
+        {
+            o.translation_imu.enabled = true;
+            o.translation_imu.acc = &acc;
+            o.translation_imu.gravity = Eigen::Vector3d(0.0, 0.0, 1.0);
+            o.translation_imu.to_mps2 = g_mps2;
+            o.translation_imu.span_s = 0.008;
+            o.translation_imu.offset_prior_cov = Eigen::Matrix3d::Identity() * 0.01 * 0.01;
+            o.translation_imu.noise_density_mps2_sqrt_hz = 0.0013;
+            o.translation_imu.floor_sigma_mps2 = 0.1;
+            o.translation_imu.velocity_prior_mean = Eigen::Vector3d(1.0, 0.0, 0.0);
+            o.translation_imu.velocity_prior_cov = Eigen::Matrix3d::Identity() * 0.02 * 0.02;
+            o.translation_imu.at_rest = k.at_rest;
+            o.translation_imu.zero_velocity_sigma_mps = 0.01;
+            w.velocity.start = w.velocity.end = o.translation_imu.velocity_prior_mean;
+        }
+        if (k.setup)
+            k.setup(o, w, points);
+        if (k.no_timestamps)
+            w.timestamps.clear();
+
+        out << "case " << k.name << '\n';
+        double lm_factor = 5.0;
+        Eigen::Vector3d acc_offset(0.001, -0.002, 0.0005);
+        Eigen::Matrix3d acc_offset_cov = Eigen::Matrix3d::Identity() * 1e-4;
+        ScanToMapWorkspace workspace;
+        for (int iter = 0; iter < 3; iter++)
+        {
+            double delta = 100000.0;
+            ScanToMapCost cost;
+            Eigen::Matrix3d information = Eigen::Matrix3d::Constant(-1.0);
+            const bool applied = optimize_lidar_odometry(points, w, maps.indoor, maps.outdoor, o.scan_to_map, o.motion_model, o.rotation,
+                                                         o.translation_imu, o.velocity_prior, lm_factor, delta, acc_offset, acc_offset_cov,
+                                                         logger, k.information ? &information : nullptr, nullptr, &workspace,
+                                                         k.cost ? &cost : nullptr, !k.cost_only);
+            out << "call " << iter << " applied " << applied << " delta ";
+            write_hex(out, delta);
+            out << '\n';
+            for (const Eigen::Affine3d &p : w.poses)
+                write_matrix(out, "pose", p.matrix());
+            write_matrix(out, "bias", w.gyro_bias.mean);
+            write_matrix(out, "bias_cov", w.gyro_bias.covariance);
+            write_matrix(out, "v_start", w.velocity.start);
+            write_matrix(out, "v_end", w.velocity.end);
+            write_matrix(out, "v_end_cov", w.velocity.end_covariance);
+            write_matrix(out, "offset", acc_offset);
+            write_matrix(out, "offset_cov", acc_offset_cov);
+            if (k.information)
+                write_matrix(out, "information", information);
+            if (k.cost)
+            {
+                out << "cost ";
+                write_hex(out, cost.total);
+                write_hex(out, cost.ndt);
+                out << cost.matched << ' ' << cost.unmatched << '\n';
+            }
+            out << "workspace " << workspace.steps_skipped << ' ' << workspace.big_jump_nodes << '\n';
+            lm_factor = next_lm_factor(lm_factor, iter, applied);
+        }
+    }
+    out.close();
+    MESSAGE("characterization written to ", file);
+}
+
+// stage 2 of docs/code-split-and-region-agents-plan.md: the NDT point terms on their own. With the projection off they go
+// straight into the normal equations, and the right-hand side must be minus half the numeric gradient of their cost, with
+// and without the Huber kernel and the information scale (the Huber weight is the derivative of the Huber cost). The step
+// is tiny, so no point changes its cell.
+TEST_CASE("window terms: the NDT point terms' right-hand side is minus half their cost's gradient")
+{
+    for (bool huber : {false, true})
+    {
+        CAPTURE(huber);
+        OdometryConfig c = test_config();
+        c.degenerate_projection_ratio = c.degenerate_projection_ratio_full = 0.0;
+        if (huber)
+        {
+            c.ndt_huber_cutoff = 3.0;
+            c.ndt_information_scale = 0.1;
+        }
+        const Options o = options_from(c);
+        const Scene s = room();
+        Maps maps = build_maps(s, o.scan_to_map);
+        const std::vector<Eigen::Affine3d> truth = true_poses();
+        const std::vector<Point3Di> points = observe(s, truth);
+        std::vector<Eigen::Affine3d> guess = truth;
+        for (int i = 0; i < n_nodes; i++)
+        {
+            guess[i].translation() += Eigen::Vector3d(0.02, -0.01, 0.008);
+            guess[i].linear() = Eigen::AngleAxisd(0.004, Eigen::Vector3d::UnitZ()).toRotationMatrix() * guess[i].linear();
+        }
+        const Window w = make_window(guess);
+        MotionModelRotationOptions rotation = o.rotation;
+        rotation.estimate_bias = false;
+        const WindowUnknowns u = layout_window_unknowns(w, rotation, {});
+        const auto evaluate = [&](const Window &win, WindowEquations &e)
+        {
+            const NdtSums sums = sum_ndt_point_terms(e, win, points, maps.indoor, maps.outdoor, o.scan_to_map, false, true, nullptr);
+            double cost = 0.0;
+            for (double v : sums.node_cost)
+                cost += v;
+            return cost;
+        };
+        WindowEquations e0(u);
+        const double cost0 = evaluate(w, e0);
+        REQUIRE(cost0 > 0.0);
+        const double h = 1e-7;
+        for (int node : {0, 10, 25, n_nodes - 1})
+            for (int p = 0; p < 6; p++)
+            {
+                const int column = node * 6 + p;
+                CAPTURE(column);
+                const auto cost_at = [&](double step)
+                {
+                    Window moved = w;
+                    TaitBryanPose pose = pose_tait_bryan_from_affine_matrix(moved.poses[node]);
+                    double *const parameter[6] = {&pose.px, &pose.py, &pose.pz, &pose.om, &pose.fi, &pose.ka};
+                    *parameter[p] += step;
+                    moved.poses[node] = affine_matrix_from_pose_tait_bryan(pose);
+                    WindowEquations e(u);
+                    return evaluate(moved, e);
+                };
+                const double gradient = (cost_at(h) - cost_at(-h)) / (2.0 * h);
+                const double scale = std::max({std::abs(gradient), std::abs(e0.rhs(column, 0)), 1e-6 * cost0});
+                CHECK(std::abs(e0.rhs(column, 0) + 0.5 * gradient) <= 1e-3 * scale);
+            }
+    }
 }

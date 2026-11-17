@@ -97,8 +97,19 @@ void GuiViewModel::process(const std::string &folder)
     std::chrono::time_point<std::chrono::system_clock> start, end;
     start = std::chrono::system_clock::now();
 
-    // odometry + post-processing (loop closure, consistency), the same stages as the CLI
-    pipeline_.run_all();
+    // odometry + post-processing (loop closure, consistency), the same stages as the CLI. An error ends the run with a
+    // message instead of std::terminate on this worker thread (the CLI reports it in main and exits 1)
+    try
+    {
+        pipeline_.run_all();
+    }
+    catch (const std::exception &e)
+    {
+        log_error(console_) << "run failed: " << e.what();
+        running_ = false;
+        notifier_->run_failed(e.what());
+        return;
+    }
 
     end = std::chrono::system_clock::now();
     std::chrono::duration<double> elapsed_seconds = end - start;

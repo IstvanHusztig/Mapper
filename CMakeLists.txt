@@ -159,7 +159,11 @@ add_library(lo_domain STATIC
   src/domain/window_steps.cpp
   src/domain/optimizer_options.cpp
   src/domain/scan_to_map.cpp
-  src/domain/robust_lidar_odometry.cpp)
+  src/domain/window_equations.cpp
+  src/domain/window_solver.cpp
+  src/domain/motion_model_terms.cpp
+  src/domain/accelerometer_term.cpp
+  src/domain/ndt_term.cpp)
 target_include_directories(lo_domain PUBLIC
   src/domain
   ${EIGEN3_INCLUDE_DIR}
@@ -173,7 +177,8 @@ add_library(lo_application STATIC
   src/application/lidar_odometry.cpp
   src/application/run_odometry.cpp
   src/application/loop_closure.cpp
-  src/application/consistency.cpp)
+  src/application/consistency.cpp
+  src/application/window_replay.cpp)
 target_include_directories(lo_application PUBLIC src/application)
 target_link_libraries(lo_application PUBLIC lo_domain)
 
@@ -193,6 +198,7 @@ add_library(lo_infrastructure STATIC
   src/infrastructure/toml_io.cpp
   src/infrastructure/toml_config_repository.cpp
   src/infrastructure/odometry_snapshot_file.cpp
+  src/infrastructure/window_capture_file.cpp
   src/infrastructure/console_reporting.cpp)
 target_include_directories(lo_infrastructure
   PUBLIC src/infrastructure
@@ -201,6 +207,26 @@ target_include_directories(lo_infrastructure
           ${LASZIP_INCLUDE_DIR}/LASzip/include
           ${EXTERNAL_LIBRARIES_DIRECTORY}/Fusion/Fusion)
 target_link_libraries(lo_infrastructure PUBLIC lo_application PRIVATE ${PLATFORM_LASZIP_LIB} Fusion ${PLATFORM_MISCELLANEOUS_LIBS})
+
+# the build's identity (git commit, uncommitted changes, configuration) for the results JSON: build_info.h, refreshed at
+# every build by cmake/build_info.cmake
+string(TOUPPER "${CMAKE_BUILD_TYPE}" BUILD_TYPE_UPPER)
+get_directory_property(DMAPPER_DIRECTORY_DEFINITIONS COMPILE_DEFINITIONS)
+string(REPLACE ";" " " DMAPPER_DIRECTORY_DEFINITIONS "${DMAPPER_DIRECTORY_DEFINITIONS}")
+set(BUILD_INFO_HEADER ${CMAKE_BINARY_DIR}/generated/build_info.h)
+add_custom_target(build_info ALL
+  COMMAND ${CMAKE_COMMAND}
+          -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+          -DOUTPUT=${BUILD_INFO_HEADER}
+          -DBUILD_TYPE=${CMAKE_BUILD_TYPE}
+          "-DCOMPILER=${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}"
+          "-DCXX_FLAGS=${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${BUILD_TYPE_UPPER}}"
+          "-DCOMPILE_DEFINITIONS=${DMAPPER_DIRECTORY_DEFINITIONS}"
+          -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/build_info.cmake
+  BYPRODUCTS ${BUILD_INFO_HEADER}
+  COMMENT "build_info.h")
+add_dependencies(lo_infrastructure build_info)
+target_include_directories(lo_infrastructure PRIVATE ${CMAKE_BINARY_DIR}/generated)
 
 # presentation: the GUI's view-model (its state and actions). Only the infrastructure's include directories, no ImGui,
 # GLUT, GL or file dialogs, so it builds and is tested without a display

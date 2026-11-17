@@ -54,6 +54,11 @@ std::vector<Point3Di> decimate(const std::vector<Point3Di>& points, double bucke
     return out;
 }
 
+namespace
+{
+    constexpr double ambiguous_normal_ratio = 3.0;  // no normal if the two smallest spreads are closer than this factor
+}
+
 // the previous cell statistics, kept unchanged behind use_exact_ndt_bucket_statistics = false: the mean is the cell's
 // first point, the normal is fixed from the first 3 points, and later points update the covariance only if they pass
 // the view-point test against that normal
@@ -136,7 +141,10 @@ static void update_rgd_legacy(const NdtGridParameters &rgd_params, NDTBucketMapT
     std::sort(changed.begin(), changed.end());
     changed.erase(std::unique(changed.begin(), changed.end()), changed.end());
     for (const auto index : changed)
-        refresh_cell_inverse(buckets.at(index));
+    {
+        NdtBucket &bucket = buckets.at(index);
+        refresh_cell_inverse(bucket);
+    }
 }
 
 void update_rgd(const NdtGridParameters &rgd_params, NDTBucketMapType &buckets,
@@ -153,7 +161,6 @@ void update_rgd(const NdtGridParameters &rgd_params, NDTBucketMapType &buckets,
     const Eigen::Vector3d b(rgd_params.resolution_X, rgd_params.resolution_Y, rgd_params.resolution_Z);
     std::vector<uint64_t> touched;
     std::vector<uint64_t> inserted;
-    constexpr double ambiguous_normal_ratio = 3.0;
 
     for (const auto &p : points_global)
     {
@@ -216,55 +223,4 @@ void update_rgd(const NdtGridParameters &rgd_params, NDTBucketMapType &buckets,
     touched.erase(std::unique(touched.begin(), touched.end()), touched.end());
     for (const auto index : touched)
         refresh_cell_inverse(buckets.at(index));
-}
-
-void update_rgd_spherical_coordinates(const NdtGridParameters &rgd_params, NDTBucketMapType &buckets,
-                                      std::vector<Point3Di> &points_global, std::vector<Eigen::Vector3d> &points_global_spherical)
-{
-    Eigen::Vector3d b(rgd_params.resolution_X, rgd_params.resolution_Y, rgd_params.resolution_Z);
-
-    for (int i = 0; i < points_global.size(); i++)
-    {
-        auto index_of_bucket = ndt_cell_index(points_global_spherical[i], b);
-
-        auto bucket_it = buckets.find(index_of_bucket);
-
-        if (bucket_it != buckets.end())
-        {
-            auto &this_bucket = bucket_it->second;
-            this_bucket.number_of_points++;
-            const auto &curr_mean = points_global[i].point;
-            const auto &mean = this_bucket.mean;
-
-            auto mean_diff = mean - curr_mean;
-            Eigen::Matrix3d cov_update;
-            cov_update.row(0) = mean_diff.x() * mean_diff;
-            cov_update.row(1) = mean_diff.y() * mean_diff;
-            cov_update.row(2) = mean_diff.z() * mean_diff;
-
-            if (this_bucket.number_of_points == 2)
-            {
-                this_bucket.cov = this_bucket.cov * (this_bucket.number_of_points - 1) / this_bucket.number_of_points +
-                                  cov_update * (this_bucket.number_of_points - 1) / (this_bucket.number_of_points * this_bucket.number_of_points);
-            }
-
-            if (this_bucket.number_of_points >= 3)
-            {
-                this_bucket.cov = this_bucket.cov * (this_bucket.number_of_points - 1) / this_bucket.number_of_points +
-                                  cov_update * (this_bucket.number_of_points - 1) / (this_bucket.number_of_points * this_bucket.number_of_points);
-            }
-        }
-        else
-        {
-            NdtBucket bucket_to_add;
-            bucket_to_add.mean = points_global[i].point;
-            bucket_to_add.cov = Eigen::Matrix3d::Identity() * 0.03 * 0.03;
-            bucket_to_add.number_of_points = 1;
-            bucket_to_add.index_begin = 0;
-            bucket_to_add.index_end = 0;
-            // no normal until the 3rd point; must not be left uninitialized (it is read by the viewpoint check)
-            bucket_to_add.normal_vector = Eigen::Vector3d::Zero();
-            buckets.emplace(index_of_bucket, bucket_to_add);
-        }
-    }
 }

@@ -24,4 +24,3 @@ struct ConsistencyData
 
 void Consistency(std::vector<Window> &windows, const OdometryConfig &params, PointStore &point_store, Logger &logger, ConsistencyTiming *timing = nullptr,
                  ConsistencyData *shared = nullptr);
-void Consistency2(std::vector<Window> &windows, const OdometryConfig &params, PointStore &point_store, Logger &logger);

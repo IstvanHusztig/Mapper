@@ -11,21 +11,17 @@ void FusionOrientationEstimator::reset(AxesConvention convention, float gain)
     switch (convention)
     {
     case AxesConvention::Nwu:
-        ahrs_.settings.convention = FusionConventionNwu;
+        settings_.convention = FusionConventionNwu;
         break;
     case AxesConvention::Enu:
-        ahrs_.settings.convention = FusionConventionEnu;
+        settings_.convention = FusionConventionEnu;
         break;
     case AxesConvention::Ned:
-        ahrs_.settings.convention = FusionConventionNed;
+        settings_.convention = FusionConventionNed;
         break;
     }
-    ahrs_.settings.gain = gain;
-}
-
-void FusionOrientationEstimator::set_gain(float gain)
-{
-    ahrs_.settings.gain = gain;
+    settings_.gain = gain;
+    FusionAhrsSetSettings(&ahrs_, &settings_);
 }
 
 void FusionOrientationEstimator::update(const Eigen::Vector3f &gyro_deg_s, const Eigen::Vector3f &acc_g, float dt_s)

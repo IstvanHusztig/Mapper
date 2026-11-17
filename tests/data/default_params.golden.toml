@@ -15,10 +15,8 @@ build_date = "GOLDEN"
 consistency_gyro_gate_deg = 3.0
 consistency_gyro_rotation_term = false
 consistency_gyro_sigma_scale = 3.0
-consistency_min_distance = 0.4
 num_constistency_iter = 10
 use_consistency = false
-use_mutliple_gaussian = false
 
 [evaluation]
 holdout_block_s = 0.0
@@ -45,22 +43,16 @@ degenerate_projection_ratio_full = 0.0
 imu_acc_smoothing_s = 0.01
 imu_accel_floor_sigma_mps2 = 0.1
 imu_accel_noise_density_mps2_sqrt_hz = 0.0013
-imu_acceleration_offset_freeze_blind = false
 imu_acceleration_offset_initial_sigma_mps2 = 0.5
 imu_acceleration_offset_rw_mps2_sqrt_s = 0.05
-imu_acceleration_offset_span_nr_samples = 20
-imu_acceleration_only_when_degenerate = false
-imu_acceleration_sigma_mps2 = 0.5
 imu_acceleration_span_s = 0.01
 imu_always_on = false
-imu_degenerate_information_ratio = 0.05
-imu_degenerate_max_duration_s = 15.0
-imu_degenerate_smoothing_windows = 5
-imu_degenerate_translation_sigma_m = 3e-04
-imu_degenerate_weight_ratio_full = 0.0
+imu_position_information_scale = 1.0
 imu_velocity_initial_sigma_mps = 1.0
 imu_zero_velocity_sigma_mps = 0.01
-use_imu_acceleration_term = false
+lm_step_check = false
+ndt_huber_cutoff = 0.0
+ndt_information_scale = 1.0
 use_imu_translation_prediction = false
 use_zero_velocity_detection = false
 zero_velocity_acc_threshold_mps2 = 0.3
@@ -118,6 +110,8 @@ use_motion_from_previous_step = true
 
 [lidar_odometry_debug_info]
 calibration_validation_points = 1000000
+capture_windows_from_s = -1.0
+capture_windows_to_s = -1.0
 log_iteration_convergence = false
 log_stage_timing = false
 log_window_diagnostics = false
@@ -201,21 +195,3 @@ working_directory_preview = ''
 
 [performance]
 real_time_threshold_seconds = 10.0
-
-[robust_lidar_odometry]
-azimutal_angle_deg = 10.0
-azimutal_angle_deg_rigid_sf = 10.0
-distance_bucket = 0.2
-distance_bucket_rigid_sf = 0.5
-max_distance_lidar_rigid_sf = 70.0
-polar_angle_deg = 10.0
-polar_angle_deg_rigid_sf = 10.0
-rgd_sf_sigma_fi_deg = 0.01
-rgd_sf_sigma_ka_deg = 0.01
-rgd_sf_sigma_om_deg = 0.01
-rgd_sf_sigma_x_m = 0.001
-rgd_sf_sigma_y_m = 0.001
-rgd_sf_sigma_z_m = 0.001
-robust_and_accurate_lidar_odometry_iterations = 20
-robust_and_accurate_lidar_odometry_rigid_sf_iterations = 30
-use_robust_and_accurate_lidar_odometry = false

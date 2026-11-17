@@ -104,29 +104,24 @@ TEST_CASE("place_windows_after chains the windows from first on, each after its 
 TEST_CASE("estimate_previous_velocity measures the previous window's final velocity")
 {
     const Window previous = moving_window(50, 1.5, 0.0);
-    Window window = moving_window(50, 1.5, 0.0);
-    for (auto &t : window.timestamps)
-        t.first += 0.5; // the window starts 0.5 s after the previous one
 
-    const PreviousVelocity v = estimate_previous_velocity(previous, window, 20, 5.0);
+    const PreviousVelocity v = estimate_previous_velocity(previous, 20, 5.0);
     CHECK(v.use);
     CHECK_FALSE(v.dropped);
     CHECK(v.velocity.isApprox(Eigen::Vector3d(1.5, 0.0, 0.0), 1e-9));
-    // centre of the span: nodes 29..49 -> 0.39 s
-    CHECK(v.age_s == doctest::Approx(0.5 - 0.39));
 
     // faster than the limit: dropped, and the speed is reported
-    const PreviousVelocity fast = estimate_previous_velocity(moving_window(50, 7.0, 0.0), window, 20, 5.0);
+    const PreviousVelocity fast = estimate_previous_velocity(moving_window(50, 7.0, 0.0), 20, 5.0);
     CHECK_FALSE(fast.use);
     CHECK(fast.dropped);
     CHECK(fast.speed == doctest::Approx(7.0));
     CHECK(fast.velocity == Eigen::Vector3d::Zero());
 
     // no usable span: a single node, or timestamps that don't match the poses
-    CHECK_FALSE(estimate_previous_velocity(moving_window(1, 1.5, 0.0), window, 20, 5.0).use);
+    CHECK_FALSE(estimate_previous_velocity(moving_window(1, 1.5, 0.0), 20, 5.0).use);
     Window mismatched = moving_window(50, 1.5, 0.0);
     mismatched.timestamps.pop_back();
-    CHECK_FALSE(estimate_previous_velocity(mismatched, window, 20, 5.0).use);
+    CHECK_FALSE(estimate_previous_velocity(mismatched, 20, 5.0).use);
 }
 
 namespace
