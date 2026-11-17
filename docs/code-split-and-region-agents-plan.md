@@ -20,6 +20,10 @@ Progress:
   (4ed2f46 .. ): loop guard, `lm_solver` + `WindowProblem`, `process_windows` in four steps, the window verdict and its
   summary; every commit identical on the guards, replays and 44_short. End runs identical (manifests 4896eeb), Debug
   ctest pass.
+- Stage 5 designed 2026-11-17 (below), decisions taken, OpenSpec `window-noise-model`; implemented 2026-11-17
+  (fd63f71 .. ): `WindowNoiseModel` built once per window, every term reads its weights from it, the per-term table and
+  the weak-axis diagnostic too, the priors' growth formulas in one place, `noise budget` / `log_window_noise`; every
+  commit identical on the guards, replays, 44_short and the per-term table.
 - **Verdict limits decided (user, 2026-11-17)**, after the readings of full runs of 44, Livox 3 and Livox 4 (task 6.1 of
   `solver-and-window-verdict`): all agreed limits stay (bent 3°, bent severely 10°, run trigger above 1 % bent; fast
   2.5 m/s; bias high 0.5 °/s; velocity chi² of the weak windows median 5 / p95 20). Three recordings, one map judged

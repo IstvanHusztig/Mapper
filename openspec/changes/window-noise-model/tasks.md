@@ -86,9 +86,12 @@
 
 ## 5. Docs and manifests
 
-- [ ] 5.1 Docs: `CLAUDE.md` (the noise model, the setting), `docs/index.html` (the debug setting; the Fundamentals'
+- [x] 5.1 Docs: `CLAUDE.md` (the noise model, the setting), `docs/index.html` (the debug setting; the Fundamentals'
   "Sigma, weight, information" entry points to the model and its log line), `tools/README.md` (the new feature
   columns), the plan's progress. Verify: the text matches the code.
+  Result: CLAUDE.md (the noise model in the pipeline paragraph, the log bullet), the guide's `log_window_noise` row and
+  the Fundamentals' sigma entry, `tools/README.md` (the `noise_*` columns), the plan's progress. The guide's step 6 gets
+  the optimizer's changes at the end of the plan (user).
 - [ ] 5.2 Manifests (44, 44_short, Livox 3): the params TOML entry, in their own commit. Verify: the stage end runs
   compare IDENTICAL.
 

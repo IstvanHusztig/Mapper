@@ -402,4 +402,7 @@ python tools/window_terms.py <window_terms.csv> [--from S] [--to S] [--state res
   motion numbers): the per-window features for a future learned tuner. Since stage 4 also the window verdict: the four
   flags (`verdict_bent`, `verdict_bent_severely`, `verdict_fast`, `verdict_bias_high`: CLEAR / TRIGGER / NOT MEASURED),
   the bends, speed, bias, velocity chi², why the iterations stopped, the solver's events, the remaining step and the
-  LiDAR's weight share (empty where NOT MEASURED).
+  LiDAR's weight share (empty where NOT MEASURED). Since stage 5 also the window's noise model as sigmas (`noise_*`: the
+  motion edges' translation and rotation sigmas, smallest / median / largest per axis, the velocity-continuity and
+  accelerometer sigmas, the three priors' sigmas, the zero-velocity sigma, the NDT scale and Huber cutoff; empty where
+  the window has no such weight).
