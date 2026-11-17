@@ -3,7 +3,8 @@
 <!-- docs-nav -->
 > [dMapper docs](README.md) › Using dMapper · [All documents](README.md) · [User guide](index.html)
 
-A run is cut into short consecutive pieces of the recording, called **windows**. This page explains what a window holds and how each processing stage uses it. The code is in `src/` (one folder per layer, see `docs/ARCHITECTURE.md`). For the parameters, see `docs/index.html`; for the target architecture, see `docs/ARCHITECTURE.md`.
+A run is cut into short consecutive pieces of the recording, called **windows**. This page explains what a window holds and how each processing stage uses it. The basic terms (pose, node, window,
+term, guess …) are defined once in the guide's [Fundamentals](index.html#fundamentals). The code is in `src/` (one folder per layer, see `docs/ARCHITECTURE.md`). For the parameters, see `docs/index.html`; for the target architecture, see `docs/ARCHITECTURE.md`.
 
 ## What a `Window` is
 

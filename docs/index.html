@@ -94,6 +94,13 @@
   .diagram .arr { stroke: var(--arrow); stroke-width: 1.5; fill: none; marker-end: url(#ah); }
   .diagram .loop { stroke: var(--accent); stroke-width: 1.5; fill: none; stroke-dasharray: 5 4; marker-end: url(#ahb); }
   #ah path { fill: var(--arrow); } #ahb path { fill: var(--accent); }
+  .terms { margin: 6px 0 14px; max-width: 82ch; }
+  .terms dt { font-weight: 650; margin-top: 12px; scroll-margin-top: 12px; }
+  .terms dt:target { color: var(--accent); }
+  .terms dd { margin: 2px 0 0 18px; }
+  .terms dd .more { font-size: 14px; color: var(--muted); }
+  a.term { color: inherit; text-decoration: underline dotted var(--muted); text-underline-offset: 3px; }
+  a.term:hover { color: var(--accent); }
   .theme-btn { float: right; background: var(--panel); color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; font-size: 13px; cursor: pointer; }
   @media (max-width: 900px) {
     .layout { grid-template-columns: 1fr; }
@@ -110,6 +117,16 @@
   <div class="sub">LiDAR + IMU odometry</div>
   <a href="hu/index.html" hreflang="hu" lang="hu">Magyar nyelven</a>
   <a href="#overview">Overview</a>
+  <a href="#fundamentals">Fundamentals: basic terms</a>
+  <a class="indent" href="#f-frames">Frames and samples</a>
+  <a class="indent" href="#f-poses">Poses and trajectory</a>
+  <a class="indent" href="#f-windows">Windows</a>
+  <a class="indent" href="#f-map">The map</a>
+  <a class="indent" href="#f-opt">The optimization</a>
+  <a class="indent" href="#f-imu">IMU states</a>
+  <a class="indent" href="#f-readings">Readings of a run</a>
+  <a class="indent" href="#f-after">After the odometry</a>
+  <a class="indent" href="#f-tools">Runs and checks</a>
   <a href="#inputs">Inputs and outputs</a>
   <div class="group">Pipeline</div>
   <a href="#pipeline">The diagram</a>
@@ -158,16 +175,211 @@
 <main>
 <button class="theme-btn" id="themeBtn" type="button">Theme</button>
 <h1>dMapper guide</h1>
-<p class="lead"><code>dMapper</code> turns a LiDAR + IMU recording into a trajectory and a point cloud. Three ways into this guide:
+<p class="lead"><code>dMapper</code> turns a LiDAR + IMU recording into a trajectory and a point cloud. Four ways into this guide:
+<a href="#fundamentals">the basic terms</a> (pose, node, window, term …), explained once and linked from every page;
 <a href="#pipeline">how it works</a>, step by step from the recorder's LAZ file to the final map, with the pages that explain each
 step in depth; <a href="#params">the settings</a>, every parameter of the settings file; and <a href="#documents">all documents</a>,
 every page of <code>docs/</code> by what it is for.</p>
 
 <h2 id="overview">What the odometry does with the points it reads</h2>
 
-<p>The program is a <b>LiDAR-inertial odometry</b>. The IMU gives a fast but drifting estimate of how the sensor rotated. The LiDAR sees the surroundings, which do not move. The program cuts the recording into short windows of about 0.4 s. Each window's trajectory is adjusted until its points line up with the map built from all previous windows, without contradicting the IMU more than its noise allows. Every point keeps its own timestamp and gets its own pose, so the motion during a sweep is compensated (deskewed).</p>
+<p>The program is a <b>LiDAR-inertial odometry</b>. The IMU gives a fast but drifting estimate of how the sensor rotated. The LiDAR sees the surroundings, which do not move. The program cuts the recording into short <a class="term" href="#t-window">windows</a> of about 0.4 s. Each window's trajectory is adjusted until its points line up with the map built from all previous windows, without contradicting the IMU more than its noise allows. Every point keeps its own timestamp and gets its own <a class="term" href="#t-pose">pose</a>, so the motion during a sweep is compensated (<a class="term" href="#t-deskew">deskewed</a>).</p>
 
 <div class="note"><b>Values on this page</b>The values shown are those of <code>settings/l2-vertical.toml</code>. Sensor-specific values (IMU noise, lever arm, range, window length in IMU samples) differ per sensor; see <a href="#sensors">Supported sensors</a>.</div>
+
+<h2 id="fundamentals">Fundamentals: the basic terms</h2>
+<p>The words below are used on every page of this guide with exactly this meaning. Other pages link here the first time
+they use one, so each term is explained once. Each entry ends with where it is explained in depth.</p>
+
+<h3 id="f-frames">Frames and samples</h3>
+<dl class="terms">
+<dt id="t-sensor-frame">Sensor frame</dt>
+<dd>The coordinates a point is measured in: relative to the scanner at the moment of the measurement, in metres, Z up,
+NWU (x forward, y left, z up). Every point is shifted by the <a class="term" href="#t-lever-arm">lever arm</a> once on loading,
+so its sensor frame is the IMU's.</dd>
+<dt id="t-world-frame">World frame</dt>
+<dd>The fixed frame the map and the <a class="term" href="#t-trajectory">trajectory</a> are in. Its origin is where the first
+window starts; its z axis is up (gravity), its heading is the AHRS heading (the filter starts at the beginning of the
+recording).</dd>
+<dt id="t-lever-arm">Lever arm</dt>
+<dd>The offset from the LiDAR's origin to the IMU's (<code>lidar_imu_lever_arm_*</code>), applied as a translation only; the
+points must already be in the IMU's axes. <span class="more">→ <a href="#s-load">step 1</a></span></dd>
+<dt id="t-timestamp">Timestamp</dt>
+<dd>Every point and every IMU sample carries one, in nanoseconds on one shared clock. The streams must agree within a few
+milliseconds; a lagging IMU is corrected before processing. <span class="more">→ <a href="#inputs">Inputs</a>, <a href="#practice">Best practices</a></span></dd>
+<dt id="t-imu-sample">IMU sample</dt>
+<dd>One reading of the gyro (rotation rate, three axes) and the accelerometer (specific force, three axes) with its
+timestamp: about every 1.1 ms on the Unitree L2 (about 900 Hz), every 2 ms on the Livox Mid-360S (500 Hz).</dd>
+<dt id="t-ahrs">AHRS orientation</dt>
+<dd>The orientation the attitude filter (Fusion AHRS) computes for every IMU sample from the gyro, with roll and pitch
+corrected towards gravity. Heading has no reference and drifts with the <a class="term" href="#t-gyro-bias">gyro bias</a>.
+<span class="more">→ <a href="#s-imu">step 2</a></span></dd>
+</dl>
+
+<h3 id="f-poses">Poses and trajectory</h3>
+<dl class="terms">
+<dt id="t-pose">Pose</dt>
+<dd>The sensor's position and orientation at one moment, in the <a class="term" href="#t-world-frame">world frame</a>: x, y, z in
+metres and three angles ω, φ, κ (om, fi, ka: roll, pitch, yaw, Tait-Bryan). As a matrix it is a rotation R and a
+translation t, so a point p of the <a class="term" href="#t-sensor-frame">sensor frame</a> lies at R p + t in the world. The
+optimizer works with the six numbers. <span class="more">→ <a href="window-chaining.html">Poses and window chaining</a>, section 1.1</span></dd>
+<dt id="t-node">Node (trajectory node)</dt>
+<dd>One <a class="term" href="#t-pose">pose</a> with its timestamp. There is one node per
+<a class="term" href="#t-imu-sample">IMU sample</a>, so nodes are about 1–2 ms apart. Before the odometry a node has the AHRS
+orientation and position (0, 0, 0); the odometry gives it its position and corrects its orientation.</dd>
+<dt id="t-trajectory">Trajectory</dt>
+<dd>All nodes in time order: the path of the sensor. The output's <code>trajectory_lio_N.csv</code> holds one node per line.</dd>
+<dt id="t-point-node">A point's node (<code>index_pose</code>)</dt>
+<dd>Each point is attached to the last node before its timestamp, if that node is at most 10 ms earlier (otherwise
+the point is dropped). Its world position is always <i>pose(node) × point</i>, so a point moves exactly as its node
+moves: a 0.1° error of the node moves a point 20 m away by 3.5 cm. <span class="more">→ <a href="#s-windows">step 3</a>,
+<a href="window-chaining.html">window chaining</a>, section 1.4</span></dd>
+<dt id="t-deskew">Motion compensation (deskewing)</dt>
+<dd>A LiDAR sweep takes time while the scanner moves. Because every point is placed with the pose of its own node, the
+points of one sweep are placed with the motion during the sweep, not with one pose for all.</dd>
+</dl>
+
+<h3 id="f-windows">Windows</h3>
+<dl class="terms">
+<dt id="t-window">Window</dt>
+<dd>A run of consecutive nodes, <code>threshold_nr_poses</code> of them (360 ≈ 0.4 s on the L2, 180 ≈ 0.36 s on the
+Mid-360S), with the points recorded in that time. The odometry optimizes one window at a time, in order; recording 44 has
+690 windows. <span class="more">→ <a href="#s-windows">step 3</a>, <a href="PIPELINE.md">How a run works</a></span></dd>
+<dt id="t-guess">Guess (initial guess)</dt>
+<dd>A window's poses before its optimization: chained onto the previous window's optimized end, rotations from the IMU minus
+the <a class="term" href="#t-gyro-bias">gyro bias</a>, positions from the accelerometer (or a constant velocity).
+<span class="more">→ <a href="#s-guess">step 5</a></span></dd>
+<dt id="t-motion-model">Motion model</dt>
+<dd>A copy of the guess kept as the IMU's "measurement" of the window's shape: the optimization may move the window, but the
+motion from node to node is pulled towards the motion model's.</dd>
+<dt id="t-placing">Placing (chaining) a window</dt>
+<dd>Moving a whole window so that it starts at a given pose while keeping its shape (the motion from node to node). Each
+window is placed after the previous window's optimized last node. <span class="more">→ <a href="window-chaining.html">window chaining</a>, section 1</span></dd>
+<dt id="t-handoff">Hand-off</dt>
+<dd>What passes from one window to the next: the end pose (after the last <code>handoff_tail_nodes</code> nodes are
+recomputed from the IMU, because they have almost no points), and the estimates of the
+<a class="term" href="#t-gyro-bias">gyro bias</a>, the <a class="term" href="#t-velocity">velocity</a> and the
+<a class="term" href="#t-acc-offset">acceleration offset</a>, which become the next window's
+<a class="term" href="#t-prior">priors</a>. <span class="more">→ <a href="#s-handoff">step 7</a></span></dd>
+<dt id="t-chunk">Chunk</dt>
+<dd>A group of 51 windows written as one <code>scan_lio_N.laz</code> on export, relative to its first pose. <span class="more">→ <a href="#s-export">step 9</a></span></dd>
+</dl>
+
+<h3 id="f-map">The map</h3>
+<dl class="terms">
+<dt id="t-decimation">Decimation (voxel thinning)</dt>
+<dd>Keeping only the first point in each cube of size <code>decimation</code>. The optimization and the map use the thinned
+points; the export uses all of them.</dd>
+<dt id="t-ndt">NDT map, grid, cell</dt>
+<dd>The map the windows are matched against (Normal Distributions Transform). Space is divided into cubes, the
+<b>cells</b>, of two <b>grids</b>: 0.15 m (indoor) and 0.4 m (outdoor). Each cell stores the mean and covariance of the
+points in it, a small Gaussian that describes the local surface, and with at least 3 points and a clear surface direction a
+<b>normal</b> facing the sensor. A window's points, placed with its optimized poses, are added after each window. <span class="more">→
+<a href="#s-map">step 4</a>, <a href="#s-update">step 8</a></span></dd>
+</dl>
+
+<h3 id="f-opt">The optimization</h3>
+<dl class="terms">
+<dt id="t-unknowns">Unknowns</dt>
+<dd>The numbers the optimization of a window changes: six per node (6 × 360), three for the
+<a class="term" href="#t-gyro-bias">gyro bias</a>, and with <code>imu_always_on</code> nine more (the start and end
+<a class="term" href="#t-velocity">velocity</a> and the <a class="term" href="#t-acc-offset">acceleration offset</a>).</dd>
+<dt id="t-term">Term</dt>
+<dd>One kind of measurement the window must agree with: the points against the NDT map (one term per grid), the
+<a class="term" href="#t-motion-model">motion model</a> between nodes, the velocity continuity, the accelerometer, the priors
+and the origin fix. Each adds its equations to one least-squares problem. <span class="more">→ <a href="#s-opt">step 6</a></span></dd>
+<dt id="t-residual">Residual</dt>
+<dd>How far one measurement is from what the current poses predict: a point's distance from its cell's Gaussian, a
+node-to-node motion's difference from the IMU's, and so on.</dd>
+<dt id="t-sigma">Sigma, weight, information</dt>
+<dd>A sigma is the expected size of a residual: its noise. A residual is weighted by 1 / sigma², so a small sigma is a
+strong term. The weights added up over a direction are the <b>information</b> about that direction: how firmly the
+measurements fix it.</dd>
+<dt id="t-cost">Cost</dt>
+<dd>The sum of all weighted residuals squared. The optimization looks for the poses with the smallest cost.</dd>
+<dt id="t-prior">Prior</dt>
+<dd>A term that holds an unknown near a value known before the window, within a sigma: the gyro bias near the previous
+window's estimate, the start velocity near the previous window's end velocity.</dd>
+<dt id="t-origin-fix">Origin fix</dt>
+<dd>The window's first node is held at the previous window's end within a very small sigma (<code>fix_origin</code>,
+1e-6); the window can only change how it continues from there.</dd>
+<dt id="t-lm">Levenberg–Marquardt iteration, damping</dt>
+<dd>One iteration linearizes all terms at the current poses, solves the least-squares system, and moves all unknowns by the
+step. The <b>damping</b> shortens the steps: it starts at <code>lm_factor_initial</code> and grows tenfold every 10
+iterations, and also after each rejected step. A window runs up to <code>nr_iter</code> iterations, or stops early at the time limit
+<code>real_time_threshold_seconds</code>. <span class="more">→ <a href="#s-opt">step 6</a></span></dd>
+</dl>
+
+<h3 id="f-imu">IMU states</h3>
+<dl class="terms">
+<dt id="t-gyro-bias">Gyro bias</dt>
+<dd>The gyro's offset: the rotation rate it reports when not turning. Uncorrected it turns the heading steadily. Each window
+estimates it (three numbers) and hands it on, within a sigma that grows by the bias random walk. <span class="more">→
+<a href="#s-handoff">step 7</a>, <a href="#p-bias">[gyro_bias_estimation]</a></span></dd>
+<dt id="t-velocity">Velocity (start and end)</dt>
+<dd>With <code>imu_always_on</code>, a window's velocity at its first and last node are unknowns. The end velocity is handed
+to the next window as the prior of its start velocity. <span class="more">→ <a href="#p-imu">[imu_translation]</a></span></dd>
+<dt id="t-acc-offset">Acceleration offset</dt>
+<dd>A slowly changing error of the accelerometer (three numbers), estimated per window and carried like the gyro bias, so
+it isn't read as motion.</dd>
+</dl>
+
+<h3 id="f-readings">Readings of a run</h3>
+<dl class="terms">
+<dt id="t-degeneracy">Degeneracy, information ratio</dt>
+<dd>A window is <b>degenerate</b> when its points can't fix every direction of motion, such as along a straight corridor.
+The <b>information ratio</b> is the smallest over the largest eigenvalue of the LiDAR's translation information in the
+window: 0 = blind in
+one direction, 1 = equally fixed everywhere. <span class="more">→ <a href="degeneracy-information.html">Degeneracy information</a></span></dd>
+<dt id="t-bend">Bend (heading, roll, pitch)</dt>
+<dd>How far the optimization turned a window's last node away from its guess, which came from the gyro: the heading bend is
+the turn about the vertical, roll and pitch bends about the horizontal axes. A large bend means the LiDAR overruled the
+gyro.</dd>
+<dt id="t-chi2">Velocity chi²</dt>
+<dd>The squared distance of a window's start velocity from its prior, measured with the prior's covariance (three
+residuals). Around 3 or below when the velocity agrees with the previous window within its noise.</dd>
+<dt id="t-verdict">Window verdict, flags</dt>
+<dd>After each window four flags are judged: <b>bent</b> (any bend above 3°), <b>bent severely</b> (above 10°), <b>fast</b>
+(above 2.5 m/s) and <b>bias high</b> (gyro bias above 0.5 °/s). Each is CLEAR, TRIGGER or NOT MEASURED (the window doesn't
+have the reading). The run's <code>window verdict summary</code> counts them. Investigation triggers, not a statement about
+the map. <span class="more">→ <a href="#p-misc">[lidar_odometry_debug_info]</a></span></dd>
+<dt id="t-term-table">Per-term table (hold, pull, remaining step)</dt>
+<dd>For each window and each <a class="term" href="#t-term">term</a>: how strongly the term alone holds four motions of the
+window (shift, stretch, curve, turn) along travel, sideways and vertical (the <b>hold</b>, a sigma), and where the term
+alone would move it (the <b>pull</b>). The <b>remaining step</b> is the pull of all terms together.
+<span class="more">→ <a href="window-terms-livox3.html">The per-term table</a></span></dd>
+</dl>
+
+<h3 id="f-after">After the odometry</h3>
+<dl class="terms">
+<dt id="t-segment">Segment</dt>
+<dd>A group of <code>loop_closure_segment_windows</code> windows (6 ≈ 2.4 s) that loop closure moves as one rigid piece.</dd>
+<dt id="t-loop-closure">Loop closure, loop edge</dt>
+<dd>When the path comes back to a place already scanned, the later segment is registered against the earlier one; an
+accepted registration becomes a <b>loop edge</b>, the measured offset between the two segments.
+<span class="more">→ <a href="#pipeline">Loop closure</a> (after step 8), <a href="loop-closure-research.html">Loop closure research</a></span></dd>
+<dt id="t-pose-graph">Pose graph</dt>
+<dd>The segments' poses as unknowns, joined by odometry edges (consecutive segments) and loop edges, optimized together;
+the correction is then spread over every node.</dd>
+<dt id="t-consistency">Consistency pass</dt>
+<dd>An optional optimization of the whole trajectory at once against one map of the whole recording, after loop closure.
+<span class="more">→ <a href="#pipeline">Consistency pass</a> (after step 8)</span></dd>
+</dl>
+
+<h3 id="f-tools">Runs and checks</h3>
+<dl class="terms">
+<dt id="t-settings">Settings file</dt>
+<dd>The TOML file of a run (<code>settings/l2-vertical.toml</code>, <code>settings/livox-vertical.toml</code>); the output
+folder keeps a copy as <code>dMapper_params_*.toml</code>. <span class="more">→ <a href="#params">Parameter reference</a></span></dd>
+<dt id="t-replay">Capture and replay</dt>
+<dd>A run can save the window loop's state before a stretch and that stretch's windows (a <b>capture</b>); <code>--replay</code>
+then runs only that stretch again in seconds, bit for bit with the same settings. A <b>snapshot</b> saves the whole odometry
+result, so loop closure and consistency can be rerun alone. <span class="more">→ <a href="#p-misc">[lidar_odometry_debug_info]</a></span></dd>
+<dt id="t-baseline">Baseline, manifest, bit-identical</dt>
+<dd>A refactor must not change a single bit of the results. A <b>manifest</b> lists the checksums of a reference result
+(<code>tools/baseline/*.manifest.json</code>), and <code>tools/compare_baseline.py</code> compares a new result with it file
+by file. <span class="more">→ <a href="../tools/README.md">tools/README.md</a></span></dd>
+</dl>
 
 <h2 id="inputs">Inputs and outputs</h2>
 <div class="table-wrap"><table>
@@ -236,7 +448,7 @@ every page of <code>docs/</code> by what it is for.</p>
 <div class="where">calculate_trajectory · src/application/lidar_odometry.cpp</div>
 <p>A Madgwick-type filter (Fusion AHRS, 6-axis, no magnetometer) integrates the gyro, and uses the accelerometer's gravity direction to correct roll and pitch. Heading (yaw) has no absolute reference, so it drifts with the gyro bias. That is what the LiDAR optimization and the bias estimation fix later. The accelerometer's pull has the constant strength <code>ahrs_gain</code> for the whole recording. (Until 2026-11-16 the code tried to switch it off while |a| was outside 0.9–1.1 g; Fusion ramps its gain up at the start and then keeps its own copy, so that switch never took effect and was removed.)</p>
 <p>If <code>use_remove_imu_bias_from_first_stationary_scan</code> is on, the median gyro value of the first <code>startup_gyro_bias_nr_samples</code> samples (1000) is subtracted as bias, but only if the total gyro variance there is below <code>startup_gyro_bias_max_variance_deg2_s2</code> (5 (°/s)²). Handheld recordings usually fail that check ("Excessive movement detected") and continue with zero bias.</p>
-<p>Result: a trajectory map <i>timestamp → rotation</i> with one entry per IMU sample (about 1.1 ms apart). These are the <b>trajectory nodes</b>. Their positions are still zero at this stage.</p>
+<p>Result: a trajectory map <i>timestamp → rotation</i> with one entry per IMU sample (about 1.1 ms apart). These are the <b><a class="term" href="#t-node">trajectory nodes</a></b>. Their positions are still zero at this stage.</p>
 <div class="params"><span>ahrs_gain</span><span>fusionConvention*</span><span>use_remove_imu_bias_from_first_stationary_scan</span><span>startup_gyro_bias_*</span></div>
 </li>
 
@@ -245,9 +457,9 @@ every page of <code>docs/</code> by what it is for.</p>
 <div class="where">compute_step_1 · src/application/lidar_odometry.cpp</div>
 <ul>
 <li>The first <code>threshold_initial_points</code> points are set aside to build the initial map (step 4). Nodes before the time of the last of these points are skipped.</li>
-<li>The remaining nodes are cut into <b>windows</b> of <code>threshold_nr_poses</code> consecutive nodes (360 ≈ 0.4 s at about 900 Hz; counted in IMU samples, so set per sensor, see <a href="#sensors">Supported sensors</a>). A leftover shorter than a full window is dropped.</li>
-<li>Every point in the window's time span is attached to the <b>node just before its timestamp</b> (its <code>index_pose</code>), but only if that node is at most 10 ms earlier. Otherwise the point is dropped. Windows with ≤ 1000 points are dropped.</li>
-<li>Two copies are cached on disk (<code>&lt;input&gt;/cache</code>): all points (for export) and a <b>voxel-decimated</b> copy that keeps the first point per <code>decimation</code>-sized cube (used in the optimization).</li>
+<li>The remaining nodes are cut into <b><a class="term" href="#t-window">windows</a></b> of <code>threshold_nr_poses</code> consecutive nodes (360 ≈ 0.4 s at about 900 Hz; counted in IMU samples, so set per sensor, see <a href="#sensors">Supported sensors</a>). A leftover shorter than a full window is dropped.</li>
+<li>Every point in the window's time span is attached to the <b><a class="term" href="#t-point-node">node just before its timestamp</a></b> (its <code>index_pose</code>), but only if that node is at most 10 ms earlier. Otherwise the point is dropped. Windows with ≤ 1000 points are dropped.</li>
+<li>Two copies are cached on disk (<code>&lt;input&gt;/cache</code>): all points (for export) and a <b><a class="term" href="#t-decimation">voxel-decimated</a></b> copy that keeps the first point per <code>decimation</code>-sized cube (used in the optimization).</li>
 </ul>
 <p>From here on, a point is always used as <i>pose(index_pose) × point</i>. Correcting a node's pose moves exactly the points recorded in that ~1 ms, and this is how motion during the scan is compensated.</p>
 <div class="deep"><b>In depth</b><a href="window-chaining.html">Poses, windows and window chaining</a> (what a pose is, how a window's trajectory and its points' positions are computed) · <a href="PIPELINE.md">How a run works: windows</a></div>
@@ -257,7 +469,7 @@ every page of <code>docs/</code> by what it is for.</p>
 <li class="step" id="s-map">
 <h3>The initial map</h3>
 <div class="where">optimize_windows (start) · src/application/run_odometry.cpp</div>
-<p>The set-aside initial points are transformed with the <b>first pose only</b> (no per-point motion compensation) and inserted into two <b>NDT grids</b>. Space is divided into cubes (0.15 m "indoor" and 0.4 m "outdoor" grid), and each cube stores the mean and covariance of the points in it, i.e. a small Gaussian that describes the local surface. A cube with 3 or more points also gets a normal vector facing the sensor.</p>
+<p>The set-aside initial points are transformed with the <b>first pose only</b> (no per-point motion compensation) and inserted into two <b><a class="term" href="#t-ndt">NDT grids</a></b>. Space is divided into cubes (0.15 m "indoor" and 0.4 m "outdoor" grid), and each cube stores the mean and covariance of the points in it, i.e. a small Gaussian that describes the local surface. A cube with 3 or more points also gets a normal vector facing the sensor.</p>
 <p>Because this map is not motion-compensated, stand still for the first second or two if you can. The first window is registered against this map, so its misfit is not allowed to affect the gyro bias estimate.</p>
 <div class="params"><span>in_out_params_indoor.resolution_*</span><span>in_out_params_outdoor.resolution_*</span><span>threshold_initial_points</span></div>
 </li>
@@ -270,7 +482,7 @@ every page of <code>docs/</code> by what it is for.</p>
 <li>Rotations follow the IMU's relative rotations between nodes, <b>minus the gyro bias</b> estimated so far (bias × Δt per step).</li>
 <li>Positions, with <code>imu_always_on</code> (on in the shipped settings): the <b>accelerometer integrated</b> from the start velocity carried over from the previous window, with that window's gravity and acceleration offset (<code>integrate_window_translations</code>). A window at rest keeps a motionless guess. Without it: a <b>constant velocity</b>, the velocity over the last <code>prior_velocity_span_nr_samples</code> nodes of the previous window (<code>use_motion_from_previous_step</code>).</li>
 </ul>
-<p>This guess is also stored as the <b>motion model</b>: the IMU "measurement" the optimizer compares against.</p>
+<p>This <a class="term" href="#t-guess">guess</a> is also stored as the <b><a class="term" href="#t-motion-model">motion model</a></b>: the IMU "measurement" the optimizer compares against.</p>
 <div class="deep"><b>In depth</b><a href="window-chaining.html">Poses, windows and window chaining</a> (section 1.3: how each window's guess is chained and placed)</div>
 <div class="params"><span>use_motion_from_previous_step</span><span>use_gyro_bias_estimation</span><span>imu_always_on</span></div>
 </li>
@@ -278,7 +490,7 @@ every page of <code>docs/</code> by what it is for.</p>
 <li class="step" id="s-opt">
 <h3>Window optimization</h3>
 <div class="where">optimize_lidar_odometry · src/domain/scan_to_map.cpp</div>
-<p>The unknowns are the 6 pose parameters (x, y, z, ω, φ, κ) of every node of the window, plus 3 gyro-bias values: 6 × 360 + 3 = 2163 numbers. With <code>imu_always_on</code> there are 9 more: the acceleration offset and the velocity at the window's start and end. Each Levenberg–Marquardt iteration builds one least-squares system from these terms:</p>
+<p>The <a class="term" href="#t-unknowns">unknowns</a> are the 6 pose parameters (x, y, z, ω, φ, κ) of every node of the window, plus 3 gyro-bias values: 6 × 360 + 3 = 2163 numbers. With <code>imu_always_on</code> there are 9 more: the acceleration offset and the velocity at the window's start and end. Each <a class="term" href="#t-lm">Levenberg–Marquardt iteration</a> builds one least-squares system from these <a class="term" href="#t-term">terms</a>:</p>
 <ul>
 <li><b>Point to map (NDT, fine grid):</b> every decimated point with 3-D distance between <code>min_distance_lidar</code> and <code>max_distance_lidar</code> is transformed with its node's pose and looked up in the 0.15 m grid. Its distance to that cube's Gaussian, weighted by the inverse covariance, is minimized. Points hitting a cube whose normal faces away from the sensor, or whose covariance is degenerate, are skipped. Two optional settings shape this term (both off for the L2, on in <code>settings/livox-vertical.toml</code>): <code>ndt_huber_cutoff</code> gives a point farther than that many standard deviations from its cube a constant pull instead of one that grows with the distance (Huber kernel), so a few wrongly matched points can't drag the window; <code>ndt_information_scale</code> multiplies the weight of all point terms, so the IMU terms count more against them.</li>
 <li><b>Point to map (NDT, coarse grid):</b> the same with the 0.4 m grid, for points between <code>min_distance_lidar_outdoor_grid</code> and <code>max_distance_lidar</code>.</li>
@@ -288,7 +500,7 @@ every page of <code>docs/</code> by what it is for.</p>
 <li><b>Fixed start:</b> node 0 is locked to the previous window's end (<code>fix_origin</code> sigmas, 1e-6).</li>
 <li><b>Bias prior:</b> the bias stays near the previous window's estimate, within its uncertainty grown by the bias random walk.</li>
 </ul>
-<p>The system is solved with a sparse Cholesky factorization. Up to <code>nr_iter</code> iterations run; the damping starts at <code>lm_factor_initial</code> and is multiplied by 10 every 10 iterations (pose unknowns only). A window stops early when the sum of all parameter updates of one iteration falls below <code>convergence_delta_threshold</code> (default 1e-12, which is practically never reached, so all iterations run), or once it has run for longer than <code>real_time_threshold_seconds</code>. Only the band of the normal matrix that can hold values (neighbouring nodes and the bias unknowns) is converted to sparse form each iteration.</p>
+<p>The system is solved with a sparse Cholesky factorization. Up to <code>nr_iter</code> iterations run; the damping starts at <code>lm_factor_initial</code> and is multiplied by 10 every 10 iterations and after each rejected step (pose unknowns only). A window stops early when the sum of all parameter updates of one iteration falls below <code>convergence_delta_threshold</code> (default 1e-12, which is practically never reached, so all iterations run), or once it has run for longer than <code>real_time_threshold_seconds</code>. Only the band of the normal matrix that can hold values (neighbouring nodes and the bias unknowns) is converted to sparse form each iteration.</p>
 <div class="deep"><b>In depth</b><a href="degeneracy-information.html">Degeneracy information</a> (when the LiDAR can't see the motion; the degeneracy projection) · <a href="window-terms-livox3.html">The per-term table</a> (which term holds a window and where it pulls it)</div>
 <div class="params"><span>nr_iter</span><span>convergence_delta_threshold</span><span>lm_factor_initial</span><span>min_distance_lidar</span><span>max_distance_lidar</span><span>motion_model_uncertainty.*</span><span>gyro_arw_*</span><span>rotation_sigma_*</span></div>
 </li>
@@ -320,10 +532,10 @@ every page of <code>docs/</code> by what it is for.</p>
 
 <div class="note"><b>Loop closure (after step 8, before the consistency pass)</b>With <code>use_loop_closure = true</code> the run (command line and GUI alike) corrects the finished trajectory when you come back to a place you have already scanned (<code>src/application/loop_closure.cpp</code>):
 <ol>
-<li>The windows are grouped into <b>segments</b> of <code>loop_closure_segment_windows</code> windows (6 ≈ 2.4 s), each with its points in world coordinates. With longer segments (12 windows ≈ 5 s) a turn of the path often lies inside one rigid segment, and the graph can twist an out-and-back passage by a few degrees.</li>
+<li>The windows are grouped into <b><a class="term" href="#t-segment">segments</a></b> of <code>loop_closure_segment_windows</code> windows (6 ≈ 2.4 s), each with its points in world coordinates. With longer segments (12 windows ≈ 5 s) a turn of the path often lies inside one rigid segment, and the graph can twist an out-and-back passage by a few degrees.</li>
 <li><b>Revisit candidates</b>: for every segment, the earlier segments with at least <code>loop_closure_min_path_m</code> walked in between, whose centre lies within min(<code>loop_closure_search_radius_m</code>, <code>loop_closure_radius_per_path</code> × that path) horizontally and <code>loop_closure_max_vertical_offset_m</code> vertically (so different floors are not confused), longest path first. The path counts a step only once the position moved 0.1 m, so standing still adds nothing; a dead end walked out and back qualifies however short the time, neighbouring segments and places seen from afar don't, and a near revisit does not take the place of a far one (the loop closure of a whole round). Up to <code>loop_closure_candidates</code> of them are registered, chosen to differ, in this order: the nearest one, the longest-path one, the nearest at least 3 segments away from the nearest, and the longest-path one at least 3 segments away from the longest-path one (a smaller limit keeps both kinds). Of the accepted registrations, up to <code>loop_closure_edges_per_segment</code> become loop edges: the best of the near ones and the best of the far ones by overlap after the refinement, both only if their earlier segments are at least 3 apart (otherwise the better one). An old parameter file with <code>loop_closure_min_time_gap_s</code> still loads; the key is ignored, since a minimum time between visits would never compare a passage walked out and back quickly.</li>
 <li><b>Registration</b>: the later segment is aligned to the earlier one and its neighbours, first by a voxel-overlap search over yaw (±10°) and translation (±<code>loop_closure_max_correction_m</code>), then by point-to-distribution refinement. It is accepted only if at least <code>loop_closure_min_fitness</code> of its points overlap the earlier visit, the overlap did not get worse, and the correction stays within the search range and 15°.</li>
-<li><b>Pose graph</b>: the segment poses are optimized with odometry edges between consecutive segments and the accepted loop edges, the first segment fixed. A step is kept only if it lowers the graph's error (damped otherwise). Every loop edge, on the same floor and between floors, is <b>weighted by what its registration determines</b> (its NDT normal matrix mapped into the edge, scaled so that the best-determined translation gets <code>loop_closure_edge_sigma_m</code>; see <code>loop_closure_cross_floor_max_vertical_m</code> below); an edge whose registration information is unusable keeps the fixed sigmas. A weak direction, such as along a corridor or the turn of a narrow passage, then pulls little, and the loop closure no longer invents turns the odometry didn't make. Then each loop edge is compared with the solution: of the edges that disagree by more than <code>loop_closure_max_residual_m</code> or <code>loop_closure_max_residual_deg</code> (in their weighted residual), the one whose removal lowers the error of the re-solved graph the most is a false match; it is dropped and the graph solved again, until all edges agree. One false edge would otherwise bend the trajectory by decimetres and leave a ghost wall. The result is applied only if it is finite and no segment moved further than <code>loop_closure_max_correction_m</code> plus the largest accepted correction; otherwise it is discarded with a warning and the trajectory stays as it was.</li>
+<li><b><a class="term" href="#t-pose-graph">Pose graph</a></b>: the segment poses are optimized with odometry edges between consecutive segments and the accepted loop edges, the first segment fixed. A step is kept only if it lowers the graph's error (damped otherwise). Every loop edge, on the same floor and between floors, is <b>weighted by what its registration determines</b> (its NDT normal matrix mapped into the edge, scaled so that the best-determined translation gets <code>loop_closure_edge_sigma_m</code>; see <code>loop_closure_cross_floor_max_vertical_m</code> below); an edge whose registration information is unusable keeps the fixed sigmas. A weak direction, such as along a corridor or the turn of a narrow passage, then pulls little, and the loop closure no longer invents turns the odometry didn't make. Then each loop edge is compared with the solution: of the edges that disagree by more than <code>loop_closure_max_residual_m</code> or <code>loop_closure_max_residual_deg</code> (in their weighted residual), the one whose removal lowers the error of the re-solved graph the most is a false match; it is dropped and the graph solved again, until all edges agree. One false edge would otherwise bend the trajectory by decimetres and leave a ghost wall. The result is applied only if it is finite and no segment moved further than <code>loop_closure_max_correction_m</code> plus the largest accepted correction; otherwise it is discarded with a warning and the trajectory stays as it was.</li>
 <li>The correction of each segment is <b>interpolated onto every trajectory node</b>, so the trajectory bends smoothly instead of jumping.</li>
 </ol>
 The log lists every candidate with its overlap before/after and the correction, every dropped edge, and the residuals of the edges kept. Errors larger than the search range (for example a 20° heading failure) are rejected on purpose; they come from the odometry and have to be fixed there.</div>
@@ -583,7 +795,7 @@ See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 <h3>Using dMapper</h3>
 <p class="meta">Start here: what a run does and what every setting means.</p>
 <div class="table-wrap"><table>
-<tr><td>this guide</td><td><code>index.html</code></td><td>The pipeline step by step, every parameter, best practices, the tuning cheat sheet, known limitations.</td></tr>
+<tr><td>this guide</td><td><code>index.html</code></td><td>The basic terms (<a href="#fundamentals">Fundamentals</a>: pose, node, window, term, bend …, defined once and linked from every page), the pipeline step by step, every parameter, best practices, the tuning cheat sheet, known limitations.</td></tr>
 <tr><td><a href="PIPELINE.md">How a run works: windows</a></td><td><code>PIPELINE.md</code></td><td>How a run cuts the recording into windows and processes one window (short, technical). <i>From pipeline step 3.</i></td></tr>
 </table></div>
 <h3>How the odometry works</h3>

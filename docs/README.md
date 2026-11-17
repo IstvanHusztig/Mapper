@@ -6,7 +6,7 @@ Start with the dMapper guide, [index.html](index.html) (open it in a browser). T
 
 Start here: what a run does and what every setting means.
 
-- [User guide](index.html): The pipeline step by step, every parameter, best practices, the tuning cheat sheet, known limitations.
+- [User guide](index.html): The basic terms ([Fundamentals](index.html#fundamentals): pose, node, window, term, bend …, defined once and linked from every page), the pipeline step by step, every parameter, best practices, the tuning cheat sheet, known limitations.
 - [How a run works: windows](PIPELINE.md): How a run cuts the recording into windows and processes one window (short, technical). *From pipeline step 3.*
 
 ## How the odometry works

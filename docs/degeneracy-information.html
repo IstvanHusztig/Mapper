@@ -74,6 +74,7 @@
 <p class="lead">What the "LiDAR translation information" is, how dMapper uses it to decide when to trust the accelerometer,
 how to read its log line, and a known weakness found in October 2026. It is computed in <code>optimize_lidar_odometry</code>
 (<code>src/domain/scan_to_map.cpp</code>) and used in <code>update_acc_term_after_window</code> (<code>src/application/run_odometry.cpp</code>).</p>
+<p class="terms-line" style="font-size:14px;color:var(--muted)">Terms used here: <a href="index.html#t-window">window</a>, <a href="index.html#t-ndt">NDT map</a>, <a href="index.html#t-term">term</a>, <a href="index.html#t-sigma">sigma and information</a>, <a href="index.html#t-degeneracy">information ratio</a>, <a href="index.html#t-unknowns">unknowns</a>, <a href="index.html#t-velocity">velocity</a>. All basic terms: the guide's <a href="index.html#fundamentals">Fundamentals</a>.</p>
 
 <div class="note"><b>In one sentence</b>
 Every surface a window's points are matched to pins the motion only <em>across</em> that surface, along its normal. Adding
