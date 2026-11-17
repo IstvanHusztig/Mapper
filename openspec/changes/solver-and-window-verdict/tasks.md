@@ -82,14 +82,16 @@
   median / 95th percentile / largest, and for Livox 4 the flagged windows over time against its known bad stretches
   (100–125 s, 200–280 s). No limit is proposed. Verify: the table is shown to the user; their decision on limits is
   recorded in the plan.
-- [ ] 6.2 Docs: `CLAUDE.md` (solver, window problem, the four steps, the verdict and its setting), `docs/index.html`
+- [x] 6.2 Docs: `CLAUDE.md` (solver, window problem, the four steps, the verdict and its setting), `docs/index.html`
   (the setting; the map of documents if a page is added), `tools/README.md` (the new feature columns), the plan's
-  progress. Verify: the text matches the code.
-- [ ] 6.3 Manifests (44, 44_short, Livox 3): the params TOML entry, in their own commit. Verify: the stage end runs
-  compare IDENTICAL.
+  progress. Verify: the text matches the code. Result: 82c9208 (the guide's map gets no new page in this stage).
+- [x] 6.3 Manifests (44, 44_short, Livox 3): the params TOML entry, in their own commit. Verify: the stage end runs
+  compare IDENTICAL. Result: 4896eeb; 44 35 files, Livox 3 35, 44_short 11, all IDENTICAL.
 
 ## 7. End of stage
 
-- [ ] 7.1 Full 44 and Livox 3 against their manifests with the shipped settings. Verify: identical except the params
-  TOML before task 6.3, IDENTICAL after it.
-- [ ] 7.2 Debug build and `ctest`. Verify: pass.
+- [x] 7.1 Full 44 and Livox 3 against their manifests with the shipped settings. Verify: identical except the params
+  TOML before task 6.3, IDENTICAL after it. Result: 44 (odometry 1214 s) and Livox 3 (697 s) and 44_short differ only in
+  the params TOML before 6.3; IDENTICAL after it. The readings runs (with both logs on) differ only in the params TOML
+  and the two extra CSV files.
+- [x] 7.2 Debug build and `ctest`. Verify: pass. Result: Debug build exit 0, ctest 100 % passed (589 s).
