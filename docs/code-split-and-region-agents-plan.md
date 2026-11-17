@@ -936,7 +936,7 @@ when they can matter").
 2. `predict_window_poses` in its four steps, chaining through `place_window_after`; tests of the steps.
 3. `tools/function_lengths.py`, `tools/README.md`; the plan's table and progress; `CLAUDE.md` where it names the window steps.
 
-### Decisions (for the user)
+### Decisions (user, 2026-11-18: all as recommended)
 
 1. **Split `predict_window_poses` now**, although it is only 4 lines over: it is the last tier-1 function above the limit,
    and its split removes a copy of the chaining and gives the rest test one home. Recommended. Alternative: leave it at
