@@ -95,6 +95,7 @@ struct WindowOutcome
 {
     int last_iteration = 0;                 // index of the last Levenberg-Marquardt iteration
     std::vector<Eigen::Affine3d> poses;     // the window's final poses
+    int rejected_steps = 0;                 // lm_step_check: steps taken back (not written to a capture)
 };
 
 // optional hooks of process_windows; none set in a normal run

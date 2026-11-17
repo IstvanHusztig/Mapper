@@ -9,6 +9,7 @@
 #include "window_term_csv.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -225,4 +226,63 @@ TEST_CASE("window term table: the run is the same with log_window_terms on, ever
     CHECK(columns(terms[1]) == columns(terms[0]));
     CHECK(columns(features[1]) == columns(features[0]));
     CHECK(features[0].find("change_turn_vertical") != std::string::npos);
+}
+
+// Loop guard of stage 4 (docs/code-split-and-region-agents-plan.md): the window loop's own logic (damping, convergence,
+// lm_step_check with its rejections and final cost-only call), which neither the replays and baselines (step check off)
+// nor the characterization guard (single iterations) cover. Runs the synthetic loop recording in four variants and
+// writes every window's outcome and state as exact hexadecimal doubles. Not a regression test of values (the bits may
+// differ between compilers and configurations): it is recorded before the stage-4 refactor and compared after every
+// commit. Run: lidar_odometry_tests -tc="window loop guard*" --no-skip; the file is LO_LOOP_GUARD_OUT, or
+// window_loop_guard.txt in the temp folder.
+TEST_CASE("window loop guard: every window's outcome over the loop's option branches, as exact bits" * doctest::skip())
+{
+    const Recording r = loop_recording(1);
+    struct Variant
+    {
+        const char *name;
+        bool step_check;
+        double lm_factor_initial;
+        double convergence_delta_threshold;
+    };
+    const Variant variants[] = {{"plain", false, 5.0, 1e-12},
+                                {"step check", true, 5.0, 1e-12},
+                                {"step check, weak damping, early stop", true, 1e-4, 1e-3},
+                                {"early stop", false, 1e-4, 1e-3}};
+    const char *env = std::getenv("LO_LOOP_GUARD_OUT");
+    const fs::path file = env ? fs::path(env) : fs::temp_directory_path() / "window_loop_guard.txt";
+    std::ofstream out(file);
+    out << std::hexfloat;
+    for (const Variant &v : variants)
+    {
+        OdometryConfig c = capture_config();
+        c.nr_iter = 12; // past iteration 10, where the damping grows by schedule
+        c.lm_step_check = v.step_check;
+        c.lm_factor_initial = v.lm_factor_initial;
+        c.convergence_delta_threshold = v.convergence_delta_threshold;
+        c.capture_windows_from_s = 0.0; // every window's outcome, through the capture
+        c.capture_windows_to_s = 1e9;
+        KeepCapture sink;
+        const std::vector<Window> windows = run(r, c, &sink);
+        REQUIRE(sink.written);
+        int rejected = 0, early = 0;
+        out << "variant " << v.name << "\n";
+        for (size_t k = 0; k < sink.kept.outcomes.size(); k++)
+        {
+            const WindowOutcome &o = sink.kept.outcomes[k];
+            const Window &w = windows[sink.kept.first + k];
+            rejected += o.rejected_steps;
+            early += o.last_iteration < c.nr_iter - 1;
+            out << "window " << sink.kept.first + k << " last_iteration " << o.last_iteration << " rejected " << o.rejected_steps << "\n";
+            for (const Eigen::Affine3d &p : o.poses)
+                for (int i = 0; i < 3; i++)
+                    for (int j = 0; j < 4; j++)
+                        out << p(i, j) << (i == 2 && j == 3 ? "\n" : " ");
+            out << "velocity " << w.velocity.start.transpose() << " " << w.velocity.end.transpose() << " end_cov "
+                << w.velocity.end_covariance.reshaped().transpose() << "\n";
+            out << "gyro_bias " << w.gyro_bias.mean.transpose() << " cov " << w.gyro_bias.covariance.reshaped().transpose() << "\n";
+        }
+        MESSAGE(std::string(v.name), ": ", sink.kept.outcomes.size(), " windows, ", rejected, " steps rejected, ", early, " ended before the iteration limit");
+    }
+    MESSAGE("loop guard written to ", file.string());
 }

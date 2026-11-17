@@ -1135,7 +1135,7 @@ bool process_windows(WindowLoop &loop, std::vector<Window> &windows, size_t firs
         }
 
         if (range.outcomes)
-            range.outcomes->push_back(WindowOutcome{optimization.last_iteration, windows[i].poses});
+            range.outcomes->push_back(WindowOutcome{optimization.last_iteration, windows[i].poses, optimization.rejected_steps});
 
         // reported only now: from here on the odometry doesn't change this window again (a viewer may read it)
         progress.progress(i + 1, windows.size());
