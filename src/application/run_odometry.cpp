@@ -320,7 +320,7 @@ namespace
             return;
         const Eigen::Vector3d w = eig.eigenvectors().col(0);
         const auto cost_at = [&](const std::vector<Eigen::Affine3d> &poses)
-        { return ndt_window_cost(intermediate_points, poses, state.buckets_indoor, state.buckets_outdoor, scan_to_map); };
+        { return ndt_window_cost(intermediate_points, poses, state.buckets_indoor, state.buckets_outdoor, scan_to_map, ndt_noise(scan_to_map)); };
         const double c0 = cost_at(window.poses);
 
         // velocity prior
@@ -414,7 +414,7 @@ namespace
             return poses;
         };
         const auto cost = [&](const std::vector<Eigen::Affine3d> &poses)
-        { return ndt_window_cost(intermediate_points, poses, state.buckets_indoor, state.buckets_outdoor, scan_to_map); };
+        { return ndt_window_cost(intermediate_points, poses, state.buckets_indoor, state.buckets_outdoor, scan_to_map, ndt_noise(scan_to_map)); };
         const double stiffness = (cost(rotated(step_deg)) + cost(rotated(-step_deg)) - 2.0 * cost(window.poses)) / (step_deg * step_deg);
         log_info(logger) << "window diagnostics " << i + 1 << ": heading " << std::fixed << std::setprecision(3) << heading << " deg, yaw correction first "
                          << yaw_first << " last " << yaw_last << " deg; yaw stiffness " << std::scientific << std::setprecision(3) << stiffness

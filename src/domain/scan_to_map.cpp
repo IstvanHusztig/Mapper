@@ -38,10 +38,11 @@ SteppedPoses stepped_poses(const Window &window, const std::vector<double> &h_x,
 }
 
 double ndt_window_cost(const std::vector<Point3Di> &intermediate_points, const std::vector<Eigen::Affine3d> &poses,
-                       const NDTBucketMapType &buckets_indoor, const NDTBucketMapType &buckets_outdoor, const ScanToMapOptions &scan_to_map)
+                       const NDTBucketMapType &buckets_indoor, const NDTBucketMapType &buckets_outdoor, const ScanToMapOptions &scan_to_map,
+                       const NdtNoise &noise)
 {
     double cost = 0.0;
-    const auto grid_cost = [&](const NDTBucketMapType &buckets, const NdtGridParameters &grid, double min_distance)
+    const auto grid_cost = [&](const NDTBucketMapType &buckets, const NdtGridParameters &grid, double min_distance, const NdtGridNoise &grid_noise)
     {
         const Eigen::Vector3d b(grid.resolution_X, grid.resolution_Y, grid.resolution_Z);
         for (const Point3Di &p : intermediate_points)
@@ -61,27 +62,28 @@ double ndt_window_cost(const std::vector<Point3Di> &intermediate_points, const s
             if (scan_to_map.use_view_point_and_normal_vectors && cell.normal_vector.dot(poses[p.index_pose].translation() - cell.mean) < 0)
                 continue;
             double w = 1.0;
-            if (scan_to_map.use_planarity)
+            if (noise.planarity)
             {
                 const Eigen::Vector3d ev = Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d>(cell.cov).eigenvalues();
                 const double sum = ev.sum();
                 w *= 1 - ((3 * ev(0) / sum) * (3 * ev(1) / sum) * (3 * ev(2) / sum));
             }
-            if (scan_to_map.use_norm)
+            if (grid_noise.range_weight)
                 w *= range;
-            w = std::min(w, 10.0);
+            if (grid_noise.cap)
+                w = std::min(w, ndt_weight_cap);
             const Eigen::Vector3d r = g - cell.mean;
-            if (scan_to_map.huber_cutoff > 0.0)
-                cost += w * ndt_huber(r.dot(*inverse * r), scan_to_map.huber_cutoff).cost;
+            if (noise.huber_cutoff > 0.0)
+                cost += w * ndt_huber(r.dot(*inverse * r), noise.huber_cutoff).cost;
             else
                 cost += w * r.dot(*inverse * r);
         }
     };
-    grid_cost(buckets_indoor, scan_to_map.grid_indoor, scan_to_map.min_distance);
+    grid_cost(buckets_indoor, scan_to_map.grid_indoor, scan_to_map.min_distance, noise.indoor);
     if (scan_to_map.use_hierarchical_rgd)
-        grid_cost(buckets_outdoor, scan_to_map.grid_outdoor, scan_to_map.min_distance_outdoor_grid);
-    if (scan_to_map.information_scale != 1.0)
-        cost *= scan_to_map.information_scale;
+        grid_cost(buckets_outdoor, scan_to_map.grid_outdoor, scan_to_map.min_distance_outdoor_grid, noise.outdoor);
+    if (noise.information_scale != 1.0)
+        cost *= noise.information_scale;
     return cost;
 }
 

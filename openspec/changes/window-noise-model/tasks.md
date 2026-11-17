@@ -53,9 +53,13 @@
   `NdtGrid` carries the model's `NdtNoise` (planarity, range weight and cap, Huber, scale), the projection reads its ratios
   from it (`ndt_noise(scan_to_map)` builds them). Step checks and the per-term table identical; the Livox 3 replay covers
   the Huber cutoff and the information scale.
-- [ ] 3.5 `ndt_window_cost` reads the model's per-grid range weight and cap. Verify: step checks; the weak-axis
+- [x] 3.5 `ndt_window_cost` reads the model's per-grid range weight and cap. Verify: step checks; the weak-axis
   diagnostic lines on 44_short with `log_weak_axis_diagnostics` before and after, the differences listed (results
   identical).
+  Result: the 26 diagnostic lines of the 44_short replay are identical before and after: both shipped settings have
+  `ablation_study_use_norm` and planarity off, so the weight is 1 in both grids and the cap never acts. The fix only
+  changes the diagnostic with `use_norm` on (no range weight and cap in the outdoor grid, as in the term). Step checks and
+  the per-term table identical.
 - [ ] 3.6 The per-term table: `WindowTermInputs` takes the model; guess and result share it. Verify: step checks; the
   table of the 44_short replay before and after the commit is identical.
 - [ ] 3.7 Consistency's time-scaled rotation sigma calls the model's sigma function. Verify: step checks (the 44_short
