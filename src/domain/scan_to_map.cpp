@@ -97,8 +97,10 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
 {
     ScanToMapWorkspace local_workspace; // without a caller's workspace every call analyses its own patterns
     ScanToMapWorkspace &cache = workspace ? *workspace : local_workspace;
+    const WindowNoiseModel noise =
+        build_window_noise_model(window, scan_to_map, motion_model, rotation_options, translation_imu_options, velocity_prior);
     WindowProblem problem(intermediate_points, window, buckets_indoor, buckets_outdoor, scan_to_map, motion_model, rotation_options,
-                          translation_imu_options, velocity_prior, acc_offset, acc_offset_cov, logger, lidar_translation_information,
+                          translation_imu_options, noise, acc_offset, acc_offset_cov, logger, lidar_translation_information,
                           timing, cache);
     const auto phase = [timing](PhaseTime ScanToMapTiming::*p) { return timing ? &(timing->*p) : nullptr; };
     const LmTiming lm_timing{phase(&ScanToMapTiming::covariance_solve), phase(&ScanToMapTiming::solve), phase(&ScanToMapTiming::update)};

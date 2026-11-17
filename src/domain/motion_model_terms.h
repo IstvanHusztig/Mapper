@@ -19,9 +19,9 @@
 void add_motion_edges(WindowEquations &equations, const WindowUnknowns &unknowns, const Window &window, const MotionModelOptions &motion_model,
                       const MotionModelRotationOptions &rotation_options, const MotionEdgeWeights &weights);
 
-// add_motion_edges with the weights of motion_edge_weights
-void add_motion_edge_terms(WindowEquations &equations, const WindowUnknowns &unknowns, const Window &window, const MotionModelOptions &motion_model,
-                           const MotionModelRotationOptions &rotation_options, const MotionModelTranslationImuOptions &translation_imu_options);
+// add_motion_edges with the noise model's edge weights
+void add_motion_edge_terms(WindowEquations &equations, const WindowNoiseModel &noise, const Window &window, const MotionModelOptions &motion_model,
+                           const MotionModelRotationOptions &rotation_options);
 
 // the gyro bias stays near the previous window's estimate: prior mean and covariance from rotation_options (only with
 // bias estimation)
@@ -29,7 +29,6 @@ void add_gyro_bias_prior(WindowEquations &equations, const WindowUnknowns &unkno
                          const MotionModelRotationOptions &rotation_options);
 
 // velocity continuity on the world-frame translation (white-noise acceleration), only in a window without the
-// accelerometer term and with timestamps: residual = change of velocity between consecutive steps [m/s], sigma =
-// acc_sigma_mps2 * dt; with velocity_prior.use the first step is tied to the previous window's final velocity
-void add_velocity_continuity(WindowEquations &equations, const WindowUnknowns &unknowns, const Window &window,
-                             const MotionModelOptions &motion_model, const VelocityPrior &velocity_prior);
+// accelerometer term and with timestamps: residual = change of velocity between consecutive steps [m/s], weighted as the
+// noise model says; with its first-step prior the first step is tied to the previous window's final velocity
+void add_velocity_continuity(WindowEquations &equations, const WindowNoiseModel &noise, const Window &window);

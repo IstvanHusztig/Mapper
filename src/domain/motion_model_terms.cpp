@@ -24,10 +24,9 @@ void add_gyro_bias_prior(WindowEquations &equations, const WindowUnknowns &unkno
     equations.residuals += 3;
 }
 
-void add_velocity_continuity(WindowEquations &equations, const WindowUnknowns &unknowns, const Window &window,
-                             const MotionModelOptions &motion_model, const VelocityPrior &velocity_prior)
+void add_velocity_continuity(WindowEquations &equations, const WindowNoiseModel &noise, const Window &window)
 {
-    if (!(motion_model.acc_sigma_mps2 > 0.0 && !unknowns.acc_term && window.timestamps.size() == window.poses.size()))
+    if (!noise.velocity_continuity)
         return;
     BandedNormalMatrix &AtPAndt = equations.matrix;
     Eigen::MatrixXd &AtPBndt = equations.rhs;
@@ -38,8 +37,7 @@ void add_velocity_continuity(WindowEquations &equations, const WindowUnknowns &u
     {
         const double dt1 = std::max(window.timestamps[i].first - window.timestamps[i - 1].first, min_dt);
         const double dt2 = std::max(window.timestamps[i + 1].first - window.timestamps[i].first, min_dt);
-        const double sigma_dv = motion_model.acc_sigma_mps2 * 0.5 * (dt1 + dt2);
-        const double w = 1.0 / (sigma_dv * sigma_dv);
+        const double w = noise.velocity_continuity_weights[i - 1];
 
         const Eigen::Vector3d r = (window.poses[i + 1].translation() - window.poses[i].translation()) / dt2 -
                                   (window.poses[i].translation() - window.poses[i - 1].translation()) / dt1;
@@ -61,13 +59,12 @@ void add_velocity_continuity(WindowEquations &equations, const WindowUnknowns &u
     }
 
     // tie the first step of this window to the final velocity of the previous window
-    if (velocity_prior.use && window.poses.size() > 1)
+    if (noise.first_step_prior)
     {
         const double dt = std::max(window.timestamps[1].first - window.timestamps[0].first, min_dt);
-        const double sigma_dv = motion_model.acc_sigma_mps2 * dt;
-        const double w = 1.0 / (sigma_dv * sigma_dv);
+        const double w = noise.first_step_weight;
 
-        const Eigen::Vector3d r = (window.poses[1].translation() - window.poses[0].translation()) / dt - velocity_prior.velocity;
+        const Eigen::Vector3d r = (window.poses[1].translation() - window.poses[0].translation()) / dt - noise.first_step_velocity;
 
         const int nodes[2] = {0, 1};
         const double c[2] = {-1.0 / dt, 1.0 / dt};
@@ -207,9 +204,8 @@ void add_motion_edges(WindowEquations &equations, const WindowUnknowns &unknowns
     }
 }
 
-void add_motion_edge_terms(WindowEquations &equations, const WindowUnknowns &unknowns, const Window &window, const MotionModelOptions &motion_model,
-                           const MotionModelRotationOptions &rotation_options, const MotionModelTranslationImuOptions &translation_imu_options)
+void add_motion_edge_terms(WindowEquations &equations, const WindowNoiseModel &noise, const Window &window, const MotionModelOptions &motion_model,
+                           const MotionModelRotationOptions &rotation_options)
 {
-    add_motion_edges(equations, unknowns, window, motion_model, rotation_options,
-                     motion_edge_weights(unknowns, window, motion_model, rotation_options, translation_imu_options));
+    add_motion_edges(equations, noise.unknowns, window, motion_model, rotation_options, noise.edges);
 }

@@ -200,12 +200,13 @@ namespace
                                   3 * (sum_of(indoor.node_matched) + sum_of(outdoor.node_matched)), false));
     }
 
-    void add_edge_rows(const WindowTermInputs &in, const WindowUnknowns &u, const Reducer &reduce, std::vector<WindowTermRow> &rows)
+    void add_edge_rows(const WindowTermInputs &in, const WindowNoiseModel &noise, const Reducer &reduce, std::vector<WindowTermRow> &rows)
     {
         if (in.window.poses.size() < 2)
             return;
+        const WindowUnknowns &u = noise.unknowns;
         const int edges = static_cast<int>(in.window.poses.size()) - 1;
-        const MotionEdgeWeights weights = motion_edge_weights(u, in.window, in.motion_model, in.rotation_options, in.translation_imu_options);
+        const MotionEdgeWeights &weights = noise.edges;
         MotionEdgeWeights position = weights;
         for (Eigen::Vector3d &r : position.rotation)
             r.setZero();
@@ -231,17 +232,18 @@ namespace
             rows.push_back(reduce.row(name, e, e.motion_cost, e.residuals));
     }
 
-    std::vector<WindowTermRow> term_rows(const WindowTermInputs &in, const WindowUnknowns &u, const std::vector<Eigen::VectorXd> &m,
+    std::vector<WindowTermRow> term_rows(const WindowTermInputs &in, const WindowNoiseModel &noise, const std::vector<Eigen::VectorXd> &m,
                                          WindowTermTable &table)
     {
+        const WindowUnknowns &u = noise.unknowns;
         const Reducer reduce{m};
         std::vector<WindowTermRow> rows;
         add_ndt_rows(in, u, reduce, rows, table);
-        add_edge_rows(in, u, reduce, rows);
+        add_edge_rows(in, noise, reduce, rows);
         const Window &w = in.window;
         add_term_row("gyro_bias_prior", u, reduce, rows, [&](WindowEquations &e) { add_gyro_bias_prior(e, u, w, in.rotation_options); });
         add_term_row("velocity_continuity", u, reduce, rows,
-                     [&](WindowEquations &e) { add_velocity_continuity(e, u, w, in.motion_model, in.velocity_prior); });
+                     [&](WindowEquations &e) { add_velocity_continuity(e, noise, w); });
         bool end_tied = false;
         add_term_row("accelerometer", u, reduce, rows,
                      [&](WindowEquations &e) { end_tied = add_acceleration_terms(e, u, w, in.translation_imu_options, in.acc_offset); });
@@ -285,9 +287,11 @@ WindowTermTable window_term_table(const WindowTermInputs &in)
     table.directions = {in.along, up.cross(in.along).normalized(), up};
     try
     {
-        const WindowUnknowns u = layout_window_unknowns(in.window, in.rotation_options, in.translation_imu_options);
+        const WindowNoiseModel noise = build_window_noise_model(in.window, in.scan_to_map, in.motion_model, in.rotation_options,
+                                                                in.translation_imu_options, in.velocity_prior);
+        const WindowUnknowns &u = noise.unknowns;
         const std::vector<Eigen::VectorXd> m = window_motion_vectors(in.window, u, table.directions, table.turn_defined);
-        table.rows = term_rows(in, u, m, table);
+        table.rows = term_rows(in, noise, m, table);
         table.rows.push_back(total_row(table.rows));
         table.rows.push_back(damping_row(m, u.n_pose_params, in.lm_factor));
         if (!table.turn_defined)

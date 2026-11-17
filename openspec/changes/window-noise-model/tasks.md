@@ -35,9 +35,12 @@
   Result: `MotionEdgeWeights` / `motion_edge_weights` moved into `window_noise_model` unchanged (the edges' sigma via
   `time_scaled_rotation_sigma`); the accelerometer terms are listed in the model (kind, nodes, tau, weight) in the order
   they are added; 5 test cases; step checks identical. The priors' growth formulas move with task 3.3.
-- [ ] 3.2 `prepare_window` builds the model; `WindowProblem` takes it (const) and stops rebuilding the layout per
+- [x] 3.2 `prepare_window` builds the model; `WindowProblem` takes it (const) and stops rebuilding the layout per
   `linearize`. The motion edges (`motion_edge_weights`, the bias coupling) and the velocity continuity and first-step
   prior take their weights from the model. Verify: step checks.
+  Result: step checks identical, and the per-term table of the 44_short replay identical with a reference recorded
+  before this task (checked on every commit from here). The table builds its own model until task 3.6. Replay time
+  measured back to back: 28.9-34.5 s against 31.7-33.3 s before (the first, slower readings were the machine).
 - [ ] 3.3 The accelerometer term, the zero velocity, the weak end-velocity tie (named constant) and the gyro-bias,
   start-velocity and acceleration-offset priors take their weights from the model. Verify: step checks.
 - [ ] 3.4 The origin fix from the model (the degree quirk kept, commented; recorded in `docs/code-review-tracker.md`);

@@ -9,12 +9,13 @@
 WindowProblem::WindowProblem(std::vector<Point3Di> &points, Window &window, NDTBucketMapType &buckets_indoor, NDTBucketMapType &buckets_outdoor,
                              const ScanToMapOptions &scan_to_map, const MotionModelOptions &motion_model,
                              const MotionModelRotationOptions &rotation_options, const MotionModelTranslationImuOptions &translation_imu_options,
-                             const VelocityPrior &velocity_prior, Eigen::Vector3d &acc_offset, Eigen::Matrix3d &acc_offset_cov, Logger &logger,
+                             const WindowNoiseModel &noise, Eigen::Vector3d &acc_offset, Eigen::Matrix3d &acc_offset_cov, Logger &logger,
                              Eigen::Matrix3d *translation_information, ScanToMapTiming *timing, ScanToMapWorkspace &workspace)
     : points_(points), window_(window), buckets_indoor_(buckets_indoor), buckets_outdoor_(buckets_outdoor), scan_to_map_(scan_to_map),
       motion_model_(motion_model), rotation_options_(rotation_options), translation_imu_options_(translation_imu_options),
-      velocity_prior_(velocity_prior), acc_offset_(acc_offset), acc_offset_cov_(acc_offset_cov), logger_(logger),
-      translation_information_(translation_information), timing_(timing), workspace_(workspace)
+      noise_(noise), acc_offset_(acc_offset), acc_offset_cov_(acc_offset_cov), logger_(logger),
+      translation_information_(translation_information), timing_(timing), workspace_(workspace),
+      unknowns_(noise.unknowns)
 {
 }
 
@@ -23,7 +24,6 @@ LmLinearization WindowProblem::linearize(bool with_cost)
     const auto phase = [this](PhaseTime ScanToMapTiming::*p) { return timing_ ? &(timing_->*p) : nullptr; };
     PhaseTimer setup_timer(phase(&ScanToMapTiming::setup));
 
-    unknowns_ = layout_window_unknowns(window_, rotation_options_, translation_imu_options_);
     WindowEquations equations(unknowns_);
     equations.with_cost = with_cost;
     setup_timer.stop();
@@ -38,10 +38,10 @@ LmLinearization WindowProblem::linearize(bool with_cost)
     if (translation_information_)
         *translation_information_ = window_translation_information(ndt);
 
-    add_motion_edge_terms(equations, unknowns_, window_, motion_model_, rotation_options_, translation_imu_options_);
+    add_motion_edge_terms(equations, noise_, window_, motion_model_, rotation_options_);
 
     add_gyro_bias_prior(equations, unknowns_, window_, rotation_options_);
-    add_velocity_continuity(equations, unknowns_, window_, motion_model_, velocity_prior_);
+    add_velocity_continuity(equations, noise_, window_);
 
     const bool end_tied = add_acceleration_terms(equations, unknowns_, window_, translation_imu_options_, acc_offset_);
     add_velocity_priors(equations, unknowns_, window_, translation_imu_options_, end_tied);

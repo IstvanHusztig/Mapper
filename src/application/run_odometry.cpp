@@ -201,7 +201,7 @@ namespace
     // the run that was captured, and the time limit is not checked, so the result doesn't depend on the computer's speed.
     WindowOptimization run_lm_iterations(std::vector<Point3Di> &intermediate_points, Window &window, OdometryState &state,
                                          const OdometryRunSetup &setup, AccTerm &acc_term, const MotionModelRotationOptions &window_rotation_options,
-                                         const VelocityPrior &velocity_prior, Eigen::Vector3d &acc_offset, Eigen::Matrix3d &lidar_translation_information,
+                                         const WindowNoiseModel &noise, Eigen::Vector3d &acc_offset, Eigen::Matrix3d &lidar_translation_information,
                                          const OdometryConfig &params, bool debugMsg, Logger &logger, ScanToMapTiming *timing,
                                          ScanToMapWorkspace &workspace, int forced_last_iteration)
     {
@@ -214,7 +214,7 @@ namespace
         // the window's translation information, in every run (the window verdict's information ratio); it enters no matrix
         Eigen::Matrix3d *translation_information = &lidar_translation_information;
         WindowProblem problem(intermediate_points, window, state.buckets_indoor, state.buckets_outdoor, setup.scan_to_map, setup.motion_model,
-                              window_rotation_options, acc_term.options, velocity_prior, acc_offset, acc_term.offset_cov, logger,
+                              window_rotation_options, acc_term.options, noise, acc_offset, acc_term.offset_cov, logger,
                               translation_information, timing, workspace);
 
         LmOptions options;
@@ -933,6 +933,7 @@ namespace
         Eigen::Matrix3d lidar_translation_information = Eigen::Matrix3d::Zero();
         Eigen::Vector3d acc_offset = Eigen::Vector3d::Zero();
         VelocityPrior velocity_prior;
+        WindowNoiseModel noise; // every weight of the window (window_noise_model.h)
         std::chrono::time_point<std::chrono::system_clock> window_start;
         std::vector<Eigen::Affine3d> poses_before_optimization; // the guess
         Window guess;                                           // log_window_terms: the window as the first iteration finds it
@@ -1037,6 +1038,7 @@ namespace
         window.motion_model_poses = window.poses;
         if (params.log_window_terms)
             w.guess = window;
+        w.noise = build_window_noise_model(window, setup.scan_to_map, setup.motion_model, w.rotation_options, w.acc_term.options, w.velocity_prior);
         return w;
     }
 
@@ -1050,7 +1052,7 @@ namespace
         const int big_jump_nodes_before = workspace.big_jump_nodes;
         const int forced = c.range.forced_last_iteration ? (*c.range.forced_last_iteration)[w.window_index - c.first] : -1;
         w.optimization = run_lm_iterations(w.intermediate_points, c.windows[w.i], c.state, c.loop.setup, w.acc_term, w.rotation_options,
-                                           w.velocity_prior, w.acc_offset, w.lidar_translation_information, c.params, c.debugMsg, c.logger,
+                                           w.noise, w.acc_offset, w.lidar_translation_information, c.params, c.debugMsg, c.logger,
                                            c.params.log_stage_timing ? &carry.timing.lm : nullptr, workspace, forced);
         lm_timer.stop();
         w.steps_not_applied = workspace.steps_skipped - steps_skipped_before;

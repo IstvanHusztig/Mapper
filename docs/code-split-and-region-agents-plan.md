@@ -840,6 +840,10 @@ Every commit: build, tests, characterization guard, loop guard, the two replays 
    (const); `linearize` no longer rebuilds the layout. Recommended. Alternative: the problem builds the model on its
    first linearize (keeps today's call order, but the model then lives inside the solver).
 
+**At the end of the plan (user, 2026-11-17):** the dMapper guide (`docs/index.html`, pipeline step 6 "Window
+optimization" and the Fundamentals) is updated with how the optimizer works after stages 2-5: the term functions, the
+solver unit and its stop reasons, the window verdict, the noise model and its log lines. Then the Hungarian pages.
+
 ## Stage 6: the other huge functions
 
 Measured today (lines):

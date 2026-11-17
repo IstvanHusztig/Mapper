@@ -184,8 +184,9 @@ namespace
         Eigen::Matrix3d acc_offset_cov = Eigen::Matrix3d::Identity();
         ScanToMapWorkspace local_workspace;
         ScanToMapWorkspace &cache = workspace ? *workspace : local_workspace;
+        const WindowNoiseModel noise = build_window_noise_model(window, o.scan_to_map, o.motion_model, o.rotation, o.translation_imu, o.velocity_prior);
         WindowProblem problem(points, window, maps.indoor, maps.outdoor, o.scan_to_map, o.motion_model, o.rotation, o.translation_imu,
-                              o.velocity_prior, acc_offset, acc_offset_cov, logger, translation_information, nullptr, cache);
+                              noise, acc_offset, acc_offset_cov, logger, translation_information, nullptr, cache);
         LmOptions options;
         options.last_iteration = iterations - 1;
         options.initial_factor = lm_factor_initial;
@@ -1283,13 +1284,14 @@ TEST_CASE("window term table: the rows add up to the window's complete equations
 
     // the complete equations, as optimize_lidar_odometry builds them
     const Eigen::Vector3d offset = Eigen::Vector3d::Zero();
-    const WindowUnknowns u = layout_window_unknowns(w, rotation, acc.imu);
+    const WindowNoiseModel noise = build_window_noise_model(w, o.scan_to_map, o.motion_model, rotation, acc.imu, o.velocity_prior);
+    const WindowUnknowns &u = noise.unknowns;
     WindowEquations all(u);
     const NdtSums ndt = sum_ndt_point_terms(all, w, points, maps.indoor, maps.outdoor, o.scan_to_map, false, false, nullptr);
     add_projected_ndt_blocks(all, ndt, o.scan_to_map);
-    add_motion_edge_terms(all, u, w, o.motion_model, rotation, acc.imu);
+    add_motion_edge_terms(all, noise, w, o.motion_model, rotation);
     add_gyro_bias_prior(all, u, w, rotation);
-    add_velocity_continuity(all, u, w, o.motion_model, o.velocity_prior);
+    add_velocity_continuity(all, noise, w);
     const bool end_tied = add_acceleration_terms(all, u, w, acc.imu, offset);
     add_velocity_priors(all, u, w, acc.imu, end_tied);
     add_acceleration_offset_prior(all, u, acc.imu, offset);

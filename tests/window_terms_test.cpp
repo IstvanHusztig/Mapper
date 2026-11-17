@@ -193,7 +193,8 @@ TEST_CASE("window terms: the velocity continuity's right-hand side is minus half
     {
         CAPTURE(with_prior);
         const VelocityPrior prior{with_prior, Eigen::Vector3d(1.1, -0.2, 0.05)};
-        const Term term = [&](WindowEquations &e, const Window &win) { add_velocity_continuity(e, u, win, m, prior); };
+        const WindowNoiseModel noise = build_window_noise_model(w, ScanToMapOptions{}, m, rotation, {}, prior);
+        const Term term = [&](WindowEquations &e, const Window &win) { add_velocity_continuity(e, noise, win); };
         check_gradient(u, w, term, columns, shift, 1e-5, true);
     }
 }
@@ -232,7 +233,8 @@ TEST_CASE("window terms: the motion-model edges' right-hand side is minus half t
             CAPTURE(bias);
             rotation.time_scaled_sigma = time_scaled;
             rotation.estimate_bias = bias;
-            const WindowUnknowns u = layout_window_unknowns(w, rotation, {});
+            const WindowNoiseModel noise = build_window_noise_model(w, ScanToMapOptions{}, m, rotation, {}, VelocityPrior{});
+            const WindowUnknowns &u = noise.unknowns;
             std::vector<int> columns;
             for (int c = 0; c < u.n_pose_params; c++)
                 columns.push_back(c);
@@ -242,7 +244,7 @@ TEST_CASE("window terms: the motion-model edges' right-hand side is minus half t
             const Term term = [&](WindowEquations &e, const Window &win)
             {
                 e.with_cost = true;
-                add_motion_edge_terms(e, u, win, m, rotation, {});
+                add_motion_edge_terms(e, noise, win, m, rotation);
             };
             check_gradient(u, w, term, columns, [&](Window &win, int c, double h) { shift_pose_or_bias(win, c, h, u); }, 1e-7, false);
         }
@@ -458,14 +460,16 @@ TEST_CASE("window terms: each term counts the scalar residuals it adds")
         m.fix_origin_x_sigma_m = m.fix_origin_y_sigma_m = m.fix_origin_z_sigma_m = 1e-3;
         m.fix_origin_om_sigma_deg = m.fix_origin_fi_sigma_deg = m.fix_origin_ka_sigma_deg = 1e-2;
         m.acc_sigma_mps2 = 1.0;
+        const VelocityPrior previous{true, Eigen::Vector3d(1.0, 0.0, 0.0)};
+        const WindowNoiseModel noise = build_window_noise_model(w, ScanToMapOptions{}, m, rotation, {}, previous);
         WindowEquations edges(u);
-        add_motion_edge_terms(edges, u, w, m, rotation, {});
+        add_motion_edge_terms(edges, noise, w, m, rotation);
         CHECK(edges.residuals == 6 * 11); // position and rotation, per edge
         WindowEquations bias(u);
         add_gyro_bias_prior(bias, u, w, rotation);
         CHECK(bias.residuals == 3);
         WindowEquations continuity(u);
-        add_velocity_continuity(continuity, u, w, m, VelocityPrior{true, Eigen::Vector3d(1.0, 0.0, 0.0)});
+        add_velocity_continuity(continuity, noise, w);
         CHECK(continuity.residuals == 3 * 10 + 3); // one per inner node, and the tie to the previous window
         WindowEquations origin(u);
         fix_origin(origin, m);

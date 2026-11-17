@@ -13,6 +13,7 @@
 #include "scan_to_map.h"
 #include "window.h"
 #include "window_equations.h"
+#include "window_noise_model.h"
 #include <structures.h>
 
 #include <Eigen/Dense>
@@ -21,11 +22,12 @@
 class WindowProblem : public LmProblem
 {
 public:
-    // translation_information: when not null, the window's translation information from the matched normals is written
-    // to it at every linearization; timing: when not null, the problem's phases are added to it
+    // noise: the window's noise model (window_noise_model.h), built before the first iteration; it holds the layout of the
+    // unknowns. translation_information: when not null, the window's translation information from the matched normals is
+    // written to it at every linearization; timing: when not null, the problem's phases are added to it
     WindowProblem(std::vector<Point3Di> &points, Window &window, NDTBucketMapType &buckets_indoor, NDTBucketMapType &buckets_outdoor,
                   const ScanToMapOptions &scan_to_map, const MotionModelOptions &motion_model, const MotionModelRotationOptions &rotation_options,
-                  const MotionModelTranslationImuOptions &translation_imu_options, const VelocityPrior &velocity_prior,
+                  const MotionModelTranslationImuOptions &translation_imu_options, const WindowNoiseModel &noise,
                   Eigen::Vector3d &acc_offset, Eigen::Matrix3d &acc_offset_cov, Logger &logger, Eigen::Matrix3d *translation_information,
                   ScanToMapTiming *timing, ScanToMapWorkspace &workspace);
 
@@ -62,14 +64,14 @@ private:
     const MotionModelOptions &motion_model_;
     const MotionModelRotationOptions &rotation_options_;
     const MotionModelTranslationImuOptions &translation_imu_options_;
-    const VelocityPrior &velocity_prior_;
+    const WindowNoiseModel &noise_;
     Eigen::Vector3d &acc_offset_;
     Eigen::Matrix3d &acc_offset_cov_;
     Logger &logger_;
     Eigen::Matrix3d *translation_information_;
     ScanToMapTiming *timing_;
     ScanToMapWorkspace &workspace_;
-    WindowUnknowns unknowns_;
+    const WindowUnknowns &unknowns_; // noise_.unknowns
     ScanToMapCost cost_;
     State candidate_, accepted_;
 };
