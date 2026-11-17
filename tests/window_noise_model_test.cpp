@@ -259,7 +259,7 @@ TEST_CASE("window noise model: the same values the terms put into the normal equ
     WindowEquations offset(u);
     add_acceleration_offset_prior(offset, noise, Eigen::Vector3d::Zero());
     WindowEquations origin(u);
-    fix_origin(origin, m);
+    fix_origin(origin, noise);
     for (int a = 0; a < 3; a++)
     {
         for (int b = 0; b < 3; b++)

@@ -28,12 +28,12 @@ LmLinearization WindowProblem::linearize(bool with_cost)
     equations.with_cost = with_cost;
     setup_timer.stop();
 
-    NdtSums ndt = sum_ndt_point_terms(equations, window_, points_, buckets_indoor_, buckets_outdoor_, scan_to_map_,
+    NdtSums ndt = sum_ndt_point_terms(equations, window_, points_, buckets_indoor_, buckets_outdoor_, scan_to_map_, noise_.ndt,
                                       translation_information_ != nullptr, with_cost, timing_);
 
     PhaseTimer motion_terms_timer(phase(&ScanToMapTiming::motion_terms));
 
-    add_projected_ndt_blocks(equations, ndt, scan_to_map_);
+    add_projected_ndt_blocks(equations, ndt, noise_.ndt);
     // geometric translation constraint of this window (world frame, summed over the nodes)
     if (translation_information_)
         *translation_information_ = window_translation_information(ndt);
@@ -62,7 +62,7 @@ LmLinearization WindowProblem::linearize(bool with_cost)
     }
     PhaseTimer assembly_timer(phase(&ScanToMapTiming::assembly));
 
-    fix_origin(equations, motion_model_);
+    fix_origin(equations, noise_);
 
     assert(equations.matrix.dropped_writes() == 0); // a write outside the band would mean the band was chosen too narrow
     LmLinearization lin;

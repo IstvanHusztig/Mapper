@@ -76,6 +76,9 @@ struct NdtNoise
     double projection_ratio_full = 0.0;
 };
 
+// the NDT term's rules from the run's scan-to-map settings
+NdtNoise ndt_noise(const ScanToMapOptions &scan_to_map);
+
 // the weak tie of the end velocity to the start velocity when the end has no accelerometer term (sigma 1 m/s)
 constexpr double weak_end_velocity_tie_weight = 1.0;
 

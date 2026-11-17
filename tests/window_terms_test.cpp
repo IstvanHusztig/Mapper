@@ -140,7 +140,7 @@ TEST_CASE("window terms: the origin fix weighs the first node's six parameters a
     MotionModelOptions m;
     m.fix_origin_x_sigma_m = m.fix_origin_y_sigma_m = m.fix_origin_z_sigma_m = 1e-3;
     m.fix_origin_om_sigma_deg = m.fix_origin_fi_sigma_deg = m.fix_origin_ka_sigma_deg = 1e-2;
-    fix_origin(e, m);
+    fix_origin(e, build_window_noise_model(w, ScanToMapOptions{}, m, rotation, {}, VelocityPrior{}));
     for (int r = 0; r < u.n_params; r++)
         for (int c = 0; c < u.n_params; c++)
         {
@@ -484,7 +484,7 @@ TEST_CASE("window terms: each term counts the scalar residuals it adds")
         add_velocity_continuity(continuity, noise, w);
         CHECK(continuity.residuals == 3 * 10 + 3); // one per inner node, and the tie to the previous window
         WindowEquations origin(u);
-        fix_origin(origin, m);
+        fix_origin(origin, noise);
         CHECK(origin.residuals == 6);
     }
 }
@@ -509,9 +509,9 @@ TEST_CASE("window terms: the degeneracy projection passes strong directions and 
             g(i) = value(rng);
         sums.rhs.push_back(g);
     }
-    ScanToMapOptions options;
-    options.degenerate_projection_ratio = 0.1;
-    options.degenerate_projection_ratio_full = 0.2;
+    NdtNoise options;
+    options.projection_ratio = 0.1;
+    options.projection_ratio_full = 0.2;
     SUBCASE("every direction strong: the blocks unchanged")
     {
         sums.normal_information.assign(3, Eigen::Vector3d(1.0, 0.8, 0.6).asDiagonal());
@@ -547,7 +547,7 @@ TEST_CASE("window terms: the degeneracy projection passes strong directions and 
     SUBCASE("projection off: nothing added")
     {
         sums.normal_information.assign(3, Eigen::Matrix3d::Identity());
-        options.degenerate_projection_ratio_full = 0.0;
+        options.projection_ratio_full = 0.0;
         WindowEquations e(u);
         add_projected_ndt_blocks(e, sums, options);
         CHECK(e.rhs.isZero());

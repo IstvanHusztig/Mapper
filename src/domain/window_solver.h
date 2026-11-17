@@ -9,13 +9,14 @@
 #include "scan_to_map.h"
 #include "window.h"
 #include "window_equations.h"
+#include "window_noise_model.h"
 
 #include <Eigen/Sparse>
 #include <vector>
 
-// weight 1 / sigma^2 on the first node's six parameters (its right-hand side is zero): node 0 stays at the previous
-// window's end
-void fix_origin(WindowEquations &equations, const MotionModelOptions &motion_model);
+// the noise model's origin weights on the first node's six parameters (its right-hand side is zero): node 0 stays at the
+// previous window's end
+void fix_origin(WindowEquations &equations, const WindowNoiseModel &noise);
 
 // a solver step (lm_solver.h): one entry per unknown; solved false: the solve failed
 struct WindowStep

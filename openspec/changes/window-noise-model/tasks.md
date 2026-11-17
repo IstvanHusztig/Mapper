@@ -47,8 +47,12 @@
   priors' growth formulas (`random_walk_prior_cov`, `velocity_prior_cov_over_gap`) moved into `window_noise_model` and are
   called by `apply_gyro_bias_prior`, `prepare_acc_term` and `prepare_velocity_state`, with a test. Step checks and the
   per-term table identical.
-- [ ] 3.4 The origin fix from the model (the degree quirk kept, commented; recorded in `docs/code-review-tracker.md`);
+- [x] 3.4 The origin fix from the model (the degree quirk kept, commented; recorded in `docs/code-review-tracker.md`);
   the NDT term's parameters per grid from the model, applied in today's order. Verify: step checks.
+  Result: `fix_origin` reads `noise.origin` (the quirk is the existing tracker entry C37, its location updated); each
+  `NdtGrid` carries the model's `NdtNoise` (planarity, range weight and cap, Huber, scale), the projection reads its ratios
+  from it (`ndt_noise(scan_to_map)` builds them). Step checks and the per-term table identical; the Livox 3 replay covers
+  the Huber cutoff and the information scale.
 - [ ] 3.5 `ndt_window_cost` reads the model's per-grid range weight and cap. Verify: step checks; the weak-axis
   diagnostic lines on 44_short with `log_weak_axis_diagnostics` before and after, the differences listed (results
   identical).

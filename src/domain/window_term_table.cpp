@@ -168,17 +168,19 @@ namespace
         return s;
     }
 
-    void add_ndt_rows(const WindowTermInputs &in, const WindowUnknowns &u, const Reducer &reduce, std::vector<WindowTermRow> &rows,
+    void add_ndt_rows(const WindowTermInputs &in, const WindowNoiseModel &noise, const Reducer &reduce, std::vector<WindowTermRow> &rows,
                       WindowTermTable &table)
     {
+        const WindowUnknowns &u = noise.unknowns;
         const ScanToMapOptions &o = in.scan_to_map;
-        const NdtSums indoor = sum_ndt_grid_blocks(indoor_ndt_grid(in.buckets_indoor, o), in.window, in.points, o, true);
+        const NdtSums indoor = sum_ndt_grid_blocks(indoor_ndt_grid(in.buckets_indoor, o, noise.ndt), in.window, in.points, o, true);
         NdtSums outdoor;
         if (o.use_hierarchical_rgd)
-            outdoor = sum_ndt_grid_blocks(outdoor_ndt_grid(in.buckets_outdoor, o), in.window, in.points, o, true);
+            outdoor = sum_ndt_grid_blocks(outdoor_ndt_grid(in.buckets_outdoor, o, noise.ndt), in.window, in.points, o, true);
         // the solver's projection: from the indoor grid's normals, for both grids
-        const NdtProjection projection =
-            o.degenerate_projection_ratio_full > 0.0 ? ndt_degeneracy_projection(window_translation_information(indoor), o) : no_projection();
+        const NdtProjection projection = noise.ndt.projection_ratio_full > 0.0
+                                             ? ndt_degeneracy_projection(window_translation_information(indoor), noise.ndt)
+                                             : no_projection();
         table.translation_information = window_translation_information(indoor);
         table.ndt_matched = sum_of(indoor.node_matched) + sum_of(outdoor.node_matched);
         table.ndt_unmatched = sum_of(indoor.node_unmatched) + sum_of(outdoor.node_unmatched);
@@ -238,7 +240,7 @@ namespace
         const WindowUnknowns &u = noise.unknowns;
         const Reducer reduce{m};
         std::vector<WindowTermRow> rows;
-        add_ndt_rows(in, u, reduce, rows, table);
+        add_ndt_rows(in, noise, reduce, rows, table);
         add_edge_rows(in, noise, reduce, rows);
         const Window &w = in.window;
         add_term_row("gyro_bias_prior", u, reduce, rows, [&](WindowEquations &e) { add_gyro_bias_prior(e, noise, w); });
@@ -253,7 +255,7 @@ namespace
         add_term_row("offset_prior", u, reduce, rows,
                      [&](WindowEquations &e) { add_acceleration_offset_prior(e, noise, in.acc_offset); });
         WindowEquations origin(u);
-        fix_origin(origin, in.motion_model);
+        fix_origin(origin, noise);
         rows.push_back(reduce.row("origin_fix", origin, 0.0, 6));
         return rows;
     }

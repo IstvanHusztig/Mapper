@@ -10,6 +10,7 @@
 #include "scan_to_map.h"
 #include "window.h"
 #include "window_equations.h"
+#include "window_noise_model.h"
 #include <structures.h>
 
 #include <cmath>
@@ -45,9 +46,9 @@ struct NdtSums
     std::vector<int> node_matched, node_unmatched;
 };
 
-// one NDT grid as the point terms see it: its cells, cell size and nearest range, and three things only the indoor grid
-// does: the range weight (use_norm), the cap of the weight at 10, and the normal information. For the outdoor grid the
-// weight is planarity * 1.0, which is planarity exactly.
+// one NDT grid as the point terms see it: its cells, cell size and nearest range, the noise model's rules for its points
+// (range weight and cap: the indoor grid only; planarity, Huber, scale: both), and whether it collects the normal
+// information (the indoor grid). For the outdoor grid the weight is planarity * 1.0, which is planarity exactly.
 struct NdtGrid
 {
     const NDTBucketMapType &buckets;
@@ -57,16 +58,17 @@ struct NdtGrid
     bool cap;
     bool normal_information;
     const char *name; // "indoor" / "outdoor", for messages
+    const NdtNoise &noise;
 };
-NdtGrid indoor_ndt_grid(const NDTBucketMapType &buckets, const ScanToMapOptions &scan_to_map);
-NdtGrid outdoor_ndt_grid(const NDTBucketMapType &buckets, const ScanToMapOptions &scan_to_map);
+NdtGrid indoor_ndt_grid(const NDTBucketMapType &buckets, const ScanToMapOptions &scan_to_map, const NdtNoise &noise);
+NdtGrid outdoor_ndt_grid(const NDTBucketMapType &buckets, const ScanToMapOptions &scan_to_map, const NdtNoise &noise);
 
 // the point terms of both grids, per node in parallel (a node's points in point order, so the result is the same with or
-// without threads); planarity / range weights, the Huber kernel and the information scale as set. Throws
-// std::domain_error on a non-finite distance with the Huber kernel on. timing: the indoor and outdoor phases.
+// without threads); planarity / range weights, the Huber kernel and the information scale as the noise model says.
+// Throws std::domain_error on a non-finite distance with the Huber kernel on. timing: the indoor and outdoor phases.
 NdtSums sum_ndt_point_terms(WindowEquations &equations, const Window &window, const std::vector<Point3Di> &intermediate_points,
                             const NDTBucketMapType &buckets_indoor, const NDTBucketMapType &buckets_outdoor, const ScanToMapOptions &scan_to_map,
-                            bool normal_information_wanted, bool with_cost, ScanToMapTiming *timing);
+                            const NdtNoise &noise, bool normal_information_wanted, bool with_cost, ScanToMapTiming *timing);
 
 // one grid's point terms alone, into node blocks whatever the projection setting (with the grid's normal information when
 // it has any): the per-grid rows of the window term table. Throws as sum_ndt_point_terms.
@@ -80,7 +82,7 @@ struct NdtProjection
     Eigen::Matrix<double, 6, 6> M;
     bool all_kept = true;
 };
-NdtProjection ndt_degeneracy_projection(const Eigen::Matrix3d &information, const ScanToMapOptions &scan_to_map);
+NdtProjection ndt_degeneracy_projection(const Eigen::Matrix3d &information, const NdtNoise &noise);
 
 // every node block of `sums` into the matrix, as M B M and M g (or unchanged when all_kept)
 void add_ndt_blocks(WindowEquations &equations, const NdtSums &sums, const NdtProjection &projection);
@@ -88,7 +90,7 @@ void add_ndt_blocks(WindowEquations &equations, const NdtSums &sums, const NdtPr
 // degeneracy-aware NDT terms (degenerate_projection_ratio_full > 0): along a translation direction whose share of the
 // window's geometric information is small the node blocks carry no information (M B M, M g with M = diag(P, I)); every
 // node block goes into the matrix here
-void add_projected_ndt_blocks(WindowEquations &equations, const NdtSums &sums, const ScanToMapOptions &scan_to_map);
+void add_projected_ndt_blocks(WindowEquations &equations, const NdtSums &sums, const NdtNoise &noise);
 
 // the window's translation information: the sum of the nodes' normal information (world frame)
 Eigen::Matrix3d window_translation_information(const NdtSums &sums);

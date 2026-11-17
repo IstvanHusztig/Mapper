@@ -4,16 +4,10 @@
 #include <algorithm>
 #include <cmath>
 
-void fix_origin(WindowEquations &equations, const MotionModelOptions &motion_model)
+void fix_origin(WindowEquations &equations, const WindowNoiseModel &noise)
 {
-    const double fix_origin_weights[6] = {1.0 / (motion_model.fix_origin_x_sigma_m * motion_model.fix_origin_x_sigma_m),
-                                          1.0 / (motion_model.fix_origin_y_sigma_m * motion_model.fix_origin_y_sigma_m),
-                                          1.0 / (motion_model.fix_origin_z_sigma_m * motion_model.fix_origin_z_sigma_m),
-                                          1.0 / (motion_model.fix_origin_om_sigma_deg * motion_model.fix_origin_om_sigma_deg),
-                                          1.0 / (motion_model.fix_origin_fi_sigma_deg * motion_model.fix_origin_fi_sigma_deg),
-                                          1.0 / (motion_model.fix_origin_ka_sigma_deg * motion_model.fix_origin_ka_sigma_deg)};
     for (int k = 0; k < 6; k++)
-        equations.matrix.add(k, k, fix_origin_weights[k]);
+        equations.matrix.add(k, k, noise.origin[size_t(k)]);
     equations.residuals += 6;
 }
 

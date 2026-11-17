@@ -59,6 +59,19 @@ MotionEdgeWeights motion_edge_weights(const WindowUnknowns &unknowns, const Wind
     return weights;
 }
 
+NdtNoise ndt_noise(const ScanToMapOptions &scan_to_map)
+{
+    NdtNoise n;
+    n.planarity = scan_to_map.use_planarity;
+    n.indoor = NdtGridNoise{scan_to_map.use_norm, true};
+    n.outdoor = NdtGridNoise{false, false};
+    n.huber_cutoff = scan_to_map.huber_cutoff;
+    n.information_scale = scan_to_map.information_scale;
+    n.projection_ratio = scan_to_map.degenerate_projection_ratio;
+    n.projection_ratio_full = scan_to_map.degenerate_projection_ratio_full;
+    return n;
+}
+
 Eigen::Matrix3d random_walk_prior_cov(const Eigen::Matrix3d &carried, double rw, double duration_s)
 {
     return carried + Eigen::Matrix3d::Identity() * (rw * rw * duration_s);
@@ -182,12 +195,6 @@ WindowNoiseModel build_window_noise_model(const Window &window, const ScanToMapO
                 1.0 / (motion_model.fix_origin_fi_sigma_deg * motion_model.fix_origin_fi_sigma_deg),
                 1.0 / (motion_model.fix_origin_ka_sigma_deg * motion_model.fix_origin_ka_sigma_deg)};
 
-    m.ndt.planarity = scan_to_map.use_planarity;
-    m.ndt.indoor = NdtGridNoise{scan_to_map.use_norm, true};
-    m.ndt.outdoor = NdtGridNoise{false, false};
-    m.ndt.huber_cutoff = scan_to_map.huber_cutoff;
-    m.ndt.information_scale = scan_to_map.information_scale;
-    m.ndt.projection_ratio = scan_to_map.degenerate_projection_ratio;
-    m.ndt.projection_ratio_full = scan_to_map.degenerate_projection_ratio_full;
+    m.ndt = ndt_noise(scan_to_map);
     return m;
 }

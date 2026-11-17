@@ -11,18 +11,18 @@
 #include <stdexcept>
 #include <string>
 
-NdtGrid indoor_ndt_grid(const NDTBucketMapType &buckets, const ScanToMapOptions &scan_to_map)
+NdtGrid indoor_ndt_grid(const NDTBucketMapType &buckets, const ScanToMapOptions &scan_to_map, const NdtNoise &noise)
 {
     return NdtGrid{buckets,
                    Eigen::Vector3d(scan_to_map.grid_indoor.resolution_X, scan_to_map.grid_indoor.resolution_Y, scan_to_map.grid_indoor.resolution_Z),
-                   scan_to_map.min_distance, scan_to_map.use_norm, true, true, "indoor"};
+                   scan_to_map.min_distance, noise.indoor.range_weight, noise.indoor.cap, true, "indoor", noise};
 }
 
-NdtGrid outdoor_ndt_grid(const NDTBucketMapType &buckets, const ScanToMapOptions &scan_to_map)
+NdtGrid outdoor_ndt_grid(const NDTBucketMapType &buckets, const ScanToMapOptions &scan_to_map, const NdtNoise &noise)
 {
     return NdtGrid{buckets,
                    Eigen::Vector3d(scan_to_map.grid_outdoor.resolution_X, scan_to_map.grid_outdoor.resolution_Y, scan_to_map.grid_outdoor.resolution_Z),
-                   scan_to_map.min_distance_outdoor_grid, false, false, false, "outdoor"};
+                   scan_to_map.min_distance_outdoor_grid, noise.outdoor.range_weight, noise.outdoor.cap, false, "outdoor", noise};
 }
 
 namespace
@@ -87,36 +87,36 @@ namespace
 
     // cost (lm_step_check): the point's w r^T M r (Huber cost when on), times the information scale
     void count_matched(const Point3Di &p, const Eigen::Vector3d &point_global, const Eigen::Vector3d &mean, const Eigen::Matrix3d &infm, double w,
-                       const ScanToMapOptions &scan_to_map, NdtPointTarget &t)
+                       const NdtNoise &noise, NdtPointTarget &t)
     {
         if (!t.with_cost)
             return;
         const Eigen::Vector3d r = point_global - mean;
         const double s = r.dot(infm * r);
-        const double point_cost = w * (scan_to_map.huber_cutoff > 0.0 ? ndt_huber(s, scan_to_map.huber_cutoff).cost : s);
-        t.sums.node_cost[p.index_pose] += scan_to_map.information_scale != 1.0 ? scan_to_map.information_scale * point_cost : point_cost;
+        const double point_cost = w * (noise.huber_cutoff > 0.0 ? ndt_huber(s, noise.huber_cutoff).cost : s);
+        t.sums.node_cost[p.index_pose] += noise.information_scale != 1.0 ? noise.information_scale * point_cost : point_cost;
         t.sums.node_matched[p.index_pose]++;
     }
 
     // ndt_huber_cutoff: the point's IRLS weight from its distance to the cell (1 when off or within the cutoff), then
     // ndt_information_scale; in this order, as in Codex's build (cbca36d: Huber weight, then scale_ndt_point)
     void apply_huber_and_scale(Eigen::Matrix<double, 6, 6, Eigen::RowMajor> &AtPA, Eigen::Matrix<double, 6, 1> &AtPB, const Eigen::Vector3d &point_global,
-                               const Eigen::Vector3d &mean, const Eigen::Matrix3d &infm, const ScanToMapOptions &scan_to_map, NdtPointTarget &t)
+                               const Eigen::Vector3d &mean, const Eigen::Matrix3d &infm, const NdtNoise &noise, NdtPointTarget &t)
     {
-        if (scan_to_map.huber_cutoff > 0.0)
+        if (noise.huber_cutoff > 0.0)
         {
             const Eigen::Vector3d r = point_global - mean;
             const double s = r.dot(infm * r);
             if (!std::isfinite(s))
                 t.invalid_distance.store(true, std::memory_order_relaxed);
-            const double weight = ndt_huber(s, scan_to_map.huber_cutoff).weight;
+            const double weight = ndt_huber(s, noise.huber_cutoff).weight;
             AtPA *= weight;
             AtPB *= weight;
         }
-        if (scan_to_map.information_scale != 1.0)
+        if (noise.information_scale != 1.0)
         {
-            AtPA *= scan_to_map.information_scale;
-            AtPB *= scan_to_map.information_scale;
+            AtPA *= noise.information_scale;
+            AtPB *= noise.information_scale;
         }
     }
 
@@ -147,10 +147,10 @@ namespace
     }
 
     // the planarity / range weight of a point term (1 when neither is on)
-    double ndt_point_weight(const NdtGrid &grid, const NdtBucket &bucket, const Eigen::Vector3d &p_s, const ScanToMapOptions &scan_to_map)
+    double ndt_point_weight(const NdtGrid &grid, const NdtBucket &bucket, const Eigen::Vector3d &p_s)
     {
         double planarity = 1.0;
-        if (scan_to_map.use_planarity)
+        if (grid.noise.planarity)
         {
             Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eigen_solver(bucket.cov, Eigen::ComputeEigenvectors);
             auto eigen_values = eigen_solver.eigenvalues();
@@ -164,8 +164,8 @@ namespace
         if (grid.range_weight)
             norm = p_s.norm();
         double w = planarity * norm;
-        if (grid.cap && w > 10.0)
-            w = 10.0;
+        if (grid.cap && w > ndt_weight_cap)
+            w = ndt_weight_cap;
         return w;
     }
 
@@ -195,15 +195,15 @@ namespace
             infm(0, 0), infm(0, 1), infm(0, 2), infm(1, 0), infm(1, 1), infm(1, 2), infm(2, 0), infm(2, 1), infm(2, 2),
             bucket->mean.x(), bucket->mean.y(), bucket->mean.z());
 
-        const double w = ndt_point_weight(grid, *bucket, p_s, scan_to_map);
-        const bool weighted = scan_to_map.use_planarity || grid.range_weight;
+        const double w = ndt_point_weight(grid, *bucket, p_s);
+        const bool weighted = grid.noise.planarity || grid.range_weight;
         if (weighted)
         {
             AtPA *= w;
             AtPB *= w;
         }
-        count_matched(p, point_global, bucket->mean, infm, weighted ? w : 1.0, scan_to_map, t);
-        apply_huber_and_scale(AtPA, AtPB, point_global, bucket->mean, infm, scan_to_map, t);
+        count_matched(p, point_global, bucket->mean, infm, weighted ? w : 1.0, grid.noise, t);
+        apply_huber_and_scale(AtPA, AtPB, point_global, bucket->mean, infm, grid.noise, t);
 
         if (t.equations == nullptr)
         {
@@ -248,24 +248,24 @@ namespace
 
 NdtSums sum_ndt_point_terms(WindowEquations &equations, const Window &window, const std::vector<Point3Di> &intermediate_points,
                             const NDTBucketMapType &buckets_indoor, const NDTBucketMapType &buckets_outdoor, const ScanToMapOptions &scan_to_map,
-                            bool normal_information_wanted, bool with_cost, ScanToMapTiming *timing)
+                            const NdtNoise &noise, bool normal_information_wanted, bool with_cost, ScanToMapTiming *timing)
 {
     const auto phase = [timing](PhaseTime ScanToMapTiming::*p) { return timing ? &(timing->*p) : nullptr; };
     // degeneracy-aware NDT terms: the point terms are first summed per node and enter the normal matrix only after their
     // translation part is projected away from the directions the geometry does not constrain (add_projected_ndt_blocks)
-    const bool project_degenerate = scan_to_map.degenerate_projection_ratio_full > 0.0;
+    const bool project_degenerate = noise.projection_ratio_full > 0.0;
     NdtSums sums = empty_ndt_sums(window.poses.size(), normal_information_wanted || project_degenerate, project_degenerate, with_cost);
     NdtPointTarget target{sums, project_degenerate ? nullptr : &equations, with_cost};
 
     PhaseTimer indoor_timer(phase(&ScanToMapTiming::ndt_indoor));
     const PointsByNode by_node = index_points_by_node(intermediate_points, static_cast<int>(window.poses.size()));
-    sum_ndt_grid(indoor_ndt_grid(buckets_indoor, scan_to_map), window, intermediate_points, by_node, scan_to_map, target);
+    sum_ndt_grid(indoor_ndt_grid(buckets_indoor, scan_to_map, noise), window, intermediate_points, by_node, scan_to_map, target);
     indoor_timer.stop();
 
     if (scan_to_map.use_hierarchical_rgd)
     {
         PhaseTimer outdoor_timer(phase(&ScanToMapTiming::ndt_outdoor));
-        sum_ndt_grid(outdoor_ndt_grid(buckets_outdoor, scan_to_map), window, intermediate_points, by_node, scan_to_map, target);
+        sum_ndt_grid(outdoor_ndt_grid(buckets_outdoor, scan_to_map, noise), window, intermediate_points, by_node, scan_to_map, target);
     }
     return sums;
 }
@@ -280,12 +280,12 @@ NdtSums sum_ndt_grid_blocks(const NdtGrid &grid, const Window &window, const std
     return sums;
 }
 
-NdtProjection ndt_degeneracy_projection(const Eigen::Matrix3d &information, const ScanToMapOptions &scan_to_map)
+NdtProjection ndt_degeneracy_projection(const Eigen::Matrix3d &information, const NdtNoise &noise)
 {
     const Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eig(information);
     const double largest = eig.eigenvalues().maxCoeff();
-    const double r0 = scan_to_map.degenerate_projection_ratio;
-    const double r1 = scan_to_map.degenerate_projection_ratio_full;
+    const double r0 = noise.projection_ratio;
+    const double r1 = noise.projection_ratio_full;
     Eigen::Matrix3d P = Eigen::Matrix3d::Zero();
     NdtProjection projection;
     projection.all_kept = true;
@@ -320,16 +320,16 @@ void add_ndt_blocks(WindowEquations &equations, const NdtSums &sums, const NdtPr
     }
 }
 
-void add_projected_ndt_blocks(WindowEquations &equations, const NdtSums &sums, const ScanToMapOptions &scan_to_map)
+void add_projected_ndt_blocks(WindowEquations &equations, const NdtSums &sums, const NdtNoise &noise)
 {
     // degeneracy-aware NDT terms: the window's geometric information sum(n * n^T) tells which translation directions the
     // matched surfaces constrain; along a direction with a small share (eigenvalue / largest) the NDT terms are scaled
     // down to nothing (scale s from 0 below degenerate_projection_ratio to 1 at degenerate_projection_ratio_full), so the
     // motion model alone places the window there. With M = diag(P, I), P = sum(s_k * v_k * v_k^T), a node's block B and
     // right-hand side g become M B M and M g. Nothing is multiplied when every direction keeps s = 1.
-    if (!(scan_to_map.degenerate_projection_ratio_full > 0.0))
+    if (!(noise.projection_ratio_full > 0.0))
         return;
-    add_ndt_blocks(equations, sums, ndt_degeneracy_projection(window_translation_information(sums), scan_to_map));
+    add_ndt_blocks(equations, sums, ndt_degeneracy_projection(window_translation_information(sums), noise));
 }
 
 Eigen::Matrix3d window_translation_information(const NdtSums &sums)
