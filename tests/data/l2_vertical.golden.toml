@@ -115,6 +115,7 @@ capture_windows_to_s = -1.0
 log_iteration_convergence = false
 log_stage_timing = false
 log_window_diagnostics = false
+log_window_terms = false
 save_calibration_validation = false
 save_odometry_snapshot = false
 
