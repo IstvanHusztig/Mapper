@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mapper Odometry Guide</title>
+<title>dMapper guide</title>
 <style>
   :root {
     --bg: #fbfbfa; --panel: #ffffff; --text: #1d2126; --muted: #5b6470; --line: #e3e5e8;
@@ -42,6 +42,7 @@
   nav a:hover { color: var(--accent); }
   nav .group { margin-top: 14px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); opacity: .8; }
   nav .indent { padding-left: 12px; }
+  nav .page { padding-left: 24px; font-size: 13.5px; }
   main { padding: 36px 44px 80px; min-width: 0; }
   h1 { font-size: 30px; line-height: 1.25; margin: 0 0 8px; }
   h2 { font-size: 23px; margin: 52px 0 12px; padding-top: 8px; border-top: 1px solid var(--line); }
@@ -58,6 +59,8 @@
   }
   .warn { border-left-color: var(--warn); background: var(--warn-soft); }
   .note b, .warn b { display: block; margin-bottom: 2px; }
+  .deep { border-left: 3px solid var(--accent); padding: 6px 12px; margin: 10px 0 8px; font-size: 14.5px; max-width: 82ch; }
+  .deep b { margin-right: 8px; }
   .steps { counter-reset: step; padding: 0; list-style: none; }
   .step { position: relative; padding: 16px 18px 6px 58px; margin: 14px 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
   .step::before {
@@ -103,10 +106,9 @@
 <body>
 <div class="layout">
 <nav>
-  <div class="brand">Mapper odometry</div>
-  <div class="sub">dMapper · LiDAR + IMU</div>
+  <div class="brand">dMapper guide</div>
+  <div class="sub">LiDAR + IMU odometry</div>
   <a href="hu/index.html" hreflang="hu" lang="hu">Magyar nyelven</a>
-  <a href="#documents">All documents</a>
   <a href="#overview">Overview</a>
   <a href="#inputs">Inputs and outputs</a>
   <div class="group">Pipeline</div>
@@ -114,9 +116,12 @@
   <a class="indent" href="#s-load">1 · Loading points</a>
   <a class="indent" href="#s-imu">2 · IMU orientation</a>
   <a class="indent" href="#s-windows">3 · Windows and point poses</a>
+  <a class="page" href="window-chaining.html">↗ Poses and window chaining</a>
   <a class="indent" href="#s-map">4 · Initial map</a>
   <a class="indent" href="#s-guess">5 · Initial guess per window</a>
   <a class="indent" href="#s-opt">6 · Optimization</a>
+  <a class="page" href="degeneracy-information.html">↗ Degeneracy information</a>
+  <a class="page" href="window-terms-livox3.html">↗ The per-term table</a>
   <a class="indent" href="#s-handoff">7 · Hand-off and bias</a>
   <a class="indent" href="#s-update">8 · Map update</a>
   <a class="indent" href="#s-export">9 · Export</a>
@@ -133,22 +138,32 @@
   <a class="indent" href="#p-ext">lidar_imu_extrinsics</a>
   <a class="indent" href="#p-imu">imu_translation</a>
   <a class="indent" href="#p-loop">loop_closure</a>
+  <a class="page" href="loop-closure-research.html">↗ Loop closure research</a>
   <a class="indent" href="#p-cons">consistency</a>
   <a class="indent" href="#p-perf">performance</a>
-  <a class="indent" href="#p-robust">robust_lidar_odometry</a>
+  <a class="page" href="performance.html">↗ Performance</a>
   <a class="indent" href="#p-misc">debug, paths, misc, version</a>
   <div class="group">More</div>
   <a href="#practice">Best practices</a>
   <a href="#tuning">Tuning cheat sheet</a>
   <a href="#fixes">Fixes and map sharpness</a>
   <a href="#limits">Known limitations</a>
+  <div class="group">Reference</div>
+  <a href="ARCHITECTURE.md">↗ Architecture</a>
+  <a href="code-split-and-region-agents-plan.md">↗ Code-split plan</a>
+  <a href="code-review-tracker.md">↗ Code-review tracker</a>
   <a href="#documents">All documents</a>
 </nav>
 
 <main>
 <button class="theme-btn" id="themeBtn" type="button">Theme</button>
-<h1 id="overview">What the odometry does with the points it reads</h1>
-<p class="lead">A reference for <code>dMapper</code>: how every LiDAR point travels from the recorder's LAZ file to the final map, and what each parameter of the settings file controls.</p>
+<h1>dMapper guide</h1>
+<p class="lead"><code>dMapper</code> turns a LiDAR + IMU recording into a trajectory and a point cloud. Three ways into this guide:
+<a href="#pipeline">how it works</a>, step by step from the recorder's LAZ file to the final map, with the pages that explain each
+step in depth; <a href="#params">the settings</a>, every parameter of the settings file; and <a href="#documents">all documents</a>,
+every page of <code>docs/</code> by what it is for.</p>
+
+<h2 id="overview">What the odometry does with the points it reads</h2>
 
 <p>The program is a <b>LiDAR-inertial odometry</b>. The IMU gives a fast but drifting estimate of how the sensor rotated. The LiDAR sees the surroundings, which do not move. The program cuts the recording into short windows of about 0.4 s. Each window's trajectory is adjusted until its points line up with the map built from all previous windows, without contradicting the IMU more than its noise allows. Every point keeps its own timestamp and gets its own pose, so the motion during a sweep is compensated (deskewed).</p>
 
@@ -235,6 +250,7 @@
 <li>Two copies are cached on disk (<code>&lt;input&gt;/cache</code>): all points (for export) and a <b>voxel-decimated</b> copy that keeps the first point per <code>decimation</code>-sized cube (used in the optimization).</li>
 </ul>
 <p>From here on, a point is always used as <i>pose(index_pose) × point</i>. Correcting a node's pose moves exactly the points recorded in that ~1 ms, and this is how motion during the scan is compensated.</p>
+<div class="deep"><b>In depth</b><a href="window-chaining.html">Poses, windows and window chaining</a> (what a pose is, how a window's trajectory and its points' positions are computed) · <a href="PIPELINE.md">How a run works: windows</a></div>
 <div class="params"><span>threshold_initial_points</span><span>threshold_nr_poses</span><span>decimation</span></div>
 </li>
 
@@ -255,6 +271,7 @@
 <li>Positions, with <code>imu_always_on</code> (on in the shipped settings): the <b>accelerometer integrated</b> from the start velocity carried over from the previous window, with that window's gravity and acceleration offset (<code>integrate_window_translations</code>). A window at rest keeps a motionless guess. Without it: a <b>constant velocity</b>, the velocity over the last <code>prior_velocity_span_nr_samples</code> nodes of the previous window (<code>use_motion_from_previous_step</code>).</li>
 </ul>
 <p>This guess is also stored as the <b>motion model</b>: the IMU "measurement" the optimizer compares against.</p>
+<div class="deep"><b>In depth</b><a href="window-chaining.html">Poses, windows and window chaining</a> (section 1.3: how each window's guess is chained and placed)</div>
 <div class="params"><span>use_motion_from_previous_step</span><span>use_gyro_bias_estimation</span><span>imu_always_on</span></div>
 </li>
 
@@ -272,6 +289,7 @@
 <li><b>Bias prior:</b> the bias stays near the previous window's estimate, within its uncertainty grown by the bias random walk.</li>
 </ul>
 <p>The system is solved with a sparse Cholesky factorization. Up to <code>nr_iter</code> iterations run; the damping starts at <code>lm_factor_initial</code> and is multiplied by 10 every 10 iterations (pose unknowns only). A window stops early when the sum of all parameter updates of one iteration falls below <code>convergence_delta_threshold</code> (default 1e-12, which is practically never reached, so all iterations run), or once it has run for longer than <code>real_time_threshold_seconds</code>. Only the band of the normal matrix that can hold values (neighbouring nodes and the bias unknowns) is converted to sparse form each iteration.</p>
+<div class="deep"><b>In depth</b><a href="degeneracy-information.html">Degeneracy information</a> (when the LiDAR can't see the motion; the degeneracy projection) · <a href="window-terms-livox3.html">The per-term table</a> (which term holds a window and where it pulls it)</div>
 <div class="params"><span>nr_iter</span><span>convergence_delta_threshold</span><span>lm_factor_initial</span><span>min_distance_lidar</span><span>max_distance_lidar</span><span>motion_model_uncertainty.*</span><span>gyro_arw_*</span><span>rotation_sigma_*</span></div>
 </li>
 
@@ -280,6 +298,7 @@
 <div class="where">optimize_windows · src/application/run_odometry.cpp</div>
 <p>The last node of a window has no points, and the ones just before it have very few. Left free, they can spin by several degrees, and the next window would inherit that error permanently, which shows up as rotated "ghost" copies of walls. So after the optimization, the last <code>handoff_tail_nodes</code> nodes are <b>recomputed from the last well-constrained node</b> using the bias-corrected IMU rotation and the optimized velocity. The next window starts from that recomputed end.</p>
 <p>The window's bias estimate and its uncertainty become the prior for the next window, and they are printed and written to the results JSON.</p>
+<div class="deep"><b>In depth</b><a href="window-chaining.html">Poses, windows and window chaining</a> (placing the next window, and the chaining fix)</div>
 <div class="params"><span>handoff_tail_nodes</span><span>gyro_bias_*</span></div>
 </li>
 
@@ -430,6 +449,7 @@ See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 
 <h3 id="p-loop">[loop_closure]</h3>
 <p>Automatic loop closure after the odometry, described in the note after step 8 of the <a href="#pipeline">pipeline</a>.</p>
+<div class="deep"><b>In depth</b><a href="loop-closure-research.html">Loop closure research</a> (diagnosis, and how other systems do it)</div>
 <div class="table-wrap"><table>
 <tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr>
 <tr><td>use_loop_closure <span class="badge b-key">key</span></td><td class="val">true</td><td>Run loop closure after the odometry, before the consistency pass and the export (command line and GUI).</td></tr>
@@ -467,6 +487,7 @@ See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 </table></div>
 
 <h3 id="p-perf">[performance]</h3>
+<div class="deep"><b>In depth</b><a href="performance.html">Performance</a> (how the full recording got 2.2 times faster) · <a href="PERFORMANCE.md">Performance fixes</a> (every fix with its method and numbers)</div>
 <div class="table-wrap"><table>
 <tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr>
 <tr><td>real_time_threshold_seconds</td><td class="val">10.0 s</td><td>Wall-clock limit per window. If a window takes longer, its iterations stop early, and results then depend on machine speed. A window normally takes about 2 s, well below the limit; under heavy CPU load a slow window can reach it.</td></tr>
@@ -525,6 +546,7 @@ See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 
 <h2 id="fixes">Fixes and map sharpness</h2>
 <p>Bugs found while documenting, what was changed, and how each one affects the sharpness of the exported map. Sharpness is the number of occupied 3/5/10 cm cells in the height section −0.3 … 0.7 m from <code>tools/eval_odometry.py</code>: <b>fewer cells means thinner walls</b>.</p>
+<div class="deep"><b>In depth</b><a href="window-chaining.html">Window chaining</a> (the placement work that grew with the square of the recording) · <a href="performance.html">Performance</a> (the speed fixes, among them the banded matrix of the row below) · <a href="degeneracy-information.html">Degeneracy information</a> (the weakness of the translation information)</div>
 <div class="table-wrap"><table>
 <tr><th>Issue</th><th>Fix</th><th>Effect on map sharpness</th></tr>
 <tr><td style="font-family:inherit;white-space:normal"><b>Consistency pass never ran in the command-line mode</b></td><td>New option <code>use_consistency</code> runs it after the odometry (on in the shipped settings, off in the built-in defaults).</td><td>The largest gain: fewer occupied cells, i.e. thinner walls, see below. It costs one more pass over the data.</td></tr>
@@ -560,29 +582,29 @@ See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 <p class="meta">Start here: what a run does and what every setting means.</p>
 <div class="table-wrap"><table>
 <tr><td>this guide</td><td><code>index.html</code></td><td>The pipeline step by step, every parameter, best practices, the tuning cheat sheet, known limitations.</td></tr>
-<tr><td><a href="PIPELINE.md">How a run works: windows</a></td><td><code>PIPELINE.md</code></td><td>How a run cuts the recording into windows and processes one window (short, technical).</td></tr>
+<tr><td><a href="PIPELINE.md">How a run works: windows</a></td><td><code>PIPELINE.md</code></td><td>How a run cuts the recording into windows and processes one window (short, technical). <i>From pipeline step 3.</i></td></tr>
 </table></div>
 <h3>How the odometry works</h3>
 <p class="meta">Explanations with measurements: one mechanism per page.</p>
 <div class="table-wrap"><table>
-<tr><td><a href="window-chaining.html">Poses, windows and window chaining</a></td><td><code>window-chaining.html</code></td><td>What a pose is, how a window&#x27;s trajectory and its points&#x27; positions are computed, and the window-chaining fix.</td></tr>
-<tr><td><a href="degeneracy-information.html">Degeneracy information</a></td><td><code>degeneracy-information.html</code></td><td>When the LiDAR can&#x27;t see where the sensor moved, how dMapper measures it, and how to read its log line.</td></tr>
-<tr><td><a href="window-terms-livox3.html">The per-term table: Livox 3</a></td><td><code>window-terms-livox3.html</code></td><td>Which term of the optimization holds a window and where it pulls it; the first reading on a real stretch.</td></tr>
-<tr><td><a href="performance.html">Performance</a></td><td><code>performance.html</code></td><td>How the full recording got 2.2 times faster: the overview.</td></tr>
-<tr><td><a href="PERFORMANCE.md">Performance fixes</a></td><td><code>PERFORMANCE.md</code></td><td>Every performance fix with its method and numbers.</td></tr>
+<tr><td><a href="window-chaining.html">Poses, windows and window chaining</a></td><td><code>window-chaining.html</code></td><td>What a pose is, how a window&#x27;s trajectory and its points&#x27; positions are computed, and the window-chaining fix. <i>From pipeline steps 3, 5 and 7.</i></td></tr>
+<tr><td><a href="degeneracy-information.html">Degeneracy information</a></td><td><code>degeneracy-information.html</code></td><td>When the LiDAR can&#x27;t see where the sensor moved, how dMapper measures it, and how to read its log line. <i>From pipeline step 6.</i></td></tr>
+<tr><td><a href="window-terms-livox3.html">The per-term table: Livox 3</a></td><td><code>window-terms-livox3.html</code></td><td>Which term of the optimization holds a window and where it pulls it; the first reading on a real stretch. <i>From pipeline step 6.</i></td></tr>
+<tr><td><a href="performance.html">Performance</a></td><td><code>performance.html</code></td><td>How the full recording got 2.2 times faster: the overview. <i>From the parameters ([performance]).</i></td></tr>
+<tr><td><a href="PERFORMANCE.md">Performance fixes</a></td><td><code>PERFORMANCE.md</code></td><td>Every performance fix with its method and numbers. <i>From the parameters ([performance]).</i></td></tr>
 </table></div>
 <h3>Code and architecture</h3>
 <p class="meta">Where the code is going, the current plan, and the review findings.</p>
 <div class="table-wrap"><table>
-<tr><td><a href="ARCHITECTURE.md">Architecture</a></td><td><code>ARCHITECTURE.md</code></td><td>The target architecture (layers, ports, SOLID) and the migration roadmap (steps 0-11, done).</td></tr>
-<tr><td><a href="code-split-and-region-agents-plan.md">Code split and region agents</a></td><td><code>code-split-and-region-agents-plan.md</code></td><td>The current plan, stages 0-8, with its progress.</td></tr>
-<tr><td><a href="code-review-tracker.md">Code-review tracker</a></td><td><code>code-review-tracker.md</code></td><td>The findings of the code review of 2026-10-13 and their status.</td></tr>
+<tr><td><a href="ARCHITECTURE.md">Architecture</a></td><td><code>ARCHITECTURE.md</code></td><td>The target architecture (layers, ports, SOLID) and the migration roadmap (steps 0-11, done). <i>In the menu under Reference.</i></td></tr>
+<tr><td><a href="code-split-and-region-agents-plan.md">Code split and region agents</a></td><td><code>code-split-and-region-agents-plan.md</code></td><td>The current plan, stages 0-8, with its progress. <i>In the menu under Reference.</i></td></tr>
+<tr><td><a href="code-review-tracker.md">Code-review tracker</a></td><td><code>code-review-tracker.md</code></td><td>The findings of the code review of 2026-10-13 and their status. <i>In the menu under Reference.</i></td></tr>
 </table></div>
 <h3>Plans and research</h3>
 <p class="meta">Drafts, research notes and task texts; each says how current it is.</p>
 <div class="table-wrap"><table>
 <tr><td><a href="sensor-neutral-retune-plan.md">Sensor-neutral retune (draft)</a></td><td><code>sensor-neutral-retune-plan.md</code></td><td>Draft of 2026-11-10: findings and direction for settings grounded in the sensor; its current status is in agents/roadmap.md.</td></tr>
-<tr><td><a href="loop-closure-research.html">Loop closure research</a></td><td><code>loop-closure-research.html</code></td><td>Loop closure in dMapper: diagnosis, and how other systems do it.</td></tr>
+<tr><td><a href="loop-closure-research.html">Loop closure research</a></td><td><code>loop-closure-research.html</code></td><td>Loop closure in dMapper: diagnosis, and how other systems do it. <i>From the parameters ([loop_closure]).</i></td></tr>
 <tr><td><a href="ml-research-roadmap.html">Machine-learning learning guide</a></td><td><code>ml-research-roadmap.html</code></td><td>Modules M1-M9 to work through before any machine-learning work on dMapper.</td></tr>
 <tr><td><a href="dlidar-timestamp-fix-prompt.md">dLidar time alignment (task text)</a></td><td><code>dlidar-timestamp-fix-prompt.md</code></td><td>Historical task text for the recorder (dLidar): the LiDAR-IMU time alignment of L2 recordings. The recorder is outside dMapper&#x27;s scope.</td></tr>
 </table></div>
