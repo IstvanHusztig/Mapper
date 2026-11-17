@@ -15,6 +15,8 @@ Progress:
 - Stage 3 designed 2026-11-17 (below); implemented 2026-11-17 (OpenSpec `per-term-window-log`, 0e4d42a .. ): the four
   splits bit-identical, `window_term_table`, setting `log_window_terms`, the CSV files, `tools/window_terms.py`. Livox 3
   replay with the setting on: 84 of 84 windows identical.
+  Archived 2026-11-17 (b234b6a); the first reading of the table is `docs/window-terms-livox3.html`.
+- Stage 4 designed 2026-11-17 (below), decisions taken, OpenSpec `solver-and-window-verdict`.
 
 ## Why
 
@@ -454,14 +456,230 @@ Not in this stage: any judgement on a window (stage 4), any change of a weight (
 
 ## Stage 4: solver and window verdict
 
-- **Solver.** The iteration loop (`run_lm_iterations`, now in `run_odometry.cpp`), the damping rule and the step
-  acceptance move into one unit that knows nothing about the terms: it asks for the normal equations and a cost, and
-  returns a step. Pure refactor.
-- **Window verdict.** After the iterations and before the map update, one function judges the window from what is
-  already known: bend against the gyro, speed, per-term cost against its expected value, rejected steps, degeneracy.
-  In this stage it only logs its verdict.
-- Not in this stage (each a measured change of its own, later): acting on the verdict (a suspect window stays out of
-  the map or is solved again), and the known flaw that every window runs all 100 iterations.
+Design of 2026-11-17, from the code after stage 3 (`b234b6a`), reviewed against the code. It replaces the first
+sketch of this stage. The decisions for the user are at its end.
+
+Three parts: the iteration loop becomes a unit that knows nothing about the terms; the window loop's body is cut into
+named steps; and after each window a verdict records what is already known about it. The first two are pure refactors.
+The verdict only observes and logs: no window is treated differently because of it.
+
+### Where the loop is today
+
+| Piece | Where | What it knows |
+|---|---|---|
+| The iteration loop (`run_lm_iterations`, 118 lines): damping schedule, convergence, time limit, the forced iteration count of a replay, `lm_step_check` (take a step back when the cost rose), the record for `log_iteration_convergence` | `src/application/run_odometry.cpp` | the window, the maps, the accelerometer term, the settings |
+| One iteration (`optimize_lidar_odometry`, 83 lines): the terms, then the origin fix, the covariance of the extra unknowns, the damped solve, the step; or, for the cost-only call, everything up to the covariance | `src/domain/scan_to_map.cpp` | everything |
+| The solve itself (`extra_unknowns_covariance`, `solve_window_step`, `apply_window_step`) | `src/domain/window_solver.cpp` | the layout of a window's unknowns |
+| The window loop's body (`process_windows`, 177 lines) | `src/application/run_odometry.cpp` | everything |
+
+The loop and the solve are tied to the window in every line, so the solver can't be tested without a map, and the
+known flaw of the loop (every window runs all its iterations) has no home of its own.
+
+### Part 1: the solver unit
+
+`src/domain/lm_solver.{h,cpp}`: Levenberg-Marquardt over any problem that can do four things. It never sees a term, a
+pose or a map.
+
+| The solver asks the problem to | Today |
+|---|---|
+| **linearize**: give the undamped normal matrix, the right-hand side, how many leading unknowns are damped, and (when asked) the cost, at its present state | the term calls, the origin fix and the band-to-sparse conversion in `optimize_lidar_odometry` |
+| **take the covariance** of its undamped unknowns (the solver computes it from the undamped matrix) | `extra_unknowns_covariance` and the lines that store the bias, offset and end-velocity covariances |
+| **apply a step** and say whether it took it, and how large it was | `apply_window_step` (big-jump rule, bias clamp, delta) |
+| **save and restore** its state | `LmState`, `capture` and `restore` in `run_lm_iterations` |
+
+The window's side of this is `WindowProblem` (`src/domain/window_problem.{h,cpp}`): it holds the references the terms
+read (points, window, maps, the five option structs, the velocity prior, the acceleration offset) and implements the
+four operations with the functions that exist today.
+
+The solver has two functions:
+
+- `lm_iteration`: one iteration, in today's order: linearize, covariance (from the undamped matrix, before the damping
+  is added to it), damp, solve, apply. With "no step" it ends after the covariance and leaves the update untouched:
+  that is today's cost-only call, which still writes the covariances into the window. `optimize_lidar_odometry` stays
+  as a thin function that builds a `WindowProblem` and calls it, so the characterization guard and the term tests keep
+  running the same single call in both modes.
+- `lm_solve`: today's loop of `run_lm_iterations`, statement for statement: the factor from `next_lm_factor`, the stop
+  at `convergence_delta_threshold`, the last iteration (forced in a replay), and `lm_step_check` with its final
+  cost-only call. It returns what the loop did (replacing the file-local `WindowOptimization`), and **why it stopped**
+  (converged, iteration limit, time limit, forced), which no log shows today.
+
+Details that keep it bit-identical and clean:
+
+- **The clock stays out of the domain.** The time limit becomes a callback the application passes in (`out_of_time`),
+  which starts its clock where the loop does today and is asked at the same point: once per iteration, after the factor
+  update, not after a rejected step. A replay passes none. The poses after each accepted iteration (for
+  `log_iteration_convergence`) and the debug line when the factor changes go through callbacks too.
+- **The saved state.** With `lm_step_check` the loop today saves the state before the call and then copies the
+  covariances and the translation information computed during the call into it. That is the same as saving between
+  "covariance" and "apply" (the step itself writes no covariance), which is how the solver does it. Without the step
+  check nothing is saved, as today.
+- **What is not part of the state.** The two Cholesky analyses (kept from window to window) and the counters of skipped
+  steps and big-jump nodes stay in the workspace and are never restored: a rejected iteration still solved and applied
+  a step, and its events still count.
+- **What the solver is given besides the problem:** the workspace, the options, the callbacks, and the three phase
+  timers it owns (covariance, solve, update); the problem times its own phases.
+
+`run_lm_iterations` shrinks to: build the problem and the options, call `lm_solve`, hand back the result.
+
+Kept exactly as it is (each would be a measured change of its own):
+
+- the damping schedule, and that a rejection multiplies the factor by 10 on its own;
+- a rejected iteration counts as an iteration, and skips the convergence test, the scheduled factor update and the time
+  check;
+- a forced last iteration switches off only the time check, not the convergence test;
+- the loop ends only when the update falls below 1e-12 on an accepted iteration, at the iteration limit, or at the
+  time limit (10 s per window in the shipped settings, so in practice every window runs all 100 iterations). An
+  exception from the NDT sum (a non-finite distance with the Huber kernel) leaves it too, as today.
+
+### The loop guard
+
+The replays and baselines run with `lm_step_check` off, and the characterization guard calls single iterations. So no
+check covers the loop's own logic with the step check on. The first commit of the stage adds a second skipped doctest
+case next to the guard: the synthetic loop recording through `optimize_windows` with the step check off and on, and
+with a low iteration limit and a convergence threshold that ends some windows early; every window's poses, velocity,
+bias, iteration count and number of rejected steps as hexadecimal doubles into a file. Recorded before the refactor,
+compared after every commit. The fixture must make the step check actually reject steps (a small initial damping
+factor, a guess moved away from the truth): the recorded file has to show rejected steps and early ends, or the
+fixture is changed until it does. The time limit can't be covered this way (it depends on the computer); its code
+moves as one `if`.
+
+### Part 2: the window loop's body in named steps
+
+`process_windows` becomes a short loop over four steps, each a function under 80 lines, in today's order:
+
+| Step | Holds today's |
+|---|---|
+| `prepare_window` | points load (with its timer), the pause point, previous velocity, the guess (`predict_window_poses`), the gyro-bias prior, the window's rotation options and turn flag, the accelerometer term, rest detection, the velocity state, the accelerometer-integrated guess, `motion_model_poses`, the copies of the guess. Returns one struct with what the later steps read |
+| `solve_window` | `run_lm_iterations` (with its timer) and the warnings about skipped steps and big jumps |
+| `report_window` | the window's elapsed time, the `log_*` calls, the per-term table, and the verdict (part 3). It reads the window before the tail is re-propagated, like today's logs |
+| `finish_window` | bias and offset carry, tail re-propagation, preview, the distance check, the outcome for a capture, progress, placing the next window, the map update, the travelled distance. Returns false when the distance is not a number: the run is cancelled there and the later parts are skipped, as today |
+
+The timer of the whole window stays in the loop around the four calls. The order inside the steps is today's; three
+places depend on it: the window's rotation options are copied after the bias prior is written, the guess is copied
+after the accelerometer integration, and the distance check comes after the tail re-propagation.
+
+Pure refactor; the replays and the loop guard check it.
+
+### Part 3: the window verdict
+
+**What it is.** After the iterations and before the map update, `judge_window` (`src/domain/window_verdict.{h,cpp}`,
+a pure function) turns what is known about the window into readings and flags. At the end of the run the flags are
+counted into the run's triggers, each `CLEAR`, `TRIGGER` or `NOT MEASURED`. It follows the agreed evaluation contract
+(`openspec/changes/sensor-neutral-yardstick/criteria-proposal.md`, 2026-11-12): these are investigation triggers,
+not a statement about the map's accuracy, and evidence that is missing is `NOT MEASURED`, never clear.
+
+**Flags with an agreed limit** (the same quantities and numbers as `tools/run_health.py`, without parsing the log):
+
+| Flag of a window | Reading | The run's trigger (contract) |
+|---|---|---|
+| bent, bent severely | the vertical component of the rotation from the guess to the result at the last node (today's "yaw correction last"), above 3° and above 10° | more than 1 % of the windows bent; any window bent severely |
+| fast | the norm of the window's end velocity, above 2.5 m/s | any fast window |
+| bias high | the estimated gyro bias per axis (on top of the start-up bias), above 0.5 °/s | any such window |
+
+**Which windows have a reading.** A window without the accelerometer term (the first one; all of them with
+`imu_always_on` off) has no velocity state: its speed and its velocity chi² are `NOT MEASURED`. The same holds for the
+bias without bias estimation. This is stricter than `run_health.py`, which reads the zeros the log prints for such a
+window as measured; the contract's rule decides here.
+
+**Readings without an agreed limit** (recorded, never a trigger in this stage):
+
+| Reading | From | Why it is there |
+|---|---|---|
+| why the iterations stopped, iterations run, last damping factor, steps not applied, big-jump nodes, rejected steps | the solver's result | the stop cause is `NOT MEASURED` today |
+| the start velocity's distance from its prior (chi², 3 residuals; the same number as the per-term table's velocity-prior cost) for every window with the accelerometer term | the velocity state and the prior | today only logged for windows with an information ratio below 0.45; the contract's limits (median 5, 95th percentile 20) are for a run, not a window |
+| information ratio and weak axis | the window's translation information | context: a flag in weak geometry reads differently |
+| tilt bend (roll, pitch) against the gyro | as the heading bend, the two horizontal components | the first table reading showed tilt changes as large as heading changes |
+| with `log_window_terms`: cost per residual of every term, the largest remaining step, the LiDAR's share of the weight along travel | the per-term table | the stage 3 evidence, per window |
+
+The translation information is collected in every run from now on (today only with `log_window_diagnostics`, or as a
+by-product of the degeneracy projection). It adds one small sum per matched point and enters no matrix; its time is
+measured. Without it the ratio would read 0 and every window would look weak.
+
+**Run summary.** At the end of the odometry the loop logs, for each flag, how many windows have it, their share, the
+first and the worst with its time, and the coverage (windows measured of all), and from them the run's triggers of the
+table above. For the readings it logs the median, the 95th percentile and the largest value. For the velocity chi² it
+logs the contract's trigger (median above 5 or 95th percentile above 20) over the windows with an information ratio
+below 0.45, as today's log selects them, and the same statistics over all measured windows beside it. Percentiles are
+interpolated linearly, as `run_health.py` does.
+
+A replay logs the summary of the windows it replayed. A cancelled run logs the summary of the windows it finished and
+says that it is incomplete.
+
+**Output.**
+- The run summary is logged in every run (a few lines, like today's "silent events").
+- `log_window_verdict = true` (`[lidar_odometry_debug_info]`, off by default) adds one log line per window that has a
+  flag, with all its readings. The line starts with `window verdict <n>:`, so `run_health.py` doesn't take it for one
+  of its `window diagnostics` lines.
+- With `log_window_terms`, the flags and readings are also columns of `window_features.csv`: the labels the future
+  tuner needs next to the features.
+
+**Limits of the new readings are not chosen here.** After the stage's runs, a table shows each reading's distribution
+on 44, Livox 3 and Livox 4, and the user decides which reading gets a limit and what it is. The contract's rule
+applies: limits are not picked by looking at which candidate they favour.
+
+**It changes nothing.** `judge_window` takes values and returns a value. Its inputs exist already (the guess's poses
+are kept by the loop today), except the tilt bend, which is a few rotations more per window. The summary lives in
+`WindowLoopCarry` and is not written to a capture, like the timing and convergence fields, so capture files keep
+their format.
+
+### Tests
+
+- **Solver on a small problem** (two unknowns, no map): a single iteration with and without a step; the factor grows tenfold after iterations 10, 20, ..., and at
+  once after a refused step; it stops at the convergence threshold and reports why; a forced last iteration ends it
+  there; `out_of_time` ends it; with the step check a step that raises the cost is taken back and the damping raised.
+- **`lm_iteration` equals the old single call**: the characterization guard, unchanged.
+- **The loop**: the loop guard, and the existing scan-to-map tests through the real `lm_solve` instead of their own
+  copy of the loop (`run_iterations` in `tests/scan_to_map_test.cpp`), if their numbers stay the same.
+- **Verdict**: each flag at, below and above its limit; missing evidence gives `NOT MEASURED`; a window without the
+  accelerometer term has no chi²; the summary's counts, shares, coverage and triggers on a made-up list of windows
+  (1 % bent is clear, more is a trigger).
+- **Against the existing tool**: on `44_short` run with `log_window_diagnostics` and `log_window_verdict`, the
+  summary is compared with `tools/run_health.py` on the same log. The tool reads values the log prints with three
+  decimals (the chi² with one), so the comparison is: the bend, speed and bias counts are equal, except for windows
+  whose reading lies within the printed precision of a limit, which are listed; the chi² median and 95th percentile
+  of the weak windows agree within the printed precision. The windows the two treat differently on purpose (no
+  accelerometer term; an information ratio that prints as 0.450) are listed, not counted as a mismatch.
+- **No effect**: the synthetic loop recording gives the same poses with `log_window_verdict` on and off.
+
+### Checks and commit order
+
+Per commit: the Release build, unit tests, the characterization guard, the loop guard, both replays, `44_short`. End
+of stage: the full 44 and Livox 3 against their manifests, the Debug build and `ctest`.
+
+1. The loop guard, recorded twice from `b234b6a`.
+2. `LmProblem`, `WindowProblem`, `lm_iteration`; `optimize_lidar_odometry` calls them.
+3. `lm_solve`; `run_lm_iterations` calls it; the solver's own tests.
+4. `process_windows` in four steps.
+5. `judge_window` with its tests.
+6. The verdict in the loop: the summary, the setting, the log line, the feature columns; golden TOMLs and manifests in
+   their own commits.
+7. The readings table of 44, Livox 3 and Livox 4 (one full run each with `log_window_verdict` and
+   `log_window_terms`), shown to the user; the cross-check with `run_health.py`.
+8. Docs.
+
+Livox 4 stays parked: its run here is a reading of the verdict on known bad stretches (passage 100–125 s, flyaway
+200–280 s), not work on them.
+
+Not in this stage: acting on the verdict (a suspect window kept out of the map, or solved again); changing when the
+iterations end; any limit for the new readings.
+
+### Decisions (user, 2026-11-17: all as recommended)
+
+1. **The solver behind a small interface** (linearize, covariance, apply, save and restore), with the window as its
+   one implementation. Recommended: it is what makes the solver testable without a map and gives the iteration rules
+   one home. The alternative, moving `run_lm_iterations` into the domain as it is, would leave it tied to the window.
+2. **The verdict uses the agreed triggers and limits; new readings get no limit in this stage.** Recommended: the
+   limits come after their distributions on three recordings are on the table.
+3. **The run summary in every run; the per-window lines behind `log_window_verdict`.** Recommended: a run then always
+   says how many windows are flagged, at almost no cost (the translation information in every run; measured).
+4. **The name "window verdict" stays** although the contract says a trigger is not a verdict on the map; the code and
+   the log say flag, `CLEAR` / `TRIGGER` / `NOT MEASURED`, and the docs say what it is not. Recommended, because later
+   stages act on it. The alternative is to call it "window triggers" everywhere.
+5. **A window without a reading is `NOT MEASURED`**, also where `run_health.py` reads the log's zeros as measured (the
+   first window's speed, for example). Recommended: it is the contract's rule; the tool can follow later.
+6. **One full Livox 4 run** for the readings table. Recommended: it is the only recording with known bad stretches.
+7. **The scan-to-map tests use the real solver** instead of their copy of the loop. Recommended if their numbers stay
+   the same; otherwise the copy stays and the difference is reported.
 
 ## Stage 5: one place for the weights
 
