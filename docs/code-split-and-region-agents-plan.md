@@ -7,7 +7,9 @@ Progress:
   still load), build identity in the results JSON, `tools/function_sizes.py`; 44, 44_short and Livox 3 bit-identical.
 - Stage 1 done 2026-11-16 (46c56b2 .. 133f63a): `process_windows`, capture (`capture_windows_from_s` / `_to_s`),
   `dMapper --replay`; replays identical: 44_short 21 of 21 windows in 35 s, Livox 3 84 of 84 in 93 s.
-- Stage 2 designed 2026-11-16 (below), not started.
+- Stage 2 done 2026-11-16 (0710807 .. addd8e4): `optimize_lidar_odometry` 1064 -> 83 lines, the terms in `ndt_term`,
+  `motion_model_terms`, `accelerometer_term`, `window_solver`; 44 and Livox 3 bit-identical, Debug `ctest` passes.
+- Stage 3 designed 2026-11-17 (below), not started.
 
 ## Why
 
@@ -48,8 +50,8 @@ Livox 4 is parked until stage 7 and is then the first job for the regions (stage
 **Capture.** A debug setting (`[lidar_odometry_debug_info]`, so it stays outside the snapshot hash) names a time range.
 When the window loop reaches the range, it writes one file with everything the loop needs to continue from there:
 
-- the settings in use, and the per-run setup the loop derives from the first window (`OdometryRunSetup`: whether
-  accelerometer data exists, the gravity norm);
+- a hash of the odometry settings in use, and the run's first window, from which the replay derives the per-run setup
+  again (`OdometryRunSetup`: whether accelerometer data exists, the gravity norm);
 - the loop's state at the first window of the range: all of `OdometryState` (both NDT maps with every cell field bit
   for bit, including the stored inverses; `m_g`; the lengths; the reference points) and all of `WindowLoopCarry`;
 - the two windows before the range (the velocity estimate and the pose prediction read them), the windows of the range
@@ -246,18 +248,204 @@ These tests are also the base of stage 3: the per-term cost, weight and pull com
 
 ## Stage 3: per-term log
 
-With the terms separate, a diagnostic wrapper records per window and per term (NDT, gyro rotation, position prior,
-velocity continuity, accelerometer, bias and offset priors, velocity prior):
+Design of 2026-11-17, from the code after stage 2 (`addd8e4`), reviewed against the code. It replaces the first
+sketch of this stage. The user's decisions are at its end.
 
-- the cost before and after the solve, and the number of residuals;
-- the weight (information) on the window's translation along three directions: along travel, sideways, vertical;
-- the pull along the same directions, in metres: where this term alone would move the window.
+With the terms separate, the window loop records per window and per term its cost, how strongly it holds the window
+and where it pulls it. This is the table that answers the Livox 4 questions: in the passage, which term outweighs the
+others along the travel direction; at 200 s, which term starts the flyaway. The log only observes: results are
+identical with it on or off.
 
-One line per window in the log, and the same as CSV rows (also the per-window features for the future learned tuner).
-The log only observes: results are identical with it on or off.
+### Why "translation of the window" is not enough
 
-This is the table that answers the Livox 4 questions: in the passage, which term outweighs the others along the travel
-direction; at 200 s, which term starts the flyaway.
+The sketch asked for each term's weight on the window's translation. Read from the code, two terms would then show
+nothing at all:
+
+- The gyro rows of the edges only see the rotation between two nodes. Moving nodes doesn't change them.
+- The accelerometer terms only see a change of velocity. Their coefficients sum to zero (`1/dt1 − (1/dt1 + 1/dt2) +
+  1/dt2`), so a window that moves as a whole, or travels faster at constant speed, costs them nothing.
+
+And a third fact: the origin fix (sigma 1e-6 in both sensor settings, weight 1e12) pins the first node of every window,
+so a window cannot move as a whole at all. What the solver decides is how the window continues from its first node.
+
+So the table measures four motions of a window. Each has one amplitude: what it does to the last node.
+
+| Motion | What moves (τ = time since the first node / window duration, 0 … 1) | Amplitude | Who can resist it |
+|---|---|---|---|
+| shift | every node by the same vector | metres | NDT, origin fix |
+| stretch | node k by a·τ; start and end velocity by a / duration | metres at the last node | NDT, edge positions, velocity prior, zero velocity, velocity continuity |
+| curve | node k by a·τ²; end velocity by 2a / duration | metres at the last node | NDT, edge positions, accelerometer, zero velocity, weak end-velocity tie, velocity continuity |
+| turn | node k's attitude by the rotation θ·τ, positions unchanged | degrees at the last node | NDT, edge rotations (gyro), edge positions, accelerometer |
+
+The velocities move with the nodes as the motion's own derivative, so the accelerometer terms see a stretch as what it
+is: no change of acceleration. A window without the accelerometer term has no velocity unknowns; there the motions
+move the nodes only. The gyro-bias coupling of the edges, the bias prior and the offset prior act on the bias and the
+offset, which none of the four motions moves: the table shows their cost, not a weight.
+
+The turn is a rotation in the world frame, turned into changes of (om, fi, ka) with the Jacobian the accelerometer
+term already uses (`tait_bryan_rotation_jacobian`). That Jacobian has no inverse at fi = ±90°; within 3° of it the
+window's turn columns stay empty and the log says so.
+
+The stall in the passage is a stretch question (the window travels too short), the flyaway a stretch and curve
+question, a heading bend against the gyro a turn question. Shift stays in the table although the origin fix always
+wins it: NDT's pull there says how far off the map thinks the window sits as a whole, which is the previous window's
+error.
+
+### Weight, hold and pull
+
+Each motion is taken along three directions: **along travel** (the horizontal direction from the result's first to
+its last node), **sideways** (horizontal, across it) and **vertical** (world z); for turn these are the rotation axes
+(roll, pitch, yaw). A window that moves less than 1 cm horizontally keeps the previous window's directions.
+
+For a term with normal matrix H and right-hand side b (as the term function writes them), and a motion along a
+direction as the vector m in the space of the unknowns:
+
+- **weight** w = mᵀ H m (1/m², or 1/deg² for turn): how strongly the term resists that motion;
+- **hold** = 1/√w: the same as a sigma (the term alone keeps this motion to ± hold). The log prints the hold;
+- **pull** p = mᵀ b / w (m or deg): how far along this motion the term's own minimum lies from the present state, with
+  everything else held. Empty when the weight is zero.
+
+The numbers of one window combine: the sum of w·p over the terms, divided by the sum of w, is the step all terms
+together would take along that motion, without damping. At the result this is the **remaining step**: near zero when
+the terms balance (then the heaviest term decided the result), and large when the iterations ended before the balance
+was reached. The damping is why that can happen: the factor starts at 5, grows tenfold every 10 iterations and reaches
+5e9 after iteration 90, far above most terms' weights, so the late iterations hardly move a window. (The loop ends
+earlier only when the update falls below 1e-12 or the window takes more than 10 s.) The `damping` row shows the last
+factor as a weight, so the two cases can be told apart.
+
+Limits, to be kept in mind when reading it:
+
+1. "Everything else held": a pull along one motion ignores that the solver also changes the other unknowns (attitude,
+   bias, offset, the other motions) at the same time.
+2. One linear step: NDT's pull is for the cells its points match now.
+3. Twelve numbers don't describe every change of a window (a wiggle inside it, for example).
+
+To see what the limits cost, the feature file also holds what the window actually did between guess and result,
+expressed in the same twelve numbers.
+
+### Rows of the table
+
+| Row | From | In the total |
+|---|---|---|
+| `ndt_indoor`, `ndt_outdoor` | the point terms of each grid, as solved: Huber weight, information scale, degeneracy projection (for both grids the projection the solver uses, from the indoor grid's normals) | yes |
+| `ndt_unprojected` | both grids before the projection: what the projection took away | no (information only) |
+| `edge_position` | the x/y/z rows of the consecutive-node edges | yes |
+| `edge_rotation` | their rotation rows (gyro); cost with the bias coupling | yes |
+| `gyro_bias_prior` | | yes (cost only: it acts on the bias) |
+| `velocity_continuity` | with the tie to the previous window's velocity; windows without the accelerometer term | yes |
+| `accelerometer` | the acceleration terms and the start and end velocity terms | yes |
+| `velocity_prior` | start velocity against the previous window's end velocity | yes |
+| `zero_velocity` | windows at rest | yes |
+| `end_velocity_tie` | the weak tie when the end velocity term was dropped | yes |
+| `offset_prior` | | yes (cost only) |
+| `origin_fix` | weight only, it has no right-hand side (its rotation sigmas are named `_deg` but act as radians; the table converts) | yes |
+| `total` | the sum of the rows above; its pull is the remaining step | |
+| `damping` | the last iteration's factor on every pose parameter (at the guess: the initial factor); weight only | no (information only) |
+
+Per row: cost, number of residuals, and weight and pull for the 4 motions × 3 directions. Each row exists twice per
+window: at the **guess** (the state the first iteration starts from: what each term wanted) and at the **result** (the
+balance).
+
+Cost / n is the term's cost per residual measured with its own weight. It is about 1 only where that weight is a noise
+model (gyro rows, accelerometer, the carried priors). It is not for NDT (cell scatter, Huber cost, the 0.1 scale), the
+scaled edge positions or the weak tie (sigma 1 m/s by choice). So it is read against the term's own usual value over a
+run, which is what the window verdict of stage 4 will do.
+
+### How it is computed without changing a result
+
+`window_term_table` (new, `src/domain/window_term_table.{h,cpp}`) takes the same inputs as `optimize_lidar_odometry`,
+all `const`, and returns the table. For each row it calls the row's term function on an empty `WindowEquations` and
+reduces the matrix and right-hand side that term wrote onto the twelve motion vectors. The real iterations are not
+touched: the matrix they solve receives the same additions in the same order as today.
+
+The window loop calls it twice, outside `run_lm_iterations` (whose clock the time limit reads) and outside the span
+the logged window time measures:
+
+- at the guess, after `motion_model_poses` is set (the edges read it);
+- at the result, directly after `run_lm_iterations` and before the steps that change the window again (the bias and
+  offset carry, the tail re-propagation).
+
+Both calls get the window's own options (`acc_term.motion_model`, `window_rotation_options`, `acc_term.options`, the
+present acceleration offset), no solver workspace and no timing target. The result is a state the iterations never
+evaluated, and the NDT sum throws on a non-finite distance (Huber on): the table call catches that, logs a warning and
+leaves the window's rows empty, so the log can't stop a run the iterations would finish.
+
+Cost: two extra assemblies per window against up to 100 iterations, expected a few percent of the odometry time with
+the setting on; measured at the end of the stage.
+
+### Splits needed first (pure refactors, each its own commit)
+
+| Function | Lines | Split into | The table needs |
+|---|---|---|---|
+| `sum_ndt_point_terms` | 251 | today's local `Grid` struct and `point_term` lambda become `NdtGrid` and a function (one point against one grid); the points-by-node index; one grid's loop over the nodes; the conductor. The maps become `const` | one grid at a time, into node blocks whatever the projection setting |
+| `add_projected_ndt_blocks` | 46 | the projection matrix as its own function | the solver's projection (from the indoor normals) for each grid's row |
+| `add_motion_edge_terms` | 216 | `MotionEdgeWeights` built by its own function (position weights with the scale, rotation weights per edge); the edge's measurement; the edge block; the edge cost; the bias coupling. The term receives the weights (a first step of stage 5) | position rows and rotation rows apart: the same function with the other weights zero |
+| `add_acceleration_terms` | 116 | the per-node samples; one term (today's lambda); the three callers | only the 80-line limit |
+| `add_velocity_priors` | 43 | start prior, zero velocity, weak end tie: three functions called in today's order | three rows |
+
+`WindowEquations` gets a residual counter beside `motion_cost` (an integer, so no bit of the solve changes). The
+per-term subtotals stage 2 planned for the cost were not built and are not needed: a term on an empty
+`WindowEquations` leaves its own cost there (the edges with `with_cost` set; NDT's cost is in `NdtSums`). The weak
+end-velocity tie needs to know whether the end velocity term was dropped, so the table evaluates the accelerometer row
+first.
+
+### Output
+
+- **Setting:** `[lidar_odometry_debug_info] log_window_terms` (off by default). A capture and a snapshot store only a
+  hash of the odometry settings, and the hash leaves out every key listed under this section in `TomlIO::CATEGORIES`:
+  the key must be in that list as well as in `POINTERS`, or every existing capture and snapshot is refused. The three
+  golden TOMLs and the params TOML entry of the manifests change with it.
+- **Log:** one line per window: the travel direction; cost / n of every term at guess and result; and for stretch
+  along travel, curve along travel, curve vertical and turn about vertical the three strongest holds, the largest pull
+  and the remaining step.
+- **`window_terms.csv`:** one row per window, state (guess / result) and term, with all weights and pulls.
+- **`window_features.csv`:** one row per window for the future learned tuner: what `log_window_diagnostics` prints
+  today as columns (time, duration, iterations, delta, guess and result move, velocities, information ratio and weak
+  axis, rest, turn window), the last damping factor, matched and unmatched points, gyro bias and acceleration offset,
+  the travel direction, and the window's actual change from guess to result as the twelve motion numbers.
+- **Where the files go:** a port `WindowTermSink` in the application layer (like `WindowCaptureSink`) and a CSV adapter
+  in the infrastructure. A CLI run writes them to the output folder; `dMapper --replay` writes them next to the
+  capture, named after the params file. The GUI gets the log line only.
+- **`tools/window_terms.py`** (pure Python): prints the table of one window, or per term the summary of a range.
+
+### Tests
+
+- The rows' sum equals the matrix and right-hand side of the real assembly, reduced the same way, within a tolerance
+  (the sums are formed in another order), so the table can't silently miss a term.
+- Corridor: along the corridor NDT's hold is far weaker than across, and the edge positions hold the stretch.
+- A guess moved 5 cm sideways in the room: NDT's shift pull sideways is −5 cm; the same for a stretched guess.
+- A trajectory with a constant acceleration against a guess without it: the accelerometer's curve pull is the missing
+  end displacement.
+- Poses turned against the motion model by a heading ramp: the edge rotations' turn pull about vertical is minus the ramp.
+- The synthetic recording through `optimize_windows` with the setting on and off: the poses are the same bits.
+- The CSV adapter writes the expected columns and rows.
+
+### Checks and commit order
+
+Per commit as in stage 2: the characterization file (recorded again from `addd8e4` first; it is not in git), unit
+tests, both replays, `44_short`. End of stage: the full 44 and Livox 3 against their manifests with the setting off;
+`44_short` and the Livox 3 replay with the setting **on** (poses identical, only the params TOML differs); Debug build
+and `ctest`, because the NDT split touches the parallel loop.
+
+1. The four splits (NDT, edges, accelerometer, velocity priors) and the residual counter.
+2. `window_term_table` with its tests.
+3. The setting, the port, the calls in the window loop, the log line.
+4. The CSV adapter, CLI and replay wiring, `tools/window_terms.py`.
+5. Golden TOMLs; manifests (params TOML); each its own commit.
+6. Docs (`CLAUDE.md`, `tools/README.md`, this plan's progress).
+
+Not in this stage: any judgement on a window (stage 4), any change of a weight (measured changes, later).
+
+### Decisions (user, 2026-11-17: all as recommended)
+
+1. **Four motions instead of translation only** (without curve and turn the accelerometer and gyro rows would be
+   empty).
+2. **Both states, guess and result** (the guess shows what each term wanted, the result who won).
+3. **NDT rows per grid, plus the unprojected row** (the passage question is partly "what did the projection remove").
+4. **Split `add_acceleration_terms` and `add_velocity_priors` in this stage** (the files are open and the guard is at
+   hand).
+5. **`log_window_diagnostics`' weak-axis and heading lines** measure by finite differences part of what the table
+   gives: kept through stage 8, then decided.
 
 ## Stage 4: solver and window verdict
 
