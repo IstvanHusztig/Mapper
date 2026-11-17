@@ -4,6 +4,7 @@
 // observes: nothing here feeds back into the odometry.
 
 #include "window_term_table.h"
+#include "window_verdict.h"
 
 #include <Eigen/Dense>
 #include <array>
@@ -30,6 +31,7 @@ struct WindowTermRecord
     std::array<std::array<double, kTermDirections>, kTermMotions> change{};
     WindowTermTable guess;  // at the state the first iteration starts from
     WindowTermTable result; // after the last iteration
+    WindowVerdict verdict;  // the window verdict (window_verdict.h): flags and readings
 };
 
 class WindowTermSink

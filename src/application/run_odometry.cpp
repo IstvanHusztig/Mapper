@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <optional>
 #include <sstream>
 #include <string>
 
@@ -215,7 +216,8 @@ namespace
         std::vector<std::vector<Eigen::Affine3d>> poses_after;
         std::vector<double> deltas;
 
-        Eigen::Matrix3d *translation_information = params.log_window_diagnostics ? &lidar_translation_information : nullptr;
+        // the window's translation information, in every run (the window verdict's information ratio); it enters no matrix
+        Eigen::Matrix3d *translation_information = &lidar_translation_information;
         WindowProblem problem(intermediate_points, window, state.buckets_indoor, state.buckets_outdoor, setup.scan_to_map, acc_term.motion_model,
                               window_rotation_options, acc_term.options, velocity_prior, acc_offset, acc_term.offset_cov, logger,
                               translation_information, timing, workspace);
@@ -567,11 +569,11 @@ namespace
     // log_window_terms: the per-term table at the guess and at the result, one log line, and the record for the sink.
     // Only reads: nothing here changes the window, the maps or the loop's state. last_along: the travel direction of the
     // previous window, used when this one moves less than 1 cm, and updated.
-    void record_window_terms(int i, const std::vector<Window> &windows, const WindowTermSources &s, const OdometryConfig &params,
-                             Eigen::Vector3d &last_along, WindowTermSink *sink, Logger &logger)
+    std::optional<WindowTermRecord> record_window_terms(int i, const std::vector<Window> &windows, const WindowTermSources &s,
+                                                        const OdometryConfig &params, Eigen::Vector3d &last_along, Logger &logger)
     {
         if (!params.log_window_terms)
-            return;
+            return std::nullopt;
         const Window &window = windows[i];
         last_along = window_travel_direction(window.poses, last_along);
         const Eigen::Vector3d no_offset = Eigen::Vector3d::Zero(); // the acceleration offset starts at zero in every window
@@ -619,8 +621,7 @@ namespace
             if (r.result.turn_defined)
                 line << "; " << motion_summary(r.result, 3, 2, "deg");
         }
-        if (sink)
-            sink->write(r);
+        return r;
     }
 
     // log_iteration_convergence: after how many iterations the window's poses settled, and where fast mode would have stopped
@@ -885,6 +886,7 @@ namespace
                          << ", big-jump nodes (their steps not applied) " << workspace.big_jump_nodes;
         if (params.log_iteration_convergence && !carry.convergence.empty())
             log_convergence_summary(carry.convergence, logger);
+        log_run_verdict(summarize_run(carry.verdicts, true), VerdictLimits{}, logger);
         if (params.log_stage_timing)
         {
             log_odometry_timing(carry.timing, std::chrono::duration<double>(std::chrono::steady_clock::now() - carry.timing.start).count(), windows.size(), logger);
@@ -940,6 +942,8 @@ namespace
         std::vector<Eigen::Affine3d> poses_before_optimization; // the guess
         Window guess;                                           // log_window_terms: the window as the first iteration finds it
         WindowOptimization optimization;
+        int steps_not_applied = 0; // failed solves of this window
+        int big_jump_nodes = 0;    // nodes whose step was refused (big jump)
     };
 
     // the window's points, the previous window's velocity and the guess continued from the previous window's end
@@ -1054,12 +1058,78 @@ namespace
                                            w.velocity_prior, w.acc_offset, w.lidar_translation_information, c.params, c.debugMsg, c.logger,
                                            c.params.log_stage_timing ? &carry.timing.lm : nullptr, workspace, forced);
         lm_timer.stop();
+        w.steps_not_applied = workspace.steps_skipped - steps_skipped_before;
+        w.big_jump_nodes = workspace.big_jump_nodes - big_jump_nodes_before;
         if (workspace.steps_skipped > steps_skipped_before)
             log_warning(c.logger) << "window " << w.i + 1 << ": " << workspace.steps_skipped - steps_skipped_before
                                   << " solver step(s) not applied (the solve failed)";
         if (workspace.big_jump_nodes > big_jump_nodes_before)
             log_warning(c.logger) << "window " << w.i + 1 << ": " << workspace.big_jump_nodes - big_jump_nodes_before
                                   << " node(s) would have moved 1 m or more from their guess: those steps were not applied (big jump)";
+    }
+
+    // what the run knows about window w for its verdict (window_verdict.h); read before the tail is re-propagated. A reading
+    // the window doesn't have stays empty: speed and chi2 without the accelerometer term, the bias without its estimation
+    WindowEvidence window_evidence(const LoopContext &c, const WindowWork &w, const WindowTermRecord *record)
+    {
+        const Window &window = c.windows[w.i];
+        WindowEvidence e;
+        e.window = w.i + 1;
+        if (!window.timestamps.empty() && !c.windows[0].timestamps.empty())
+            e.time_s = window.timestamps.front().first - c.windows[0].timestamps.front().first;
+        if (!window.poses.empty() && w.poses_before_optimization.size() == window.poses.size())
+        {
+            // as log_heading_diagnostics' "yaw correction last", and its horizontal components
+            const Eigen::AngleAxisd aa(window.poses.back().linear() * w.poses_before_optimization.back().linear().transpose());
+            e.heading_bend_deg = aa.angle() * aa.axis().z() * RAD_TO_DEG;
+            e.roll_bend_deg = aa.angle() * aa.axis().x() * RAD_TO_DEG;
+            e.pitch_bend_deg = aa.angle() * aa.axis().y() * RAD_TO_DEG;
+        }
+        if (w.acc_term.options.enabled)
+        {
+            e.speed_mps = window.velocity.end.norm();
+            const Eigen::Vector3d jump = window.velocity.start - w.acc_term.options.velocity_prior_mean;
+            const Eigen::Matrix3d Ci = w.acc_term.options.velocity_prior_cov.inverse();
+            e.velocity_chi2 = jump.dot(Ci * jump);
+        }
+        if (w.rotation_options.estimate_bias)
+            e.max_bias_deg_s = (window.gyro_bias.mean * RAD_TO_DEG).cwiseAbs().maxCoeff();
+        const Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eig(w.lidar_translation_information);
+        if (eig.eigenvalues().maxCoeff() > 0.0)
+            e.information_ratio = eig.eigenvalues().minCoeff() / eig.eigenvalues().maxCoeff();
+        e.stop = w.optimization.stop;
+        e.iterations = w.optimization.last_iteration + 1;
+        e.lm_factor = w.optimization.lm_factor;
+        e.rejected_steps = w.optimization.rejected_steps;
+        e.steps_not_applied = w.steps_not_applied;
+        e.big_jump_nodes = w.big_jump_nodes;
+        if (record && record->result.failure.empty())
+            for (const WindowTermRow &row : record->result.rows)
+            {
+                if (row.name == "total")
+                {
+                    double largest = 0.0;
+                    for (int m = 0; m < 3; m++)
+                        for (int d = 0; d < kTermDirections; d++)
+                            if (std::isfinite(row.pull[m][d]))
+                                largest = std::max(largest, std::abs(row.pull[m][d]));
+                    e.remaining_step_m = largest;
+                }
+            }
+        if (record && record->result.failure.empty())
+        {
+            double ndt = 0.0, total = 0.0;
+            for (const WindowTermRow &row : record->result.rows)
+            {
+                if (row.name == "ndt_indoor" || row.name == "ndt_outdoor")
+                    ndt += row.weight[1][0];
+                if (row.name == "total")
+                    total = row.weight[1][0];
+            }
+            if (total > 0.0)
+                e.lidar_share_along = ndt / total;
+        }
+        return e;
     }
 
     // step 3: what the window did, in the log (and the per-term table); reads the window before its tail is re-propagated
@@ -1078,10 +1148,21 @@ namespace
         log_weak_axis_diagnostics(i, c.windows[i], w.intermediate_points, c.state, setup.scan_to_map, w.acc_term, w.lidar_translation_information,
                                   params, c.logger);
         log_heading_diagnostics(i, c.windows[i], w.poses_before_optimization, w.intermediate_points, c.state, setup.scan_to_map, params, c.logger);
-        record_window_terms(i, c.windows,
-                            WindowTermSources{w.intermediate_points, w.guess, c.state, setup, w.acc_term, w.rotation_options, w.velocity_prior,
-                                              w.acc_offset, w.optimization, w.at_rest, w.turn_window},
-                            params, c.last_along, c.range.terms, c.logger);
+        std::optional<WindowTermRecord> record =
+            record_window_terms(i, c.windows,
+                                WindowTermSources{w.intermediate_points, w.guess, c.state, setup, w.acc_term, w.rotation_options, w.velocity_prior,
+                                                  w.acc_offset, w.optimization, w.at_rest, w.turn_window},
+                                params, c.last_along, c.logger);
+
+        const WindowVerdict verdict = judge_window(window_evidence(c, w, record ? &*record : nullptr));
+        carry.verdicts.push_back(verdict);
+        if (params.log_window_verdict && verdict.any())
+            log_window_verdict(verdict, c.logger);
+        if (record && c.range.terms)
+        {
+            record->verdict = verdict;
+            c.range.terms->write(*record);
+        }
     }
 
     // step 4: the hand-off (bias and offset carried, the tail re-propagated), the distance check, the next window placed
@@ -1231,28 +1312,34 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
                                 << params.capture_windows_to_s << " s";
         WindowRange plain; // every window outside a capture
         plain.terms = terms;
+        // a cancelled run logs the verdict summary of the windows it finished
+        const auto cancelled = [&]()
+        {
+            log_run_verdict(summarize_run(loop.carry.verdicts, false), VerdictLimits{}, logger);
+            return false;
+        };
         if (!capturing)
         {
             if (!run(0, n - 1, plain))
-                return false;
+                return cancelled();
         }
         else
         {
             // the same windows in the same order as without the capture, in three parts: before, in and after the range
             if (capture_first > 0 && !run(0, capture_first - 1, plain))
-                return false;
+                return cancelled();
             WindowCapture c = start_capture(windows, capture_first, capture_last, loop, state, point_store);
             WindowRange range = plain;
             range.outcomes = &c.outcomes;
             if (!run(capture_first, capture_last, range))
-                return false;
+                return cancelled();
             std::string why;
             if (capture->write(c, why))
                 log_info(logger) << "window capture written: windows " << capture_first + 1 << " to " << capture_last + 1;
             else
                 log_error(logger) << "window capture not written: " << why;
             if (capture_last + 1 < n && !run(capture_last + 1, n - 1, plain))
-                return false;
+                return cancelled();
         }
 
         finish_run(windows, start, loop.setup, loop.carry, state, params, loop.workspace, logger);

@@ -14,6 +14,7 @@
 #include "window.h"
 #include "window_steps.h"
 #include "window_term_sink.h"
+#include "window_verdict.h"
 #include <structures.h>
 
 #include <chrono>
@@ -69,6 +70,7 @@ struct WindowLoopCarry
     double velocity_time_s = 0.0;                                // ... at the previous window's last node
     bool first_window_at_rest = false;
     std::vector<IterationConvergence> convergence; // per window, with log_iteration_convergence
+    std::vector<WindowVerdict> verdicts;           // per window: the window verdict (not written to a capture)
     OdometryTiming timing;                         // with log_stage_timing
 };
 

@@ -73,6 +73,9 @@ struct OdometryConfig
     // at the result (window_term_table.h); one log line per window, window_terms.csv and window_features.csv in the output
     // folder (results unchanged)
     bool log_window_terms = false;
+    // diagnostics only: one "window verdict" line per window that has a flag (bent against the gyro, fast, gyro bias
+    // high), with all its readings; the run's verdict summary is logged in every run (results unchanged)
+    bool log_window_verdict = false;
     // after the odometry the CLI writes odometry_snapshot.bin to the output folder, so that the post-processing can be run
     // again from it (dMapper <input> <params.toml> <output> --from-snapshot <file>) without running the odometry again
     bool save_odometry_snapshot = false;

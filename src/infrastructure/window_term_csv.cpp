@@ -38,6 +38,8 @@ namespace
         for (int m = 0; m < kTermMotions; m++)
             for (int d = 0; d < kTermDirections; d++)
                 h += std::string(",change_") + term_motion_name(m) + "_" + term_direction_name(d);
+        h += ",verdict_bent,verdict_bent_severely,verdict_fast,verdict_bias_high,heading_bend_deg,roll_bend_deg,pitch_bend_deg,speed_mps,"
+             "max_bias_deg_s,velocity_chi2,stop,rejected_steps,steps_not_applied,big_jump_nodes,remaining_step_m,lidar_share_along";
         return h;
     }
 
@@ -92,6 +94,14 @@ void FolderWindowTermSink::write(const WindowTermRecord &r)
     for (int m = 0; m < kTermMotions; m++)
         for (int d = 0; d < kTermDirections; d++)
             features_ << "," << number(r.change[m][d]);
+    // the window verdict: its flags (CLEAR / TRIGGER / NOT MEASURED) and readings (empty where NOT MEASURED)
+    const WindowVerdict &v = r.verdict;
+    const WindowEvidence &e = v.evidence;
+    const auto opt = [](const std::optional<double> &x) { return x ? number(*x) : std::string(); };
+    features_ << "," << check_name(v.bent) << "," << check_name(v.bent_severely) << "," << check_name(v.fast) << "," << check_name(v.bias_high)
+              << "," << opt(e.heading_bend_deg) << "," << opt(e.roll_bend_deg) << "," << opt(e.pitch_bend_deg) << "," << opt(e.speed_mps) << ","
+              << opt(e.max_bias_deg_s) << "," << opt(e.velocity_chi2) << "," << lm_stop_name(e.stop) << "," << e.rejected_steps << ","
+              << e.steps_not_applied << "," << e.big_jump_nodes << "," << opt(e.remaining_step_m) << "," << opt(e.lidar_share_along);
     features_ << "\n";
     terms_.flush();
     features_.flush();

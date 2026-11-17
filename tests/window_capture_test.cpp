@@ -286,3 +286,18 @@ TEST_CASE("window loop guard: every window's outcome over the loop's option bran
     }
     MESSAGE("loop guard written to ", file.string());
 }
+
+// The window verdict (stage 4) only observes: the run is the same bits with log_window_verdict on, and the setting is not
+// one of the odometry settings a capture or snapshot is checked against.
+TEST_CASE("window verdict: the run is the same with log_window_verdict on")
+{
+    const Recording r = loop_recording(1);
+    OdometryConfig c = capture_config();
+    const std::vector<Window> plain = run(r, c, nullptr);
+    OdometryConfig with_lines = c;
+    with_lines.log_window_verdict = true;
+    CHECK(odometry_settings_hash(with_lines) == odometry_settings_hash(c));
+    const std::vector<Window> logged = run(r, with_lines, nullptr);
+    for (size_t i = 0; i < plain.size(); i++)
+        CHECK(same_poses(plain[i].poses, logged[i].poses));
+}

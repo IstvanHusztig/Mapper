@@ -59,6 +59,7 @@ WindowReplayResult replay_window_capture(const WindowCapture &capture, const Odo
     double ts_failure = 0.0;
     result.cancelled = !process_windows(loop, windows, capture.first, capture.last, params, state, ts_failure, false, points, preview,
                                         logger, progress, range);
+    log_run_verdict(summarize_run(loop.carry.verdicts, !result.cancelled), VerdictLimits{}, logger);
 
     for (std::size_t k = 0; k < result.outcomes.size() && k < capture.outcomes.size(); k++)
     {
