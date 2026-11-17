@@ -5,6 +5,7 @@
 #include <Eigen/Dense>
 #include <vector>
 #include <structures.h>
+#include "lm_solver.h"
 #include "ndt_map.h"
 #include "normal_equations.h"
 #include "optimizer_options.h"
@@ -41,12 +42,7 @@ struct SteppedPoses
 };
 SteppedPoses stepped_poses(const Window &window, const std::vector<double> &h_x, double max_from_guess_m, Logger &logger);
 
-// Levenberg-Marquardt damping for the next iteration: x10 after iterations 10, 20, ..., and x10 at once after a step
-// that was not applied (failed solve or big jump); without that the next iteration builds the same system, gets the
-// same step and rejects it again, until the 10th
-double next_lm_factor(double lm_factor, int iter, bool step_applied);
-
-// this function performs main LiDAR odometry calculations
+// One Levenberg-Marquardt iteration of a window (lm_iteration on a WindowProblem, window_problem.h)
 // gyro_bias / gyro_bias_cov are updated only when rotation_options.estimate_bias is set
 // timing (log_stage_timing): when not null, the time of each phase is added to it
 // workspace: when not null, the Cholesky analyses are kept in it between calls (the results are the same without it)

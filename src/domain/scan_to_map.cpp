@@ -1,21 +1,13 @@
 #include "scan_to_map.h"
-#include "accelerometer_term.h"
-#include "motion_model_terms.h"
+#include "lm_solver.h"
 #include "ndt_map.h"
 #include "ndt_term.h"
-#include "normal_equations.h"
-#include "window_equations.h"
-#include "window_solver.h"
+#include "window_problem.h"
 #include <transformations.h>
 
 #include <algorithm>
 #include <cassert>
 #include <cmath>
-
-namespace
-{
-
-}
 
 SteppedPoses stepped_poses(const Window &window, const std::vector<double> &h_x, double max_from_guess_m, Logger &logger)
 {
@@ -43,15 +35,6 @@ SteppedPoses stepped_poses(const Window &window, const std::vector<double> &h_x,
         out.poses.push_back(pose);
     }
     return out;
-}
-
-double next_lm_factor(double lm_factor, int iter, bool step_applied)
-{
-    if (!step_applied)
-        lm_factor *= 10.0;
-    if (iter % 10 == 0 && iter > 0)
-        lm_factor *= 10.0;
-    return lm_factor;
 }
 
 double ndt_window_cost(const std::vector<Point3Di> &intermediate_points, const std::vector<Eigen::Affine3d> &poses,
@@ -114,74 +97,14 @@ bool optimize_lidar_odometry(std::vector<Point3Di> &intermediate_points, Window 
 {
     ScanToMapWorkspace local_workspace; // without a caller's workspace every call analyses its own patterns
     ScanToMapWorkspace &cache = workspace ? *workspace : local_workspace;
+    WindowProblem problem(intermediate_points, window, buckets_indoor, buckets_outdoor, scan_to_map, motion_model, rotation_options,
+                          translation_imu_options, velocity_prior, acc_offset, acc_offset_cov, logger, lidar_translation_information,
+                          timing, cache);
     const auto phase = [timing](PhaseTime ScanToMapTiming::*p) { return timing ? &(timing->*p) : nullptr; };
-    PhaseTimer setup_timer(phase(&ScanToMapTiming::setup));
-
-    const WindowUnknowns unknowns = layout_window_unknowns(window, rotation_options, translation_imu_options);
-    WindowEquations equations(unknowns);
-    equations.with_cost = cost != nullptr;
-    setup_timer.stop();
-
-    NdtSums ndt = sum_ndt_point_terms(equations, window, intermediate_points, buckets_indoor, buckets_outdoor, scan_to_map,
-                                      lidar_translation_information != nullptr, cost != nullptr, timing);
-
-    PhaseTimer motion_terms_timer(phase(&ScanToMapTiming::motion_terms));
-
-    add_projected_ndt_blocks(equations, ndt, scan_to_map);
-    // geometric translation constraint of this window (world frame, summed over the nodes)
-    if (lidar_translation_information)
-        *lidar_translation_information = window_translation_information(ndt);
-
-    add_motion_edge_terms(equations, unknowns, window, motion_model, rotation_options, translation_imu_options);
-
-    add_gyro_bias_prior(equations, unknowns, window, rotation_options);
-    add_velocity_continuity(equations, unknowns, window, motion_model, velocity_prior);
-
-    const bool end_tied = add_acceleration_terms(equations, unknowns, window, translation_imu_options, acc_offset);
-    add_velocity_priors(equations, unknowns, window, translation_imu_options, end_tied);
-    add_acceleration_offset_prior(equations, unknowns, translation_imu_options, acc_offset);
-
-    motion_terms_timer.stop();
-
+    const LmTiming lm_timing{phase(&ScanToMapTiming::covariance_solve), phase(&ScanToMapTiming::solve), phase(&ScanToMapTiming::update)};
+    const LmIteration it = lm_iteration(problem, lm_factor, apply_step, cost != nullptr, false, delta,
+                                        LmWorkspace{cache.covariance, cache.damped}, lm_timing);
     if (cost)
-    {
-        *cost = ScanToMapCost{};
-        for (size_t k = 0; k < ndt.node_cost.size(); k++)
-        {
-            cost->ndt += ndt.node_cost[k];
-            cost->matched += ndt.node_matched[k];
-            cost->unmatched += ndt.node_unmatched[k];
-        }
-        cost->total = cost->ndt + equations.motion_cost;
-    }
-    PhaseTimer assembly_timer(phase(&ScanToMapTiming::assembly));
-
-    fix_origin(equations, motion_model);
-
-    assert(equations.matrix.dropped_writes() == 0); // a write outside the band would mean the band was chosen too narrow
-    Eigen::SparseMatrix<double> AtPA = equations.matrix.to_sparse();
-    Eigen::SparseMatrix<double> AtPB = equations.rhs.sparseView();
-
-    assembly_timer.stop();
-    PhaseTimer covariance_timer(phase(&ScanToMapTiming::covariance_solve));
-    const ExtraCovariances covariances = extra_unknowns_covariance(AtPA, unknowns, cache.covariance);
-    if (covariances.solved)
-    {
-        if (unknowns.estimate_bias)
-            window.gyro_bias.covariance = covariances.gyro_bias;
-        if (unknowns.acc_term)
-        {
-            acc_offset_cov = covariances.acceleration_offset;
-            window.velocity.end_covariance = covariances.end_velocity;
-        }
-    }
-    covariance_timer.stop();
-    if (!apply_step)
-        return false;
-
-    PhaseTimer solve_timer(phase(&ScanToMapTiming::solve));
-    const WindowStep step = solve_window_step(AtPA, AtPB, unknowns, lm_factor, cache.damped);
-    solve_timer.stop();
-    PhaseTimer update_timer(phase(&ScanToMapTiming::update));
-    return apply_window_step(window, step, unknowns, rotation_options, acc_offset, delta, cache, logger);
+        *cost = problem.cost();
+    return it.applied;
 }

@@ -1,7 +1,7 @@
 #pragma once
 
-// The solver part of a window's optimization (optimize_lidar_odometry, scan_to_map.cpp), after every term has been added:
-// the origin fix, the covariance of the extra unknowns, the damped solve and the step applied to the window.
+// The window's side of the solver (window_problem.h): the origin fix, and a step applied to the window. The covariance and
+// the damped solve are the solver's (lm_solver.h).
 
 #include "normal_equations.h"
 #include "optimizer_options.h"
@@ -17,25 +17,12 @@
 // window's end
 void fix_origin(WindowEquations &equations, const MotionModelOptions &motion_model);
 
-// marginal covariance of the extra unknowns (gyro bias, acceleration offset, end velocity): their block of the inverse of the
-// undamped normal matrix. Only meaningful when solved; each block only when its unknowns exist.
-struct ExtraCovariances
-{
-    bool solved = false;
-    Eigen::Matrix3d gyro_bias = Eigen::Matrix3d::Zero();
-    Eigen::Matrix3d acceleration_offset = Eigen::Matrix3d::Zero();
-    Eigen::Matrix3d end_velocity = Eigen::Matrix3d::Zero();
-};
-ExtraCovariances extra_unknowns_covariance(const Eigen::SparseMatrix<double> &AtPA, const WindowUnknowns &unknowns, PatternCachedCholesky &solver);
-
-// the damped solve: lm_factor on the pose parameters only (AtPA gets the damping added); the step, one entry per unknown
+// a solver step (lm_solver.h): one entry per unknown; solved false: the solve failed
 struct WindowStep
 {
     bool solved = false;
     std::vector<double> h_x;
 };
-WindowStep solve_window_step(Eigen::SparseMatrix<double> &AtPA, const Eigen::SparseMatrix<double> &AtPB, const WindowUnknowns &unknowns,
-                             double lm_factor, PatternCachedCholesky &solver);
 
 // applies a step: the nodes' new poses, the bias (clamped), the acceleration offset and the velocities, and delta (the sum of
 // |updates|; 1e6 when not applied). A node that would end 1 m or more from its guess ("big jump") rejects the whole step.
