@@ -1,0 +1,50 @@
+# dMapper documentation
+
+Start with the user guide, [index.html](index.html) (open it in a browser). This file is the map of every page in `docs/`, by what it is for; the same map is the guide's section [All documents](index.html#documents). The Hungarian pages are under `hu/`. Also outside `docs/`: [CLAUDE.md](../CLAUDE.md) (how the code is built, tested and laid out), [tools/README.md](../tools/README.md) (the analysis tools) and `openspec/specs/` (the requirements).
+
+## Using dMapper
+
+Start here: what a run does and what every setting means.
+
+- [User guide](index.html): The pipeline step by step, every parameter, best practices, the tuning cheat sheet, known limitations.
+- [How a run works: windows](PIPELINE.md): How a run cuts the recording into windows and processes one window (short, technical).
+
+## How the odometry works
+
+Explanations with measurements: one mechanism per page.
+
+- [Poses, windows and window chaining](window-chaining.html): What a pose is, how a window's trajectory and its points' positions are computed, and the window-chaining fix.
+- [Degeneracy information](degeneracy-information.html): When the LiDAR can't see where the sensor moved, how dMapper measures it, and how to read its log line.
+- [The per-term table: Livox 3](window-terms-livox3.html): Which term of the optimization holds a window and where it pulls it; the first reading on a real stretch.
+- [Performance](performance.html): How the full recording got 2.2 times faster: the overview.
+- [Performance fixes](PERFORMANCE.md): Every performance fix with its method and numbers.
+
+## Code and architecture
+
+Where the code is going, the current plan, and the review findings.
+
+- [Architecture](ARCHITECTURE.md): The target architecture (layers, ports, SOLID) and the migration roadmap (steps 0-11, done).
+- [Code split and region agents](code-split-and-region-agents-plan.md): The current plan, stages 0-8, with its progress.
+- [Code-review tracker](code-review-tracker.md): The findings of the code review of 2026-10-13 and their status.
+
+## Plans and research
+
+Drafts, research notes and task texts; each says how current it is.
+
+- [Sensor-neutral retune (draft)](sensor-neutral-retune-plan.md): Draft of 2026-11-10: findings and direction for settings grounded in the sensor; its current status is in agents/roadmap.md.
+- [Loop closure research](loop-closure-research.html): Loop closure in dMapper: diagnosis, and how other systems do it.
+- [Machine-learning learning guide](ml-research-roadmap.html): Modules M1-M9 to work through before any machine-learning work on dMapper.
+- [dLidar time alignment (task text)](dlidar-timestamp-fix-prompt.md): Historical task text for the recorder (dLidar): the LiDAR-IMU time alignment of L2 recordings. The recorder is outside dMapper's scope.
+
+## Agent working notes
+
+Working notes of the Codex agent setup (read through AGENTS.md); kept by the agents, not edited as documentation.
+
+- [Roadmap](agents/roadmap.md): Current status of the retune and Livox work as the agents keep it.
+- [Handoff](agents/handoff.md): The latest save point of an agent session.
+- [Shared preferences](agents/preferences.md): Working preferences shared by the agents.
+- [Environment](agents/environment.md): Local environment and workflow for builds and runs.
+- [Removal validation](agents/removal-validation.md): Validation record of the accelerometer-mode removal.
+- [Turn calibration measurements](agents/turn-calibration-measurements.md): Measurements of the turn recording, 2026-11-12.
+
+A new page goes into this map and into the guide's [All documents](index.html#documents), and gets the top line and the "See also" block the other pages have.

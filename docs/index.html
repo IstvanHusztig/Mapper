@@ -71,6 +71,7 @@
   .params { margin: 10px 0 8px; }
   .params span { display: inline-block; background: var(--tag); border-radius: 4px; padding: 0 6px; margin: 2px 4px 2px 0; font: 12.5px ui-monospace, Consolas, monospace; }
   .table-wrap { overflow-x: auto; margin: 10px 0 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+  .meta { color: var(--muted); font-size: 14px; margin: 4px 0 6px; }
   table { border-collapse: collapse; width: 100%; font-size: 14px; }
   th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
   th { font-size: 12.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: var(--code-bg); }
@@ -105,8 +106,7 @@
   <div class="brand">Mapper odometry</div>
   <div class="sub">dMapper · LiDAR + IMU</div>
   <a href="hu/index.html" hreflang="hu" lang="hu">Magyar nyelven</a>
-  <a href="performance.html">Performance</a>
-  <a href="window-terms-livox3.html">Per-term table: Livox 3</a>
+  <a href="#documents">All documents</a>
   <a href="#overview">Overview</a>
   <a href="#inputs">Inputs and outputs</a>
   <div class="group">Pipeline</div>
@@ -142,6 +142,7 @@
   <a href="#tuning">Tuning cheat sheet</a>
   <a href="#fixes">Fixes and map sharpness</a>
   <a href="#limits">Known limitations</a>
+  <a href="#documents">All documents</a>
 </nav>
 
 <main>
@@ -553,6 +554,48 @@ See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 <li><b>Loop closure also moves a correct trajectory.</b> On the synthetic two-lap recording of the unit tests (<code>tests/loop_closure_test.cpp</code>) it halves a second-lap drift, but a trajectory that is already exact is moved by up to 3 cm and 0.1°: every revisit registers with a residual of 1–3 cm, and the pose graph trusts loop edges to 5 cm. With points only within 6 m it accepted a wrong registration and moved the trajectory by 1.5 m; the overlap threshold alone does not catch that.</li>
 <li><b>The consistency pass also moves a correct trajectory</b>, on the same synthetic recording (<code>tests/consistency_test.cpp</code>): by up to 6 mm (spread evenly, the noise of the NDT fit). It removes offsets between windows.</li>
 </ul>
+<h2 id="documents">All documents</h2>
+<p>Every page of <code>docs/</code>, by what it is for. The same map is in <code>docs/README.md</code>; the Hungarian pages are under <code>docs/hu/</code>. Also outside <code>docs/</code>: <code>CLAUDE.md</code> (how the code is built, tested and laid out), <code>tools/README.md</code> (the analysis tools) and <code>openspec/specs/</code> (the requirements).</p>
+<h3>Using dMapper</h3>
+<p class="meta">Start here: what a run does and what every setting means.</p>
+<div class="table-wrap"><table>
+<tr><td>this guide</td><td><code>index.html</code></td><td>The pipeline step by step, every parameter, best practices, the tuning cheat sheet, known limitations.</td></tr>
+<tr><td><a href="PIPELINE.md">How a run works: windows</a></td><td><code>PIPELINE.md</code></td><td>How a run cuts the recording into windows and processes one window (short, technical).</td></tr>
+</table></div>
+<h3>How the odometry works</h3>
+<p class="meta">Explanations with measurements: one mechanism per page.</p>
+<div class="table-wrap"><table>
+<tr><td><a href="window-chaining.html">Poses, windows and window chaining</a></td><td><code>window-chaining.html</code></td><td>What a pose is, how a window&#x27;s trajectory and its points&#x27; positions are computed, and the window-chaining fix.</td></tr>
+<tr><td><a href="degeneracy-information.html">Degeneracy information</a></td><td><code>degeneracy-information.html</code></td><td>When the LiDAR can&#x27;t see where the sensor moved, how dMapper measures it, and how to read its log line.</td></tr>
+<tr><td><a href="window-terms-livox3.html">The per-term table: Livox 3</a></td><td><code>window-terms-livox3.html</code></td><td>Which term of the optimization holds a window and where it pulls it; the first reading on a real stretch.</td></tr>
+<tr><td><a href="performance.html">Performance</a></td><td><code>performance.html</code></td><td>How the full recording got 2.2 times faster: the overview.</td></tr>
+<tr><td><a href="PERFORMANCE.md">Performance fixes</a></td><td><code>PERFORMANCE.md</code></td><td>Every performance fix with its method and numbers.</td></tr>
+</table></div>
+<h3>Code and architecture</h3>
+<p class="meta">Where the code is going, the current plan, and the review findings.</p>
+<div class="table-wrap"><table>
+<tr><td><a href="ARCHITECTURE.md">Architecture</a></td><td><code>ARCHITECTURE.md</code></td><td>The target architecture (layers, ports, SOLID) and the migration roadmap (steps 0-11, done).</td></tr>
+<tr><td><a href="code-split-and-region-agents-plan.md">Code split and region agents</a></td><td><code>code-split-and-region-agents-plan.md</code></td><td>The current plan, stages 0-8, with its progress.</td></tr>
+<tr><td><a href="code-review-tracker.md">Code-review tracker</a></td><td><code>code-review-tracker.md</code></td><td>The findings of the code review of 2026-10-13 and their status.</td></tr>
+</table></div>
+<h3>Plans and research</h3>
+<p class="meta">Drafts, research notes and task texts; each says how current it is.</p>
+<div class="table-wrap"><table>
+<tr><td><a href="sensor-neutral-retune-plan.md">Sensor-neutral retune (draft)</a></td><td><code>sensor-neutral-retune-plan.md</code></td><td>Draft of 2026-11-10: findings and direction for settings grounded in the sensor; its current status is in agents/roadmap.md.</td></tr>
+<tr><td><a href="loop-closure-research.html">Loop closure research</a></td><td><code>loop-closure-research.html</code></td><td>Loop closure in dMapper: diagnosis, and how other systems do it.</td></tr>
+<tr><td><a href="ml-research-roadmap.html">Machine-learning learning guide</a></td><td><code>ml-research-roadmap.html</code></td><td>Modules M1-M9 to work through before any machine-learning work on dMapper.</td></tr>
+<tr><td><a href="dlidar-timestamp-fix-prompt.md">dLidar time alignment (task text)</a></td><td><code>dlidar-timestamp-fix-prompt.md</code></td><td>Historical task text for the recorder (dLidar): the LiDAR-IMU time alignment of L2 recordings. The recorder is outside dMapper&#x27;s scope.</td></tr>
+</table></div>
+<h3>Agent working notes</h3>
+<p class="meta">Working notes of the Codex agent setup (read through AGENTS.md); kept by the agents, not edited as documentation.</p>
+<div class="table-wrap"><table>
+<tr><td><a href="agents/roadmap.md">Roadmap</a></td><td><code>agents/roadmap.md</code></td><td>Current status of the retune and Livox work as the agents keep it.</td></tr>
+<tr><td><a href="agents/handoff.md">Handoff</a></td><td><code>agents/handoff.md</code></td><td>The latest save point of an agent session.</td></tr>
+<tr><td><a href="agents/preferences.md">Shared preferences</a></td><td><code>agents/preferences.md</code></td><td>Working preferences shared by the agents.</td></tr>
+<tr><td><a href="agents/environment.md">Environment</a></td><td><code>agents/environment.md</code></td><td>Local environment and workflow for builds and runs.</td></tr>
+<tr><td><a href="agents/removal-validation.md">Removal validation</a></td><td><code>agents/removal-validation.md</code></td><td>Validation record of the accelerometer-mode removal.</td></tr>
+<tr><td><a href="agents/turn-calibration-measurements.md">Turn calibration measurements</a></td><td><code>agents/turn-calibration-measurements.md</code></td><td>Measurements of the turn recording, 2026-11-12.</td></tr>
+</table></div>
 </main>
 </div>
 <script>

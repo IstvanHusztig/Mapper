@@ -1,5 +1,8 @@
 # How a run works: windows
 
+<!-- docs-nav -->
+> [dMapper docs](README.md) › Using dMapper · [All documents](README.md) · [User guide](index.html)
+
 A run is cut into short consecutive pieces of the recording, called **windows**. This page explains what a window holds and how each processing stage uses it. The code is in `src/` (one folder per layer, see `docs/ARCHITECTURE.md`). For the parameters, see `docs/index.html`; for the target architecture, see `docs/ARCHITECTURE.md`.
 
 ## What a `Window` is
@@ -71,3 +74,9 @@ In more detail:
 ## Why windows at all
 
 Optimizing all nodes of a run at once (248,000 on the full 44 recording) would be far too big a problem. Window by window, each optimization is small (360 nodes). The map built from the windows so far keeps them aligned, and loop closure removes the drift that remains.
+
+## See also
+
+- [User guide: the pipeline](index.html#pipeline)
+- [Window chaining: poses, windows, placing](window-chaining.html)
+- [All documents](README.md)

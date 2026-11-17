@@ -1,5 +1,8 @@
 # Architecture goals
 
+<!-- docs-nav -->
+> [dMapper docs](README.md) › Code and architecture · [All documents](README.md) · [User guide](index.html)
+
 Status: **in progress.** This is the target architecture for dMapper (`dMapper.exe`) and the
 plan for getting there. Each migration step is its own OpenSpec change; steps 0–6 are done (see
 the roadmap).
@@ -263,3 +266,9 @@ Steps 8–11 were added on 2026-10-03. They cover the goals that steps 0–7 sti
 ## 9. Open questions
 
 - None right now.
+
+## See also
+
+- [The code-split plan](code-split-and-region-agents-plan.md)
+- [Code-review tracker](code-review-tracker.md)
+- [All documents](README.md)

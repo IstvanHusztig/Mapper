@@ -1,5 +1,8 @@
 # Code-review tracker (review of 2026-10-13)
 
+<!-- docs-nav -->
+> [dMapper docs](README.md) › Code and architecture · [All documents](README.md) · [User guide](index.html)
+
 One row per finding of the code review of 2026-10-13 (four review agents; main claims checked in the code). The full write-up with code quotes is on branch `odometry-map-horizon-wip`, `openspec/changes/odometry-map-horizon/code-review-2026-10-13.md`; the plan that orders the work is in the change `map-quality-harness` (change A) and the changes B–I that follow it.
 
 Map quality is judged on three equal measures: **global geometry** (angles and distances true; façade angle start room vs gallery on 44), **consistency** (no doubled walls) and **sharpness** (railing nearest-neighbour check), on s0/s1/s2 against the noise floor (change A).
@@ -61,3 +64,9 @@ The settings audit (`openspec/changes/settings-audit`) follows after that.
 | C37 | First-node angle weights are 1/σ_deg² applied to radian parameters (3283× weaker than intended) | `scan_to_map.cpp:955-957` | map-precision-leaks | reported | master-reviewer 2026-10-18; harmless (both huge) |
 | C38 | Recording 44: the gyro values at 253–259.7 s are inconsistent with gravity and the LiDAR (raw gyro turns 89.6° over 255.86–259.93 s and predicts gravity 29.6° off, the result 2.4°; raw-scan ICP 0.3–2.9° per window vs gyro 8–11°); the odometry follows the LiDAR, the gyro-bias estimate swings −0.86 → +0.48 °/s | data, gyro-bias carry | map-precision-leaks | reported | 2026-10-18 (`findings.md` F3); cause unknown; open: ICP degeneracy check, robust bias update when gyro and LiDAR disagree by degrees per window; links C4, C26 |
 | — | Tait-Bryan gimbal lock with the vertical mount | — | — | rejected | pitch never above 23° on 44 (measured) |
+
+## See also
+
+- [Architecture](ARCHITECTURE.md)
+- [The code-split plan](code-split-and-region-agents-plan.md)
+- [All documents](README.md)

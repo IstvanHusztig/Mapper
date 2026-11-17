@@ -1,5 +1,8 @@
 # Sensor-neutral retune: findings, direction and plan (draft for discussion)
 
+<!-- docs-nav -->
+> [dMapper docs](README.md) › Plans and research · [All documents](README.md) · [User guide](index.html)
+
 Current evaluation rules: the user agreed on 2026-11-12 to
 [the OpenSpec evaluation contract](../openspec/changes/sensor-neutral-yardstick/criteria-proposal.md).
 It supersedes the draft numerical limits and verdict rules below. Preserve the
@@ -194,3 +197,9 @@ of F7 that section 1 has since put in doubt. Phase 0b still decides it.
 3. Does the gated accelerometer mode (off under `imu_always_on`) stay, or go?
 4. Static recording and the turn on the spot: when?
 5. Are the draft pass criteria the right ones for "clean and precise", and what is missing for caves?
+
+## See also
+
+- [Roadmap (agent notes): current status](agents/roadmap.md)
+- [User guide: tuning cheat sheet](index.html#tuning)
+- [All documents](README.md)

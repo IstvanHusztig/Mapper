@@ -1,5 +1,8 @@
 # Task: fix the LiDAR–IMU time alignment in dLidar (Unitree L2 recordings)
 
+<!-- docs-nav -->
+> [dMapper docs](README.md) › Plans and research · [All documents](README.md) · [User guide](index.html)
+
 You maintain **dLidar**, the app that records a Unitree L2 (LiDAR with a built-in 6-axis IMU) into recording folders. A separate program, **dMapper** (LiDAR-inertial odometry, another repository; don't change it), processes those folders. dMapper has measured that **the IMU timestamps in the recordings lag the LiDAR point timestamps by tens of milliseconds**. Find the cause in dLidar, fix it, and show that it's fixed.
 
 **The scanner is currently broken and waiting for repair.** You can't make new recordings now. Work from the code, the SDK documentation, any raw packet captures or logs you have, and unit tests. Plan the field check for when the scanner is back.
@@ -81,3 +84,8 @@ With file and line references:
   - a rotation test: turn the scanner back and forth about its vertical axis a few times in a room.
 
   The user will check them with dMapper's `tools/imu_time_offset.py`. The target is a residual offset below 5 ms on every axis and in every 60 s segment.
+
+## See also
+
+- [User guide: inputs and outputs](index.html#inputs)
+- [All documents](README.md)

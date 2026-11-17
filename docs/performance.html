@@ -68,7 +68,7 @@
 </head>
 <body>
 <main>
-<p style="text-align:right;font-size:13px;margin:0 0 8px"><a href="hu/performance.html" hreflang="hu" lang="hu">Magyar nyelven</a> · <a href="index.html">User guide</a></p>
+<p class="docs-nav" style="font-size:13px;margin:0 0 8px;color:var(--muted)"><a href="index.html">dMapper docs</a> › How the odometry works · <a href="index.html#documents">All documents</a> · <a href="hu/performance.html" hreflang="hu" lang="hu">Magyar nyelven</a></p>
 
 <h1>Performance: how the full recording got 2.2 times faster</h1>
 <p class="lead">Between 2026-10-05 and 2026-10-08 the processing of a full reference recording (about 5 minutes of data, 690 windows, 16.5 million points) went from 33 to 10 minutes, and its odometry from 26 to 8 minutes. This page shows what was measured, what each step changed, and what is left.</p>
@@ -171,6 +171,8 @@ On the 30-second test recording the two baselines differ by up to 2 cm in positi
 
 <p class="meta">Details, the method and every number: <a href="../docs/PERFORMANCE.md">PERFORMANCE.md</a> in the repository. Times are for the reference recordings with the Release build; the machine has 16 logical cores.</p>
 
+<h2>See also</h2>
+<ul class="docs-nav"><li><a href="PERFORMANCE.md">PERFORMANCE.md: every fix with method and numbers</a></li><li><a href="window-chaining.html">Window chaining</a></li><li><a href="index.html#documents">All documents</a></li></ul>
 </main>
 </body>
 </html>

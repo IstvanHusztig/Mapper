@@ -68,7 +68,7 @@
 </head>
 <body>
 <main>
-<p style="text-align:right;font-size:13px;margin:0 0 8px"><a href="hu/window-chaining.html" hreflang="hu" lang="hu">Magyar nyelven</a></p>
+<p class="docs-nav" style="font-size:13px;margin:0 0 8px;color:var(--muted)"><a href="index.html">dMapper docs</a> › How the odometry works · <a href="index.html#documents">All documents</a> · <a href="hu/window-chaining.html" hreflang="hu" lang="hu">Magyar nyelven</a></p>
 
 <h1>Window chaining: what was wrong, and what the fix changed</h1>
 <p class="lead">Change <code>chain-next-window-only</code>, October 2026. After every window, the odometry loop used to place
@@ -89,6 +89,16 @@ scan-to-map optimization takes almost all of the time; on much longer recordings
 
 <h2>1. Background: windows and placing a window</h2>
 
+<h3>1.1 What a pose is</h3>
+<p>A <strong>pose</strong> is the sensor's position and orientation at one moment, in the world frame: x, y, z in metres
+and three angles om, fi, ka (roll, pitch, yaw, Tait-Bryan). In the code it is a 4 × 4 <code>Eigen::Affine3d</code>: a
+rotation R and a translation t, so that a point p given in the sensor's frame lies at <code>R p + t</code> in the world.
+The optimizer works with the six numbers (x, y, z, om, fi, ka) per pose.</p>
+<p>A <strong>node</strong> is one pose with its timestamp: one per IMU sample. A <strong>window</strong> is a run of
+consecutive nodes, <code>threshold_nr_poses</code> of them (360 in <code>l2-vertical.toml</code>, about 0.4 s at the L2's
+IMU rate; 180 in <code>livox-vertical.toml</code>, 0.36 s).</p>
+
+<h3>1.2 Windows</h3>
 <p>A run cuts the recording into <strong>windows</strong> (see <code>docs/PIPELINE.md</code>). Each window is a short
 trajectory: a list of poses (<code>Window::poses</code>), one node every few milliseconds. On <code>raw data/44</code> there are
 <strong>690 windows of 360 nodes</strong> (248,400 nodes in all).</p>
@@ -114,6 +124,75 @@ void place_window_after(Window &amp;window, const Eigen::Affine3d &amp;start)
 
 <p>One placement costs, per node, an inverse and two 4×4 matrix products, plus a copy of the window's pose vector
 (360 × 128 bytes ≈ 46 KB).</p>
+
+<h3>1.3 How a window's trajectory is computed, step by step</h3>
+<p>The placement above is one step of a longer chain. From the recording to the final trajectory:</p>
+<ol>
+<li><b>Orientation from the IMU</b> (<code>calculate_trajectory</code>, <code>src/application/lidar_odometry.cpp</code>).
+The Fusion AHRS filter turns the gyro and accelerometer samples into an orientation per IMU sample. This trajectory has
+<em>orientations only</em>: every position is zero. The gyro bias is estimated and removed here first.</li>
+<li><b>Cutting into windows</b> (<code>compute_step_1</code>, same file). After the first
+<code>threshold_initial_points</code> points (they seed the map), every <code>threshold_nr_poses</code> nodes become a
+window: <code>poses</code> and <code>motion_model_poses</code> both start as the IMU's orientations,
+plus each node's timestamp, IMU angles and raw accelerometer reading. A window with 1000 points or fewer is dropped.
+<code>imu_motion_from_previous</code> keeps the IMU's motion from the previous window's last node to this window's first.</li>
+<li><b>The first window</b> is placed at the map's origin (<code>place_window_after(windows[0], m_g)</code>), and the map
+is seeded from the initial points.</li>
+<li><b>The guess of each later window</b> (<code>predict_window_poses</code>, <code>src/domain/window_steps.cpp</code>).
+The window is chained onto the previous window's <em>optimized</em> last node, keeping the IMU's shape (the orientation
+increments, as in <code>place_window_after</code>). Its positions then come from one of:
+  <ul>
+  <li>the accelerometer, integrated from the previous window's final velocity (<code>use_imu_translation_prediction</code>;
+  with <code>imu_always_on</code> it is integrated again from the start-velocity prior by
+  <code>integrate_window_translations</code>);</li>
+  <li>no motion, when the window is detected at rest;</li>
+  <li>otherwise the previous window's velocity carried forward (or, without timestamps, the previous windows' mean step).</li>
+  </ul>
+The gyro-bias estimate carried from the previous window is also removed here (<code>apply_gyro_bias_prior</code>). The
+result is copied to <code>motion_model_poses</code>: it is what the IMU says the window looks like, and the motion-model
+terms of the optimization pull towards its shape.</li>
+<li><b>The optimization</b> (<code>run_lm_iterations</code> → <code>optimize_lidar_odometry</code>). Up to
+<code>nr_iter</code> Levenberg-Marquardt iterations move all six numbers of every node at once, so that the window's
+LiDAR points fit the NDT map while the motion stays close to the IMU's: the gyro's rotation between nodes, the
+accelerometer's change of velocity, the velocity carried from the previous window. The first node is held fixed (the
+origin fix); the window can only change how it continues from there. What each of these terms contributes is shown by
+the per-term table (<a href="window-terms-livox3.html">first reading</a>).</li>
+<li><b>Hand-off.</b> The window's last few nodes are re-propagated from the IMU with the bias estimated in this window
+(<code>repropagate_window_tail</code>), and the next window is placed after its new last node
+(<code>place_window_after</code>, section 2 is about this step). The estimated gyro bias, end velocity and acceleration
+offset become the next window's priors.</li>
+<li><b>After the odometry</b>, loop closure and the consistency pass (when on) move the windows' poses again; the
+positions written to the output are the poses after these.</li>
+</ol>
+
+<h3>1.4 How the points' positions are computed</h3>
+<p>A LiDAR point is stored as it was measured: its coordinates in the sensor's frame at its own time (already shifted by
+the lever arm to the IMU), its timestamp and its intensity. It never gets a world position of its own; it is placed with
+a pose each time it is needed.</p>
+<ol>
+<li><b>Which node a point belongs to</b> (<code>compute_step_1</code>). Each point is given to the window whose time range
+contains it, and within the window to the last node at or before its timestamp, if that node is at most 10 ms away
+(<code>Point3Di::index_pose</code>); otherwise it is dropped. The window's points are stored twice: all of them
+(<code>WindowOriginal</code>), and voxel-thinned with <code>decimation</code> (<code>WindowIntermediate</code>), which is
+what the optimization uses.</li>
+<li><b>Placing a point.</b> With its node's pose, a point's world position is
+<pre>world = poses[p.index_pose] * p.point          <span class="cm">// R p + t of its node</span></pre>
+So a point moves exactly as its node moves: an error of the node's position moves the point by the same amount, and an
+error of the node's orientation moves it by the angle times its range (0.1° at 20 m is 3.5 cm).</li>
+<li><b>During the optimization</b> every thinned point is placed this way with the current guess of its node, looked up
+in the NDT map, and pulls its node towards its cell.</li>
+<li><b>Into the map.</b> When a window is done, its thinned points, placed with the window's final poses, are added to
+the NDT map (<code>add_window_to_map</code> → <code>update_rgd</code>); the next window is matched against them. A point
+placed with a wrong pose therefore stays in the map as a wrong wall for the windows after it.</li>
+<li><b>Into the output</b> (<code>save_result</code>, <code>points_to_vector</code>). The windows are joined into chunks;
+each chunk's original points are placed with the final poses and written relative to the chunk's first pose
+(<code>scan_lio_&lt;i&gt;.laz</code>, with that pose in the session files), and once more in world coordinates into
+<code>scan_lio_merged.laz</code>. The trajectory CSVs hold each chunk's poses relative to its first node.</li>
+</ol>
+<div class="note"><b>Why window placement matters for the map</b>
+Everything a run outputs is "points placed with poses". The odometry decides the poses window by window, and each window
+starts where the previous one ended; a window that ends a few millimetres off hands that offset to every later window,
+until loop closure or consistency corrects it.</div>
 
 <h2>2. The old code</h2>
 
@@ -327,6 +406,8 @@ change, the change writes new baselines for <code>44_short</code> and <code>44</
   <li>The other performance fixes: <code>docs/PERFORMANCE.md</code>.</li>
 </ul>
 
+<h2>See also</h2>
+<ul class="docs-nav"><li><a href="PIPELINE.md">How a run works: windows</a></li><li><a href="degeneracy-information.html">Degeneracy information</a></li><li><a href="window-terms-livox3.html">The per-term table: Livox 3</a></li><li><a href="performance.html">Performance</a></li><li><a href="index.html#documents">All documents</a></li></ul>
 </main>
 </body>
 </html>

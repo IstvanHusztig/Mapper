@@ -8,6 +8,8 @@ dMapper started as a standalone extraction of the LiDAR odometry (step 1) applic
 
 **Priorities:** dMapper is a mapping application (target: cave surveys hundreds of metres long), so precision and map quality come before speed. When a choice trades one against the other (a slower but more robust method, more registrations, an extra solve), take the more precise one, and report the time cost instead of avoiding it.
 
+**Documentation:** `docs/` is one guide: the user guide `docs/index.html` and a map of every page in `docs/README.md` and in the guide's "All documents" section (`#documents`), grouped by purpose. Every page carries the top line `dMapper docs › <group> · All documents` (class / comment `docs-nav`) and ends with "See also". A new page goes into both maps and gets the top line and "See also"; `docs/agents/` (the Codex agents' notes) is listed but not edited. The Hungarian pages (`docs/hu/`) are updated only at the end of a body of work, not with each English change.
+
 There are no linters or CI. Unit tests use doctest (`3rdparty/doctest`), and refactors are checked against a golden baseline (see Testing). Mechanical renames in refactors are done with `tools/rename_identifiers.py` (code only, never comments or strings; `-m` for member accesses only; `--dry-run` first).
 
 **Missing tools:** when a tool or package an analysis needs is missing (a Python module such as numpy, a CLI program), ask the user to install it (name the package and the command, e.g. `python -m pip install --user numpy`) instead of working around it with a slower or weaker substitute or reporting it as a blocker. Repo tools in `tools/` stay pure Python unless a change decides otherwise.

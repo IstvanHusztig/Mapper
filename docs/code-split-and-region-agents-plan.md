@@ -1,5 +1,8 @@
 # Code split and region agents ("divide et impera"): plan
 
+<!-- docs-nav -->
+> [dMapper docs](README.md) › Code and architecture · [All documents](README.md) · [User guide](index.html)
+
 Status: **agreed 2026-11-16** (decisions below). Branch `honest-degeneracy-measure`, nothing pushed.
 
 Progress:
@@ -537,3 +540,10 @@ hand it to its region.
 3. **Regions:** the eight listed in stage 7.
 4. **Code the sensor settings never reach:** robust mode (`optimize_sf2`, `optimize_rigid_sf`,
    `use_robust_and_accurate_lidar_odometry`) and `Consistency2` (`use_mutliple_gaussian`) are removed in stage 0.
+
+## See also
+
+- [Architecture](ARCHITECTURE.md)
+- [The per-term table: Livox 3](window-terms-livox3.html)
+- [Code-review tracker](code-review-tracker.md)
+- [All documents](README.md)
