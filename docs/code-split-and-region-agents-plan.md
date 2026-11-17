@@ -16,7 +16,9 @@ Progress:
   splits bit-identical, `window_term_table`, setting `log_window_terms`, the CSV files, `tools/window_terms.py`. Livox 3
   replay with the setting on: 84 of 84 windows identical.
   Archived 2026-11-17 (b234b6a); the first reading of the table is `docs/window-terms-livox3.html`.
-- Stage 4 designed 2026-11-17 (below), decisions taken, OpenSpec `solver-and-window-verdict`.
+- Stage 4 designed 2026-11-17 (below), decisions taken, OpenSpec `solver-and-window-verdict`; implemented 2026-11-17
+  (4ed2f46 .. ): loop guard, `lm_solver` + `WindowProblem`, `process_windows` in four steps, the window verdict and its
+  summary; every commit identical on the guards, replays and 44_short.
 
 ## Why
 

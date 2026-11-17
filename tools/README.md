@@ -399,4 +399,7 @@ python tools/window_terms.py <window_terms.csv> [--from S] [--to S] [--state res
   the weak tie with their own usual values.
 - `window_features.csv`: one row per window (time, iterations, damping, moves, velocities, gyro bias, acceleration
   offset, information ratio and weak axis, matched points, and the window's change from guess to result in the twelve
-  motion numbers): the per-window features for a future learned tuner.
+  motion numbers): the per-window features for a future learned tuner. Since stage 4 also the window verdict: the four
+  flags (`verdict_bent`, `verdict_bent_severely`, `verdict_fast`, `verdict_bias_high`: CLEAR / TRIGGER / NOT MEASURED),
+  the bends, speed, bias, velocity chi², why the iterations stopped, the solver's events, the remaining step and the
+  LiDAR's weight share (empty where NOT MEASURED).
