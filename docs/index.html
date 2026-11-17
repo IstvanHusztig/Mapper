@@ -286,12 +286,18 @@ recomputed from the IMU, because they have almost no points), and the estimates 
 
 <h3 id="f-map">The map</h3>
 <dl class="terms">
+<dt id="t-voxel">Voxel</dt>
+<dd>A cube of a regular 3D grid laid over space, the 3D counterpart of a pixel: every point falls into exactly one
+voxel, found from its coordinates divided by the voxel size. A voxel holds whatever the grid keeps for its points. In
+dMapper that is one point (<a class="term" href="#t-decimation">decimation</a>), or a mean and covariance (an
+<a class="term" href="#t-ndt">NDT cell</a>), or one coloured point in the GUI's live preview (0.10 m). The size sets the
+detail: a smaller voxel keeps more detail and more points.</dd>
 <dt id="t-decimation">Decimation (voxel thinning)</dt>
-<dd>Keeping only the first point in each cube of size <code>decimation</code>. The optimization and the map use the thinned
-points; the export uses all of them.</dd>
+<dd>Keeping only the first point in each <a class="term" href="#t-voxel">voxel</a> of size <code>decimation</code> (0.03 m in
+both sensor settings). The optimization and the map use the thinned points; the export uses all of them.</dd>
 <dt id="t-ndt">NDT map, grid, cell</dt>
-<dd>The map the windows are matched against (Normal Distributions Transform). Space is divided into cubes, the
-<b>cells</b>, of two <b>grids</b>: 0.15 m (indoor) and 0.4 m (outdoor). Each cell stores the mean and covariance of the
+<dd>The map the windows are matched against (Normal Distributions Transform). Space is divided into
+<a class="term" href="#t-voxel">voxels</a>, the <b>cells</b>, of two <b>grids</b>: 0.15 m (indoor) and 0.4 m (outdoor). Each cell stores the mean and covariance of the
 points in it, a small Gaussian that describes the local surface, and with at least 3 points and a clear surface direction a
 <b>normal</b> facing the sensor. A window's points, placed with its optimized poses, are added after each window. <span class="more">→
 <a href="#s-map">step 4</a>, <a href="#s-update">step 8</a></span></dd>
