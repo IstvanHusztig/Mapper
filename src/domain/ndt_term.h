@@ -45,12 +45,45 @@ struct NdtSums
     std::vector<int> node_matched, node_unmatched;
 };
 
+// one NDT grid as the point terms see it: its cells, cell size and nearest range, and three things only the indoor grid
+// does: the range weight (use_norm), the cap of the weight at 10, and the normal information. For the outdoor grid the
+// weight is planarity * 1.0, which is planarity exactly.
+struct NdtGrid
+{
+    const NDTBucketMapType &buckets;
+    Eigen::Vector3d b; // cell size [m]
+    double min_distance;
+    bool range_weight;
+    bool cap;
+    bool normal_information;
+    const char *name; // "indoor" / "outdoor", for messages
+};
+NdtGrid indoor_ndt_grid(const NDTBucketMapType &buckets, const ScanToMapOptions &scan_to_map);
+NdtGrid outdoor_ndt_grid(const NDTBucketMapType &buckets, const ScanToMapOptions &scan_to_map);
+
 // the point terms of both grids, per node in parallel (a node's points in point order, so the result is the same with or
 // without threads); planarity / range weights, the Huber kernel and the information scale as set. Throws
 // std::domain_error on a non-finite distance with the Huber kernel on. timing: the indoor and outdoor phases.
 NdtSums sum_ndt_point_terms(WindowEquations &equations, const Window &window, const std::vector<Point3Di> &intermediate_points,
-                            NDTBucketMapType &buckets_indoor, NDTBucketMapType &buckets_outdoor, const ScanToMapOptions &scan_to_map,
+                            const NDTBucketMapType &buckets_indoor, const NDTBucketMapType &buckets_outdoor, const ScanToMapOptions &scan_to_map,
                             bool normal_information_wanted, bool with_cost, ScanToMapTiming *timing);
+
+// one grid's point terms alone, into node blocks whatever the projection setting (with the grid's normal information when
+// it has any): the per-grid rows of the window term table. Throws as sum_ndt_point_terms.
+NdtSums sum_ndt_grid_blocks(const NdtGrid &grid, const Window &window, const std::vector<Point3Di> &intermediate_points,
+                            const ScanToMapOptions &scan_to_map, bool with_cost);
+
+// the degeneracy projection M = diag(P, I) from a window's translation information, P = sum(s_k * v_k * v_k^T); all_kept:
+// every direction keeps s = 1 (the blocks then pass unchanged, nothing is multiplied)
+struct NdtProjection
+{
+    Eigen::Matrix<double, 6, 6> M;
+    bool all_kept = true;
+};
+NdtProjection ndt_degeneracy_projection(const Eigen::Matrix3d &information, const ScanToMapOptions &scan_to_map);
+
+// every node block of `sums` into the matrix, as M B M and M g (or unchanged when all_kept)
+void add_ndt_blocks(WindowEquations &equations, const NdtSums &sums, const NdtProjection &projection);
 
 // degeneracy-aware NDT terms (degenerate_projection_ratio_full > 0): along a translation direction whose share of the
 // window's geometric information is small the node blocks carry no information (M B M, M g with M = diag(P, I)); every
