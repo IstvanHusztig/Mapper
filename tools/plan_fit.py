@@ -9,14 +9,18 @@ room and the gallery (PARTS) are also fitted on their own, turned about their ow
 their rotations against it show which part of the map is turned; differences below about 0.05 deg are noise. Needs
 numpy, scipy, laspy (with lazrs) and pymupdf.
 
-Usage: plan_fit.py <result_folder> [out_prefix]
+A recording that doesn't start where 44 does has another world frame: --start gives its map -> plan rotation and the
+stairwell centre in its map (read them off the map; the search around them is the same +-6 deg and +-1 m), --z-band
+the world z of the storey's walls, and --no-parts leaves out the start room and gallery fits, whose times are 44's.
+
+Usage: plan_fit.py <result_folder> [out_prefix] [--start ROT_DEG X Y] [--z-band LO HI] [--no-parts]
 Writes <out_prefix>_whole_fit.png, _start_fit.png, _full_sheet.png, _zoom_gallery.png, _zoom_core.png (default prefix
 <result>/map_quality_cache/plan_fit): red the whole floor, green the start room, blue the gallery. The whole-floor fit
 goes to <result>/map_quality_cache/plan_fit.json (used by plan_section.py).
 """
+import argparse
 import json
 import os
-import sys
 
 import laspy
 import numpy as np
@@ -25,13 +29,25 @@ from scipy import ndimage, optimize
 
 from map_quality_lib import MAP_SHAFT, PLAN_PDF, PLAN_PX_PER_M, PLAN_ROTATION_DEG, PLAN_SHAFT_PX, cache_dir
 
-Z_BAND = (-0.5, 1.5)   # world z band of the top floor's walls [m]
 CELL = 0.05            # wall cell size [m]
 TRUNC = 0.30           # distances to the plan are capped here in the fit [m]
 PARTS = {"start room (0-15 s)": (0.0, 15.0), "gallery out+back (49-71 s)": (48.9, 70.9)}
 
-result = sys.argv[1]
-prefix = sys.argv[2] if len(sys.argv) > 2 else os.path.join(cache_dir(result), "plan_fit")
+parser = argparse.ArgumentParser(description="Fits one storey of a result onto the building plan.")
+parser.add_argument("result")
+parser.add_argument("out_prefix", nargs="?")
+parser.add_argument("--start", nargs=3, type=float, default=(PLAN_ROTATION_DEG, *MAP_SHAFT), metavar=("ROT_DEG", "X", "Y"),
+                    help="map -> plan rotation [deg] and the stairwell centre in the map [m] (default: recording 44)")
+parser.add_argument("--z-band", nargs=2, type=float, default=(-0.5, 1.5), metavar=("LO", "HI"),
+                    help="world z band of the storey's walls [m] (default: the top floor of 44)")
+parser.add_argument("--no-parts", action="store_true", help="no start room and gallery fits (their times are 44's)")
+args = parser.parse_args()
+result = args.result
+prefix = args.out_prefix or os.path.join(cache_dir(result), "plan_fit")
+START_ROTATION_DEG, MAP_SHAFT = args.start[0], (args.start[1], args.start[2])
+Z_BAND = tuple(args.z_band)  # world z band of the storey's walls [m]
+if args.no_parts:
+    PARTS = {}
 
 # ---- plan ---------------------------------------------------------------------------------------------------------
 pix = pymupdf.open(PLAN_PDF)[0].get_pixmap(dpi=150, colorspace=pymupdf.csGRAY)
@@ -101,9 +117,9 @@ def stats(xy, w, p):
 
 
 xy_all, w_all = wall_cells(np.ones_like(t, bool))
-th0 = np.radians(PLAN_ROTATION_DEG)
+th0 = np.radians(START_ROTATION_DEG)
 R0 = np.array([[np.cos(th0), -np.sin(th0)], [np.sin(th0), np.cos(th0)]])
-p0 = np.r_[PLAN_ROTATION_DEG, np.array([PLAN_SHAFT_PX[0], H - PLAN_SHAFT_PX[1]]) / PLAN_PX_PER_M - R0 @ np.array(MAP_SHAFT)]
+p0 = np.r_[START_ROTATION_DEG, np.array([PLAN_SHAFT_PX[0], H - PLAN_SHAFT_PX[1]]) / PLAN_PX_PER_M - R0 @ np.array(MAP_SHAFT)]
 
 p_all = fit(xy_all, w_all, p0, MAP_SHAFT)
 s_all = stats(xy_all, w_all, p_all)
@@ -120,7 +136,8 @@ for name, (a, b) in PARTS.items():
     print(f"{name}: own-fit rotation {p[0]:.2f} deg ({p[0] - p_all[0]:+.2f} vs whole), mean |d| own {s_own[0]:.3f} m / "
           f"in whole fit {s_glob[0]:.3f} m, within 10 cm own {s_own[1]:.0%} / whole {s_glob[1]:.0%}")
 names = list(PARTS)
-print(f"gallery - start rotation: {part_fits[names[1]][0] - part_fits[names[0]][0]:+.2f} deg")
+if names:
+    print(f"gallery - start rotation: {part_fits[names[1]][0] - part_fits[names[0]][0]:+.2f} deg")
 
 
 # ---- overlays ---------------------------------------------------------------------------------------------------------
@@ -130,7 +147,7 @@ def overlay(p, png, crop, s=3):
     img = (255 - (255 - img) * 0.55).astype(np.uint8)
     sel_all = np.arange(len(t))[::4]
     layers = [(sel_all, (220, 0, 0))]
-    for name, col in ((names[1], (0, 90, 255)), (names[0], (0, 170, 0))):
+    for name, col in zip(reversed(names), ((0, 90, 255), (0, 170, 0))):
         a, b = PARTS[name]
         layers.append((sel_all[(t[sel_all] >= a) & (t[sel_all] < b)], col))
     for sel, col in layers:
@@ -166,7 +183,8 @@ def perimeter(p, png, crop, s=3, close_m=0.4, min_area_m2=0.5):
 
 perimeter(p_all, prefix + "_perimeter.png", (0, 1300, 5600, 4200))
 overlay(p_all, prefix + "_whole_fit.png", (0, 1300, 5600, 4200))
-overlay(part_fits[names[0]], prefix + "_start_fit.png", (0, 1300, 5600, 4200))
+if names:
+    overlay(part_fits[names[0]], prefix + "_start_fit.png", (0, 1300, 5600, 4200))
 overlay(p_all, prefix + "_full_sheet.png", (0, 0, A.shape[1], A.shape[0]), s=5)
 overlay(p_all, prefix + "_zoom_gallery.png", (3000, 3550, 5300, 4150), s=2)
 overlay(p_all, prefix + "_zoom_core.png", (1650, 2550, 3450, 3950), s=2)

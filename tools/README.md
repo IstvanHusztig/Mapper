@@ -214,8 +214,10 @@ python tools/map_quality.py [--floors] [--overlay] [label=]result_folder ...
 Fits the top floor of a result of recording 44 onto the building plan (`haus47_LG_plan.pdf`, scale 1:50 fixed) and draws the map over it. Needs numpy, scipy, laspy (with lazrs) and pymupdf; reads `scan_lio_merged.laz` directly (no CloudCompare export).
 
 ```
-python tools/plan_fit.py <result_folder> [out_prefix]
+python tools/plan_fit.py <result_folder> [out_prefix] [--start ROT_DEG X Y] [--z-band LO HI] [--no-parts]
 ```
+
+- A recording with another world frame than 44 (another start room or sensor) needs `--start`: the map → plan rotation [deg] and the stairwell centre in its map [m], read off the map; the search around them is the same. `--z-band` is the world z of the storey's walls (default −0.5 1.5, the top floor of 44; about 0.6 to 2.6 m above the floor), and `--no-parts` leaves out the start room and gallery fits, whose times are 44's. Livox 3 (start storey, floor at −0.70 m): `--start 195.84 0.96 -6.46 --z-band -0.1 1.65 --no-parts`, then `plan_section.py --height 1.3`.
 
 - The walls (world z −0.5…1.5 m, 5 cm cells with ≥ 8 points) are placed by the 2D rotation and shift that bring them closest to the plan's drawn lines; the start is `map_quality_lib`'s plan anchor.
 - Prints the whole-floor fit (rotation, mean distance to the plan, share within 10 / 25 cm) and the start room (0–15 s) and the gallery (49–71 s) fitted on their own, with their rotation against the whole fit.
