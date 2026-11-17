@@ -45,7 +45,7 @@
 - [x] 4.1 `src/domain/window_term_table.{h,cpp}`: the motion vectors (shift, stretch, curve, turn × along, sideways,
   vertical; velocities as the motion's derivative; turn through the angle Jacobian, empty within 3° of fi = ±90°); the
   rows of the plan, including NDT before the projection, origin fix (rad), total and damping; weight, pull, cost and
-  residuals per row. Tests (`tests/window_term_table_test.cpp`): rows sum to the complete equations within a tolerance;
+  residuals per row. Tests (planned in `tests/window_term_table_test.cpp`): rows sum to the complete equations within a tolerance;
   sideways and stretched NDT guess; accelerometer curve; edge-rotation turn; corridor weights. Verify: the new tests
   pass, step checks identical. Result: the tests are in `tests/scan_to_map_test.cpp` (its room and corridor scenes),
   all pass; all step checks identical. The accelerometer curve pull and the edge turn pull are exact; NDT pulls back
@@ -55,28 +55,43 @@
 
 ## 5. Window loop, setting, log
 
-- [ ] 5.1 Setting `log_window_terms` in `OdometryConfig`, `TomlIO::POINTERS` and the `[lidar_odometry_debug_info]`
+- [x] 5.1 Setting `log_window_terms` in `OdometryConfig`, `TomlIO::POINTERS` and the `[lidar_odometry_debug_info]`
   `CATEGORIES` entry; golden TOMLs regenerated in their own commit. Verify: unit tests pass; a capture made at
-  `addd8e4` replays as "same settings".
-- [ ] 5.2 Port `WindowTermSink`; the window loop calls the table at the guess (after `motion_model_poses` is set) and at
+  `addd8e4` replays as "same settings". Result: 8d86796, goldens 081cf3e; also in the three shipped
+  settings files; the stage 1 captures (made before the key existed) replay as "same settings", every window identical.
+- [x] 5.2 Port `WindowTermSink`; the window loop calls the table at the guess (after `motion_model_poses` is set) and at
   the result (directly after `run_lm_iterations`), with the window's own options, no workspace, outside the timed
   spans; exceptions caught as a warning; one log line per window. Test: the synthetic recording through the window loop
   with the setting on and off gives the same poses bit for bit. Verify: that test, step checks identical with the
-  setting off, the Livox 3 replay identical with it on.
+  setting off, the Livox 3 replay identical with it on. Result: 28952e4. The guess state is a copy
+  taken after `motion_model_poses` is set; both tables are computed after the iterations and the logged window time,
+  before the bias and offset carry. The sink is a `WindowRange` hook. Test passes; step checks identical (44_short:
+  only the params TOML differs, by the new key); Livox 3 replay with the setting on: 84 of 84 identical, exit 0.
 
 ## 6. Files and tool
 
-- [ ] 6.1 CSV adapter (`window_terms.csv`, `window_features.csv`) in the infrastructure; CLI run writes to the output
+- [x] 6.1 CSV adapter (`window_terms.csv`, `window_features.csv`) in the infrastructure; CLI run writes to the output
   folder, `dMapper --replay` next to the capture. Test of the adapter's columns and rows. Verify: the test passes; a
-  44_short run with the setting on writes both files with one table per window.
-- [ ] 6.2 `tools/window_terms.py` (pure Python): one window's table, or a per-term summary of a range; documented in
-  `tools/README.md`. Verify: it prints the table of a window from the 44_short run of 6.1.
-- [ ] 6.3 Manifests: params TOML entries refreshed in their own commit. Verify: 44_short and Livox 3 compare IDENTICAL.
-- [ ] 6.4 Docs: `CLAUDE.md` (setting, files, tool), the plan's progress. Verify: the text matches the code.
+  44_short run with the setting on writes both files with one table per window. Result: 28952e4 and
+  46bc553: the first 44_short run wrote no files (the output folder is created only at saving); the sink now creates it
+  and the CLI warns if it still can't write; the test writes into a missing folder. 44_short with the setting on: 70
+  windows, 1674 term rows, 70 feature rows, no table failure.
+- [x] 6.2 `tools/window_terms.py` (pure Python): one window's table, or a per-term summary of a range; documented in
+  `tools/README.md`. Verify: it prints the table of a window from the 44_short run of 6.1. Result: 6ee02b0,
+  README 9f97437; prints window 40 of that run and the Livox 3 replay's range summary.
+- [x] 6.3 Manifests: params TOML entries refreshed in their own commit. Verify: 44_short and Livox 3 compare IDENTICAL. Result: the three manifests (44, 44_short,
+  Livox 3) written from the stage end runs at 9f97437; each run compares IDENTICAL (35, 11, 35 files). The Livox 4
+  manifest is not refreshed (not a stage check; its params entry is stale until its next run).
+- [x] 6.4 Docs: `CLAUDE.md` (setting, files, tool), the plan's progress. Verify: the text matches the code. Result:
+  9f97437, plus `docs/window-terms-livox3.html`, the first reading of the table (reviewed), linked from the user guide.
 
 ## 7. End of stage
 
-- [ ] 7.1 Full 44 and Livox 3 against their manifests with the setting off. Verify: both IDENTICAL.
-- [ ] 7.2 44_short and the Livox 3 replay with the setting on: poses identical; the odometry time with and without the
-  setting reported. Verify: replay exits 0; times written into this file.
-- [ ] 7.3 Debug build and `ctest` (the NDT split touches the parallel loop). Verify: pass.
+- [x] 7.1 Full 44 and Livox 3 against their manifests with the setting off. Verify: both IDENTICAL. Result (9f97437): both
+  differ from the old manifests only in the params TOML (the new key): 34 of 35 files identical each; 44_short 10 of
+  11. Wall times: 44 1640 s, Livox 3 1244 s, 44_short 129 s.
+- [x] 7.2 44_short and the Livox 3 replay with the setting on: poses identical; the odometry time with and without the
+  setting reported. Verify: replay exits 0; times written into this file. Result: 44_short with the setting on matches
+  the manifest except the params TOML and the two new CSV files; odometry 118.0 s against 110.1 s off (+7 %). Livox 3
+  replay (84 windows) 96.7 s against 88.9 s off (+9 %), 84 of 84 identical, exit 0.
+- [x] 7.3 Debug build and `ctest` (the NDT split touches the parallel loop). Verify: pass. Result: pass (586 s).
