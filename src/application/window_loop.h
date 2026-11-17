@@ -74,11 +74,10 @@ struct WindowLoopCarry
     OdometryTiming timing;                         // with log_stage_timing
 };
 
-// the accelerometer term of one window and the motion-model options that depend on it
+// the accelerometer term of one window
 struct AccTerm
 {
     MotionModelTranslationImuOptions options; // enabled only in windows that use the term
-    MotionModelOptions motion_model;          // the window's translation sigmas (loosened while the term is active)
     Eigen::Matrix3d offset_cov;               // acceleration-offset covariance, updated by the optimization
     double window_duration_s = 0.0;
 };

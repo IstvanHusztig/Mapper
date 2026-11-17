@@ -99,11 +99,6 @@ namespace
         t.window_duration_s = window.timestamps.size() > 1
                                   ? window.timestamps.back().first - window.timestamps.front().first
                                   : 0.0;
-        t.motion_model = setup.motion_model;
-        t.motion_model.x_sigma_m = params.lidar_odometry_motion_model_x_1_sigma_m;
-        t.motion_model.y_sigma_m = params.lidar_odometry_motion_model_y_1_sigma_m;
-        t.motion_model.z_sigma_m = params.lidar_odometry_motion_model_z_1_sigma_m;
-
         if (setup.always_on && after_first_window && window.imu_acc.size() == window.poses.size())
         {
             const double rw = params.imu_acceleration_offset_rw_mps2_sqrt_s;
@@ -218,7 +213,7 @@ namespace
 
         // the window's translation information, in every run (the window verdict's information ratio); it enters no matrix
         Eigen::Matrix3d *translation_information = &lidar_translation_information;
-        WindowProblem problem(intermediate_points, window, state.buckets_indoor, state.buckets_outdoor, setup.scan_to_map, acc_term.motion_model,
+        WindowProblem problem(intermediate_points, window, state.buckets_indoor, state.buckets_outdoor, setup.scan_to_map, setup.motion_model,
                               window_rotation_options, acc_term.options, velocity_prior, acc_offset, acc_term.offset_cov, logger,
                               translation_information, timing, workspace);
 
@@ -312,7 +307,8 @@ namespace
     //    model's; the accelerometer terms don't see such an offset;
     //  - profile: the NDT cost with the whole window moved along w by -2 .. +2 m in 5 cm steps, and its local minima.
     void log_weak_axis_diagnostics(int i, const Window &window, const std::vector<Point3Di> &intermediate_points, const OdometryState &state,
-                                   const ScanToMapOptions &scan_to_map, const AccTerm &acc_term, const Eigen::Matrix3d &lidar_translation_information,
+                                   const ScanToMapOptions &scan_to_map, const MotionModelOptions &mm, const AccTerm &acc_term,
+                                   const Eigen::Matrix3d &lidar_translation_information,
                                    const OdometryConfig &params, Logger &logger)
     {
         if (!params.log_window_diagnostics || window.poses.size() < 2)
@@ -345,7 +341,6 @@ namespace
         };
         const double ndt_stiffness = (cost_at(stretched(d)) + cost_at(stretched(-d)) - 2.0 * c0) / (d * d);
         const double prior_stiffness = 2.0 * w.dot(Ci * w);
-        const MotionModelOptions &mm = acc_term.motion_model;
         double motion_stiffness = 0.0;
         if (mm.x_sigma_m > 0.0 && mm.y_sigma_m > 0.0 && mm.z_sigma_m > 0.0)
             for (size_t k = 1; k < window.poses.size(); k++)
@@ -578,10 +573,10 @@ namespace
         last_along = window_travel_direction(window.poses, last_along);
         const Eigen::Vector3d no_offset = Eigen::Vector3d::Zero(); // the acceleration offset starts at zero in every window
         const WindowTermInputs at_guess{s.points, s.guess, s.state.buckets_indoor, s.state.buckets_outdoor, s.setup.scan_to_map,
-                                        s.acc_term.motion_model, s.rotation, s.acc_term.options, s.velocity_prior, no_offset,
+                                        s.setup.motion_model, s.rotation, s.acc_term.options, s.velocity_prior, no_offset,
                                         params.lm_factor_initial, last_along};
         const WindowTermInputs at_result{s.points, window, s.state.buckets_indoor, s.state.buckets_outdoor, s.setup.scan_to_map,
-                                         s.acc_term.motion_model, s.rotation, s.acc_term.options, s.velocity_prior, s.acc_offset,
+                                         s.setup.motion_model, s.rotation, s.acc_term.options, s.velocity_prior, s.acc_offset,
                                          s.optimization.lm_factor, last_along};
         WindowTermRecord r;
         r.window = i + 1;
@@ -1145,7 +1140,7 @@ namespace
         log_window_diagnostics(i, c.windows, w.poses_before_optimization, w.optimization, w.previous, w.acc_term, w.lidar_translation_information,
                                params, c.logger);
         log_accelerometer_fit(i, c.windows[i], w.lidar_translation_information, w.acc_term, setup, carry, params, c.logger);
-        log_weak_axis_diagnostics(i, c.windows[i], w.intermediate_points, c.state, setup.scan_to_map, w.acc_term, w.lidar_translation_information,
+        log_weak_axis_diagnostics(i, c.windows[i], w.intermediate_points, c.state, setup.scan_to_map, setup.motion_model, w.acc_term, w.lidar_translation_information,
                                   params, c.logger);
         log_heading_diagnostics(i, c.windows[i], w.poses_before_optimization, w.intermediate_points, c.state, setup.scan_to_map, params, c.logger);
         std::optional<WindowTermRecord> record =

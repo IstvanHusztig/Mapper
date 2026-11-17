@@ -18,11 +18,12 @@
 
 ## 2. Guards and clean-up
 
-- [ ] 2.1 Record the characterization reference and the loop guard's reference from the code at the change's start,
+- [x] 2.1 Record the characterization reference and the loop guard's reference from the code at the change's start,
   twice each. Verify: the two recordings are identical; the characterization reference equals stage 4's (the code is
-  unchanged since).
-- [ ] 2.2 Remove the no-op reset of `x/y/z_sigma_m` in `prepare_acc_term` (`run_odometry.cpp:102-105`); `CLAUDE.md`
-  without the degenerate-window sigma raise. Verify: step checks.
+  unchanged since). Result: recorded twice at 81583e0, both guards identical with stage 4's references.
+- [x] 2.2 Remove the no-op reset of `x/y/z_sigma_m` in `prepare_acc_term` (`run_odometry.cpp:102-105`); `CLAUDE.md`
+  without the degenerate-window sigma raise. Verify: step checks. Result: `AccTerm::motion_model` (only ever a copy of
+  `setup.motion_model`) removed with the reset; its users read `setup.motion_model`. Step checks identical.
 
 ## 3. The noise model (pure refactors)
 
