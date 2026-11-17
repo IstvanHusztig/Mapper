@@ -9,7 +9,9 @@ Progress:
   `dMapper --replay`; replays identical: 44_short 21 of 21 windows in 35 s, Livox 3 84 of 84 in 93 s.
 - Stage 2 done 2026-11-16 (0710807 .. addd8e4): `optimize_lidar_odometry` 1064 -> 83 lines, the terms in `ndt_term`,
   `motion_model_terms`, `accelerometer_term`, `window_solver`; 44 and Livox 3 bit-identical, Debug `ctest` passes.
-- Stage 3 designed 2026-11-17 (below), not started.
+- Stage 3 designed 2026-11-17 (below); implemented 2026-11-17 (OpenSpec `per-term-window-log`, 0e4d42a .. ): the four
+  splits bit-identical, `window_term_table`, setting `log_window_terms`, the CSV files, `tools/window_terms.py`. Livox 3
+  replay with the setting on: 84 of 84 windows identical.
 
 ## Why
 

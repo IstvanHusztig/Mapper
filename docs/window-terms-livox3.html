@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Per-term table: Livox 3, 100–130 s</title>
+<style>
+  :root {
+    --bg: #fbfbfa; --panel: #ffffff; --text: #1d2126; --muted: #5b6470; --line: #e3e5e8;
+    --accent: #1f6fb2; --accent-soft: #e8f1fa; --code-bg: #f2f3f5; --warn: #9a5b00; --warn-soft: #fff4e0;
+    --ok: #20703c; --ok-soft: #e6f4ea; --bad: #b3261e; --bad-soft: #fbe9e7;
+    --node: #ffffff; --node-line: #9aa6b4; --arrow: #7a8594;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15181c; --panel: #1c2026; --text: #e4e7eb; --muted: #9aa3ae; --line: #2c323a;
+      --accent: #6cb0ec; --accent-soft: #1d2d3d; --code-bg: #242a31; --warn: #f0b35a; --warn-soft: #3a2c16;
+      --ok: #6ccf8e; --ok-soft: #1a3324; --bad: #f28b82; --bad-soft: #3a1f1d;
+      --node: #222830; --node-line: #56616e; --arrow: #8994a2;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #15181c; --panel: #1c2026; --text: #e4e7eb; --muted: #9aa3ae; --line: #2c323a;
+    --accent: #6cb0ec; --accent-soft: #1d2d3d; --code-bg: #242a31; --warn: #f0b35a; --warn-soft: #3a2c16;
+    --ok: #6ccf8e; --ok-soft: #1a3324; --bad: #f28b82; --bad-soft: #3a1f1d;
+    --node: #222830; --node-line: #56616e; --arrow: #8994a2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 40px 16px 80px; }
+  h1 { font-size: 30px; line-height: 1.25; margin: 0 0 8px; }
+  h2 { font-size: 23px; margin: 48px 0 12px; padding-top: 8px; border-top: 1px solid var(--line); }
+  h3 { font-size: 18px; margin: 28px 0 8px; }
+  .lead { color: var(--muted); font-size: 17px; margin-top: 0; }
+  code, pre { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 13.5px; }
+  code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--code-bg); padding: 12px 14px; border-radius: 8px; overflow-x: auto; line-height: 1.45; }
+  pre .del { color: var(--bad); }
+  pre .add { color: var(--ok); }
+  pre .cm { color: var(--muted); }
+  a { color: var(--accent); }
+  .note, .warn, .good {
+    border-left: 3px solid var(--accent); background: var(--accent-soft);
+    padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 16px 0;
+  }
+  .warn { border-left-color: var(--warn); background: var(--warn-soft); }
+  .good { border-left-color: var(--ok); background: var(--ok-soft); }
+  .note b, .warn b, .good b { display: block; margin-bottom: 2px; }
+  .table-wrap { overflow-x: auto; margin: 14px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 600; color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tldr { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 22px 0; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .card .big { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .card .lbl { color: var(--muted); font-size: 13.5px; }
+  figure { margin: 18px 0; }
+  figcaption { color: var(--muted); font-size: 13.5px; margin-top: 6px; }
+  svg { max-width: 100%; height: auto; display: block; }
+  svg text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: var(--text); }
+  svg .muted { fill: var(--muted); }
+  .meta { color: var(--muted); font-size: 13.5px; }
+</style>
+</head>
+<body>
+<main>
+<p style="text-align:right;font-size:13px;margin:0 0 8px"><a href="index.html">User guide</a></p>
+
+<h1>What the per-term table says: Livox 3, 100–130 s</h1>
+<p class="lead">The first reading of the per-term window table (<code>log_window_terms</code>, stage 3 of the code split) on a
+real stretch: 84 windows of the Livox 3 recording, replayed from a capture on 2026-11-17. This page reports what the
+numbers show and where the table's limits lie. It gives no verdict on the map and proposes no fix.</p>
+
+<div class="tldr">
+  <div class="card"><div class="big">84 of 84</div><div class="lbl">windows ended with their terms in balance along the twelve motions (remaining step 0.0000 m)</div></div>
+  <div class="card"><div class="big">90 %</div><div class="lbl">of the weight on how far a window travels is the LiDAR's (median; 34 to 98 %)</div></div>
+  <div class="card"><div class="big">0.13 %</div><div class="lbl">of the weight on a window's heading bend is the gyro's (median)</div></div>
+  <div class="card"><div class="big">2.9 σ</div><div class="lbl">median distance (rms) of the start velocity from its prior, after the solve</div></div>
+</div>
+
+<h2>How to read the table</h2>
+<p>For every window the optimizer adds up about ten terms (LiDAR against the map, gyro, accelerometer, priors) and solves
+for the window's poses. The table takes each term on its own and asks two questions about four motions of the window.</p>
+<div class="table-wrap"><table>
+<tr><th>Motion</th><th>What moves</th><th>Amplitude</th></tr>
+<tr><td>shift</td><td>every node by the same vector</td><td>metres</td></tr>
+<tr><td>stretch</td><td>the window travels further or shorter (node k by a share of its time in the window)</td><td>metres at the last node</td></tr>
+<tr><td>curve</td><td>the window accelerates (the share squared)</td><td>metres at the last node</td></tr>
+<tr><td>turn</td><td>the attitude turns progressively over the window, positions unchanged</td><td>degrees at the last node</td></tr>
+</table></div>
+<p>Each motion is taken along travel, sideways and vertical (for turn: the rotation axis, so "turn vertical" is a heading bend).</p>
+<ul>
+<li><b>Hold</b> is a sigma: the term alone keeps that motion to ± hold. A smaller hold is a stronger term. Weight is
+1 / hold², and weights add up, so shares of the total weight say who decides.</li>
+<li><b>Pull</b> is where the term's own minimum lies from the present state, with everything else held.</li>
+<li><b>Remaining step</b> is the pull of all terms together. At the result it is near zero when the terms balance, and
+large when the iterations ended before the balance was reached.</li>
+<li><b>Cost per residual</b> is the term's cost divided by its number of residuals, measured with its own weight. It is
+about 1 only where that weight is a noise model.</li>
+</ul>
+<p>Each row exists at the <b>guess</b> (before the first iteration) and at the <b>result</b> (after the last).</p>
+
+<h2>The stretch</h2>
+<div class="table-wrap"><table>
+<tr><td>Recording, settings</td><td>Livox 3, <code>settings/livox-vertical.toml</code> with <code>log_window_terms = true</code></td></tr>
+<tr><td>Windows</td><td>279 to 362 (84), 100.1 to 130.0 s, each 180 nodes over 0.358 s</td></tr>
+<tr><td>Replay</td><td>84 of 84 windows bit-identical with the captured run; 96.7 s with the table, 88.9 s without</td></tr>
+<tr><td>Motion</td><td>walking, horizontal speed median 0.87 m/s (0.19 to 1.14 m/s); no window at rest, no turn window</td></tr>
+<tr><td>Iterations</td><td>100 in every window; the damping factor ends at 5e9</td></tr>
+<tr><td>LiDAR points per window</td><td>median 66,500 point terms matched, 10,500 in range without a cell</td></tr>
+<tr><td>Geometry</td><td>information ratio median 0.30, lowest 0.117 (112–113 s)</td></tr>
+</table></div>
+
+<h2>What the numbers show</h2>
+
+<h3>1. Along the twelve motions, every window ended in balance</h3>
+<p>At the result the remaining step is 0.0000 m for shift, stretch and curve in all three directions in every window
+(largest 0.009 mm), and at most 0.0002° for turn. So along these twelve motions no window was stopped by the damping
+before its terms balanced: there the result is the point where the terms agree, and the weights decide it. The table
+measures only these twelve motions, not every unknown of a window.</p>
+<p>No window ended because it had converged: all 84 ran the full 100 iterations, and by then the damping holds every
+motion to about 0.002 mm, so the late iterations hardly move a window. The balance was reached before that.</p>
+
+<h3>2. The LiDAR decides how far a window travels</h3>
+<div class="table-wrap"><table>
+<tr><th>Stretch along travel, at the result</th><th class="num">Hold (median)</th><th class="num">Share of the weight (median)</th><th class="num">Share, range</th><th class="num">Heaviest term in</th></tr>
+<tr><td>NDT indoor grid (0.15 m cells)</td><td class="num">0.65 mm</td><td class="num">56 %</td><td class="num">25–79 %</td><td class="num">82 windows</td></tr>
+<tr><td>NDT outdoor grid (0.4 m cells)</td><td class="num">0.83 mm</td><td class="num">33 %</td><td class="num">6–45 %</td><td class="num">0</td></tr>
+<tr><td>Velocity prior (previous window's end velocity)</td><td class="num">1.64 mm</td><td class="num">8.6 %</td><td class="num">2–51 %</td><td class="num">2</td></tr>
+<tr><td>Edge positions (the guess's shape)</td><td class="num">4.21 mm (4.19–4.22)</td><td class="num">1.25 %</td><td class="num">0.2–16 %</td><td class="num">0</td></tr>
+<tr><td>All terms</td><td class="num">0.47 mm</td><td class="num">100 %</td><td></td><td></td></tr>
+</table></div>
+<p>The accelerometer does not appear: a window that travels further at constant speed is no change of acceleration, so
+its weight there is zero. It appears in <b>curve</b> along travel, where it holds 1.12 mm (1.10–1.14 mm) and carries a
+median 24.5 % of the weight (5–84 %; heaviest term in 28 windows). In curve vertical it carries 4.5 %.</p>
+
+<h3>3. The gyro has almost no say in a window's heading bend</h3>
+<div class="table-wrap"><table>
+<tr><th>Turn about vertical, at the result</th><th class="num">Hold (median)</th><th class="num">Share of the weight (median)</th></tr>
+<tr><td>NDT indoor grid</td><td class="num">0.0115°</td><td class="num">56 %</td></tr>
+<tr><td>NDT outdoor grid</td><td class="num">0.0129°</td><td class="num">44 %</td></tr>
+<tr><td>Gyro rows of the edges</td><td class="num">0.240° (0.233–0.242°)</td><td class="num">0.13 % (at most 1.35 %)</td></tr>
+<tr><td>All terms</td><td class="num">0.0085°</td><td class="num">100 %</td></tr>
+</table></div>
+<p>The gyro's hold is nearly the same in every window. It is the configured value: the gyro's angle random walk
+0.057 °/√s × the inflation factor 7.09 × √0.358 s = 0.242°. The factor 7.09 is a tuned setting, not the sensor's own
+noise; without it the hold would be 0.034°. The LiDAR terms outweigh the gyro rows about 800 to 1.</p>
+<p>What the windows did: from guess to result a window's heading bend changed by a median 0.118° (90 % of the windows
+below 0.30°, largest 0.43°). Over 0.358 s that is 0.33 °/s, 0.83 °/s and 1.19 °/s. The gyro rows accept this: their cost
+per residual at the result is median 0.29, at most 1.02. For roll and pitch the picture is the same (gyro share 0.29 %
+and 0.24 %; the windows' tilt changed by a median 0.06° and 0.11°, at most 0.31° and 0.58°).</p>
+
+<h3>4. The start velocity ends a median 2.9 sigmas from its prior</h3>
+<p>The velocity prior says: this window starts with the velocity the previous one ended with. Its sigma along travel is
+4.6 mm/s (median). After the solve its cost per residual is median 8.65, for 90 % of the windows below 30.8, at most
+65.4. As distances (rms over its three residuals) that is 2.9, 5.5 and 8.1 sigmas. It is above 1 in 81 of 84 windows.</p>
+<p>The largest values are spread over the stretch (windows 358, 338, 316, 303 and 302: 65, 50, 43, 41 and 40), not
+tied to the weak geometry of point 6. The table shows the distance, not its cause: the prior may be too tight, or the
+solved velocity may be off.</p>
+
+<h3>5. The result lies to one side of the guess</h3>
+<p>From guess to result the window's sideways stretch is negative in 65 of 84 windows (median −2.7 mm, mean −3.4 mm
+over 0.358 s), and the sideways curve in 63 of 84. At the result the edge positions and the velocity prior pull the
+other way (median +4.2 mm and +2.7 mm). Along travel there is no such preference (47 of 84 positive).</p>
+
+<h3>6. The eight windows with weak geometry (110.9–113.8 s)</h3>
+<p>In windows 309 to 317 the information ratio falls to 0.117–0.170, and the degeneracy projection takes away part of
+the LiDAR's weight along travel. Over the whole stretch it does so in 12 windows, in 5 of them more than half (311 to 315). Three more short
+dips in the information ratio (window 301 and 328 to 330, 0.17–0.20) lose little or nothing.</p>
+<div class="table-wrap"><table>
+<tr><th class="num">Window</th><th class="num">Time [s]</th><th class="num">Information ratio</th><th class="num">NDT weight kept</th>
+<th class="num">Share: NDT in / out</th><th class="num">Share: velocity prior / edges</th>
+<th class="num">Pull [mm]: NDT in / out</th><th class="num">Pull [mm]: velocity prior / edges</th>
+<th class="num">Change guess → result [mm]</th><th class="num">Velocity prior cost per residual</th></tr>
+<tr><td class="num">308</td><td class="num">110.5</td><td class="num">0.208</td><td class="num">100 %</td><td class="num">57 / 23 %</td><td class="num">18 / 2.5 %</td><td class="num">−0.3 / +2.2</td><td class="num">−1.6 / −2.1</td><td class="num">+1.6</td><td class="num">0.5</td></tr>
+<tr><td class="num">309</td><td class="num">110.9</td><td class="num">0.155</td><td class="num">59 %</td><td class="num">49 / 19 %</td><td class="num">27 / 5 %</td><td class="num">−4.7 / −0.9</td><td class="num">+7.3 / +9.8</td><td class="num">−8.5</td><td class="num">6.1</td></tr>
+<tr><td class="num">310</td><td class="num">111.2</td><td class="num">0.149</td><td class="num">60 %</td><td class="num">52 / 23 %</td><td class="num">20 / 5 %</td><td class="num">−0.6 / −3.8</td><td class="num">+4.7 / +4.6</td><td class="num">−5.6</td><td class="num">3.8</td></tr>
+<tr><td class="num">311</td><td class="num">111.6</td><td class="num">0.149</td><td class="num">40 %</td><td class="num">45 / 16 %</td><td class="num">30 / 9 %</td><td class="num">+1.7 / +5.6</td><td class="num">−4.4 / −3.3</td><td class="num">+3.0</td><td class="num">12.4</td></tr>
+<tr><td class="num">312</td><td class="num">112.0</td><td class="num">0.151</td><td class="num">33 %</td><td class="num">43 / 12 %</td><td class="num">34 / 11 %</td><td class="num">+1.8 / +27.0</td><td class="num">−8.9 / −10.0</td><td class="num">+10.0</td><td class="num">6.0</td></tr>
+<tr><td class="num">313</td><td class="num">112.3</td><td class="num">0.133</td><td class="num">14 %</td><td class="num">26 / 8 %</td><td class="num">51 / 16 %</td><td class="num">+12.3 / +26.8</td><td class="num">−7.3 / −10.6</td><td class="num">+8.1</td><td class="num">6.9</td></tr>
+<tr><td class="num">314</td><td class="num">112.7</td><td class="num">0.121</td><td class="num">15 %</td><td class="num">27 / 15 %</td><td class="num">43 / 16 %</td><td class="num">+4.7 / +6.7</td><td class="num">−4.0 / −3.6</td><td class="num">+4.7</td><td class="num">1.8</td></tr>
+<tr><td class="num">315</td><td class="num">113.0</td><td class="num">0.117</td><td class="num">21 %</td><td class="num">38 / 27 %</td><td class="num">25 / 10 %</td><td class="num">+7.6 / +6.4</td><td class="num">−12.6 / −14.4</td><td class="num">+11.8</td><td class="num">8.9</td></tr>
+<tr><td class="num">316</td><td class="num">113.4</td><td class="num">0.146</td><td class="num">58 %</td><td class="num">53 / 35 %</td><td class="num">9 / 3 %</td><td class="num">+3.5 / +2.2</td><td class="num">−20.3 / −29.8</td><td class="num">+30.0</td><td class="num">43.0</td></tr>
+<tr><td class="num">317</td><td class="num">113.8</td><td class="num">0.170</td><td class="num">86 %</td><td class="num">55 / 39 %</td><td class="num">5 / 1 %</td><td class="num">−0.3 / −1.0</td><td class="num">+7.5 / +16.3</td><td class="num">−12.7</td><td class="num">23.2</td></tr>
+<tr><td class="num">318</td><td class="num">114.1</td><td class="num">0.221</td><td class="num">100 %</td><td class="num">53 / 43 %</td><td class="num">3 / 0.4 %</td><td class="num">+0.7 / −0.9</td><td class="num">+0.6 / +5.2</td><td class="num">−3.1</td><td class="num">28.1</td></tr>
+</table></div>
+<p>All columns are for stretch along travel at the result. "NDT weight kept" is the two grids' weight after the
+projection against their weight before it.</p>
+<ul>
+<li>Where the projection cuts most (windows 313 and 314, 14–15 % kept), the velocity prior and the edge positions
+together hold 59–66 % of the weight. The LiDAR no longer decides alone.</li>
+<li>In six windows in a row (311 to 316) the window ends travelling further than its guess: +3.0, +10.0, +8.1, +4.7,
++11.8 and +30.0 mm. In each of them the velocity prior pulls back (−4.4 to −20.3 mm).</li>
+<li>When the geometry returns (window 316: 58 % kept, the LiDAR back at 88 % of the weight) the window moves 30 mm away
+from its guess in one step, 6.6 sigmas from its velocity prior, and the next window moves 12.7 mm back.</li>
+</ul>
+
+<h3>7. The two grids disagree by centimetres in a few windows</h3>
+<p>The indoor and the outdoor grid's pulls for the travel distance differ by a median 1.6 mm (90 % of the windows below
+5.4 mm). The largest differences are in windows 312 (25 mm: outdoor +27.0, indoor +1.8), 350 (16 mm: outdoor −14.2, indoor
++1.8), 313 (15 mm) and 351 (9 mm). Windows 312 and 313 have weak geometry; 350 and 351 have not (information ratio
+0.38 and 0.32).</p>
+
+<h3>8. At the guess, the accelerometer row is very large</h3>
+<p>At the guess the accelerometer's cost per residual is median 359 (at most 3980); at the result it is 0.114. The
+guess path itself is integrated from the accelerometer, so the path alone should not cost that much.</p>
+<p>One start value fits the size: <code>prepare_velocity_state</code> sets the window's end velocity to the start
+velocity, while the guess path accelerates. The end-velocity term would then start with a residual equal to the
+window's change of velocity (median 0.2 m/s), and its weight is between 0.4 and 4 million per (m/s)². The measured
+ratio of guess cost to squared velocity change is 1.05 million (median; correlation 0.69). This is consistent with the
+start value being the cause, but not shown: the row lumps the acceleration terms and the start and end velocity terms,
+so the table can't separate them.</p>
+<p>Consequence for reading the table: at the guess the accelerometer's pulls (for example 16° of tilt in a tenth of the
+windows) should not be read as a statement about the path.</p>
+
+<h3>9. Cost per residual</h3>
+<div class="table-wrap"><table>
+<tr><th>Term</th><th class="num">Residuals (median)</th><th class="num">At the guess (median)</th><th class="num">At the result: median</th><th class="num">90 % below</th><th class="num">Largest</th></tr>
+<tr><td>NDT indoor</td><td class="num">103,600</td><td class="num">0.135</td><td class="num">0.117</td><td class="num">0.130</td><td class="num">0.139</td></tr>
+<tr><td>NDT outdoor</td><td class="num">96,200</td><td class="num">0.140</td><td class="num">0.122</td><td class="num">0.145</td><td class="num">0.166</td></tr>
+<tr><td>Edge positions</td><td class="num">537</td><td class="num">0</td><td class="num">0.058</td><td class="num">0.144</td><td class="num">0.26</td></tr>
+<tr><td>Edge rotations (gyro)</td><td class="num">537</td><td class="num">0</td><td class="num">0.29</td><td class="num">0.65</td><td class="num">1.02</td></tr>
+<tr><td>Accelerometer</td><td class="num">99</td><td class="num">359</td><td class="num">0.114</td><td class="num">0.31</td><td class="num">0.59</td></tr>
+<tr><td>Velocity prior</td><td class="num">3</td><td class="num">0</td><td class="num">8.65</td><td class="num">30.8</td><td class="num">65.4</td></tr>
+<tr><td>Gyro-bias prior</td><td class="num">3</td><td class="num">0</td><td class="num">0.004</td><td class="num">0.010</td><td class="num">0.023</td></tr>
+<tr><td>Acceleration-offset prior</td><td class="num">3</td><td class="num">0</td><td class="num">0.019</td><td class="num">0.061</td><td class="num">0.123</td></tr>
+</table></div>
+<p>The NDT values can't be read against 1 (cell scatter, the Huber kernel and the 0.1 information scale are in them);
+what they show is that no window stands out. The edges, the accelerometer and the bias and offset priors end below 1.
+The velocity prior is the only term far above it.</p>
+
+<h2>How far the table can be trusted</h2>
+<p>A pull is one linear step with everything else held. To see what that costs, the table at the guess can be compared
+with what each window then actually did (84 windows):</p>
+<div class="table-wrap"><table>
+<tr><th>Motion</th><th class="num">Correlation, along / sideways / vertical</th><th class="num">Actual change per predicted step</th></tr>
+<tr><td>stretch</td><td class="num">0.60 / 0.83 / 0.76</td><td class="num">0.65 / 0.75 / 0.75</td></tr>
+<tr><td>turn</td><td class="num">0.48 / 0.63 / 0.58</td><td class="num">0.40 / 0.49 / 0.44</td></tr>
+<tr><td>curve</td><td class="num">0.27 / 0.51 / −0.09</td><td class="num">0.05 / 0.11 / −0.03</td></tr>
+</table></div>
+<p>For stretch the table at the guess gives the direction and about two thirds of the size of what a window does, for
+turn about half. For curve it gives little at the guess (only sideways shows a relation), which fits the large
+accelerometer row there (point 8). The result rows are the ones to read. Two cautions: neighbouring windows are not
+independent, so 84 windows are less evidence than the count suggests; and shift can't be tested this way, because the
+first node never moves.</p>
+
+<h2>What the table can't say</h2>
+<ul>
+<li><b>Which side is right.</b> Where the LiDAR and the IMU terms disagree (points 3, 5 and 6) the table shows the size
+of the disagreement and who wins it. It has no reference to say who should.</li>
+<li><b>Whether the windows of 111–114 s lost distance.</b> The table shows the mechanism at work there (the projection
+cuts the LiDAR, the prior holds, the window still ends beyond its guess six times in a row, then a jump). Whether the
+path came out short needs a reference, such as the plan or a second pass.</li>
+<li><b>Anything about Livox 4.</b> This stretch is from Livox 3, whose map is the good one. The passage and the flyaway
+of Livox 4 need their own captures (stage 8).</li>
+</ul>
+
+<h2>How to reproduce</h2>
+<pre>dMapper --replay &lt;window_capture_100.0-130.0s.bin&gt; &lt;settings with log_window_terms = true&gt;
+python tools/window_terms.py &lt;params name&gt;_window_terms.csv                # per-term summary of the range
+python tools/window_terms.py &lt;params name&gt;_window_terms.csv --window 313   # one window's table</pre>
+<p class="meta">Data: <code>experiments/stage1/livox3-100-130/result/livox3_terms_window_terms.csv</code> and
+<code>livox3_terms_window_features.csv</code>, code at commit 28952e4. Written 2026-11-17; the numbers were recomputed
+independently by a reviewer before this page was written.</p>
+
+</main>
+</body>
+</html>

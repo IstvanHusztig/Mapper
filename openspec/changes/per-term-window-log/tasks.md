@@ -15,32 +15,43 @@
 
 ## 2. Guard
 
-- [ ] 2.1 Record the characterization reference again from `addd8e4` (the file is not in git), twice; the two files
-  must be identical. Verify: `stage2_check.py` passes on `addd8e4`.
+- [x] 2.1 Record the characterization reference again from `addd8e4` (the file is not in git), twice; the two files
+  must be identical. Verify: `stage2_check.py` passes on `addd8e4`. Result: recorded at 694360d (no source change since
+  `addd8e4`), twice identical, and identical with stage 2's reference; all step checks pass (`stage3_check.py`, the
+  stage 2 script in this session's scratchpad).
 
 ## 3. Splits (pure refactors)
 
-- [ ] 3.1 `sum_ndt_point_terms`: `NdtGrid` and the point-term function, the points-by-node index, one grid's loop over
+- [x] 3.1 `sum_ndt_point_terms`: `NdtGrid` and the point-term function, the points-by-node index, one grid's loop over
   the nodes, the conductor; the maps `const`; a grid can be summed alone into node blocks. Projection matrix out of
   `add_projected_ndt_blocks`. Verify: step checks identical; existing NDT gradient and projection tests pass;
-  `tools/function_sizes.py` shows no NDT function above 80 lines.
-- [ ] 3.2 `add_motion_edge_terms`: `MotionEdgeWeights` and its builder; the edge's measurement, block, cost and bias
+  `tools/function_sizes.py` shows no NDT function above 80 lines. Result: 0e4d42a; all checks identical; no NDT
+  function listed. The replays took 41.6 / 102.5 s against 35.7 / 93.3 s on the base (measured properly in 7.2).
+- [x] 3.2 `add_motion_edge_terms`: `MotionEdgeWeights` and its builder; the edge's measurement, block, cost and bias
   coupling as functions. Add a test: the edge block with only position weights plus the one with only rotation weights
   equals the full block. Verify: step checks identical; edge gradient tests pass; no function above 80 lines.
-- [ ] 3.3 `add_acceleration_terms` (per-node samples, one term, three callers) and `add_velocity_priors` (start prior,
+  Result: committed after 0e4d42a ("Motion-model edges split"); all checks identical; the new linearity test passes;
+  no edge function listed.
+- [x] 3.3 `add_acceleration_terms` (per-node samples, one term, three callers) and `add_velocity_priors` (start prior,
   zero velocity, weak end tie, in today's order). Verify: step checks identical; accelerometer gradient tests pass; no
-  function above 80 lines.
-- [ ] 3.4 Residual counter in `WindowEquations`, incremented by every term. Add a test of the counts on a synthetic
-  window. Verify: step checks identical.
+  function above 80 lines. Result: all checks identical; no accelerometer function listed; `tait_bryan_rotation_jacobian`
+  made public for the turn motion.
+- [x] 3.4 Residual counter in `WindowEquations`, incremented by every term. Add a test of the counts on a synthetic
+  window. Verify: step checks identical. Result: counted by every motion and IMU term and the origin fix (the NDT
+  points are counted in `NdtSums`); count test passes; all checks identical.
 
 ## 4. The table
 
-- [ ] 4.1 `src/domain/window_term_table.{h,cpp}`: the motion vectors (shift, stretch, curve, turn × along, sideways,
+- [x] 4.1 `src/domain/window_term_table.{h,cpp}`: the motion vectors (shift, stretch, curve, turn × along, sideways,
   vertical; velocities as the motion's derivative; turn through the angle Jacobian, empty within 3° of fi = ±90°); the
   rows of the plan, including NDT before the projection, origin fix (rad), total and damping; weight, pull, cost and
   residuals per row. Tests (`tests/window_term_table_test.cpp`): rows sum to the complete equations within a tolerance;
   sideways and stretched NDT guess; accelerometer curve; edge-rotation turn; corridor weights. Verify: the new tests
-  pass, step checks identical.
+  pass, step checks identical. Result: the tests are in `tests/scan_to_map_test.cpp` (its room and corridor scenes),
+  all pass; all step checks identical. The accelerometer curve pull and the edge turn pull are exact; NDT pulls back
+  84-86 % of a 1 cm offset and 66-78 % of 5 cm (points change their 15 cm cell: one linear step), so the NDT check and
+  the spec scenario use 75-105 % at 1 cm instead of "-5 cm within 5 mm". A weight below 1e-9 of the row's largest
+  counts as none (no pull).
 
 ## 5. Window loop, setting, log
 

@@ -371,3 +371,32 @@ python tools/function_sizes.py [src] [--min 80]
 - A function runs from its first line at column 0 to the next line starting with `}` (dMapper's .cpp style); functions
   inside an anonymous namespace are indented and not counted. The length includes blank lines and comments, so it is
   approximate, and a class body defined at column 0 can show up under the name of its first member.
+
+## window_terms.py
+
+Prints the per-term window tables that a run or a replay writes with `log_window_terms = true`
+(`[lidar_odometry_debug_info]`; stage 3 of `docs/code-split-and-region-agents-plan.md`). Pure Python 3.
+
+```
+python tools/window_terms.py <window_terms.csv> --window N [--state result|guess]
+python tools/window_terms.py <window_terms.csv> [--from S] [--to S] [--state result|guess]
+```
+
+- The files: a CLI run writes `window_terms.csv` and `window_features.csv` to its output folder; `dMapper --replay
+  <capture> <params.toml>` writes `<params name>_window_terms.csv` and `_window_features.csv` next to the capture.
+- Per window, state (`guess`: before the first iteration, `result`: after the last) and term (NDT indoor and outdoor as
+  solved, NDT before the degeneracy projection, edge positions and rotations, gyro-bias prior, velocity continuity,
+  accelerometer, velocity prior, zero velocity, weak end-velocity tie, offset prior, origin fix, total, damping): the cost,
+  the residuals, and for four motions (shift, stretch, curve, turn) along travel, sideways and vertical the weight
+  `m^T H m` and the pull `m^T b / weight`. Each motion has amplitude 1 at the window's last node; turn is in degrees.
+- `--window N`: the table, with the hold (1 / sqrt(weight), a sigma) and the pull per motion and direction.
+- Without `--window`: per term over the range, for stretch and curve along travel, curve vertical and turn about
+  vertical, how often the term holds the window most, its median hold, its median and largest pull, and the remaining
+  step (the total's pull: near zero when the terms balance, large when the damping froze the window).
+- Read the pull with its limits: it is one linear step with everything else held, on the cells the points match now
+  (NDT reaches about 85 % of a 1 cm offset in the unit test, less beyond). Cost per residual is about 1 only for terms
+  whose weight is a noise model (gyro rows, accelerometer, the carried priors); compare NDT, the scaled edge positions and
+  the weak tie with their own usual values.
+- `window_features.csv`: one row per window (time, iterations, damping, moves, velocities, gyro bias, acceleration
+  offset, information ratio and weak axis, matched points, and the window's change from guess to result in the twelve
+  motion numbers): the per-window features for a future learned tuner.
