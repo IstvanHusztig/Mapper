@@ -246,6 +246,33 @@ TEST_CASE("window terms: the motion-model edges' right-hand side is minus half t
             };
             check_gradient(u, w, term, columns, [&](Window &win, int c, double h) { shift_pose_or_bias(win, c, h, u); }, 1e-7, false);
         }
+
+    // the edge block is linear in its six weights: the position rows alone (rotation weights zero) plus the rotation rows
+    // alone (position weights zero) give the full edges, matrix, right-hand side and cost (the per-term table's two rows)
+    rotation.time_scaled_sigma = true;
+    rotation.estimate_bias = true;
+    const WindowUnknowns u = layout_window_unknowns(w, rotation, {});
+    const MotionEdgeWeights full = motion_edge_weights(u, w, m, rotation, {});
+    MotionEdgeWeights position = full;
+    for (Eigen::Vector3d &r : position.rotation)
+        r.setZero();
+    MotionEdgeWeights rotation_only = full;
+    rotation_only.x = rotation_only.y = rotation_only.z = 0.0;
+    const auto edges = [&](const MotionEdgeWeights &weights)
+    {
+        WindowEquations e(u);
+        e.with_cost = true;
+        add_motion_edges(e, u, w, m, rotation, weights);
+        return e;
+    };
+    const WindowEquations all = edges(full), pos = edges(position), rot = edges(rotation_only);
+    const Eigen::MatrixXd A_all = Eigen::MatrixXd(all.matrix.to_sparse());
+    const Eigen::MatrixXd A_sum = Eigen::MatrixXd(pos.matrix.to_sparse()) + Eigen::MatrixXd(rot.matrix.to_sparse());
+    CHECK((A_all - A_sum).norm() <= 1e-10 * A_all.norm());
+    CHECK((all.rhs - pos.rhs - rot.rhs).norm() <= 1e-10 * all.rhs.norm());
+    CHECK(std::abs(all.motion_cost - pos.motion_cost - rot.motion_cost) <= 1e-10 * all.motion_cost);
+    CHECK(pos.motion_cost > 0.0);
+    CHECK(rot.motion_cost > 0.0);
 }
 
 namespace
