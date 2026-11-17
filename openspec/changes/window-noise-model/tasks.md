@@ -65,8 +65,11 @@
   Result: `WindowTermInputs::velocity_prior` became `noise`; `record_window_terms` passes the window's model from
   `prepare_window` to both rows. The table (`window_terms.csv`, `window_features.csv`) identical with the reference recorded
   before task 3.2; step checks identical.
-- [ ] 3.7 Consistency's time-scaled rotation sigma calls the model's sigma function. Verify: step checks (the 44_short
+- [x] 3.7 Consistency's time-scaled rotation sigma calls the model's sigma function. Verify: step checks (the 44_short
   run has `use_consistency` on in the shipped settings, so its manifest covers consistency).
+  Result: the line sits in the gyro rotation term, which is off in both shipped settings, so the manifest does not run
+  it: checked separately, 44_short with `consistency_gyro_rotation_term = true` before and after the change (the term ran,
+  10 log lines) is IDENTICAL, 11 of 11 files. Step checks identical.
 
 ## 4. The log
 

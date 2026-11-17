@@ -1,4 +1,5 @@
 #include "consistency.h"
+#include "window_noise_model.h"
 #include "holdout.h"
 #include "ndt_map.h"
 #include "normal_equations.h"
@@ -88,7 +89,8 @@ namespace
             double weight[3];
             for (int axis = 0; axis < 3; axis++)
             {
-                const double sigma = scale * std::max(rotation.inflation_k * rotation.arw_rad_sqrt_s(axis) * std::sqrt(dt), rotation.sigma_floor_rad);
+                const double sigma =
+                    scale * time_scaled_rotation_sigma(rotation.inflation_k, rotation.arw_rad_sqrt_s(axis), dt, rotation.sigma_floor_rad);
                 weight[axis] = 1.0 / (sigma * sigma);
             }
             const TaitBryanPose &p1 = poses[k], &p2 = poses[k + 1];
