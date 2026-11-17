@@ -163,7 +163,8 @@ add_library(lo_domain STATIC
   src/domain/window_solver.cpp
   src/domain/motion_model_terms.cpp
   src/domain/accelerometer_term.cpp
-  src/domain/ndt_term.cpp)
+  src/domain/ndt_term.cpp
+  src/domain/window_term_table.cpp)
 target_include_directories(lo_domain PUBLIC
   src/domain
   ${EIGEN3_INCLUDE_DIR}

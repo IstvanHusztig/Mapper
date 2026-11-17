@@ -4,6 +4,10 @@
 #include "ndt_term.h"
 #include "scan_to_map.h"
 #include "window_equations.h"
+#include "window_solver.h"
+#include "window_term_table.h"
+#include "accelerometer_term.h"
+#include "motion_model_terms.h"
 #include "window_steps.h"
 #include <transformations.h>
 #include "synthetic_recording.h"
@@ -1198,4 +1202,240 @@ TEST_CASE("window terms: the NDT point terms' right-hand side is minus half thei
                 CHECK(std::abs(e0.rhs(column, 0) + 0.5 * gradient) <= 1e-3 * scale);
             }
     }
+}
+
+// The per-term window table (window_term_table.h; stage 3 of docs/code-split-and-region-agents-plan.md): the rows add up to
+// the window's complete equations, and each motion shows a known offset where it should.
+namespace
+{
+    const WindowTermRow *table_row(const WindowTermTable &t, const std::string &name)
+    {
+        for (const WindowTermRow &r : t.rows)
+            if (r.name == name)
+                return &r;
+        return nullptr;
+    }
+
+    // constant-velocity accelerometer data for a window moving along x at 1 m/s: the specific force is gravity in each node's frame
+    struct AccData
+    {
+        std::vector<Eigen::Vector3d> acc;
+        MotionModelTranslationImuOptions imu;
+    };
+
+    void make_acc_data(AccData &d, const std::vector<Eigen::Affine3d> &truth, const Eigen::Vector3d &world_acceleration_mps2)
+    {
+        for (const Eigen::Affine3d &p : truth)
+            d.acc.push_back(p.linear().transpose() * (Eigen::Vector3d(0.0, 0.0, 1.0) + world_acceleration_mps2 / 9.80665));
+        d.imu.enabled = true;
+        d.imu.acc = &d.acc;
+        d.imu.gravity = Eigen::Vector3d(0.0, 0.0, 1.0);
+        d.imu.to_mps2 = 9.80665;
+        d.imu.span_s = 0.05;
+        d.imu.noise_density_mps2_sqrt_hz = 0.0013;
+        d.imu.floor_sigma_mps2 = 0.1;
+        d.imu.velocity_prior_mean = Eigen::Vector3d(1.0, 0.0, 0.0);
+        d.imu.velocity_prior_cov = Eigen::Matrix3d::Identity() * 1e-2;
+        d.imu.offset_prior_cov = Eigen::Matrix3d::Identity() * 1e-2;
+    }
+
+    WindowTermTable table_of(const std::vector<Point3Di> &points, const Window &w, const Maps &maps, const Options &o,
+                             const MotionModelTranslationImuOptions &imu, const MotionModelRotationOptions &rotation)
+    {
+        const Eigen::Vector3d offset = Eigen::Vector3d::Zero();
+        const WindowTermInputs in{points, w, maps.indoor, maps.outdoor, o.scan_to_map, o.motion_model, rotation, imu, o.velocity_prior, offset,
+                                  5.0, Eigen::Vector3d::UnitX()};
+        return window_term_table(in);
+    }
+}
+
+TEST_CASE("window term table: the rows add up to the window's complete equations")
+{
+    OdometryConfig c = test_config();
+    c.use_gyro_bias_estimation = true;
+    const Options o = options_from(c);
+    const Scene s = room();
+    const Maps maps = build_maps(s, o.scan_to_map);
+    const std::vector<Eigen::Affine3d> truth = true_poses();
+    const std::vector<Point3Di> points = observe(s, truth);
+    std::vector<Eigen::Affine3d> guess = truth;
+    for (int k = 0; k < n_nodes; k++)
+        guess[k].translation() += Eigen::Vector3d(0.01, -0.02, 0.005) * (k / double(n_nodes - 1));
+    Window w = make_window(guess);
+    w.motion_model_poses = truth;
+    w.velocity.start = w.velocity.end = Eigen::Vector3d(1.0, 0.0, 0.0);
+    w.gyro_bias.mean = Eigen::Vector3d(0.001, 0.0, -0.002);
+    AccData acc;
+    make_acc_data(acc, truth, Eigen::Vector3d::Zero());
+    MotionModelRotationOptions rotation = o.rotation;
+    rotation.estimate_bias = true;
+
+    const WindowTermTable t = table_of(points, w, maps, o, acc.imu, rotation);
+    REQUIRE(t.failure.empty());
+    for (const char *name : {"ndt_indoor", "ndt_outdoor", "ndt_unprojected", "edge_position", "edge_rotation", "gyro_bias_prior",
+                             "accelerometer", "velocity_prior", "offset_prior", "origin_fix", "total", "damping"})
+    {
+        CAPTURE(name);
+        CHECK(table_row(t, name) != nullptr);
+    }
+    CHECK(table_row(t, "velocity_continuity") == nullptr); // only without the accelerometer term
+
+    // the complete equations, as optimize_lidar_odometry builds them
+    const Eigen::Vector3d offset = Eigen::Vector3d::Zero();
+    const WindowUnknowns u = layout_window_unknowns(w, rotation, acc.imu);
+    WindowEquations all(u);
+    const NdtSums ndt = sum_ndt_point_terms(all, w, points, maps.indoor, maps.outdoor, o.scan_to_map, false, false, nullptr);
+    add_projected_ndt_blocks(all, ndt, o.scan_to_map);
+    add_motion_edge_terms(all, u, w, o.motion_model, rotation, acc.imu);
+    add_gyro_bias_prior(all, u, w, rotation);
+    add_velocity_continuity(all, u, w, o.motion_model, o.velocity_prior);
+    const bool end_tied = add_acceleration_terms(all, u, w, acc.imu, offset);
+    add_velocity_priors(all, u, w, acc.imu, end_tied);
+    add_acceleration_offset_prior(all, u, acc.imu, offset);
+    fix_origin(all, o.motion_model);
+
+    bool turn_defined = false;
+    const std::vector<Eigen::VectorXd> m = window_motion_vectors(w, u, t.directions, turn_defined);
+    REQUIRE(turn_defined);
+    const Eigen::SparseMatrix<double> H = all.matrix.to_sparse();
+    const WindowTermRow *total = table_row(t, "total");
+    for (int i = 0; i < kTermMotions * kTermDirections; i++)
+    {
+        CAPTURE(i);
+        const double weight = m[i].dot(H * m[i]);
+        const double pull = m[i].dot(all.rhs.col(0)) / weight;
+        CHECK(std::abs(total->weight[i / 3][i % 3] - weight) <= 1e-9 * weight);
+        CHECK(std::abs(total->pull[i / 3][i % 3] - pull) <= 1e-6 * std::max(std::abs(pull), 1e-6));
+    }
+}
+
+TEST_CASE("window term table: NDT shows a sideways offset and a stretch of the guess")
+{
+    OdometryConfig c = test_config();
+    c.degenerate_projection_ratio = c.degenerate_projection_ratio_full = 0.0;
+    const Options o = options_from(c);
+    const Scene s = room();
+    const Maps maps = build_maps(s, o.scan_to_map);
+    const std::vector<Eigen::Affine3d> truth = true_poses();
+    const std::vector<Point3Di> points = observe(s, truth);
+    MotionModelRotationOptions rotation = o.rotation;
+    rotation.estimate_bias = false;
+
+    // The pull is one linear step on the cells the points match now. Points that move to another cell make NDT's cost
+    // non-quadratic, so it undershoots: measured 84-86 % of a 1 cm offset and 66-78 % of 5 cm (15 cm cells). Checked: the
+    // sign, and 75-105 % at 1 cm, 50-110 % at 5 cm.
+    const auto ndt_pull = [&](const std::vector<Eigen::Affine3d> &guess, int motion, int direction)
+    {
+        const WindowTermTable t = table_of(points, make_window(guess), maps, o, {}, rotation);
+        REQUIRE(t.failure.empty());
+        const WindowTermRow *ndt = table_row(t, "ndt_indoor");
+        REQUIRE(ndt != nullptr);
+        return ndt->pull[motion][direction];
+    };
+    SUBCASE("moved sideways: the shift pull sideways is minus the offset")
+    {
+        const double at_truth = ndt_pull(truth, 0, 1); // NDT's own minimum is not exactly at the true poses
+        MESSAGE("at the true poses: NDT indoor shift pull sideways ", at_truth, " m");
+        for (double offset : {0.01, 0.05})
+        {
+            std::vector<Eigen::Affine3d> guess = truth;
+            for (Eigen::Affine3d &p : guess)
+                p.translation() += Eigen::Vector3d(0.0, offset, 0.0); // along is x, so sideways is +y
+            const double pull = ndt_pull(guess, 0, 1) - at_truth;
+            MESSAGE("offset ", offset, " m sideways: NDT indoor shift pull sideways, minus the one at the truth, ", pull, " m");
+            if (offset == 0.01)
+                CHECK((pull < -0.75 * offset && pull > -1.05 * offset));
+            else
+                CHECK((pull < -0.5 * offset && pull > -1.1 * offset));
+        }
+    }
+    SUBCASE("stretched along travel: the stretch pull along is minus the stretch")
+    {
+        const double at_truth = ndt_pull(truth, 1, 0);
+        MESSAGE("at the true poses: NDT indoor stretch pull along ", at_truth, " m");
+        for (double stretch : {0.01, 0.05})
+        {
+            std::vector<Eigen::Affine3d> guess = truth;
+            for (int k = 0; k < n_nodes; k++)
+                guess[k].translation() += Eigen::Vector3d(stretch * k / double(n_nodes - 1), 0.0, 0.0);
+            const double pull = ndt_pull(guess, 1, 0) - at_truth;
+            MESSAGE("stretch ", stretch, " m along: NDT indoor stretch pull along, minus the one at the truth, ", pull, " m");
+            if (stretch == 0.01)
+                CHECK((pull < -0.75 * stretch && pull > -1.05 * stretch));
+            else
+                CHECK((pull < -0.5 * stretch && pull > -1.1 * stretch));
+        }
+    }
+}
+
+TEST_CASE("window term table: the accelerometer's curve pull is a missing constant acceleration")
+{
+    // the truth accelerates at 0.8 m/s^2 along x; the guess keeps the start velocity (no curve), its end velocity too
+    const OdometryConfig c = test_config();
+    const Options o = options_from(c);
+    const double a = 0.8, duration = (n_nodes - 1) * node_dt;
+    std::vector<Eigen::Affine3d> truth, guess;
+    for (int k = 0; k < n_nodes; k++)
+    {
+        const double t = k * node_dt;
+        truth.push_back(pose(Eigen::Vector3d(t + 0.5 * a * t * t, 0.0, 1.5), 0.0));
+        guess.push_back(pose(Eigen::Vector3d(t, 0.0, 1.5), 0.0));
+    }
+    Window w = make_window(guess);
+    w.velocity.start = w.velocity.end = Eigen::Vector3d(1.0, 0.0, 0.0);
+    AccData acc;
+    make_acc_data(acc, truth, Eigen::Vector3d(a, 0.0, 0.0));
+    MotionModelRotationOptions rotation = o.rotation;
+    rotation.estimate_bias = false;
+    const Maps empty;
+    const WindowTermTable t = table_of({}, w, empty, o, acc.imu, rotation);
+    REQUIRE(t.failure.empty());
+    const WindowTermRow *row = table_row(t, "accelerometer");
+    REQUIRE(row != nullptr);
+    const double missing = 0.5 * a * duration * duration; // at the last node
+    MESSAGE("accelerometer curve pull along ", row->pull[2][0], " m, missing ", missing, " m");
+    CHECK(std::abs(row->pull[2][0] - missing) <= 1e-3 * missing);
+    // a stretch is no change of acceleration: the accelerometer doesn't resist it (zero up to rounding)
+    CHECK(std::abs(row->weight[1][0]) <= 1e-9 * row->weight[2][0]);
+}
+
+TEST_CASE("window term table: the gyro edges' turn pull is a heading ramp against the motion model")
+{
+    const OdometryConfig c = test_config();
+    const Options o = options_from(c);
+    const std::vector<Eigen::Affine3d> truth = true_poses();
+    const double ramp_deg = 0.5;
+    std::vector<Eigen::Affine3d> turned = truth;
+    for (int k = 0; k < n_nodes; k++)
+        turned[k].linear() = Eigen::AngleAxisd(ramp_deg * deg * k / double(n_nodes - 1), Eigen::Vector3d::UnitZ()).toRotationMatrix() * truth[k].linear();
+    Window w = make_window(turned);
+    w.motion_model_poses = truth;
+    MotionModelRotationOptions rotation = o.rotation;
+    rotation.estimate_bias = false;
+    const Maps empty;
+    const WindowTermTable t = table_of({}, w, empty, o, {}, rotation);
+    REQUIRE(t.failure.empty());
+    REQUIRE(t.turn_defined);
+    const WindowTermRow *row = table_row(t, "edge_rotation");
+    REQUIRE(row != nullptr);
+    MESSAGE("edge rotation turn pull about vertical ", row->pull[3][2], " deg");
+    CHECK(std::abs(row->pull[3][2] + ramp_deg) <= 0.02 * ramp_deg);
+}
+
+TEST_CASE("window term table: in a corridor NDT holds the window across, far less along")
+{
+    const OdometryConfig c = test_config();
+    const Options o = options_from(c);
+    const Scene s = corridor();
+    const Maps maps = build_maps(s, o.scan_to_map);
+    const std::vector<Eigen::Affine3d> truth = true_poses();
+    const std::vector<Point3Di> points = observe(s, truth);
+    MotionModelRotationOptions rotation = o.rotation;
+    rotation.estimate_bias = false;
+    const WindowTermTable t = table_of(points, make_window(truth), maps, o, {}, rotation);
+    REQUIRE(t.failure.empty());
+    const WindowTermRow *raw = table_row(t, "ndt_unprojected");
+    REQUIRE(raw != nullptr);
+    MESSAGE("corridor NDT shift weight along ", raw->weight[0][0], ", sideways ", raw->weight[0][1]);
+    CHECK(raw->weight[0][0] < 0.05 * raw->weight[0][1]);
 }
