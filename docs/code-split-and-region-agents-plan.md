@@ -18,7 +18,24 @@ Progress:
   Archived 2026-11-17 (b234b6a); the first reading of the table is `docs/window-terms-livox3.html`.
 - Stage 4 designed 2026-11-17 (below), decisions taken, OpenSpec `solver-and-window-verdict`; implemented 2026-11-17
   (4ed2f46 .. ): loop guard, `lm_solver` + `WindowProblem`, `process_windows` in four steps, the window verdict and its
-  summary; every commit identical on the guards, replays and 44_short.
+  summary; every commit identical on the guards, replays and 44_short. End runs identical (manifests 4896eeb), Debug
+  ctest pass.
+- **Verdict limits decided (user, 2026-11-17)**, after the readings of full runs of 44, Livox 3 and Livox 4 (task 6.1 of
+  `solver-and-window-verdict`): all agreed limits stay (bent 3°, bent severely 10°, run trigger above 1 % bent; fast
+  2.5 m/s; bias high 0.5 °/s; velocity chi² of the weak windows median 5 / p95 20). Three recordings, one map judged
+  good by eye. Notes:
+  - Bent and fast mark Livox 4's flyaway (76 of 85 bent and all 124 fast windows lie in 200–280 s); neither sees the
+    passage (100–125 s: 2 bent, 0 fast). Livox 3: largest bend 1.82°, largest speed 1.28 m/s. 2.5 m/s is a handheld
+    assumption, not a measured limit.
+  - Bias high says almost nothing on the L2 (634 of 689 windows of 44: the faulty gyro, and no start-up bias is
+    subtracted on a handheld start). On Livox 4 it starts at 143 s and 397 of its 615 windows lie outside the bad
+    stretches; a wrong estimate carried on, real rotation errors or temperature drift are all open. A run trigger on
+    the bias trend or the share of high windows is an alternative for later.
+  - The velocity chi² triggers on all three, also on the good Livox 3 (weak windows median 35), so on these recordings
+    it doesn't separate good from bad: a question about the noise model (the velocity prior's covariance, or missing
+    process noise between windows) for stage 5, not a reason to loosen the limit. Its rise in the Livox 4 passage
+    (median 1120 against 230 outside) is a hint from one recording.
+  - No limit is tested on a failure every flag catches; the passage is caught only by the chi².
 
 ## Why
 

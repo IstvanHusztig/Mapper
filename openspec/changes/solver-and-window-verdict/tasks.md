@@ -77,11 +77,12 @@
 
 ## 6. Readings, docs, manifests
 
-- [ ] 6.1 One full run each of 44, Livox 3 and Livox 4 with `log_window_verdict` and `log_window_terms` (sequential,
+- [x] 6.1 One full run each of 44, Livox 3 and Livox 4 with `log_window_verdict` and `log_window_terms` (sequential,
   in the background). A table for the user: per recording the flags' counts and the run's triggers, each reading's
   median / 95th percentile / largest, and for Livox 4 the flagged windows over time against its known bad stretches
   (100–125 s, 200–280 s). No limit is proposed. Verify: the table is shown to the user; their decision on limits is
-  recorded in the plan.
+  recorded in the plan. Result: table shown 2026-11-17 (`experiments/stage4/*-readings`); the user kept every limit;
+  the decision and its notes are in the plan's progress.
 - [x] 6.2 Docs: `CLAUDE.md` (solver, window problem, the four steps, the verdict and its setting), `docs/index.html`
   (the setting; the map of documents if a page is added), `tools/README.md` (the new feature columns), the plan's
   progress. Verify: the text matches the code. Result: 82c9208 (the guide's map gets no new page in this stage).
