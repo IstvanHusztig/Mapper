@@ -86,58 +86,6 @@ void add_velocity_continuity(WindowEquations &equations, const WindowUnknowns &u
     }
 }
 
-
-MotionEdgeWeights motion_edge_weights(const WindowUnknowns &unknowns, const Window &window, const MotionModelOptions &motion_model,
-                                      const MotionModelRotationOptions &rotation_options,
-                                      const MotionModelTranslationImuOptions &translation_imu_options)
-{
-    MotionEdgeWeights weights;
-    double sigma_motion_model_om = motion_model.om_sigma_deg * DEG_TO_RAD;
-    double sigma_motion_model_fi = motion_model.fi_sigma_deg * DEG_TO_RAD;
-    double sigma_motion_model_ka = motion_model.ka_sigma_deg * DEG_TO_RAD;
-
-    double w_motion_model_om = 1.0 / (sigma_motion_model_om * sigma_motion_model_om);
-    double w_motion_model_fi = 1.0 / (sigma_motion_model_fi * sigma_motion_model_fi);
-    double w_motion_model_ka = 1.0 / (sigma_motion_model_ka * sigma_motion_model_ka);
-
-    weights.x = 1.0 / (motion_model.x_sigma_m * motion_model.x_sigma_m);
-    weights.y = 1.0 / (motion_model.y_sigma_m * motion_model.y_sigma_m);
-    weights.z = 1.0 / (motion_model.z_sigma_m * motion_model.z_sigma_m);
-    // imu_position_information_scale: the x/y/z rows (with their attitude coupling) weaker while the accelerometer term is
-    // active (Codex's "beta", DMAPPER_EXPERIMENT_MOTION_XYZ_SCALE in cbca36d)
-    if (unknowns.acc_term && translation_imu_options.position_information_scale != 1.0)
-    {
-        weights.x *= translation_imu_options.position_information_scale;
-        weights.y *= translation_imu_options.position_information_scale;
-        weights.z *= translation_imu_options.position_information_scale;
-    }
-
-    for (size_t i = 1; i < window.poses.size(); i++)
-    {
-        double w_om_i = w_motion_model_om;
-        double w_fi_i = w_motion_model_fi;
-        double w_ka_i = w_motion_model_ka;
-        double dt_i = 0.0;
-        if (unknowns.time_scaled_sigma || unknowns.estimate_bias)
-            dt_i = std::max(window.timestamps[i].first - window.timestamps[i - 1].first, 0.0);
-
-        if (unknowns.time_scaled_sigma)
-        {
-            // gyro angle random walk over this edge, inflated by k, floored for near-zero dt
-            const double sqrt_dt = std::sqrt(dt_i);
-            const double s_om = std::max(rotation_options.inflation_k * rotation_options.arw_rad_sqrt_s.x() * sqrt_dt, rotation_options.sigma_floor_rad);
-            const double s_fi = std::max(rotation_options.inflation_k * rotation_options.arw_rad_sqrt_s.y() * sqrt_dt, rotation_options.sigma_floor_rad);
-            const double s_ka = std::max(rotation_options.inflation_k * rotation_options.arw_rad_sqrt_s.z() * sqrt_dt, rotation_options.sigma_floor_rad);
-            w_om_i = 1.0 / (s_om * s_om);
-            w_fi_i = 1.0 / (s_fi * s_fi);
-            w_ka_i = 1.0 / (s_ka * s_ka);
-        }
-        weights.rotation.emplace_back(w_om_i, w_fi_i, w_ka_i);
-        weights.dt.push_back(dt_i);
-    }
-    return weights;
-}
-
 namespace
 {
     // the motion model's relative pose from node a to node b (the IMU's), with the frame correction and, with bias

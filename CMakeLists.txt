@@ -167,7 +167,8 @@ add_library(lo_domain STATIC
   src/domain/window_term_table.cpp
   src/domain/lm_solver.cpp
   src/domain/window_problem.cpp
-  src/domain/window_verdict.cpp)
+  src/domain/window_verdict.cpp
+  src/domain/window_noise_model.cpp)
 target_include_directories(lo_domain PUBLIC
   src/domain
   ${EIGEN3_INCLUDE_DIR}

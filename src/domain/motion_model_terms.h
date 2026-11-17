@@ -7,23 +7,11 @@
 #include "optimizer_options.h"
 #include "window.h"
 #include "window_equations.h"
+#include "window_noise_model.h"
 
 #include <vector>
 
-// the weights of the consecutive-node edges: the position rows' (x/y/z in the first node's frame, scaled by
-// imu_position_information_scale while the accelerometer term is active) and, per edge, the rotation rows' (om/fi/ka;
-// time-scaled from the gyro's noise when set), and each edge's duration (with time-scaled sigmas or bias estimation,
-// else 0). The edge block is linear in these weights: the position rows alone are the block with zero rotation weights,
-// and the reverse.
-struct MotionEdgeWeights
-{
-    double x = 0.0, y = 0.0, z = 0.0;
-    std::vector<Eigen::Vector3d> rotation; // per edge
-    std::vector<double> dt;                // per edge [s]
-};
-MotionEdgeWeights motion_edge_weights(const WindowUnknowns &unknowns, const Window &window, const MotionModelOptions &motion_model,
-                                      const MotionModelRotationOptions &rotation_options,
-                                      const MotionModelTranslationImuOptions &translation_imu_options);
+// the edges' weights (MotionEdgeWeights, motion_edge_weights) are in window_noise_model.h
 
 // the edges between consecutive nodes: each node pair's relative pose should match the motion model's (the IMU's), rotation
 // and position in one block; with bias estimation the rotation increment is corrected by the bias update, which couples

@@ -27,11 +27,14 @@
 
 ## 3. The noise model (pure refactors)
 
-- [ ] 3.1 `src/domain/window_noise_model.{h,cpp}`: `WindowNoiseModel` with the layout, the fixed values and the NDT
+- [x] 3.1 `src/domain/window_noise_model.{h,cpp}`: `WindowNoiseModel` with the layout, the fixed values and the NDT
   parameters per grid; `build_window_noise_model` from the options, the window and the carried priors; the rotation
   sigma function (max(k·ARW·√dt, floor)). Not used yet. Tests (`tests/window_noise_model_test.cpp`): each weight
   equals its formula; the first window, a window at rest and the path without the accelerometer term have the terms'
   conditions; every weight is bit-identical with the one the term computes today. Verify: step checks.
+  Result: `MotionEdgeWeights` / `motion_edge_weights` moved into `window_noise_model` unchanged (the edges' sigma via
+  `time_scaled_rotation_sigma`); the accelerometer terms are listed in the model (kind, nodes, tau, weight) in the order
+  they are added; 5 test cases; step checks identical. The priors' growth formulas move with task 3.3.
 - [ ] 3.2 `prepare_window` builds the model; `WindowProblem` takes it (const) and stops rebuilding the layout per
   `linearize`. The motion edges (`motion_edge_weights`, the bias coupling) and the velocity continuity and first-step
   prior take their weights from the model. Verify: step checks.
