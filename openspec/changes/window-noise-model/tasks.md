@@ -81,7 +81,8 @@
   Result: 44_short with `log_window_noise` on: 70 `window noise` lines, one `noise budget` line, every file but the params
   TOML identical with the manifest; the replay logs the budget too. `window_features.csv` gains 28 `noise_*` columns, the
   old 65 columns identical. Step checks identical; the three golden TOML tests fail until task 4.2.
-- [ ] 4.2 Golden TOMLs (`LO_UPDATE_GOLDEN=1`) in their own commit. Verify: unit tests.
+- [x] 4.2 Golden TOMLs (`LO_UPDATE_GOLDEN=1`) in their own commit. Verify: unit tests. Result: each golden gains
+  `log_window_noise = false`; all tests pass (the one failed assertion is the known `should_fail` consistency truth case).
 
 ## 5. Docs and manifests
 
