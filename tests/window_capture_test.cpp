@@ -197,12 +197,15 @@ TEST_CASE("window term table: the run is the same with log_window_terms on, ever
     }
 
     // the CSV files: a header and a row per window, state and term; a row per window
-    const fs::path folder = fs::temp_directory_path() / "lidar_odometry_tests_window_terms";
-    fs::create_directories(folder);
+    // into a folder that doesn't exist yet, as a CLI run's output folder during the odometry
+    const fs::path root = fs::temp_directory_path() / "lidar_odometry_tests_window_terms";
+    fs::remove_all(root);
+    const fs::path folder = root / "result";
     {
         FolderWindowTermSink files(folder, "t_");
         for (const WindowTermRecord &record : sink.records)
             files.write(record);
+        CHECK(files.ok());
     }
     const auto lines = [](const fs::path &file)
     {
@@ -214,7 +217,7 @@ TEST_CASE("window term table: the run is the same with log_window_terms on, ever
     };
     const auto columns = [](const std::string &line) { return std::count(line.begin(), line.end(), ',') + 1; };
     const std::vector<std::string> terms = lines(folder / "t_window_terms.csv"), features = lines(folder / "t_window_features.csv");
-    fs::remove_all(folder);
+    fs::remove_all(root);
     REQUIRE(terms.size() == 1 + rows);
     REQUIRE(features.size() == 1 + sink.records.size());
     CHECK(terms[0].rfind("window,time_s,state,term,in_total,cost,residuals,weight_shift_along", 0) == 0);

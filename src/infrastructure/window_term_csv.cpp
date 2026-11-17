@@ -58,10 +58,20 @@ namespace
 
 void FolderWindowTermSink::write(const WindowTermRecord &r)
 {
+    if (failed_)
+        return;
     if (!terms_.is_open())
     {
+        // a CLI run's output folder is only created when the results are saved, after the odometry
+        std::error_code ec;
+        std::filesystem::create_directories(folder_, ec);
         terms_.open(terms_file());
         features_.open(features_file());
+        if (!terms_ || !features_)
+        {
+            failed_ = true;
+            return;
+        }
         terms_ << terms_header() << "\n";
         features_ << features_header() << "\n";
     }
@@ -85,4 +95,5 @@ void FolderWindowTermSink::write(const WindowTermRecord &r)
     features_ << "\n";
     terms_.flush();
     features_.flush();
+    failed_ = !terms_ || !features_;
 }

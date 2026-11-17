@@ -74,6 +74,8 @@ int run_cli(int argc, char *argv[])
     else
     {
         pipeline.run_odometry();
+        if (config.log_window_terms && !terms.ok())
+            log_warning(reporter) << "log_window_terms: " << terms.terms_file().string() << " could not be written";
         if (config.save_odometry_snapshot)
         {
             const fs::path file = fs::path(argv[3]) / "odometry_snapshot.bin";
@@ -128,6 +130,8 @@ int run_replay(const char *capture_file, const char *params_file)
     FolderWindowTermSink terms(fs::path(capture_file).parent_path(), fs::path(params_file).stem().string() + "_");
     const WindowReplayResult r = replay_window_capture(capture, config, same_settings, reporter, config.log_window_terms ? &terms : nullptr);
     const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+    if (config.log_window_terms && !terms.ok())
+        log_warning(reporter) << "log_window_terms: " << terms.terms_file().string() << " could not be written";
 
     std::size_t iterations_differ = 0;
     for (int d : r.iteration_differences)

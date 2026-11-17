@@ -19,10 +19,13 @@ public:
 
     std::filesystem::path terms_file() const { return folder_ / (prefix_ + "window_terms.csv"); }
     std::filesystem::path features_file() const { return folder_ / (prefix_ + "window_features.csv"); }
+    // false when the files could not be written (the caller reports it; the run itself goes on)
+    bool ok() const { return !failed_; }
 
 private:
     std::filesystem::path folder_;
     std::string prefix_;
     std::ofstream terms_;
     std::ofstream features_;
+    bool failed_ = false;
 };
