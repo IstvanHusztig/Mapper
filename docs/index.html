@@ -210,10 +210,29 @@ milliseconds; a lagging IMU is corrected before processing. <span class="more">�
 <dt id="t-imu-sample">IMU sample</dt>
 <dd>One reading of the gyro (rotation rate, three axes) and the accelerometer (specific force, three axes) with its
 timestamp: about every 1.1 ms on the Unitree L2 (about 900 Hz), every 2 ms on the Livox Mid-360S (500 Hz).</dd>
-<dt id="t-ahrs">AHRS orientation</dt>
-<dd>The orientation the attitude filter (Fusion AHRS) computes for every IMU sample from the gyro, with roll and pitch
-corrected towards gravity. Heading has no reference and drifts with the <a class="term" href="#t-gyro-bias">gyro bias</a>.
-<span class="more">→ <a href="#s-imu">step 2</a></span></dd>
+<dt id="t-ahrs">AHRS, Fusion AHRS, AHRS orientation</dt>
+<dd>An <b>AHRS</b> (attitude and heading reference system) turns the IMU samples into an orientation. dMapper uses
+<b>Fusion</b> (the open-source AHRS library by x-io Technologies, vendored in <code>3rdparty/Fusion</code>), a
+Madgwick-type complementary filter, in its 6-axis form (gyro and accelerometer, no magnetometer):
+<ul>
+<li>it <b>integrates the gyro</b> from sample to sample, which gives every turn quickly and accurately, but lets errors
+grow: a <a class="term" href="#t-gyro-bias">gyro bias</a> of 0.1 °/s is 6° of heading per minute;</li>
+<li>it <b>pulls roll and pitch towards gravity</b>, the direction the accelerometer measures, with the strength
+<code>ahrs_gain</code> (0.05 in both sensor settings). A small gain trusts the gyro more, so walking accelerations
+barely tilt the estimate, but a tilt error is corrected only slowly. For the first 3 s Fusion starts from a gain of 10 and
+ramps it down to <code>ahrs_gain</code>, so the first orientation is levelled quickly;</li>
+<li><b>heading</b> (yaw) has no reference without a magnetometer: it is whatever the gyro integrates to, starting from the
+beginning of the recording, and drifts with the gyro bias. Fixing it is the LiDAR's job in the optimization;</li>
+<li>Fusion's acceleration rejection (ignoring the accelerometer while it measures more than gravity) is off; the
+<code>fusionConvention*</code> settings choose the axes (NWU in both sensor settings).</li>
+</ul>
+The result, the <b>AHRS orientation</b>, is one rotation per IMU sample: the orientation of every
+<a class="term" href="#t-node">node</a> before the odometry, and the gyro's shape of each window's
+<a class="term" href="#t-guess">guess</a>. The pipeline uses it through the <code>OrientationEstimator</code> port
+(<code>src/application/service_ports.h</code>); the adapter <code>FusionOrientationEstimator</code>
+(<code>src/infrastructure/fusion_orientation_estimator.cpp</code>) only wraps Fusion, and the bias removal, the start-up
+bias and the time steps are in <code>calculate_trajectory</code>. <span class="more">→ <a href="#s-imu">step 2</a>,
+<a href="#p-ahrs">[madgwick_filter]</a></span></dd>
 </dl>
 
 <h3 id="f-poses">Poses and trajectory</h3>
@@ -446,7 +465,7 @@ by file. <span class="more">→ <a href="../tools/README.md">tools/README.md</a>
 <li class="step" id="s-imu">
 <h3>An orientation for every IMU sample</h3>
 <div class="where">calculate_trajectory · src/application/lidar_odometry.cpp</div>
-<p>A Madgwick-type filter (Fusion AHRS, 6-axis, no magnetometer) integrates the gyro, and uses the accelerometer's gravity direction to correct roll and pitch. Heading (yaw) has no absolute reference, so it drifts with the gyro bias. That is what the LiDAR optimization and the bias estimation fix later. The accelerometer's pull has the constant strength <code>ahrs_gain</code> for the whole recording. (Until 2026-11-16 the code tried to switch it off while |a| was outside 0.9–1.1 g; Fusion ramps its gain up at the start and then keeps its own copy, so that switch never took effect and was removed.)</p>
+<p>A Madgwick-type filter (<a class="term" href="#t-ahrs">Fusion AHRS</a>, 6-axis, no magnetometer) integrates the gyro, and uses the accelerometer's gravity direction to correct roll and pitch. Heading (yaw) has no absolute reference, so it drifts with the gyro bias. That is what the LiDAR optimization and the bias estimation fix later. The accelerometer's pull has the constant strength <code>ahrs_gain</code> for the whole recording. (Until 2026-11-16 the code tried to switch it off while |a| was outside 0.9–1.1 g; Fusion ramps its gain down from 10 over the first 3 s and then keeps its own copy, so that switch never took effect and was removed.)</p>
 <p>If <code>use_remove_imu_bias_from_first_stationary_scan</code> is on, the median gyro value of the first <code>startup_gyro_bias_nr_samples</code> samples (1000) is subtracted as bias, but only if the total gyro variance there is below <code>startup_gyro_bias_max_variance_deg2_s2</code> (5 (°/s)²). Handheld recordings usually fail that check ("Excessive movement detected") and continue with zero bias.</p>
 <p>Result: a trajectory map <i>timestamp → rotation</i> with one entry per IMU sample (about 1.1 ms apart). These are the <b><a class="term" href="#t-node">trajectory nodes</a></b>. Their positions are still zero at this stage.</p>
 <div class="params"><span>ahrs_gain</span><span>fusionConvention*</span><span>use_remove_imu_bias_from_first_stationary_scan</span><span>startup_gyro_bias_*</span></div>
