@@ -870,6 +870,85 @@ lines in tiers 1–3.
 Tiers 2 and 3 are split when their region is about to work, not all up front: the split is cheapest when the region's
 owner needs to read the code anyway, and Livox 4 doesn't wait for them.
 
+### Stage 6 design (2026-11-18, Opus, high)
+
+**Measured today** (every function above 80 lines in `src/`, with a rough brace-matching reader):
+
+| Lines | Function | Region | Tier | When |
+|---|---|---|---|---|
+| 84 | `predict_window_poses` (`window_steps.cpp`) | inertial / window loop | 1 | **this stage** |
+| 84 | `update_rgd_legacy` (`ndt_map.cpp`; the default cell statistics) | map | 2 | before the map region's first job |
+| 336 | `run_loop_closure` | back-end | 2 | before the back-end region's first job |
+| 311 | `Consistency` | back-end | 2 | same |
+| 134 | `optimize_loop_pose_graph` | back-end | 2 | same |
+| 180 | `compute_step_1` | front-end | 3 | before the front-end region's first job |
+| 143 | `calculate_trajectory` | front-end | 3 | same |
+| 110 | `load_imu` | front-end | 3 | same |
+| 100 | `pair_recording_files` | front-end | 3 | same |
+| 89 | `load_point_cloud` | front-end | 3 | same |
+| 185, 146, 119, 117, 89, 85 | `exportLaz`, `save_result`, `TomlIO::LoadParametersFromTomlFile`, `FolderResultSink::processing_results`, `TomlIO::SaveParametersToTomlFile`, `TomlIO::check_keys` | I/O | 5 | when next changed |
+| 119, 116, 106, 96 | `display`, `drawMiniCompassWithRuler`, `view_kbd_shortcuts`, `camMenu` | GUI | 5 | when next changed |
+| 93 | `affine_matrix_from_pose_rodrigues` (`transformations.h`, HDMapping's, unchanged) | domain types | 5 | not split: one closed-form expression |
+
+Checked by a reviewer against the code; the term files, `run_odometry.cpp` and the solver have no function above 80
+lines (`process_windows` 15, `optimize_windows` 58, `optimize_lidar_odometry` 24). Tier 1 is done except `predict_window_poses`: the window loop, the terms, the solver, the verdict and the noise model are all
+under 80 lines. Tier 4 went in stage 0.
+
+**`predict_window_poses` in four steps** (pure refactor). It already has them:
+
+1. `mean_shift_of(previous, before_previous)`: the mean shift per node between the two previous windows' last nodes, zero
+   (and reported) above 1 m.
+2. Chaining onto the previous window's end: today a copy of `place_window_after`'s loop (start at the previous end times
+   `imu_motion_from_previous`, then each node's increment). It calls `place_window_after` instead: the same expressions in
+   the same order, so the same bits (`inverse() * x` of two `Affine3d` is an `Affine3d` in both, and `place_window_after`
+   copies the poses before it writes), and one copy of the chaining less. The translations are then overwritten in
+   `window.poses` and `motion_model_poses` set from it, as today from the separate copy. An empty window (never produced:
+   a window has `threshold_nr_poses` nodes) keeps today's behaviour, one node at the previous end, by a guard.
+3. Rest detection: `window_rests(poses, timestamps, imu_acc, imu_angles, gravity_norm, acc_threshold, gyro_threshold)`
+   (`window_steps`), the zero-velocity test on a 50 ms average with its 0.025 s half width as one named constant. The same
+   call is written out three times today: in `predict_window_poses`, in `window_at_rest` (`run_odometry.cpp`, the
+   accelerometer term's rest) and in `log_accelerometer_fit` (a diagnostic), each with its own copy of the constant. All
+   three call the one function. It holds only the acceleration on the 50 ms average and the stationarity test: the size
+   checks stay at the callers (they differ: `use_zupt` and the IMU sizes in the prediction, the window's sizes in
+   `window_at_rest`) and so does the gyro threshold's conversion to rad/s, as today. The poses passed differ (the chained
+   guess, the window later), which changes nothing: the test reads only the rotations. The prediction's other
+   acceleration (the integration's own smoothing width) stays where it is.
+4. `guess_window_translations(...)`: the three ways to the positions (accelerometer integration from the previous velocity
+   or rest, constant velocity, mean shift), with the gap to the previous window.
+
+Each step is under 40 lines and has a test: the mean shift and its drop at 1 m, the chaining equal to
+`place_window_after`, rest on a still and a moving window, the three translation branches. The existing tests of
+`predict_window_poses` (`tests/window_steps_test.cpp`, `tests/window_cut_test.cpp`) stay as they are.
+
+**What the measurement leaves for later.** The table goes into each region's knowledge file in stage 7 (front-end, map,
+back-end): a region splits its functions in its first job, as this plan says, before it changes them.
+
+**A tool for the measurement:** `tools/function_lengths.py <limit> <files or folders>` prints every function above the
+limit (the reader above, pure Python). The verification region runs it; the region contracts of stage 7 can name it.
+
+**Checks and commit order.** Every commit: Release build, unit tests, characterization guard, loop guard (it runs the
+prediction through the window loop), the two replays, 44_short against its manifest, the per-term table of the 44_short
+replay. End of stage: full 44 and Livox 3 against their manifests, IDENTICAL (no setting changes, so the manifests stay).
+No Debug build: a pure split with no lifetime, threading or configuration-dependent change (CLAUDE.md, "Debug builds only
+when they can matter").
+
+1. `window_rests` and its named constant; the three callers use it; test.
+2. `predict_window_poses` in its four steps, chaining through `place_window_after`; tests of the steps.
+3. `tools/function_lengths.py`, `tools/README.md`; the plan's table and progress; `CLAUDE.md` where it names the window steps.
+
+### Decisions (for the user)
+
+1. **Split `predict_window_poses` now**, although it is only 4 lines over: it is the last tier-1 function above the limit,
+   and its split removes a copy of the chaining and gives the rest test one home. Recommended. Alternative: leave it at
+   84 lines and record it.
+2. **One rest-detection function for the three callers** (prediction, the accelerometer term's rest, the fit
+   diagnostic). Recommended: the same test with the same constant written three times can drift apart.
+3. **Tiers 2 and 3 stay deferred** to their region's first job, and the measured table goes into the region knowledge
+   files in stage 7. Recommended; `update_rgd_legacy` (map) joins tier 2, which the old table did not list.
+4. **`tools/function_lengths.py`** in the repo for the verification region. Recommended. Alternative: keep the measurement
+   as a one-off.
+5. **No Debug build at the end of the stage.** Recommended (a pure split; the rule in CLAUDE.md).
+
 ## Stage 7: region agents
 
 **Mechanism.** One agent definition per region in `.claude/agents/region-<name>.md` (like the existing
