@@ -10,10 +10,12 @@
 #include "scan_to_map.h"
 #include "window_loop.h"
 #include "window_steps.h"
+#include "window_term_table.h"
 #include <point_placement.h>
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <sstream>
 #include <string>
 
@@ -188,6 +190,7 @@ namespace
     {
         int last_iteration = 0; // index of the last Levenberg-Marquardt iteration
         double delta = 100000.0; // sum of the parameter updates of that iteration
+        double lm_factor = 0.0;  // the damping after the iterations (log_window_terms)
         int rejected_steps = 0;  // lm_step_check: steps taken back because they raised the cost
         ScanToMapCost cost;      // lm_step_check: the cost of the final state
         IterationConvergence convergence; // only with log_iteration_convergence
@@ -329,6 +332,7 @@ namespace
         result.rejected_steps = rejected_steps;
         result.last_iteration = iter_end;
         result.delta = delta;
+        result.lm_factor = lm_factor;
         if (params.log_iteration_convergence)
             result.convergence = convergence_of(poses_after, deltas, convergence_settle_position_m,
                                                 convergence_settle_rotation_deg * DEG_TO_RAD, convergence_fast_delta);
@@ -576,6 +580,132 @@ namespace
                          << (acc_term.options.enabled ? 1 : 0) << ", triples " << world.size() << ", world mean " << v(world_mean)
                          << ", body mean " << v(body_mean) << ", rms " << std::setprecision(4) << std::sqrt(rest) << ", max gap ms "
                          << std::setprecision(2) << max_gap * 1000.0 << ", rest " << (at_rest ? 1 : 0);
+    }
+
+    // log_window_terms: one motion of the table in a few words: the three terms that hold it most (as a sigma), the largest
+    // pull, and the step all terms together still want (the total's pull)
+    std::string motion_summary(const WindowTermTable &t, int motion, int direction, const char *unit)
+    {
+        std::vector<const WindowTermRow *> rows;
+        const WindowTermRow *total = nullptr;
+        for (const WindowTermRow &r : t.rows)
+        {
+            if (r.name == "total")
+                total = &r;
+            else if (r.in_total && r.weight[motion][direction] > 0.0)
+                rows.push_back(&r);
+        }
+        std::sort(rows.begin(), rows.end(), [&](const WindowTermRow *a, const WindowTermRow *b)
+                  { return a->weight[motion][direction] > b->weight[motion][direction]; });
+        std::ostringstream o;
+        o << term_motion_name(motion) << " " << term_direction_name(direction) << ": hold";
+        for (size_t k = 0; k < rows.size() && k < 3; k++)
+            o << " " << rows[k]->name << " " << std::scientific << std::setprecision(1) << 1.0 / std::sqrt(rows[k]->weight[motion][direction]);
+        const WindowTermRow *largest = nullptr;
+        for (const WindowTermRow *r : rows)
+            if (std::isfinite(r->pull[motion][direction]) &&
+                (largest == nullptr || std::abs(r->pull[motion][direction]) > std::abs(largest->pull[motion][direction])))
+                largest = r;
+        o << std::fixed << std::setprecision(4);
+        if (largest)
+            o << ", largest pull " << largest->name << " " << largest->pull[motion][direction];
+        if (total)
+            o << ", remaining " << total->pull[motion][direction];
+        o << " " << unit;
+        return o.str();
+    }
+
+    // log_window_terms: cost per residual of every term, guess -> result
+    std::string cost_summary(const WindowTermTable &guess, const WindowTermTable &result)
+    {
+        std::ostringstream o;
+        o << std::setprecision(3);
+        for (const WindowTermRow &r : result.rows)
+        {
+            if (!r.in_total || r.residuals == 0)
+                continue;
+            double before = std::numeric_limits<double>::quiet_NaN();
+            for (const WindowTermRow &g : guess.rows)
+                if (g.name == r.name && g.residuals > 0)
+                    before = g.cost / g.residuals;
+            o << " " << r.name << " " << before << "->" << r.cost / r.residuals;
+        }
+        return o.str();
+    }
+
+    // what the window loop knows of one window for its term record
+    struct WindowTermSources
+    {
+        const std::vector<Point3Di> &points;
+        const Window &guess;      // the window as the first iteration found it
+        const OdometryState &state;
+        const OdometryRunSetup &setup;
+        const AccTerm &acc_term;
+        const MotionModelRotationOptions &rotation;
+        const VelocityPrior &velocity_prior;
+        const Eigen::Vector3d &acc_offset;
+        const WindowOptimization &optimization;
+        bool at_rest;
+        bool turn_window;
+    };
+
+    // log_window_terms: the per-term table at the guess and at the result, one log line, and the record for the sink.
+    // Only reads: nothing here changes the window, the maps or the loop's state. last_along: the travel direction of the
+    // previous window, used when this one moves less than 1 cm, and updated.
+    void record_window_terms(int i, const std::vector<Window> &windows, const WindowTermSources &s, const OdometryConfig &params,
+                             Eigen::Vector3d &last_along, WindowTermSink *sink, Logger &logger)
+    {
+        if (!params.log_window_terms)
+            return;
+        const Window &window = windows[i];
+        last_along = window_travel_direction(window.poses, last_along);
+        const Eigen::Vector3d no_offset = Eigen::Vector3d::Zero(); // the acceleration offset starts at zero in every window
+        const WindowTermInputs at_guess{s.points, s.guess, s.state.buckets_indoor, s.state.buckets_outdoor, s.setup.scan_to_map,
+                                        s.acc_term.motion_model, s.rotation, s.acc_term.options, s.velocity_prior, no_offset,
+                                        params.lm_factor_initial, last_along};
+        const WindowTermInputs at_result{s.points, window, s.state.buckets_indoor, s.state.buckets_outdoor, s.setup.scan_to_map,
+                                         s.acc_term.motion_model, s.rotation, s.acc_term.options, s.velocity_prior, s.acc_offset,
+                                         s.optimization.lm_factor, last_along};
+        WindowTermRecord r;
+        r.window = i + 1;
+        if (!window.timestamps.empty() && !windows[0].timestamps.empty())
+        {
+            r.time_s = window.timestamps.front().first - windows[0].timestamps.front().first;
+            r.duration_s = window.timestamps.back().first - window.timestamps.front().first;
+        }
+        r.iterations = s.optimization.last_iteration + 1;
+        r.delta = s.optimization.delta;
+        r.lm_factor = s.optimization.lm_factor;
+        r.at_rest = s.at_rest;
+        r.turn_window = s.turn_window;
+        r.acc_term = s.acc_term.options.enabled;
+        if (!window.poses.empty())
+        {
+            r.guess_move = s.guess.poses.back().translation() - s.guess.poses.front().translation();
+            r.result_move = window.poses.back().translation() - window.poses.front().translation();
+        }
+        r.velocity_start = window.velocity.start;
+        r.velocity_end = window.velocity.end;
+        r.gyro_bias_deg_s = window.gyro_bias.mean * RAD_TO_DEG;
+        r.acc_offset_mps2 = s.acc_offset;
+        r.guess = window_term_table(at_guess);
+        r.result = window_term_table(at_result);
+        r.change = window_motion_change(s.guess, window, r.result.directions);
+
+        for (const WindowTermTable *t : {&r.guess, &r.result})
+            if (!t->failure.empty())
+                log_warning(logger) << "window terms " << i + 1 << ": " << (t == &r.guess ? "guess" : "result") << " table not computed: " << t->failure;
+        if (r.result.failure.empty())
+        {
+            auto line = log_info(logger);
+            line << "window terms " << i + 1 << ": along " << std::fixed << std::setprecision(2) << last_along.x() << " " << last_along.y()
+                 << "; cost/n" << cost_summary(r.guess, r.result) << "; " << motion_summary(r.result, 1, 0, "m") << "; "
+                 << motion_summary(r.result, 2, 0, "m") << "; " << motion_summary(r.result, 2, 2, "m");
+            if (r.result.turn_defined)
+                line << "; " << motion_summary(r.result, 3, 2, "deg");
+        }
+        if (sink)
+            sink->write(r);
     }
 
     // log_iteration_convergence: after how many iterations the window's poses settled, and where fast mode would have stopped
@@ -864,6 +994,7 @@ bool process_windows(WindowLoop &loop, std::vector<Window> &windows, size_t firs
 
     // log_stage_timing: the timers get a target only when the setting is on
     const auto timed = [&params](PhaseTime &t) { return params.log_stage_timing ? &t : nullptr; };
+    Eigen::Vector3d last_along = Eigen::Vector3d::UnitX(); // log_window_terms: the travel direction of the window before
 
     for (size_t window_index = first; window_index <= last; window_index++)
     {
@@ -917,7 +1048,8 @@ bool process_windows(WindowLoop &loop, std::vector<Window> &windows, size_t firs
         window_rotation_options.estimate_bias = setup.rotation_options.estimate_bias && i > 0;
 
         // tight turns: trust the gyro more (rotation about the vertical from the IMU-based initial guess)
-        if (params.rotation_sigma_inflation_k_turn > 0.0 && is_turn_window(windows[i], params.turn_rate_threshold_deg_s * DEG_TO_RAD))
+        const bool turn_window = params.rotation_sigma_inflation_k_turn > 0.0 && is_turn_window(windows[i], params.turn_rate_threshold_deg_s * DEG_TO_RAD);
+        if (turn_window)
         {
             window_rotation_options.inflation_k = params.rotation_sigma_inflation_k_turn;
             carry.turn_windows++;
@@ -925,9 +1057,10 @@ bool process_windows(WindowLoop &loop, std::vector<Window> &windows, size_t firs
 
         // accelerometer term (from the second window on, like the bias) and the window's translation sigmas
         AccTerm acc_term = prepare_acc_term(windows[i], i > 0, setup, carry, params);
+        bool at_rest = false;
         if (setup.always_on)
         {
-            const bool at_rest = window_at_rest(windows[i], setup, params);
+            at_rest = window_at_rest(windows[i], setup, params);
             if (at_rest)
                 carry.rest_windows++;
             if (i == 0)
@@ -946,6 +1079,8 @@ bool process_windows(WindowLoop &loop, std::vector<Window> &windows, size_t firs
         const std::vector<Eigen::Affine3d> poses_before_optimization = windows[i].poses;
 
         windows[i].motion_model_poses = windows[i].poses;
+        // log_window_terms: the window as the first iteration finds it (only read)
+        const Window guess = params.log_window_terms ? windows[i] : Window{};
 
         PhaseTimer lm_timer(timed(carry.timing.lm_iterations));
         const int steps_skipped_before = workspace.steps_skipped;
@@ -970,6 +1105,10 @@ bool process_windows(WindowLoop &loop, std::vector<Window> &windows, size_t firs
         log_weak_axis_diagnostics(i, windows[i], intermediate_points, state, setup.scan_to_map, acc_term, lidar_translation_information, params,
                                   logger);
         log_heading_diagnostics(i, windows[i], poses_before_optimization, intermediate_points, state, setup.scan_to_map, params, logger);
+        record_window_terms(i, windows,
+                            WindowTermSources{intermediate_points, guess, state, setup, acc_term, window_rotation_options, velocity_prior,
+                                              acc_offset, optimization, at_rest, turn_window},
+                            params, last_along, range.terms, logger);
 
         update_gyro_bias_after_window(windows[i], i, setup, carry, params, logger);
         update_acc_term_after_window(windows[i], i, acc_term, acc_offset, carry, logger);
@@ -1071,7 +1210,7 @@ namespace
 }
 
 bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params, OdometryState &state, double &ts_failure, bool debugMsg, PointStore &point_store, PreviewSink &preview, Logger &logger, ProgressReporter &progress,
-                      WindowCaptureSink *capture)
+                      WindowCaptureSink *capture, WindowTermSink *terms)
 {
     if (windows.size() != 0)
     {
@@ -1092,18 +1231,20 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
         if (capture && !capturing && params.capture_windows_from_s >= 0.0)
             log_warning(logger) << "window capture: no window starts between " << params.capture_windows_from_s << " and "
                                 << params.capture_windows_to_s << " s";
+        WindowRange plain; // every window outside a capture
+        plain.terms = terms;
         if (!capturing)
         {
-            if (!run(0, n - 1, {}))
+            if (!run(0, n - 1, plain))
                 return false;
         }
         else
         {
             // the same windows in the same order as without the capture, in three parts: before, in and after the range
-            if (capture_first > 0 && !run(0, capture_first - 1, {}))
+            if (capture_first > 0 && !run(0, capture_first - 1, plain))
                 return false;
             WindowCapture c = start_capture(windows, capture_first, capture_last, loop, state, point_store);
-            WindowRange range;
+            WindowRange range = plain;
             range.outcomes = &c.outcomes;
             if (!run(capture_first, capture_last, range))
                 return false;
@@ -1112,7 +1253,7 @@ bool optimize_windows(std::vector<Window> &windows, const OdometryConfig &params
                 log_info(logger) << "window capture written: windows " << capture_first + 1 << " to " << capture_last + 1;
             else
                 log_error(logger) << "window capture not written: " << why;
-            if (capture_last + 1 < n && !run(capture_last + 1, n - 1, {}))
+            if (capture_last + 1 < n && !run(capture_last + 1, n - 1, plain))
                 return false;
         }
 

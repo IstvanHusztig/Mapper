@@ -8,6 +8,7 @@
 #include "odometry_config.h"
 #include "run_reporting.h"
 #include "window_capture.h"
+#include "window_term_sink.h"
 
 #include <cstddef>
 #include <vector>
@@ -24,4 +25,6 @@ struct WindowReplayResult
 };
 
 // same_settings: the capture was made with these odometry settings, so the captured iteration counts are forced
-WindowReplayResult replay_window_capture(const WindowCapture &capture, const OdometryConfig &params, bool same_settings, Logger &logger);
+// terms: log_window_terms' tables of the replayed windows (optional)
+WindowReplayResult replay_window_capture(const WindowCapture &capture, const OdometryConfig &params, bool same_settings, Logger &logger,
+                                         WindowTermSink *terms = nullptr);

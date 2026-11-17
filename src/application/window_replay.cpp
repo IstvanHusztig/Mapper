@@ -26,7 +26,8 @@ namespace
     };
 }
 
-WindowReplayResult replay_window_capture(const WindowCapture &capture, const OdometryConfig &params, bool same_settings, Logger &logger)
+WindowReplayResult replay_window_capture(const WindowCapture &capture, const OdometryConfig &params, bool same_settings, Logger &logger,
+                                         WindowTermSink *terms)
 {
     // windows 0 .. min(last + 1, n - 1): the run's first window (the loop's settings and the diagnostics' time origin read
     // it), the captured ones, empty windows between (never read)
@@ -49,6 +50,7 @@ WindowReplayResult replay_window_capture(const WindowCapture &capture, const Odo
     WindowReplayResult result;
     WindowRange range;
     range.outcomes = &result.outcomes;
+    range.terms = terms;
     if (same_settings)
         range.forced_last_iteration = &forced;
 

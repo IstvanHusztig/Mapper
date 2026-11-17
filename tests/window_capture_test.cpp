@@ -6,8 +6,12 @@
 #include "synthetic_recording.h"
 #include "window_capture_file.h"
 #include "window_replay.h"
+#include "window_term_csv.h"
 
+#include <algorithm>
 #include <filesystem>
+#include <fstream>
+#include <string>
 
 // Window capture and replay (stage 1 of docs/code-split-and-region-agents-plan.md) on one lap of the loop recording (see
 // synthetic_recording.h): the capture doesn't change the run, the file gives back the capture, and a replay with the same
@@ -58,7 +62,7 @@ namespace
     }
 
     // the window loop over the recording; the map is seeded from window 0's points, placed with its true poses
-    std::vector<Window> run(const Recording &r, const OdometryConfig &c, WindowCaptureSink *capture)
+    std::vector<Window> run(const Recording &r, const OdometryConfig &c, WindowCaptureSink *capture, WindowTermSink *terms = nullptr)
     {
         MemoryPointStore store;
         for (size_t w = 0; w < r.points.size(); w++)
@@ -76,9 +80,16 @@ namespace
         NoProgress progress;
         NullLogger logger;
         double ts_failure = 0.0;
-        CHECK(optimize_windows(windows, c, state, ts_failure, false, store, preview, logger, progress, capture));
+        CHECK(optimize_windows(windows, c, state, ts_failure, false, store, preview, logger, progress, capture, terms));
         return windows;
     }
+
+    class KeepTerms : public WindowTermSink
+    {
+    public:
+        void write(const WindowTermRecord &record) override { records.push_back(record); }
+        std::vector<WindowTermRecord> records;
+    };
 
     bool same_poses(const std::vector<Eigen::Affine3d> &a, const std::vector<Eigen::Affine3d> &b)
     {
@@ -155,4 +166,60 @@ TEST_CASE("window capture: the range is the windows that start within it")
     CHECK_FALSE(capture_range(windows, 4.5, 5.5, first, last)); // no window starts there
     CHECK_FALSE(capture_range(windows, -1.0, -1.0, first, last)); // off
     CHECK_FALSE(capture_range(windows, 3.0, 2.0, first, last));   // off
+}
+
+// The per-term window table (log_window_terms, stage 3): it only observes, so the run is the same bits with it on, and the
+// setting is not one of the odometry settings a capture or snapshot is checked against.
+TEST_CASE("window term table: the run is the same with log_window_terms on, every window gets its tables, and the files hold them")
+{
+    const Recording r = loop_recording(1);
+    OdometryConfig c = capture_config();
+    const std::vector<Window> plain = run(r, c, nullptr);
+
+    OdometryConfig with_terms = c;
+    with_terms.log_window_terms = true;
+    CHECK(odometry_settings_hash(with_terms) == odometry_settings_hash(c));
+    KeepTerms sink;
+    const std::vector<Window> logged = run(r, with_terms, nullptr, &sink);
+    for (size_t i = 0; i < plain.size(); i++)
+        CHECK(same_poses(plain[i].poses, logged[i].poses));
+
+    REQUIRE(sink.records.size() == plain.size());
+    size_t rows = 0;
+    for (const WindowTermRecord &record : sink.records)
+    {
+        CAPTURE(record.window);
+        CHECK(record.guess.failure.empty());
+        CHECK(record.result.failure.empty());
+        CHECK_FALSE(record.result.rows.empty());
+        CHECK(record.result.rows.back().name == "damping");
+        rows += record.guess.rows.size() + record.result.rows.size();
+    }
+
+    // the CSV files: a header and a row per window, state and term; a row per window
+    const fs::path folder = fs::temp_directory_path() / "lidar_odometry_tests_window_terms";
+    fs::create_directories(folder);
+    {
+        FolderWindowTermSink files(folder, "t_");
+        for (const WindowTermRecord &record : sink.records)
+            files.write(record);
+    }
+    const auto lines = [](const fs::path &file)
+    {
+        std::ifstream in(file);
+        std::vector<std::string> out;
+        for (std::string line; std::getline(in, line);)
+            out.push_back(line);
+        return out;
+    };
+    const auto columns = [](const std::string &line) { return std::count(line.begin(), line.end(), ',') + 1; };
+    const std::vector<std::string> terms = lines(folder / "t_window_terms.csv"), features = lines(folder / "t_window_features.csv");
+    fs::remove_all(folder);
+    REQUIRE(terms.size() == 1 + rows);
+    REQUIRE(features.size() == 1 + sink.records.size());
+    CHECK(terms[0].rfind("window,time_s,state,term,in_total,cost,residuals,weight_shift_along", 0) == 0);
+    CHECK(columns(terms[0]) == 7 + 2 * 12);
+    CHECK(columns(terms[1]) == columns(terms[0]));
+    CHECK(columns(features[1]) == columns(features[0]));
+    CHECK(features[0].find("change_turn_vertical") != std::string::npos);
 }

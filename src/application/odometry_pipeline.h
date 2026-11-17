@@ -5,6 +5,7 @@
 #include "output_ports.h"
 #include "run_reporting.h"
 #include "window_capture.h"
+#include "window_term_sink.h"
 
 #include <string>
 #include <vector>
@@ -32,6 +33,9 @@ public:
     bool run_odometry();
     // where run_odometry writes a window capture (capture_windows_from_s / _to_s); none if not set
     void set_window_capture(WindowCaptureSink *sink) { capture_ = sink; }
+    // where run_odometry writes each window's per-term table (log_window_terms); none if not set (the log line is written
+    // without it too)
+    void set_window_terms(WindowTermSink *sink) { terms_ = sink; }
     // what the later stages read from the odometry (the windows and three values of the run state)
     OdometrySnapshot snapshot() const;
     // in place of run_odometry, after load: takes the windows and run state from a snapshot of an earlier run with the same
@@ -63,6 +67,7 @@ private:
     ProgressReporter *progress_;
     bool debug_;
     WindowCaptureSink *capture_ = nullptr;
+    WindowTermSink *terms_ = nullptr;
     RunInputs inputs_;
     RunServices services_;
 };

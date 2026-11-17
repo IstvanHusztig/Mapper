@@ -10,6 +10,7 @@
 #include "run_services.h"
 #include "toml_config_repository.h"
 #include "window_capture_file.h"
+#include "window_term_csv.h"
 #include "window_replay.h"
 
 #include <chrono>
@@ -53,6 +54,9 @@ int run_cli(int argc, char *argv[])
     OdometryPipeline pipeline(config, reporter, reporter, make_folder_inputs(input_file_names, reporter), make_run_services(), paths);
     FolderWindowCaptureSink capture(argv[3], config);
     pipeline.set_window_capture(&capture);
+    FolderWindowTermSink terms(argv[3]); // log_window_terms: window_terms.csv and window_features.csv in the output folder
+    if (config.log_window_terms)
+        pipeline.set_window_terms(&terms);
     if (pipeline.load())
         log_info(reporter) << "step_1_done";
 
@@ -120,7 +124,9 @@ int run_replay(const char *capture_file, const char *params_file)
                        << (same_settings ? "the capture's own odometry settings: iterations as captured" : "OTHER odometry settings than the capture's")
                        << ")";
     const auto start = std::chrono::steady_clock::now();
-    const WindowReplayResult r = replay_window_capture(capture, config, same_settings, reporter);
+    // log_window_terms: <params name>_window_terms.csv and _window_features.csv next to the capture
+    FolderWindowTermSink terms(fs::path(capture_file).parent_path(), fs::path(params_file).stem().string() + "_");
+    const WindowReplayResult r = replay_window_capture(capture, config, same_settings, reporter, config.log_window_terms ? &terms : nullptr);
     const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
 
     std::size_t iterations_differ = 0;

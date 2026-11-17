@@ -13,6 +13,7 @@
 #include "scan_to_map.h"
 #include "window.h"
 #include "window_steps.h"
+#include "window_term_sink.h"
 #include <structures.h>
 
 #include <chrono>
@@ -103,6 +104,8 @@ struct WindowRange
     const std::vector<int> *forced_last_iteration = nullptr;
     // filled per window from `first` with what the loop did
     std::vector<WindowOutcome> *outcomes = nullptr;
+    // log_window_terms: each window's per-term table at the guess and the result (the log line is written without it too)
+    WindowTermSink *terms = nullptr;
 };
 
 // sets the loop's settings and its state before the first window; first: the run's first window, already placed

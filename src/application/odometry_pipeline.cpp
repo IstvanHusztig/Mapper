@@ -74,7 +74,7 @@ bool OdometryPipeline::run_odometry()
     progress_->checkpoint();
     double ts_failure = 0.0;
     StepTiming timing(*config_, *logger_, "odometry");
-    return optimize_windows(windows, *config_, state, ts_failure, debug_, *inputs_.points, *inputs_.preview, *logger_, *progress_, capture_);
+    return optimize_windows(windows, *config_, state, ts_failure, debug_, *inputs_.points, *inputs_.preview, *logger_, *progress_, capture_, terms_);
 }
 
 OdometrySnapshot OdometryPipeline::snapshot() const
