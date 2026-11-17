@@ -40,12 +40,12 @@ LmLinearization WindowProblem::linearize(bool with_cost)
 
     add_motion_edge_terms(equations, noise_, window_, motion_model_, rotation_options_);
 
-    add_gyro_bias_prior(equations, unknowns_, window_, rotation_options_);
+    add_gyro_bias_prior(equations, noise_, window_);
     add_velocity_continuity(equations, noise_, window_);
 
-    const bool end_tied = add_acceleration_terms(equations, unknowns_, window_, translation_imu_options_, acc_offset_);
-    add_velocity_priors(equations, unknowns_, window_, translation_imu_options_, end_tied);
-    add_acceleration_offset_prior(equations, unknowns_, translation_imu_options_, acc_offset_);
+    const bool end_tied = add_acceleration_terms(equations, noise_, window_, translation_imu_options_, acc_offset_);
+    add_velocity_priors(equations, noise_, window_, end_tied);
+    add_acceleration_offset_prior(equations, noise_, acc_offset_);
 
     motion_terms_timer.stop();
 

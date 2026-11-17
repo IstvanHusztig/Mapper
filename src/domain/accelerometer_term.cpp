@@ -63,9 +63,6 @@ namespace
         const AccelerometerSamples &samples;
         const Eigen::Vector3d &acc_offset;
         double to_mps2;
-        double density2; // noise density^2
-        double floor2;   // vibration floor^2
-        double max_dt;   // a longer stretch has a gap in the IMU samples: its terms are dropped
     };
 
     // one term: residual r = sum(c_j * p_j) + c_v * v - sign * (mean acceleration - e) * tau [m/s] over [t0, t1), with the
@@ -78,6 +75,7 @@ namespace
         double t0, t1;
         int first, last;
         double sign, tau;
+        double w; // the term's weight, from the noise model
     };
 
     void add_acceleration_term(const AccTermContext &x, const AccTermShape &shape)
@@ -121,7 +119,7 @@ namespace
         if (shape.velocity_column >= 0)
             blocks.push_back({shape.velocity_column, Eigen::Matrix3d::Identity() * shape.c_v});
 
-        const double w = 1.0 / ((x.density2 / shape.tau + x.floor2) * shape.tau * shape.tau);
+        const double w = shape.w;
         x.equations.motion_cost += w * r.squaredNorm();
         x.equations.residuals += 3;
         for (const auto &[ca, ja] : blocks)
@@ -139,50 +137,38 @@ namespace
         }
     }
 
-    // the change of velocity between consecutive anchor pairs against the mean acceleration between their midpoints
-    void add_anchor_triples(const AccTermContext &x)
+    // one listed term as its shape: the anchor triples (the change of velocity between consecutive anchor pairs against
+    // the mean acceleration between their midpoints), the start velocity (the mean velocity over [node 0, first anchor] is
+    // v_start + the mean acceleration over its first half * dt / 2), the end velocity (the mean velocity over the last two
+    // anchors is v_end - the mean acceleration from their midpoint to the last node * that time)
+    AccTermShape shape_of(const AccTermContext &x, const AccelerometerTermSpan &span)
     {
-        const std::vector<int> &anchors = x.unknowns.anchors;
         const Window &window = x.window;
-        for (size_t j = 1; j + 1 < anchors.size(); j++)
+        switch (span.kind)
         {
-            const int A = anchors[j - 1], B = anchors[j], C = anchors[j + 1];
+        case AccelerometerTermKind::anchor_triple:
+        {
+            const int A = span.a, B = span.b, C = span.c;
             const double tA = window.timestamps[A].first, tB = window.timestamps[B].first, tC = window.timestamps[C].first;
             const double dt1 = tB - tA, dt2 = tC - tB;
-            if (dt1 > x.max_dt || dt2 > x.max_dt)
-                continue;
             const double m1 = 0.5 * (tA + tB), m2 = 0.5 * (tB + tC);
-            add_acceleration_term(x, {{{A, 1.0 / dt1}, {B, -(1.0 / dt1 + 1.0 / dt2)}, {C, 1.0 / dt2}}, -1, 0.0, m1, m2, A, C, 1.0, m2 - m1});
+            return {{{A, 1.0 / dt1}, {B, -(1.0 / dt1 + 1.0 / dt2)}, {C, 1.0 / dt2}}, -1, 0.0, m1, m2, A, C, 1.0, span.tau, span.weight};
         }
-    }
-
-    // start velocity: the mean velocity over [node 0, first anchor] is v_start + (mean acceleration over its first half) * dt / 2
-    void add_start_velocity_term(const AccTermContext &x)
-    {
-        const std::vector<int> &anchors = x.unknowns.anchors;
-        if (anchors.size() <= 1)
-            return;
-        const int B = anchors[1];
-        const double t0 = x.window.timestamps[0].first, tB = x.window.timestamps[B].first, dt = tB - t0;
-        if (dt <= x.max_dt)
-            add_acceleration_term(x, {{{0, -1.0 / dt}, {B, 1.0 / dt}}, x.unknowns.iv, -1.0, t0, 0.5 * (t0 + tB), 0, B, 1.0, 0.5 * dt});
-    }
-
-    // end velocity: the mean velocity over the last two anchors is v_end - (mean acceleration from their midpoint to the last
-    // node) * (time from the midpoint to the last node). Returns whether the term was added.
-    bool add_end_velocity_term(const AccTermContext &x)
-    {
-        const std::vector<int> &anchors = x.unknowns.anchors;
-        if (anchors.size() <= 1)
-            return false;
-        const int n = static_cast<int>(x.window.poses.size());
-        const int P = anchors[anchors.size() - 2], Q = anchors.back(), N = n - 1;
-        const double tP = x.window.timestamps[P].first, tQ = x.window.timestamps[Q].first, tN = x.window.timestamps[N].first, dt = tQ - tP;
-        const double mid = 0.5 * (tP + tQ);
-        if (!(dt <= x.max_dt && tN - tQ <= x.max_dt))
-            return false;
-        add_acceleration_term(x, {{{P, -1.0 / dt}, {Q, 1.0 / dt}}, x.unknowns.ie, -1.0, mid, tN, P, N, -1.0, tN - mid});
-        return true;
+        case AccelerometerTermKind::start_velocity:
+        {
+            const int B = span.b;
+            const double t0 = window.timestamps[0].first, tB = window.timestamps[B].first, dt = tB - t0;
+            return {{{0, -1.0 / dt}, {B, 1.0 / dt}}, x.unknowns.iv, -1.0, t0, 0.5 * (t0 + tB), 0, B, 1.0, span.tau, span.weight};
+        }
+        case AccelerometerTermKind::end_velocity:
+        default:
+        {
+            const int P = span.a, Q = span.b, N = span.c;
+            const double tP = window.timestamps[P].first, tQ = window.timestamps[Q].first, tN = window.timestamps[N].first, dt = tQ - tP;
+            const double mid = 0.5 * (tP + tQ);
+            return {{{P, -1.0 / dt}, {Q, 1.0 / dt}}, x.unknowns.ie, -1.0, mid, tN, P, N, -1.0, span.tau, span.weight};
+        }
+        }
     }
 }
 
@@ -190,35 +176,26 @@ namespace
 // unknowns. One term: residual r = sum(c_j * p_j) + c_v * v - sign * (mean acceleration - e) * tau [m/s], with mean
 // acceleration = time-weighted mean of (R_k f_k - g) * to_mps2 over the term's interval; the node rotations enter through
 // d(R f) = -[R f]x d(theta). Weight 1 / (sigma^2 tau^2) with sigma^2 = density^2 / tau + floor^2.
-bool add_acceleration_terms(WindowEquations &equations, const WindowUnknowns &unknowns, const Window &window,
+bool add_acceleration_terms(WindowEquations &equations, const WindowNoiseModel &noise, const Window &window,
                             const MotionModelTranslationImuOptions &translation_imu_options, const Eigen::Vector3d &acc_offset)
 {
-    if (!unknowns.acc_term)
+    if (!noise.unknowns.acc_term)
         return false;
     const AccelerometerSamples samples = accelerometer_samples(window, translation_imu_options);
-    const AccTermContext x{equations,
-                           unknowns,
-                           window,
-                           samples,
-                           acc_offset,
-                           translation_imu_options.to_mps2,
-                           translation_imu_options.noise_density_mps2_sqrt_hz * translation_imu_options.noise_density_mps2_sqrt_hz,
-                           translation_imu_options.floor_sigma_mps2 * translation_imu_options.floor_sigma_mps2,
-                           2.0 * translation_imu_options.span_s};
-    add_anchor_triples(x);
-    add_start_velocity_term(x);
-    return add_end_velocity_term(x);
+    const AccTermContext x{equations, noise.unknowns, window, samples, acc_offset, translation_imu_options.to_mps2};
+    for (const AccelerometerTermSpan &span : noise.accelerometer_terms)
+        add_acceleration_term(x, shape_of(x, span));
+    return noise.end_velocity_tied;
 }
 
-void add_start_velocity_prior(WindowEquations &equations, const WindowUnknowns &unknowns, const Window &window,
-                              const MotionModelTranslationImuOptions &translation_imu_options)
+void add_start_velocity_prior(WindowEquations &equations, const WindowNoiseModel &noise, const Window &window)
 {
-    if (!unknowns.acc_term)
+    if (!noise.unknowns.acc_term)
         return;
-    const int iv = unknowns.iv;
-    const Eigen::Matrix3d velocity_inf = translation_imu_options.velocity_prior_cov.inverse();
-    const Eigen::Vector3d velocity_rhs = velocity_inf * (translation_imu_options.velocity_prior_mean - window.velocity.start);
-    equations.motion_cost += (translation_imu_options.velocity_prior_mean - window.velocity.start).dot(velocity_rhs);
+    const int iv = noise.unknowns.iv;
+    const Eigen::Matrix3d &velocity_inf = noise.velocity_prior_information;
+    const Eigen::Vector3d velocity_rhs = velocity_inf * (noise.velocity_prior_mean - window.velocity.start);
+    equations.motion_cost += (noise.velocity_prior_mean - window.velocity.start).dot(velocity_rhs);
     equations.residuals += 3;
     for (int r = 0; r < 3; r++)
     {
@@ -228,13 +205,12 @@ void add_start_velocity_prior(WindowEquations &equations, const WindowUnknowns &
     }
 }
 
-void add_zero_velocity(WindowEquations &equations, const WindowUnknowns &unknowns, const Window &window,
-                       const MotionModelTranslationImuOptions &translation_imu_options)
+void add_zero_velocity(WindowEquations &equations, const WindowNoiseModel &noise, const Window &window)
 {
-    if (!unknowns.acc_term || !translation_imu_options.at_rest)
+    if (!noise.unknowns.acc_term || !noise.at_rest)
         return;
-    const int iv = unknowns.iv, ie = unknowns.ie;
-    const double w = 1.0 / (translation_imu_options.zero_velocity_sigma_mps * translation_imu_options.zero_velocity_sigma_mps);
+    const int iv = noise.unknowns.iv, ie = noise.unknowns.ie;
+    const double w = noise.zero_velocity_weight;
     for (int r = 0; r < 3; r++)
     {
         equations.matrix.add(iv + r, iv + r, w);
@@ -246,43 +222,42 @@ void add_zero_velocity(WindowEquations &equations, const WindowUnknowns &unknown
     equations.residuals += 6;
 }
 
-void add_weak_end_velocity_tie(WindowEquations &equations, const WindowUnknowns &unknowns, const Window &window, bool end_tied)
+void add_weak_end_velocity_tie(WindowEquations &equations, const WindowNoiseModel &noise, const Window &window, bool end_tied)
 {
-    if (!unknowns.acc_term || end_tied)
+    if (!noise.unknowns.acc_term || end_tied)
         return;
-    const int ie = unknowns.ie;
+    const int ie = noise.unknowns.ie;
+    // weight weak_end_velocity_tie_weight = 1: the right-hand side and the cost are the unweighted residual
     for (int r = 0; r < 3; r++)
     {
-        equations.matrix.add(ie + r, ie + r, 1.0);
+        equations.matrix.add(ie + r, ie + r, weak_end_velocity_tie_weight);
         equations.rhs(ie + r, 0) += window.velocity.start(r) - window.velocity.end(r);
     }
     equations.motion_cost += (window.velocity.start - window.velocity.end).squaredNorm();
     equations.residuals += 3;
 }
 
-void add_velocity_priors(WindowEquations &equations, const WindowUnknowns &unknowns, const Window &window,
-                         const MotionModelTranslationImuOptions &translation_imu_options, bool end_tied)
+void add_velocity_priors(WindowEquations &equations, const WindowNoiseModel &noise, const Window &window, bool end_tied)
 {
-    add_start_velocity_prior(equations, unknowns, window, translation_imu_options);
-    add_zero_velocity(equations, unknowns, window, translation_imu_options);
-    add_weak_end_velocity_tie(equations, unknowns, window, end_tied);
+    add_start_velocity_prior(equations, noise, window);
+    add_zero_velocity(equations, noise, window);
+    add_weak_end_velocity_tie(equations, noise, window, end_tied);
 }
 
-void add_acceleration_offset_prior(WindowEquations &equations, const WindowUnknowns &unknowns,
-                                   const MotionModelTranslationImuOptions &translation_imu_options, const Eigen::Vector3d &acc_offset)
+void add_acceleration_offset_prior(WindowEquations &equations, const WindowNoiseModel &noise, const Eigen::Vector3d &acc_offset)
 {
-    if (!unknowns.acc_term)
+    if (!noise.unknowns.acc_term)
         return;
     BandedNormalMatrix &AtPAndt = equations.matrix;
     Eigen::MatrixXd &AtPBndt = equations.rhs;
     double &motion_cost = equations.motion_cost;
-    const int io = unknowns.io;
+    const int io = noise.unknowns.io;
     // offset prior carried over from the previous window
-    const Eigen::Matrix3d prior_inf = translation_imu_options.offset_prior_cov.inverse();
+    const Eigen::Matrix3d &prior_inf = noise.offset_prior_information;
     for (int r = 0; r < 3; r++)
         for (int c = 0; c < 3; c++)
             AtPAndt.add(io + r, io + c, prior_inf(r, c));
-    AtPBndt.block<3, 1>(io, 0) += prior_inf * (translation_imu_options.offset_prior_mean - acc_offset);
-    motion_cost += (translation_imu_options.offset_prior_mean - acc_offset).dot(prior_inf * (translation_imu_options.offset_prior_mean - acc_offset));
+    AtPBndt.block<3, 1>(io, 0) += prior_inf * (noise.offset_prior_mean - acc_offset);
+    motion_cost += (noise.offset_prior_mean - acc_offset).dot(prior_inf * (noise.offset_prior_mean - acc_offset));
     equations.residuals += 3;
 }

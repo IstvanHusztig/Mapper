@@ -23,10 +23,8 @@ void add_motion_edges(WindowEquations &equations, const WindowUnknowns &unknowns
 void add_motion_edge_terms(WindowEquations &equations, const WindowNoiseModel &noise, const Window &window, const MotionModelOptions &motion_model,
                            const MotionModelRotationOptions &rotation_options);
 
-// the gyro bias stays near the previous window's estimate: prior mean and covariance from rotation_options (only with
-// bias estimation)
-void add_gyro_bias_prior(WindowEquations &equations, const WindowUnknowns &unknowns, const Window &window,
-                         const MotionModelRotationOptions &rotation_options);
+// the gyro bias stays near the previous window's estimate: the noise model's prior (only with bias estimation)
+void add_gyro_bias_prior(WindowEquations &equations, const WindowNoiseModel &noise, const Window &window);
 
 // velocity continuity on the world-frame translation (white-noise acceleration), only in a window without the
 // accelerometer term and with timestamps: residual = change of velocity between consecutive steps [m/s], weighted as the

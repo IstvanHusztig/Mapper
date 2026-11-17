@@ -59,6 +59,16 @@ MotionEdgeWeights motion_edge_weights(const WindowUnknowns &unknowns, const Wind
     return weights;
 }
 
+Eigen::Matrix3d random_walk_prior_cov(const Eigen::Matrix3d &carried, double rw, double duration_s)
+{
+    return carried + Eigen::Matrix3d::Identity() * (rw * rw * duration_s);
+}
+
+Eigen::Matrix3d velocity_prior_cov_over_gap(const Eigen::Matrix3d &carried, double density, double floor, double gap_s)
+{
+    return carried + Eigen::Matrix3d::Identity() * (density * density * gap_s + floor * floor * gap_s * gap_s);
+}
+
 namespace
 {
     // velocity continuity (only without the accelerometer term, with timestamps): sigma = acc_sigma * mean dt of the two

@@ -241,17 +241,17 @@ namespace
         add_ndt_rows(in, u, reduce, rows, table);
         add_edge_rows(in, noise, reduce, rows);
         const Window &w = in.window;
-        add_term_row("gyro_bias_prior", u, reduce, rows, [&](WindowEquations &e) { add_gyro_bias_prior(e, u, w, in.rotation_options); });
+        add_term_row("gyro_bias_prior", u, reduce, rows, [&](WindowEquations &e) { add_gyro_bias_prior(e, noise, w); });
         add_term_row("velocity_continuity", u, reduce, rows,
                      [&](WindowEquations &e) { add_velocity_continuity(e, noise, w); });
         bool end_tied = false;
         add_term_row("accelerometer", u, reduce, rows,
-                     [&](WindowEquations &e) { end_tied = add_acceleration_terms(e, u, w, in.translation_imu_options, in.acc_offset); });
-        add_term_row("velocity_prior", u, reduce, rows, [&](WindowEquations &e) { add_start_velocity_prior(e, u, w, in.translation_imu_options); });
-        add_term_row("zero_velocity", u, reduce, rows, [&](WindowEquations &e) { add_zero_velocity(e, u, w, in.translation_imu_options); });
-        add_term_row("end_velocity_tie", u, reduce, rows, [&](WindowEquations &e) { add_weak_end_velocity_tie(e, u, w, end_tied); });
+                     [&](WindowEquations &e) { end_tied = add_acceleration_terms(e, noise, w, in.translation_imu_options, in.acc_offset); });
+        add_term_row("velocity_prior", u, reduce, rows, [&](WindowEquations &e) { add_start_velocity_prior(e, noise, w); });
+        add_term_row("zero_velocity", u, reduce, rows, [&](WindowEquations &e) { add_zero_velocity(e, noise, w); });
+        add_term_row("end_velocity_tie", u, reduce, rows, [&](WindowEquations &e) { add_weak_end_velocity_tie(e, noise, w, end_tied); });
         add_term_row("offset_prior", u, reduce, rows,
-                     [&](WindowEquations &e) { add_acceleration_offset_prior(e, u, in.translation_imu_options, in.acc_offset); });
+                     [&](WindowEquations &e) { add_acceleration_offset_prior(e, noise, in.acc_offset); });
         WindowEquations origin(u);
         fix_origin(origin, in.motion_model);
         rows.push_back(reduce.row("origin_fix", origin, 0.0, 6));

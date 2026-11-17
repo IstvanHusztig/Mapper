@@ -119,6 +119,13 @@ struct WindowNoiseModel
     NdtNoise ndt;
 };
 
+// a prior carried from the previous window, grown by its random walk over the window: carried + I rw^2 duration (the
+// gyro bias, the acceleration offset)
+Eigen::Matrix3d random_walk_prior_cov(const Eigen::Matrix3d &carried, double rw, double duration_s);
+// the start velocity's prior from the previous window's end velocity, grown over the gap between the windows by the
+// accelerometer's noise: carried + I (density^2 gap + floor^2 gap^2)
+Eigen::Matrix3d velocity_prior_cov_over_gap(const Eigen::Matrix3d &carried, double density, double floor, double gap_s);
+
 WindowNoiseModel build_window_noise_model(const Window &window, const ScanToMapOptions &scan_to_map, const MotionModelOptions &motion_model,
                                           const MotionModelRotationOptions &rotation_options,
                                           const MotionModelTranslationImuOptions &translation_imu_options, const VelocityPrior &velocity_prior);

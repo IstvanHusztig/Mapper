@@ -1290,11 +1290,11 @@ TEST_CASE("window term table: the rows add up to the window's complete equations
     const NdtSums ndt = sum_ndt_point_terms(all, w, points, maps.indoor, maps.outdoor, o.scan_to_map, false, false, nullptr);
     add_projected_ndt_blocks(all, ndt, o.scan_to_map);
     add_motion_edge_terms(all, noise, w, o.motion_model, rotation);
-    add_gyro_bias_prior(all, u, w, rotation);
+    add_gyro_bias_prior(all, noise, w);
     add_velocity_continuity(all, noise, w);
-    const bool end_tied = add_acceleration_terms(all, u, w, acc.imu, offset);
-    add_velocity_priors(all, u, w, acc.imu, end_tied);
-    add_acceleration_offset_prior(all, u, acc.imu, offset);
+    const bool end_tied = add_acceleration_terms(all, noise, w, acc.imu, offset);
+    add_velocity_priors(all, noise, w, end_tied);
+    add_acceleration_offset_prior(all, noise, offset);
     fix_origin(all, o.motion_model);
 
     bool turn_defined = false;

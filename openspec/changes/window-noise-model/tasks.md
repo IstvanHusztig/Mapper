@@ -41,8 +41,12 @@
   Result: step checks identical, and the per-term table of the 44_short replay identical with a reference recorded
   before this task (checked on every commit from here). The table builds its own model until task 3.6. Replay time
   measured back to back: 28.9-34.5 s against 31.7-33.3 s before (the first, slower readings were the machine).
-- [ ] 3.3 The accelerometer term, the zero velocity, the weak end-velocity tie (named constant) and the gyro-bias,
+- [x] 3.3 The accelerometer term, the zero velocity, the weak end-velocity tie (named constant) and the gyro-bias,
   start-velocity and acceleration-offset priors take their weights from the model. Verify: step checks.
+  Result: the accelerometer term walks the model's list of terms (one `shape_of`, the three adders gone); the
+  priors' growth formulas (`random_walk_prior_cov`, `velocity_prior_cov_over_gap`) moved into `window_noise_model` and are
+  called by `apply_gyro_bias_prior`, `prepare_acc_term` and `prepare_velocity_state`, with a test. Step checks and the
+  per-term table identical.
 - [ ] 3.4 The origin fix from the model (the degree quirk kept, commented; recorded in `docs/code-review-tracker.md`);
   the NDT term's parameters per grid from the model, applied in today's order. Verify: step checks.
 - [ ] 3.5 `ndt_window_cost` reads the model's per-grid range weight and cap. Verify: step checks; the weak-axis

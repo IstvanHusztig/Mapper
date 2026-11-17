@@ -1,4 +1,5 @@
 #include "window_steps.h"
+#include "window_noise_model.h"
 
 #include "imu_kinematics.h"
 
@@ -144,7 +145,7 @@ GyroBiasState apply_gyro_bias_prior(Window &window, const GyroBiasState &carried
     const double window_duration = ts.size() > 1 ? ts.back().first - ts.front().first : 0.0;
     GyroBiasState prior;
     prior.mean = carried.mean;
-    prior.covariance = carried.covariance + Eigen::Matrix3d::Identity() * (bias_rw_rad * bias_rw_rad * window_duration);
+    prior.covariance = random_walk_prior_cov(carried.covariance, bias_rw_rad, window_duration);
     window.gyro_bias.mean = carried.mean;
     window.gyro_bias.covariance = prior.covariance;
 

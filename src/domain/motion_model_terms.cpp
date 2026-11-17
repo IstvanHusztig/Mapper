@@ -5,17 +5,16 @@
 
 #include <algorithm>
 
-void add_gyro_bias_prior(WindowEquations &equations, const WindowUnknowns &unknowns, const Window &window,
-                         const MotionModelRotationOptions &rotation_options)
+void add_gyro_bias_prior(WindowEquations &equations, const WindowNoiseModel &noise, const Window &window)
 {
-    if (!unknowns.estimate_bias)
+    if (!noise.unknowns.estimate_bias)
         return;
     BandedNormalMatrix &AtPAndt = equations.matrix;
     Eigen::MatrixXd &AtPBndt = equations.rhs;
-    const int ib = unknowns.ib;
+    const int ib = noise.unknowns.ib;
     // bias prior carried over from the previous window
-    const Eigen::Matrix3d prior_inf = rotation_options.bias_prior_cov.inverse();
-    const Eigen::Vector3d prior_delta = rotation_options.bias_prior_mean - window.gyro_bias.mean;
+    const Eigen::Matrix3d &prior_inf = noise.bias_prior_information;
+    const Eigen::Vector3d prior_delta = noise.bias_prior_mean - window.gyro_bias.mean;
     for (int r = 0; r < 3; r++)
         for (int c = 0; c < 3; c++)
             AtPAndt.add(ib + r, ib + c, prior_inf(r, c));

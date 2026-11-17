@@ -251,13 +251,13 @@ TEST_CASE("window noise model: the same values the terms put into the normal equ
     REQUIRE(u.acc_term);
 
     WindowEquations bias(u);
-    add_gyro_bias_prior(bias, u, w, r);
+    add_gyro_bias_prior(bias, noise, w);
     WindowEquations velocity(u);
-    add_start_velocity_prior(velocity, u, w, imu.options);
+    add_start_velocity_prior(velocity, noise, w);
     WindowEquations rest(u);
-    add_zero_velocity(rest, u, w, imu.options);
+    add_zero_velocity(rest, noise, w);
     WindowEquations offset(u);
-    add_acceleration_offset_prior(offset, u, imu.options, Eigen::Vector3d::Zero());
+    add_acceleration_offset_prior(offset, noise, Eigen::Vector3d::Zero());
     WindowEquations origin(u);
     fix_origin(origin, m);
     for (int a = 0; a < 3; a++)
@@ -273,4 +273,22 @@ TEST_CASE("window noise model: the same values the terms put into the normal equ
     }
     for (int k = 0; k < 6; k++)
         CHECK(origin.matrix(k, k) == noise.origin[size_t(k)]);
+}
+
+TEST_CASE("window noise model: the priors grow by their random walk over the window and by the noise over the gap")
+{
+    Eigen::Matrix3d carried;
+    carried << 4.0, 0.5, 0.0, 0.5, 3.0, 0.2, 0.0, 0.2, 2.0;
+    carried *= 1e-6;
+    const double rw = 2e-4, duration = 0.4;
+    const Eigen::Matrix3d grown = random_walk_prior_cov(carried, rw, duration);
+    CHECK(grown == carried + Eigen::Matrix3d::Identity() * (rw * rw * duration));
+    CHECK((grown - carried).isDiagonal());
+    CHECK(random_walk_prior_cov(carried, rw, 0.0) == carried);
+
+    const double density = 0.0013, floor = 0.1, gap = 0.002;
+    const Eigen::Matrix3d v = velocity_prior_cov_over_gap(carried, density, floor, gap);
+    CHECK(v == carried + Eigen::Matrix3d::Identity() * (density * density * gap + floor * floor * gap * gap));
+    CHECK(v(0, 0) > carried(0, 0));
+    CHECK(v(0, 1) == carried(0, 1));
 }

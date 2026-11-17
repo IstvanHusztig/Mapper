@@ -107,7 +107,7 @@ namespace
             t.options.gravity = carry.acc_gravity;
             t.options.to_mps2 = 9.80665 / carry.acc_gravity.norm();
             t.options.span_s = params.imu_acceleration_span_s;
-            t.options.offset_prior_cov = carry.acc_offset_cov + Eigen::Matrix3d::Identity() * (rw * rw * t.window_duration_s);
+            t.options.offset_prior_cov = random_walk_prior_cov(carry.acc_offset_cov, rw, t.window_duration_s);
             t.offset_cov = t.options.offset_prior_cov;
             t.options.noise_density_mps2_sqrt_hz = params.imu_accel_noise_density_mps2_sqrt_hz;
             t.options.floor_sigma_mps2 = params.imu_accel_floor_sigma_mps2;
@@ -146,7 +146,7 @@ namespace
             const double gap = std::max(window.timestamps.front().first - carry.velocity_time_s, 0.0);
             const double density = params.imu_accel_noise_density_mps2_sqrt_hz, floor = params.imu_accel_floor_sigma_mps2;
             mean = carry.velocity_mean;
-            cov = carry.velocity_cov + Eigen::Matrix3d::Identity() * (density * density * gap + floor * floor * gap * gap);
+            cov = velocity_prior_cov_over_gap(carry.velocity_cov, density, floor, gap);
         }
         else if (!carry.velocity_valid && carry.first_window_at_rest)
         {

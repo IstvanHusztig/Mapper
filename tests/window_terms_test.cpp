@@ -161,9 +161,10 @@ TEST_CASE("window terms: the gyro-bias prior's right-hand side is minus half its
     Eigen::Matrix3d a;
     a << 1.0, 0.2, 0.0, 0.2, 2.0, 0.1, 0.0, 0.1, 1.5;
     rotation.bias_prior_cov = a * 1e-4;
-    const WindowUnknowns u = layout_window_unknowns(w, rotation, {});
+    const WindowNoiseModel noise = build_window_noise_model(w, ScanToMapOptions{}, MotionModelOptions{}, rotation, {}, VelocityPrior{});
+    const WindowUnknowns &u = noise.unknowns;
     REQUIRE(u.estimate_bias);
-    const Term term = [&](WindowEquations &e, const Window &win) { add_gyro_bias_prior(e, u, win, rotation); };
+    const Term term = [&](WindowEquations &e, const Window &win) { add_gyro_bias_prior(e, noise, win); };
     check_gradient(u, w, term, {u.ib, u.ib + 1, u.ib + 2}, [&](Window &win, int c, double h) { shift_pose_or_bias(win, c, h, u); }, 1e-4, true);
 }
 
@@ -327,7 +328,17 @@ namespace
         std::vector<Eigen::Vector3d> acc;
         MotionModelTranslationImuOptions imu;
         WindowUnknowns unknowns;
+        WindowNoiseModel noise;
     };
+
+    // the case's noise model (after a change of its options)
+    void rebuild_noise(AccCase &k)
+    {
+        MotionModelRotationOptions rotation;
+        rotation.estimate_bias = false;
+        k.noise = build_window_noise_model(k.state.window, ScanToMapOptions{}, MotionModelOptions{}, rotation, k.imu, VelocityPrior{});
+        k.unknowns = k.noise.unknowns;
+    }
 
     void make_acc_case(AccCase &k)
     {
@@ -359,9 +370,7 @@ namespace
         k.imu.offset_prior_mean = Eigen::Vector3d(0.0, -0.01, 0.0);
         k.imu.offset_prior_cov = a * 1e-4;
         k.imu.zero_velocity_sigma_mps = 0.01;
-        MotionModelRotationOptions rotation;
-        rotation.estimate_bias = false;
-        k.unknowns = layout_window_unknowns(k.state.window, rotation, k.imu);
+        rebuild_noise(k);
     }
 }
 
@@ -371,7 +380,7 @@ TEST_CASE("window terms: the acceleration terms' right-hand side is minus half t
     make_acc_case(k);
     const WindowUnknowns &u = k.unknowns;
     REQUIRE(u.acc_term);
-    const auto term = [&](WindowEquations &e, const AccState &s) { add_acceleration_terms(e, u, s.window, k.imu, s.offset); };
+    const auto term = [&](WindowEquations &e, const AccState &s) { add_acceleration_terms(e, k.noise, s.window, k.imu, s.offset); };
     std::vector<int> linear, rotation;
     for (int node = 0; node < u.n_nodes; node++)
         for (int p = 0; p < 6; p++)
@@ -396,7 +405,8 @@ TEST_CASE("window terms: the velocity priors' right-hand side is minus half thei
     SUBCASE("start prior and rest, end velocity tied by its term")
     {
         k.imu.at_rest = true;
-        const auto term = [&](WindowEquations &e, const AccState &s) { add_velocity_priors(e, u, s.window, k.imu, true); };
+        rebuild_noise(k);
+        const auto term = [&](WindowEquations &e, const AccState &s) { add_velocity_priors(e, k.noise, s.window, true); };
         check_acc_gradient(u, k.state, term, {u.iv, u.iv + 1, u.iv + 2, u.ie, u.ie + 1, u.ie + 2}, 1e-6, 1e-5);
     }
     SUBCASE("weak end tie: it treats the start velocity as fixed, so only the end velocity is checked")
@@ -405,8 +415,8 @@ TEST_CASE("window terms: the velocity priors' right-hand side is minus half thei
         {
             // the tie alone: its cost and right-hand side without the start prior's
             WindowEquations with(u), without(u);
-            add_velocity_priors(with, u, s.window, k.imu, false);
-            add_velocity_priors(without, u, s.window, k.imu, true);
+            add_velocity_priors(with, k.noise, s.window, false);
+            add_velocity_priors(without, k.noise, s.window, true);
             e.motion_cost = with.motion_cost - without.motion_cost;
             e.rhs = with.rhs - without.rhs;
         };
@@ -419,7 +429,7 @@ TEST_CASE("window terms: the acceleration-offset prior's right-hand side is minu
     AccCase k;
     make_acc_case(k);
     const WindowUnknowns &u = k.unknowns;
-    const auto term = [&](WindowEquations &e, const AccState &s) { add_acceleration_offset_prior(e, u, k.imu, s.offset); };
+    const auto term = [&](WindowEquations &e, const AccState &s) { add_acceleration_offset_prior(e, k.noise, s.offset); };
     check_acc_gradient(u, k.state, term, {u.io, u.io + 1, u.io + 2}, 1e-6, 1e-5);
 }
 
@@ -432,20 +442,22 @@ TEST_CASE("window terms: each term counts the scalar residuals it adds")
         const WindowUnknowns &u = k.unknowns;
         REQUIRE(u.anchors.size() >= 3);
         WindowEquations acc(u);
-        const bool end_tied = add_acceleration_terms(acc, u, k.state.window, k.imu, k.state.offset);
+        const bool end_tied = add_acceleration_terms(acc, k.noise, k.state.window, k.imu, k.state.offset);
         REQUIRE(end_tied);
         // a triple per inner anchor, the start and the end velocity term: 3 residuals each
         CHECK(acc.residuals == 3 * static_cast<int>(u.anchors.size() - 2 + 2));
         k.imu.at_rest = true;
+        rebuild_noise(k);
         WindowEquations rest(u);
-        add_velocity_priors(rest, u, k.state.window, k.imu, true);
+        add_velocity_priors(rest, k.noise, k.state.window, true);
         CHECK(rest.residuals == 3 + 6); // start prior, both velocities zero
         k.imu.at_rest = false;
+        rebuild_noise(k);
         WindowEquations untied(u);
-        add_velocity_priors(untied, u, k.state.window, k.imu, false);
+        add_velocity_priors(untied, k.noise, k.state.window, false);
         CHECK(untied.residuals == 3 + 3); // start prior, weak end tie
         WindowEquations offset(u);
-        add_acceleration_offset_prior(offset, u, k.imu, k.state.offset);
+        add_acceleration_offset_prior(offset, k.noise, k.state.offset);
         CHECK(offset.residuals == 3);
     }
     SUBCASE("edges, gyro-bias prior, velocity continuity, origin fix")
@@ -466,7 +478,7 @@ TEST_CASE("window terms: each term counts the scalar residuals it adds")
         add_motion_edge_terms(edges, noise, w, m, rotation);
         CHECK(edges.residuals == 6 * 11); // position and rotation, per edge
         WindowEquations bias(u);
-        add_gyro_bias_prior(bias, u, w, rotation);
+        add_gyro_bias_prior(bias, noise, w);
         CHECK(bias.residuals == 3);
         WindowEquations continuity(u);
         add_velocity_continuity(continuity, noise, w);
