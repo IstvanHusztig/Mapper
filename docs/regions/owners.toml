@@ -1,0 +1,152 @@
+# Who owns what in dMapper (stage 7 of docs/code-split-and-region-agents-plan.md). Checked by tools/region_owners.py.
+#
+# - `files`: files (or globs) a region owns whole.
+# - `functions`: "file::function" entries; a function entry overrides its file's owner (a region's function in the
+#   orchestrator's run_odometry.cpp; the orchestrator's save_result in the front-end's lidar_odometry.cpp).
+# - `shared_tests`: test files whose cases don't separate by name; any region may add or change the cases of its own
+#   code there, and the orchestrator reads that part of a branch's diff.
+# - Whatever is not named here belongs to the orchestrator (the main session): shared types and settings, the window
+#   loop's skeleton, capture and replay, the pipeline and the ports, the rest of infrastructure, the presentation layer,
+#   CMake, settings/, CLAUDE.md, docs/, openspec/.
+#
+# A region's agent edits only what it owns; what it needs elsewhere it reports. See docs/regions/README.md.
+
+shared_tests = [
+    "tests/window_terms_test.cpp",
+    "tests/scan_to_map_test.cpp",
+    "tests/window_capture_test.cpp",
+]
+
+[front-end]
+files = [
+    "src/application/lidar_odometry.h",
+    "src/application/lidar_odometry.cpp",
+    "src/domain/imu_kinematics.h",
+    "src/domain/imu_kinematics.cpp",
+    "src/domain/imu_sample.h",
+    "src/infrastructure/recording_files.h",
+    "src/infrastructure/recording_files.cpp",
+    "src/infrastructure/recording_folder_source.h",
+    "src/infrastructure/recording_folder_source.cpp",
+    "src/infrastructure/fusion_orientation_estimator.h",
+    "src/infrastructure/fusion_orientation_estimator.cpp",
+    "src/infrastructure/folder_inputs.h",
+    "src/infrastructure/folder_inputs.cpp",
+    "tests/recording_files_test.cpp",
+    "tests/orientation_test.cpp",
+    "tests/fusion_orientation_test.cpp",
+    "tests/imu_kinematics_test.cpp",
+    "tests/window_cut_test.cpp",
+]
+
+[map]
+files = [
+    "src/domain/ndt_map.h",
+    "src/domain/ndt_map.cpp",
+    "src/domain/ndt_types.h",
+    "tests/ndt_map_test.cpp",
+]
+functions = [
+    "src/application/run_odometry.cpp::seed_map",
+    "src/application/run_odometry.cpp::add_window_to_map",
+]
+
+[lidar-matching]
+files = [
+    "src/domain/ndt_term.h",
+    "src/domain/ndt_term.cpp",
+]
+
+[inertial]
+files = [
+    "src/domain/motion_model_terms.h",
+    "src/domain/motion_model_terms.cpp",
+    "src/domain/accelerometer_term.h",
+    "src/domain/accelerometer_term.cpp",
+    "src/domain/window_steps.h",
+    "src/domain/window_steps.cpp",
+    "tests/window_steps_test.cpp",
+]
+functions = [
+    "src/application/run_odometry.cpp::load_and_predict",
+    "src/application/run_odometry.cpp::prepare_acc_term",
+    "src/application/run_odometry.cpp::window_at_rest",
+    "src/application/run_odometry.cpp::prepare_velocity_state",
+    "src/application/run_odometry.cpp::update_acc_term_after_window",
+    "src/application/run_odometry.cpp::update_gyro_bias_after_window",
+]
+
+[solver]
+files = [
+    "src/domain/lm_solver.h",
+    "src/domain/lm_solver.cpp",
+    "src/domain/window_problem.h",
+    "src/domain/window_problem.cpp",
+    "src/domain/window_solver.h",
+    "src/domain/window_solver.cpp",
+    "src/domain/window_equations.h",
+    "src/domain/window_equations.cpp",
+    "src/domain/normal_equations.h",
+    "src/domain/normal_equations.cpp",
+    "src/domain/scan_to_map.h",
+    "src/domain/scan_to_map.cpp",
+    "src/domain/window_verdict.h",
+    "src/domain/window_verdict.cpp",
+    "tests/lm_solver_test.cpp",
+    "tests/normal_equations_test.cpp",
+    "tests/window_verdict_test.cpp",
+]
+functions = [
+    "src/application/run_odometry.cpp::run_lm_iterations",
+    "src/application/run_odometry.cpp::solve_window",
+    "src/application/run_odometry.cpp::window_evidence",
+]
+
+[back-end]
+files = [
+    "src/application/loop_closure.h",
+    "src/application/loop_closure.cpp",
+    "src/application/consistency.h",
+    "src/application/consistency.cpp",
+    "src/domain/odometry_snapshot.h",
+    "src/infrastructure/odometry_snapshot_file.h",
+    "src/infrastructure/odometry_snapshot_file.cpp",
+    "tests/loop_closure_test.cpp",
+    "tests/consistency_test.cpp",
+    "tests/odometry_snapshot_test.cpp",
+]
+
+[noise-budget]
+files = [
+    "src/domain/window_noise_model.h",
+    "src/domain/window_noise_model.cpp",
+    "src/domain/window_term_table.h",
+    "src/domain/window_term_table.cpp",
+    "src/application/window_term_sink.h",
+    "src/infrastructure/window_term_csv.h",
+    "src/infrastructure/window_term_csv.cpp",
+    "tests/window_noise_model_test.cpp",
+]
+functions = [
+    "src/application/run_odometry.cpp::record_window_terms",
+    "src/application/run_odometry.cpp::log_weak_axis_diagnostics",
+    "src/application/run_odometry.cpp::log_accelerometer_fit",
+    "src/application/run_odometry.cpp::log_heading_diagnostics",
+]
+
+[verification]
+files = [
+    "tools/**",
+    ".claude/skills/verify-*/**",
+    ".agents/skills/verify-*/**",
+    "tests/synthetic_recording.h",
+    "tests/synthetic_recording.cpp",
+    "tests/synthetic_recording_test.cpp",
+    "tests/serial_executor.h",
+    "tests/test_verification_tools.py",
+]
+
+[orchestrator]
+functions = [
+    "src/application/lidar_odometry.cpp::save_result",
+]

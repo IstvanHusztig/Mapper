@@ -1,0 +1,49 @@
+# This workstation's paths for the verification kit (tools/kit_lib.py: step_checks.py, end_runs.py, run_replay.py).
+# The one file to change on another machine. The same paths are described in docs/agents/environment.md.
+
+vcvars = "C:/Program Files/Microsoft Visual Studio/18/Community/VC/Auxiliary/Build/vcvars64.bat"
+recordings = "C:/Users/User/Downloads/dLidar/raw data"
+# captures, reference files, the gate's locks and the kit's run folders (outside the repo)
+guards = "C:/Users/User/Downloads/dLidar/experiments/guards"
+
+[gate]
+replay_slots = 2          # replays that may run at once; a full run takes the gate alone
+memory_factor = 3.0       # a replay's peak memory over its capture file's size (measured: 2.9 on both captures)
+memory_reserve_gb = 2.0   # kept free beyond the replay's estimated need
+
+# the window captures the step checks replay; file and settings are relative to `guards`
+[[capture]]
+name = "44_short 20-40 s"
+file = "44short-20-40/window_capture_20.0-40.0s.bin"
+settings = "44short-20-40/settings.toml"
+windows = 21
+terms = true              # its per-term table (log_window_terms) is compared with the reference too
+
+[[capture]]
+name = "Livox 3 100-130 s"
+file = "livox3-100-130/window_capture_100.0-130.0s.bin"
+settings = "livox3-100-130/settings.toml"
+windows = 84
+terms = false
+
+# the recordings of the full runs; folder is relative to `recordings`, settings and manifest to the repository
+[[recording]]
+name = "44"
+folder = "44"
+settings = "settings/l2-vertical.toml"
+manifest = "tools/baseline/44.manifest.json"
+step_check = false
+
+[[recording]]
+name = "livox3"
+folder = "livox/3"
+settings = "settings/livox-vertical.toml"
+manifest = "tools/baseline/livox3.manifest.json"
+step_check = false
+
+[[recording]]
+name = "44_short"
+folder = "44_short"
+settings = "settings/l2-vertical.toml"
+manifest = "tools/baseline/44_short.manifest.json"
+step_check = true         # run by step_checks.py on every commit (about 2 min)

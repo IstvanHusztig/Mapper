@@ -18,7 +18,11 @@ SKIP = ("if", "for", "while", "switch", "return", "else", "catch", "do")
 
 
 def functions(path):
-    lines = path.read_text(encoding="utf-8-sig", errors="replace").splitlines()
+    return functions_in(path.read_text(encoding="utf-8-sig", errors="replace").splitlines())
+
+
+def functions_in(lines):
+    """(length, first line, name) of every function in the lines of a source file."""
     i = 0
     while i < len(lines):
         stripped = lines[i].strip()
