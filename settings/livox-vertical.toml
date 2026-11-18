@@ -190,12 +190,14 @@ lidar_odometry_motion_model_om_1_sigma_deg = 0.17724539
 lidar_odometry_motion_model_x_1_sigma_m = 1e-04
 lidar_odometry_motion_model_y_1_sigma_m = 1e-04
 lidar_odometry_motion_model_z_1_sigma_m = 1e-04
-# TODO: measure on a static Mid-360S recording (L2 values)
-gyro_arw_x_deg_sqrt_s = 0.028
-gyro_arw_y_deg_sqrt_s = 0.042
-gyro_arw_z_deg_sqrt_s = 0.057
-rotation_sigma_floor_deg = 0.0035449077
-rotation_sigma_inflation_k = 7.0898154
+# The Mid-360S gyro's noise measured at rest (a recording of this sensor, 2-20 s at rest, 2026-11-15), used without
+# inflation (k = 1): with the L2's values and k = 7.09 the LiDAR decided every window's rotation and bent windows by
+# degrees against the gyro. The floor lies below the noise of one 2 ms IMU step and only guards against a zero sigma.
+gyro_arw_x_deg_sqrt_s = 0.0094
+gyro_arw_y_deg_sqrt_s = 0.0224
+gyro_arw_z_deg_sqrt_s = 0.0144
+rotation_sigma_floor_deg = 0.0002
+rotation_sigma_inflation_k = 1.0
 use_time_scaled_rotation_sigma = true
 
 [paths]
