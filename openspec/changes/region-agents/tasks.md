@@ -146,7 +146,10 @@
 
 ## 7. End
 
-- [ ] 7.1 The plan's progress; the memory's model and effort table for stage 8 unchanged or corrected.
-- [ ] 7.2 `tools/region_owners.py` and `tools/check_agent_setup.py` pass on the final tree.
+- [x] 7.1 The plan's progress; the memory's model and effort table for stage 8 unchanged or corrected.
+  Result: the plan's progress (de51b4c); the model and effort table unchanged for stage 8, with the user's line that guide and
+  docs writing is Opus / medium.
+- [x] 7.2 `tools/region_owners.py` and `tools/check_agent_setup.py` pass on the final tree.
+  Result: `region_owners.py`: 0 problems; `check_agent_setup.py`: PASS (de51b4c).
 - [ ] 7.3 `tools/end_runs.py --debug` in the background (the try-out changed map code). Verify: full 44, Livox 3 and
   44_short IDENTICAL with their manifests; Debug `ctest` passes.
