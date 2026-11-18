@@ -1118,7 +1118,11 @@ until its knowledge entry is written, then deleted with its worktree.
   job, so that a build is incremental instead of full. At most two editing agents at once.
 - Agents replay only. Full runs stay with the orchestrator, one at a time, from the main tree (they share each
   recording's cache and make the baselines).
-- Verification runs `step_checks.py` in the agent's worktree, on the branch as committed.
+- Agents run the replays themselves: the replay is how a region measures while it works (change, build, replay, read
+  the table). Their numbers are then checked twice by others: verification runs `step_checks.py` in the agent's
+  worktree, on the branch as committed, before the merge; and the orchestrator runs it again on the main tree after
+  each merge, because two branches merged one after the other were never tested together. A merged tree that differs
+  from what its branches showed alone: the last merge is taken back.
 - `CLAUDE.md`'s rule "do not add other build trees" gets this exception written in, beside the `/fp:fast` scratch
   worktree it already has.
 
@@ -1182,7 +1186,7 @@ knowledge entries through the orchestrator, the limits of what a definition can 
 
 No Debug build except for the try-out's end (it changes map code).
 
-#### Decisions (for the user)
+#### Decisions (user, 2026-11-18: all as recommended, with the worktree flow of decision 4)
 
 1. **Ownership by file, by function in shared files, in one checked list** (`docs/regions/owners.toml`,
    `tools/region_owners.py`). Recommended. Alternative: ownership only in words in each knowledge file.
