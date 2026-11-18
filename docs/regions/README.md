@@ -85,6 +85,9 @@ step checks are listed in `tools/local_paths.toml`: `<guards>/44short-20-40/wind
   the bits the code must keep. They are recorded again only by the orchestrator, after a change that is meant to move
   them.
 - `tools/region_owners.py --owner` and `--diff` take paths relative to the repository (`src/domain/ndt_map.cpp`).
+- **A build needs the worktree's executable free.** While a run or replay started from a worktree is going, that
+  worktree cannot be built (the linker cannot replace `dMapper.exe`); `step_checks.py` then says so and builds nothing.
+  Wait for your replays before you build or run the step checks.
 
 Each editing agent gets a git worktree and a branch of its own (`region/<name>/<date>-<question>`). There are two
 standing worktrees, `C:/Repo/dMapper-worktrees/region-a` and `region-b`, reset to the main tree's commit before each job;

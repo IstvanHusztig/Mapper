@@ -52,7 +52,15 @@ def vs_run(paths, name, lines):
 
 
 def build(paths, preset="x64-Release", targets=("dMapper", "lidar_odometry_tests")):
-    """Configure and build the preset in this worktree. Returns (ok, compiler error lines)."""
+    """Configure and build the preset in this worktree. Returns (ok, compiler error lines). A run or replay started from
+    this worktree keeps its dMapper.exe open and the linker could not replace it: then nothing is built."""
+    exe = ROOT / "out/build" / preset / "bin/dMapper.exe"
+    if "dMapper" in targets and exe.exists():
+        try:
+            with open(exe, "ab"):
+                pass
+        except PermissionError:
+            return False, [f"{exe} is in use (a run or replay started from this worktree is running): wait for it, then build"]
     log = run_folder(paths) / f"build_{preset}.log"
     code = vs_run(paths, f"build_{preset}", [f'cmake --preset {preset} > "{log}" 2>&1',
                                             "if errorlevel 1 exit /b 1",
