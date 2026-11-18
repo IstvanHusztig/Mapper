@@ -1,6 +1,7 @@
 #include "ndt_map.h"
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 // this function provides unique index
 unsigned long long int ndt_cell_key(const int16_t x, const int16_t y, const int16_t z)
@@ -57,6 +58,92 @@ std::vector<Point3Di> decimate(const std::vector<Point3Di>& points, double bucke
 namespace
 {
     constexpr double ambiguous_normal_ratio = 3.0;  // no normal if the two smallest spreads are closer than this factor
+
+    // the cells an update_rgd call added or changed get their inverse covariance, each once, in key order
+    void refresh_cell_inverses(NDTBucketMapType &buckets, std::vector<uint64_t> cells)
+    {
+        std::sort(cells.begin(), cells.end());
+        cells.erase(std::unique(cells.begin(), cells.end()), cells.end());
+        for (const auto index : cells)
+            refresh_cell_inverse(buckets.at(index));
+    }
+
+    // the previous cell statistics (use_exact_ndt_bucket_statistics = false), split into its steps; every expression is
+    // the one of the single function they came from, in the same order, so not one bit changes
+
+    // a new cell: its first point is the mean (for good), the covariance starts isotropic, no normal until the 3rd point
+    NdtBucket new_legacy_cell(const Eigen::Vector3d &point)
+    {
+        NdtBucket bucket_to_add;
+        bucket_to_add.mean = point;
+        bucket_to_add.cov = Eigen::Matrix3d::Identity() * 0.03 * 0.03; //ToDo move to params
+        bucket_to_add.number_of_points = 1;
+        bucket_to_add.index_begin = 0;
+        bucket_to_add.index_end = 0;
+        // must not be left uninitialized (it is read by the viewpoint check)
+        bucket_to_add.normal_vector = Eigen::Vector3d::Zero();
+        return bucket_to_add;
+    }
+
+    // the running covariance about the cell's fixed mean, with number_of_points already counting the new point;
+    // cov_update is (mean - point)(mean - point)^T
+    void add_to_legacy_cov(NdtBucket &this_bucket, const Eigen::Matrix3d &cov_update)
+    {
+        this_bucket.cov = this_bucket.cov * (this_bucket.number_of_points - 1) / this_bucket.number_of_points +
+                          cov_update * (this_bucket.number_of_points - 1) / (this_bucket.number_of_points * this_bucket.number_of_points);
+    }
+
+    // the normal fixed at the 3rd point: the cross product of the eigenvectors of the two largest spreads, turned
+    // towards the viewport
+    Eigen::Vector3d legacy_cell_normal(const Eigen::Matrix3d &cov, const Eigen::Vector3d &mean, const Eigen::Vector3d &viewport)
+    {
+        Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eigen_solver(cov, Eigen::ComputeEigenvectors);
+        Eigen::Matrix3d eigenVectorsPCA = eigen_solver.eigenvectors();
+
+        Eigen::Vector3d nv = eigenVectorsPCA.col(1).cross(eigenVectorsPCA.col(2));
+        nv.normalize();
+
+        if (nv.dot(viewport - mean) < 0.0)
+        {
+            nv *= -1.0;
+        }
+        return nv;
+    }
+
+    // one more point in an existing cell: counted always (C33); the 2nd and 3rd update the covariance, the 3rd fixes the
+    // normal, later ones update the covariance only if the cell's normal faces this call's viewport
+    void add_point_to_legacy_cell(NdtBucket &this_bucket, const Eigen::Vector3d &curr_mean, const Eigen::Vector3d &viewport)
+    {
+        this_bucket.number_of_points++;
+        const auto &mean = this_bucket.mean;
+
+        auto mean_diff = mean - curr_mean;
+        Eigen::Matrix3d cov_update;
+        cov_update.row(0) = mean_diff.x() * mean_diff;
+        cov_update.row(1) = mean_diff.y() * mean_diff;
+        cov_update.row(2) = mean_diff.z() * mean_diff;
+
+        if (this_bucket.number_of_points == 2)
+        {
+            add_to_legacy_cov(this_bucket, cov_update);
+        }
+
+        if (this_bucket.number_of_points == 3)
+        {
+            add_to_legacy_cov(this_bucket, cov_update);
+            this_bucket.normal_vector = legacy_cell_normal(this_bucket.cov, this_bucket.mean, viewport);
+        }
+
+        if (this_bucket.number_of_points > 3)
+        {
+            Eigen::Vector3d &nv = this_bucket.normal_vector;
+
+            if (nv.dot(viewport - this_bucket.mean) >= 0.0)
+            {
+                add_to_legacy_cov(this_bucket, cov_update);
+            }
+        }
+    }
 }
 
 // the previous cell statistics, kept unchanged behind use_exact_ndt_bucket_statistics = false: the mean is the cell's
@@ -76,75 +163,12 @@ static void update_rgd_legacy(const NdtGridParameters &rgd_params, NDTBucketMapT
         auto bucket_it = buckets.find(index_of_bucket);
 
         if (bucket_it != buckets.end())
-        {
-            auto &this_bucket = bucket_it->second;
-            this_bucket.number_of_points++;
-            const auto &curr_mean = points_global[i].point;
-            const auto &mean = this_bucket.mean;
-
-            auto mean_diff = mean - curr_mean;
-            Eigen::Matrix3d cov_update;
-            cov_update.row(0) = mean_diff.x() * mean_diff;
-            cov_update.row(1) = mean_diff.y() * mean_diff;
-            cov_update.row(2) = mean_diff.z() * mean_diff;
-
-            if (this_bucket.number_of_points == 2)
-            {
-                this_bucket.cov = this_bucket.cov * (this_bucket.number_of_points - 1) / this_bucket.number_of_points +
-                                  cov_update * (this_bucket.number_of_points - 1) / (this_bucket.number_of_points * this_bucket.number_of_points);
-            }
-
-            if (this_bucket.number_of_points == 3)
-            {
-                this_bucket.cov = this_bucket.cov * (this_bucket.number_of_points - 1) / this_bucket.number_of_points +
-                                  cov_update * (this_bucket.number_of_points - 1) / (this_bucket.number_of_points * this_bucket.number_of_points);
-                // calculate normal vector
-                Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eigen_solver(this_bucket.cov, Eigen::ComputeEigenvectors);
-                Eigen::Matrix3d eigenVectorsPCA = eigen_solver.eigenvectors();
-
-                Eigen::Vector3d nv = eigenVectorsPCA.col(1).cross(eigenVectorsPCA.col(2));
-                nv.normalize();
-
-                // flip towards viewport
-                if (nv.dot(viewport - this_bucket.mean) < 0.0)
-                {
-                    nv *= -1.0;
-                }
-                this_bucket.normal_vector = nv;
-            }
-
-            if (this_bucket.number_of_points > 3)
-            {
-                Eigen::Vector3d &nv = this_bucket.normal_vector;
-
-                if (nv.dot(viewport - this_bucket.mean) >= 0.0)
-                {
-                    this_bucket.cov = this_bucket.cov * (this_bucket.number_of_points - 1) / this_bucket.number_of_points +
-                                      cov_update * (this_bucket.number_of_points - 1) / (this_bucket.number_of_points * this_bucket.number_of_points);
-                }
-            }
-        }
+            add_point_to_legacy_cell(bucket_it->second, points_global[i].point, viewport);
         else
-        {
-            NdtBucket bucket_to_add;
-            bucket_to_add.mean = points_global[i].point;
-            bucket_to_add.cov = Eigen::Matrix3d::Identity() * 0.03 * 0.03; //ToDo move to params
-            bucket_to_add.number_of_points = 1;
-            bucket_to_add.index_begin = 0;
-            bucket_to_add.index_end = 0;
-            // no normal until the 3rd point; must not be left uninitialized (it is read by the viewpoint check)
-            bucket_to_add.normal_vector = Eigen::Vector3d::Zero();
-            buckets.emplace(index_of_bucket, bucket_to_add);
-        }
+            buckets.emplace(index_of_bucket, new_legacy_cell(points_global[i].point));
     }
 
-    std::sort(changed.begin(), changed.end());
-    changed.erase(std::unique(changed.begin(), changed.end()), changed.end());
-    for (const auto index : changed)
-    {
-        NdtBucket &bucket = buckets.at(index);
-        refresh_cell_inverse(bucket);
-    }
+    refresh_cell_inverses(buckets, std::move(changed));
 }
 
 void update_rgd(const NdtGridParameters &rgd_params, NDTBucketMapType &buckets,
@@ -219,8 +243,5 @@ void update_rgd(const NdtGridParameters &rgd_params, NDTBucketMapType &buckets,
 
     // the cells this call added or changed get their inverse covariance (a cell only changes its cov through the loop above)
     touched.insert(touched.end(), inserted.begin(), inserted.end());
-    std::sort(touched.begin(), touched.end());
-    touched.erase(std::unique(touched.begin(), touched.end()), touched.end());
-    for (const auto index : touched)
-        refresh_cell_inverse(buckets.at(index));
+    refresh_cell_inverses(buckets, std::move(touched));
 }
