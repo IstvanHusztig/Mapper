@@ -907,6 +907,22 @@ decides what is merged. Who owns which file and function is one list, <code>docs
 <code>python tools/region_owners.py</code> checks it, and with <code>--diff</code> lists what a branch touches outside its
 region. A separate read-only <b>conclusion reviewer</b> (Sonnet) checks each finding against its evidence before it is
 stated to the user.</p>
+<p><b>Several agents, one machine: the gate.</b> Agents work side by side, and a replay costs memory (about three times its
+capture file: 0.2 GB for the 44_short capture, 1.6 GB and about 5 cores for the Livox 3 one) while a full run of a recording
+must not be slowed down (a window that runs past the time limit changes the result). So every replay and every full run goes
+through one gate, the script <code>tools/run_replay.py</code> (and <code>tools/end_runs.py</code> for full runs):</p>
+<ul>
+<li>at most two replays run at once, and a replay starts only when its estimated memory plus a reserve is free
+(<code>[gate]</code> in <code>tools/local_paths.toml</code>);</li>
+<li>a full run has the machine alone: replays wait until it ends, and it waits until they end;</li>
+<li>a job waits <i>before</i> it starts and says what it waits for; a running job is never paused, because a pause frees no
+memory and a paused window would run past the time limit;</li>
+<li>after each replay the script prints its wall time, CPU time and peak memory, and how many windows stopped at the time
+limit (above 0: the result depended on the machine's load, so the replay is run again).</li>
+</ul>
+<p>The agents themselves are managed by the main session: it starts each agent with one question and a worktree, lets at
+most two editing agents work at once (one per standing worktree), runs the full runs and the snapshot runs an agent asks
+for, and decides what is merged. An agent cannot start other agents.</p>
 
 <h3 id="i-flow">From a question to a merged change</h3>
 <ol>
