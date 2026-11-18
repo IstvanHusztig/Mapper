@@ -29,6 +29,10 @@ to change a model or effort setting that the runtime does not let you change.
 - Use separate worktrees for simultaneous editing. Never run two processing jobs
   on one recording folder (shared cache), nor rebuild an executable in use.
   Worktrees do not isolate external datasets. Preserve existing uncommitted work.
+- The code is divided into regions with knowledge files (`docs/regions/`, ownership in
+  `docs/regions/owners.toml`, checked by `tools/region_owners.py`). They bind Codex too: edit only what the task's
+  region owns, and read its knowledge file first. The region agent definitions are Claude's
+  (`.claude/agents/region-*.md`). The per-commit checks are `tools/step_checks.py`.
 - After an authorized push to master, delegate review of the exact pushed range
   to `master-reviewer`. Before substantive causal conclusions/recommendations,
   delegate an independent evidence review, following the shared preferences.

@@ -18,7 +18,8 @@ There are no linters or CI. Unit tests use doctest (`3rdparty/doctest`), and ref
 
 ## Build
 
-Requires CMake >= 4.0. `CMakePresets.json` defines exactly two configurations, `x64-Release` and `x64-Debug` (Ninja + cl, build trees `out/build/<preset>`); Visual Studio uses them via Open Folder. Do not add other build trees. From a shell, `vcvars64.bat` must be loaded first (cl/ninja on PATH):
+Requires CMake >= 4.0. `CMakePresets.json` defines exactly two configurations, `x64-Release` and `x64-Debug` (Ninja + cl, build trees `out/build/<preset>`); Visual Studio uses them via Open Folder. Do not add other build trees. Exception: the region agents' standing worktrees (`C:/Repo/dMapper-worktrees/region-a`, `region-b`)
+each have their own `out/build/x64-Release` from the same preset (see Regions). From a shell, `vcvars64.bat` must be loaded first (cl/ninja on PATH):
 
 ```
 cmake --preset x64-Release
@@ -40,6 +41,31 @@ cmake --build --preset x64-Release --target dMapper
 - **Position check between two results:** `tools/trajectory_seams.py <reference> <result>...` prints the largest position difference, when it first exceeds 5/20/50 cm and the longest stretch above (yaw-only `eval_odometry.py` doesn't see a lagging stretch, which draws a ghost wall where the path passes the same place again). A change to the odometry's numerics is also run with a `/fp:fast` build of the same code (a scratch worktree with `/fp:precise` replaced, built outside the presets) and the two compared this way: a large difference means a fragile decision somewhere (change `odometry-stall-fix`). `log_window_diagnostics` prints one line per window to find it.
 - **Map quality:** a change to the odometry, the map, loop closure or consistency is judged with `tools/map_quality.py` on s0, s1 and s2 of recording 44 against the noise floor of the unchanged code: global geometry (façade angle start vs gallery), consistency (revisits, doubled walls) and sharpness (jitter; `--floors` for railing and stairwell), all three of equal weight; it counts only beyond the s0/s1/s2 spread, and it must not widen that spread. The code-review findings and their status are in `docs/code-review-tracker.md`.
 - **Subagents:** Claude may start subagents on its own when it sees a need, without asking first. Good candidates are long, self-contained jobs with a small result, such as a full 44 evaluation (runs, CloudCompare export, `eval_odometry.py`, counting log lines) or a broad code search. Give the subagent the exact scripts, paths and pass criteria, and check what it reports before acting on it.
+
+## Regions
+
+The code is divided into eight regions (front-end, map, lidar-matching, inertial, solver, back-end, noise-budget,
+verification), each with an owner agent (`.claude/agents/region-<name>.md`) and a knowledge file
+(`docs/regions/<name>.md`: contract, files, how to check, known flaws, experiments, ideas rejected, open questions). The
+main session is the orchestrator: it owns what the regions share, talks to the user, starts the agents and decides what is
+merged. `docs/regions/README.md` has the rules and the protocol; in short:
+
+- **Who owns what:** `docs/regions/owners.toml` (files, `file::function` entries, shared test files; the unnamed rest is
+  the orchestrator's). `python tools/region_owners.py` checks it; `--diff <base>..<branch> --region <name>` lists what a
+  branch touches outside its region.
+- **Worktrees:** an editing agent works in a standing worktree (`C:/Repo/dMapper-worktrees/region-a` or `region-b`, reset
+  to the main tree's commit before each job) on its own branch `region/<name>/<date>-<question>`, and hands the branch
+  back. At most two editing agents at once. Agents never merge, push, start full runs or change `settings/`.
+- **Merge:** the orchestrator checks the branch (ownership, `tools/step_checks.py` in the worktree, the conclusion
+  reviewer), then merges a branch that changes no number on its own judgment and one that changes a number only after the
+  user's decision on its numbers; after each merge `tools/step_checks.py` runs on the main tree.
+- **Verification kit:** `tools/step_checks.py` (build, tests, both guards, both replays, the per-term table, 44_short;
+  about 7 min; `--record` writes the references), `tools/end_runs.py` (full 44, Livox 3, 44_short against their
+  manifests, `--debug`; about 50 min, background), `tools/run_replay.py` (the gate every replay goes through: memory and a
+  slot, its cost, the time-limit count). Paths in `tools/local_paths.toml`; captures and references in
+  `C:/Users/User/Downloads/dLidar/experiments/guards/`.
+- **Knowledge files** are written by the orchestrator from the agents' hand-backs, after review and, where a number or a
+  contract changes, after the user's decision.
 
 ## Run
 
