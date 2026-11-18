@@ -89,14 +89,30 @@
   9.38 m, but from 329 s the speed runs to 2.4-4.2 m/s until the rest at 354 s (about 50 m of false path; the
   normal-only NDT pulls back 10-80 mm with a hold of 2.2-3.8 mm and loses to the carried velocity; a steady false
   acceleration of about 0.4 m/s2). So gain 0 is not a fix on its own.
-- [ ] 3.5 Full Livox 4 runs with the yaw gyro rate scaled by 1.004 and 1.008 (copies `raw data/livox/4_gz0040`,
+- [x] 3.5 Full Livox 4 runs with the yaw gyro rate scaled by 1.004 and 1.008 (copies `raw data/livox/4_gz0040`,
   `4_gz0080`; measured gyro noise): does the bias estimate stop following the turn rate? Background: in both
   measured-gyro runs the yaw bias estimate follows the yaw rate (slope about -0.003, R2 0.20-0.25 on Livox 4,
   0.46-0.58 on Livox 3) and not the yaw acceleration (R2 0-0.02), so a time offset is not what it follows; the
   loop corrections against the net turn were reviewed and do NOT support a scale error (one loop repeated
   about 11 times dominates the fit).
-- [ ] 3.6 A capture of the stretch that runs away without the in-plane part (315-362 s, experiment build, measured
+  Result: `full_gyro_4_gz0040` (yaw rate x 1.004): the slope of the yaw bias estimate against the yaw rate goes from
+  -0.0022 / -0.0028 / -0.0032 (smoothing 1 / 5 / 15 windows, R2 0.20-0.25) to -0.0006 / 0.0000 / +0.0022 (R2
+  0.00-0.10): a scale mismatch of about 0.4 % (0.24-0.53 % by the smoothing), the gyro reading too little. Not
+  fitted to it, the run also closes: start-to-end before loop closure 3.73 -> 0.77 m (height 0.70 -> 0.05 m),
+  loop corrections' rotation median 2.1 -> 1.2 deg (last minute 3.8-4.0 -> 1.2-2.2 deg), 66 loops / 4.36 m ->
+  84 loops / 2.76 m, velocity chi2 73 / 413 -> 58 / 245; passage unchanged (5.79 m). One run; whether it is the
+  gyro's sensitivity or the IMU clock's rate cannot be told from these data. The 0.8 % run was cancelled (the
+  machine was needed for the replays). The user's look at `full_gyro_4_gz0040/result` is open.
+- [x] 3.6 A capture of the stretch that runs away without the in-plane part (315-362 s, experiment build, measured
   gyro, rule A gain 0): `experiments/stage8/runaway_capture`.
+  Result: `experiments/stage8/runaway_capture/result/window_capture_315.0-362.0s.bin` (719 MB), settings
+  `runaway_capture.toml`, experiment build 0feae07.
+- [ ] 3.8 Region job, experiment branch `region/lidar-matching/2026-11-18-rotation-prior-experiment` (not for merge):
+  a prior with a sigma on node 0's rotation in place of the hard fix (`origin_rotation_prior_sigma_deg` 0.005 /
+  0.02 / 0.08) and a gyro scale correction (`gyro_scale_correction_z` 0.004), alone and together, on the passage
+  and Livox 3 captures, then on the stairs; then with the in-plane rule A at gain 0 / 0.03 / 0.1 on the runaway,
+  passage and Livox 3 captures. Readings: the bias estimate's swing, the tilt the accelerometer sees, how far
+  node 0 is turned, the speeds of the runaway stretch.
 - [x] 3.7 Research (two Sonnet passes; `experiments/stage8/research_rotation_and_inplane.md`, the second pass read
   the sources): VoxelMap, FAST-LIO2 and GICP match points to planes only (GICP: a point constrains only along
   its normal); FAST-LIO2 and VINS-Mono correct the attitude as a state, the window's oldest pose carries a prior
