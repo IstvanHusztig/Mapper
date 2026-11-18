@@ -275,6 +275,17 @@ python tools/holdout_sharpness.py [--block 0.01] --sets <ref_s0>,<res_s0> <ref_s
 - All results of a set must hold the same points (same recording and hold-out), else it stops.
 - Reference (2026-10-18, 44_short at `holdout_block_s` 0.01, research runs): consistency +1.85 mm all-time against odometry only, the scratch gyro term (s = 3) −0.87 mm.
 
+## function_lengths.py
+
+Lists every function longer than a limit in C++ files or folders, longest first, with its file and line: the measurement
+of stage 6 of `docs/code-split-and-region-agents-plan.md` (no function above about 80 lines in the window loop and its
+terms; the longer ones elsewhere are split in their region's first job). A rough brace-matching reader, pure Python, not
+a build check.
+
+```
+python tools/function_lengths.py 80 src
+```
+
 ## Regression baseline (compare_baseline.py, cut_recording)
 
 Refactors must reproduce `44_short` and the full 44 bit for bit (see `docs/ARCHITECTURE.md`). Two reference datasets live next to the raw data, outside git:
