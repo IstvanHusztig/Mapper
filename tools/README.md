@@ -275,6 +275,78 @@ python tools/holdout_sharpness.py [--block 0.01] --sets <ref_s0>,<res_s0> <ref_s
 - All results of a set must hold the same points (same recording and hold-out), else it stops.
 - Reference (2026-10-18, 44_short at `holdout_block_s` 0.01, research runs): consistency +1.85 mm all-time against odometry only, the scratch gyro term (s = 3) −0.87 mm.
 
+## The verification kit (step_checks.py, end_runs.py, run_replay.py)
+
+The checks that say whether a change changes a number, as commands. They work on the worktree their file lies in (its
+`out/build/x64-Release`), so a region agent's branch is checked in its worktree and the main tree again after a merge.
+This workstation's paths (recordings, captures, `vcvars64.bat`, the gate's limits) are in `tools/local_paths.toml`; the
+captures, the reference files, the gate's locks and the kit's run folders are outside the repo, in its `guards` folder.
+Shared code: `tools/kit_lib.py`. Windows only.
+
+### step_checks.py
+
+```
+python tools/step_checks.py            # the checks of a commit, one line each; exit 0 only if all hold
+python tools/step_checks.py --record   # write the reference files from this commit
+```
+
+In this order: the Release build, the unit tests, the characterization guard and the loop guard against their reference
+files (exact hexadecimal doubles), the replays of the two captures (44_short 20-40 s, Livox 3 100-130 s: every window
+identical with its capture), the per-term table of the 44_short replay against its reference, and 44_short against its
+manifest. About 7 minutes. "IDENTICAL" everywhere means the change changes no number; that is this command's word, not
+its author's.
+
+- `--record` refuses when `src/`, `tests/` or `CMakeLists.txt` have uncommitted changes, runs each guard twice (they
+  must agree), and notes the commit in `<guards>/refs/recorded.json`. Record again only after a change that is meant to
+  change the references (a new feature column, a new guard case), from the commit that makes it.
+- The first line prints the worktree and the commit, so a result can't be mistaken for another tree's.
+
+### end_runs.py
+
+```
+python tools/end_runs.py [--debug] [--only 44,livox3] [--no-build]
+```
+
+The runs that end a change: the full 44, Livox 3 and 44_short with their shipped settings, one after the other, each
+against its manifest, with its odometry time, wall time, CPU time and peak memory; `--debug` adds the Debug build and
+`ctest`. About 50 minutes, so start it in the background; one line per run goes to `<guards>/runs/<worktree>/end_runs.log`.
+It holds the gate for itself (no replay runs beside a full run) and starts nothing when a dMapper process runs that did
+not come through the gate.
+
+### run_replay.py (the gate)
+
+```
+python tools/run_replay.py <capture.bin> <settings.toml> [--log <file>] [--label <text>]
+```
+
+Starts a replay when the workstation has room for it, and reports what it cost. A replay's peak memory is about three
+times its capture file (0.2 GB for the 44_short capture, 1.6 GB and 5.5 cores for the Livox 3 one), and several jobs
+share the machine: the region agents' worktrees, the step checks, a full run. The gate lets at most two replays run at
+once, none beside a full run, and a replay only when its estimated memory plus a reserve is free (`[gate]` in
+`local_paths.toml`). A job waits before it starts and says what it waits for; a running replay is never paused (a pause
+frees no memory, and a paused window would run into the wall-clock time limit and change the result). A holder whose
+process has ended is ignored.
+
+- It prints the replay's summary line, then `cost: wall ..., CPU ..., peak memory ...; windows stopped at the time limit:
+  N`. With N above 0 the result depended on the machine's load: run the replay again.
+- The replay's own output goes to `<settings name>_replay.log` beside the settings file. dMapper writes the table files
+  of `log_window_terms` next to the capture, named after the settings file, so give your settings file a name of its own.
+- Exit code: the replay's.
+
+## region_owners.py
+
+```
+python tools/region_owners.py                                    # is the ownership list consistent?
+python tools/region_owners.py --owner src/application/run_odometry.cpp
+python tools/region_owners.py --diff <base>..<branch> --region map
+```
+
+Checks `docs/regions/owners.toml` (who owns each file and function; see `docs/regions/README.md`): every named file
+exists, nothing is named twice, every named function is found in its file. With `--diff` it lists what a branch touches
+outside its region: other owners' files, and in files with function entries (`run_odometry.cpp`) the functions the
+changed lines lie in. A shared test file is listed for the orchestrator to read and does not fail the check. Exit 1 when
+the branch leaves its region. An agent's definition cannot restrict paths; this check does it after the fact.
+
 ## Regression baseline (compare_baseline.py, cut_recording)
 
 Refactors must reproduce `44_short` and the full 44 bit for bit (see `docs/ARCHITECTURE.md`). Two reference datasets live next to the raw data, outside git:

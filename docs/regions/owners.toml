@@ -2,12 +2,16 @@
 #
 # - `files`: files (or globs) a region owns whole.
 # - `functions`: "file::function" entries; a function entry overrides its file's owner (a region's function in the
-#   orchestrator's run_odometry.cpp; the orchestrator's save_result in the front-end's lidar_odometry.cpp).
+#   orchestrator's run_odometry.cpp; the back-end's run_consistency and the orchestrator's save_result in the front-end's
+#   lidar_odometry.cpp).
 # - `shared_tests`: test files whose cases don't separate by name; any region may add or change the cases of its own
 #   code there, and the orchestrator reads that part of a branch's diff.
 # - Whatever is not named here belongs to the orchestrator (the main session): shared types and settings, the window
 #   loop's skeleton, capture and replay, the pipeline and the ports, the rest of infrastructure, the presentation layer,
 #   CMake, settings/, CLAUDE.md, docs/, openspec/.
+#
+# A diagnostic of one term's fit belongs to the term's region (log_accelerometer_fit: inertial); a diagnostic of the
+# balance between terms belongs to the noise-budget (the weak axis, the heading).
 #
 # A region's agent edits only what it owns; what it needs elsewhere it reports. See docs/regions/README.md.
 
@@ -74,6 +78,7 @@ functions = [
     "src/application/run_odometry.cpp::prepare_velocity_state",
     "src/application/run_odometry.cpp::update_acc_term_after_window",
     "src/application/run_odometry.cpp::update_gyro_bias_after_window",
+    "src/application/run_odometry.cpp::log_accelerometer_fit",
 ]
 
 [solver]
@@ -115,6 +120,9 @@ files = [
     "tests/consistency_test.cpp",
     "tests/odometry_snapshot_test.cpp",
 ]
+functions = [
+    "src/application/lidar_odometry.cpp::run_consistency",
+]
 
 [noise-budget]
 files = [
@@ -130,7 +138,6 @@ files = [
 functions = [
     "src/application/run_odometry.cpp::record_window_terms",
     "src/application/run_odometry.cpp::log_weak_axis_diagnostics",
-    "src/application/run_odometry.cpp::log_accelerometer_fit",
     "src/application/run_odometry.cpp::log_heading_diagnostics",
 ]
 
@@ -149,4 +156,5 @@ files = [
 [orchestrator]
 functions = [
     "src/application/lidar_odometry.cpp::save_result",
+    "src/application/lidar_odometry.cpp::save_trajectory_to_ascii",
 ]
