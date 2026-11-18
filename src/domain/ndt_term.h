@@ -46,9 +46,24 @@ struct NdtSums
     std::vector<int> node_matched, node_unmatched;
 };
 
+// which part of a cell's information (its stored inverse covariance) the point terms use. `normal`: the part along the
+// information's largest eigen-direction (the covariance's smallest: the normal of a flat cell), mu_max e e^T; `in_plane`:
+// the rest, the whole minus `normal`. The two add up to the whole; the Huber weight and the cost's distance stay those of
+// the whole, so the parts' blocks add up to the whole term's (the per-term table's ndt_normal / ndt_in_plane rows).
+enum class NdtInformationPart
+{
+    whole,
+    normal,
+    in_plane
+};
+
+// the part of `information` (symmetric 3x3) named by `part` (not `whole`)
+Eigen::Matrix3d ndt_information_part(const Eigen::Matrix3d &information, NdtInformationPart part);
+
 // one NDT grid as the point terms see it: its cells, cell size and nearest range, the noise model's rules for its points
 // (range weight and cap: the indoor grid only; planarity, Huber, scale: both), and whether it collects the normal
 // information (the indoor grid). For the outdoor grid the weight is planarity * 1.0, which is planarity exactly.
+// `part`: the whole cell information (the optimization) or one part of it (the per-term table only).
 struct NdtGrid
 {
     const NDTBucketMapType &buckets;
@@ -59,6 +74,7 @@ struct NdtGrid
     bool normal_information;
     const char *name; // "indoor" / "outdoor", for messages
     const NdtNoise &noise;
+    NdtInformationPart part = NdtInformationPart::whole;
 };
 NdtGrid indoor_ndt_grid(const NDTBucketMapType &buckets, const ScanToMapOptions &scan_to_map, const NdtNoise &noise);
 NdtGrid outdoor_ndt_grid(const NDTBucketMapType &buckets, const ScanToMapOptions &scan_to_map, const NdtNoise &noise);

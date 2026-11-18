@@ -168,6 +168,34 @@ namespace
         return s;
     }
 
+    // ndt_unprojected split by each cell's information: along the cell's normal (ndt_normal) and the rest (ndt_in_plane),
+    // both grids, before the projection; the two rows' weights and weight * pull add up to ndt_unprojected's
+    void add_ndt_part_rows(const WindowTermInputs &in, const WindowNoiseModel &noise, const Reducer &reduce, std::vector<WindowTermRow> &rows)
+    {
+        const ScanToMapOptions &o = in.scan_to_map;
+        for (const auto &[name, part] : {std::pair<const char *, NdtInformationPart>{"ndt_normal", NdtInformationPart::normal},
+                                         {"ndt_in_plane", NdtInformationPart::in_plane}})
+        {
+            WindowEquations e(noise.unknowns);
+            NdtGrid indoor_grid = indoor_ndt_grid(in.buckets_indoor, o, noise.ndt);
+            indoor_grid.part = part;
+            const NdtSums indoor = sum_ndt_grid_blocks(indoor_grid, in.window, in.points, o, true);
+            add_ndt_blocks(e, indoor, no_projection());
+            double cost = sum_of(indoor.node_cost);
+            int matched = sum_of(indoor.node_matched);
+            if (o.use_hierarchical_rgd)
+            {
+                NdtGrid outdoor_grid = outdoor_ndt_grid(in.buckets_outdoor, o, noise.ndt);
+                outdoor_grid.part = part;
+                const NdtSums outdoor = sum_ndt_grid_blocks(outdoor_grid, in.window, in.points, o, true);
+                add_ndt_blocks(e, outdoor, no_projection());
+                cost += sum_of(outdoor.node_cost);
+                matched += sum_of(outdoor.node_matched);
+            }
+            rows.push_back(reduce.row(name, e, cost, 3 * matched, false));
+        }
+    }
+
     void add_ndt_rows(const WindowTermInputs &in, const WindowNoiseModel &noise, const Reducer &reduce, std::vector<WindowTermRow> &rows,
                       WindowTermTable &table)
     {
@@ -200,6 +228,7 @@ namespace
             add_ndt_blocks(e_raw, outdoor, no_projection());
         rows.push_back(reduce.row("ndt_unprojected", e_raw, sum_of(indoor.node_cost) + sum_of(outdoor.node_cost),
                                   3 * (sum_of(indoor.node_matched) + sum_of(outdoor.node_matched)), false));
+        add_ndt_part_rows(in, noise, reduce, rows);
     }
 
     void add_edge_rows(const WindowTermInputs &in, const WindowNoiseModel &noise, const Reducer &reduce, std::vector<WindowTermRow> &rows)

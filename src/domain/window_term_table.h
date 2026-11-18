@@ -34,7 +34,7 @@ const char *term_direction_name(int direction);
 struct WindowTermRow
 {
     std::string name;
-    bool in_total = true;   // false: shown for information (NDT before the projection, damping)
+    bool in_total = true;   // false: shown for information (NDT before the projection and its normal / in-plane parts, damping)
     double cost = 0.0;      // at the state the table is computed at (with its own weight)
     int residuals = 0;      // scalar residuals behind the cost
     std::array<std::array<double, kTermDirections>, kTermMotions> weight{}; // [motion][direction]
