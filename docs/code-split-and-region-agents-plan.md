@@ -1052,6 +1052,13 @@ Two boundaries the old table left open:
   read by both (`tomllib`, standard library); today they are typed into each script. Committed, as
   `docs/agents/environment.md` already records the same paths. The references and captures live outside the repo, under
   `experiments/guards/`.
+- `tools/run_replay.py`: the gate every replay goes through (user, 2026-11-18: replays cost memory and CPU, and agents
+  run them side by side). It waits until enough memory is free for the capture (measured: a replay's peak is about three
+  times the capture file, 0.2 GB for the 44_short capture, 1.6 GB and 5.5 cores for the Livox 3 one) and until a slot is
+  free (at most two replays at once, none while a full run goes: `end_runs.py` holds the gate for itself), then runs the
+  replay and prints its wall time, CPU time and peak memory and how many windows stopped at the time limit. It queues
+  before the start and never pauses a running replay: a pause frees no memory, and a paused window would run into the
+  wall-clock time limit and change the result.
 - Whether a change "changes no number" is what `step_checks.py` says (guards, replays and 44_short identical), never
   what its author says.
 
@@ -1094,8 +1101,8 @@ the region's name and contract filled in:
 - Edit only what you own. What you need from a shared file or another region, you report; you don't edit it.
 - Work by replay. You never start a full run and never change `settings/`; a settings idea is tried on a copy in your
   experiment folder, under a file name of your own (a replay names its table files after the settings file, next to
-  the capture). After a replay with settings other than the capture's, check that the verdict summary shows no window
-  stopped by the time limit (another job's load can cause it); if one did, run it again alone.
+  the capture). Start every replay through `tools/run_replay.py`, never dMapper directly; if it reports a window
+  stopped at the time limit, run that replay again.
 - Numbers, not verdicts: no statement about the map, no "better". No dead code. Precision before speed.
 - Work only in the worktree you were given, on its branch; commit your change there. Never touch the main tree, never
   merge, never push.
@@ -1177,12 +1184,15 @@ knowledge entries through the orchestrator, the limits of what a definition can 
    made-up branch that leaves its region.
 3. The knowledge files and `docs/regions/README.md`, each checked against the code by a reviewer; the tracker's
    references brought to today's files; the docs maps.
-4. The two standing worktrees, each built once; the agent definitions; `CLAUDE.md` gets a "Regions" section and the
+4. The guide (`docs/index.html`) gets a section "Internals": how the code is laid out (layers, the window loop, the
+   terms, the solver, the noise model, the checks) and how the work is organised (regions, agents, worktrees, the
+   protocol), with links to the pages in depth (user, 2026-11-18).
+5. The two standing worktrees, each built once; the agent definitions; `CLAUDE.md` gets a "Regions" section and the
    worktree exception, `AGENTS.md` a pointer (the definitions are Claude's; the
    knowledge files and the ownership bind Codex too); `tools/check_agent_setup.py` still passes.
-5. Each region agent is started once, read-only: it states its contract and its files and names what in its knowledge
+6. Each region agent is started once, read-only: it states its contract and its files and names what in its knowledge
    file it could not find in the code. Corrections go into the files.
-6. The try-out, with `step_checks.py` and the full 44 and Livox 3 at its end.
+7. The try-out, with `step_checks.py` and the full 44 and Livox 3 at its end.
 
 No Debug build except for the try-out's end (it changes map code).
 

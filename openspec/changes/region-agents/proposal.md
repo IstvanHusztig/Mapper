@@ -14,7 +14,8 @@ change must not reach the main tree before it is checked and decided on. Stage 7
   list and, with `--diff`, what a branch touches outside its region.
 - **Verification kit in the repo:** `tools/step_checks.py` (build, unit tests, both guards, both replays, 44_short, the
   per-term table; `--record` for the references), `tools/end_runs.py` (full 44, Livox 3, 44_short against their
-  manifests; `--debug`), `tools/local_paths.toml` (this workstation's paths).
+  manifests; `--debug`), `tools/run_replay.py` (the gate every replay goes through: it waits for free memory and a
+  slot, then reports the replay's time, CPU and peak memory), `tools/local_paths.toml` (this workstation's paths).
 - **A knowledge file per region** (`docs/regions/<name>.md`, eight, and a `README.md`): contract, what it owns, how to
   check its work, known flaws (the tracker's open findings by today's code), functions to split in its first job,
   experiments, ideas rejected, open questions. Seeded from what is written, each checked against the code by a reviewer.
@@ -26,6 +27,8 @@ change must not reach the main tree before it is checked and decided on. Stage 7
   merges, and runs the step checks again on the main tree after each merge. Agents run replays, never full runs.
 - **The protocol** in `docs/regions/README.md` and `CLAUDE.md` (a "Regions" section and the worktree exception to "no
   other build trees"); a pointer in `AGENTS.md`.
+- **The guide gets a section "Internals"**: how the code is laid out and how the work is organised (regions, agents,
+  worktrees, the protocol).
 - **A try-out:** the map region splits `update_rgd_legacy` (84 lines) without changing a bit, through the whole chain.
 
 ## Capabilities

@@ -18,7 +18,11 @@
 - [ ] 2.2 `tools/end_runs.py` (full 44, Livox 3, 44_short against their manifests, odometry times; `--debug`; refuses
   while a dMapper runs; one line per run into a log). Verify: started in the background at the end of this change (task
   7.3), it reports IDENTICAL for the three recordings.
-- [ ] 2.3 `tools/README.md` sections for the three; `tests/test_verification_tools.py` gets a case for
+- [ ] 2.4 `tools/run_replay.py`: the gate (memory need from the capture's size, two slots, held whole by `end_runs.py`,
+  stale holders ignored; wall time, CPU time, peak memory, time-limit count; the replay's exit code). `step_checks.py`
+  starts its replays through it. Verify: alone it starts at once and prints the cost line; a third replay waits while
+  two run and starts after; a replay waits while a made-up full-run lock is held; a lock of a dead process is ignored.
+- [ ] 2.3 `tools/README.md` sections for the four; `tests/test_verification_tools.py` gets a case for
   `step_checks.py`'s reading of the paths file if it fits its form. Verify: the text matches the tools.
 
 ## 3. Ownership
@@ -53,6 +57,12 @@
 - [ ] 5.3 `CLAUDE.md`: a "Regions" section (the list, the rules, the protocol in short, the kit) and the worktree
   exception to "do not add other build trees"; `AGENTS.md`: a pointer to `docs/regions/` and the ownership list.
   Verify: the text matches the files.
+- [ ] 5.5 The guide (`docs/index.html`) gets a section "Internals" (menu entry, linked from the opening paragraph):
+  how the code is laid out (the layers, the pipeline, the window loop's four steps, the terms, the solver, the noise
+  model, the verdict, capture and replay, the checks) and how the work is organised (the regions and what each owns,
+  the agents and their models, worktrees and branches, the gate, the protocol from question to merge), with links to
+  `ARCHITECTURE.md`, the plan, `docs/regions/` and the pages in depth. Verify: a Sonnet reviewer checks it against the
+  code and the region files; every link resolves.
 - [ ] 5.4 Each region agent is started once, read-only: it states its contract and its files and names what in its
   knowledge file it could not find in the code. Verify: every agent answered from its files; the corrections are in the
   knowledge files. (If a new definition is not offered in the running session: the same text through a general agent
