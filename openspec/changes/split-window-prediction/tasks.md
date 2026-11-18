@@ -43,8 +43,9 @@
 - [x] 4.1 `tools/function_lengths.py <limit> <files or folders>`; `tools/README.md`. Verify: on `src/` with limit 80 it
   lists the plan's table, without `predict_window_poses`.
   Result: 20 functions listed, the plan's table exactly, without `predict_window_poses`.
-- [ ] 4.2 Docs: the plan's table and progress, `CLAUDE.md` where it lists the window steps (`window_rests`). Verify: the
+- [x] 4.2 Docs: the plan's table and progress, `CLAUDE.md` where it lists the window steps (`window_rests`). Verify: the
   text matches the code.
+  Result: CLAUDE.md's list of window steps, the plan's table and progress.
 
 ## 5. End of stage
 

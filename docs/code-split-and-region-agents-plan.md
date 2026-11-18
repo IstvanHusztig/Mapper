@@ -24,6 +24,10 @@ Progress:
   (fd63f71 .. ): `WindowNoiseModel` built once per window, every term reads its weights from it, the per-term table and
   the weak-axis diagnostic too, the priors' growth formulas in one place, `noise budget` / `log_window_noise`; every
   commit identical on the guards, replays, 44_short and the per-term table.
+- Stage 6 designed 2026-11-18 (below), decisions taken, OpenSpec `split-window-prediction`; implemented 2026-11-18
+  (3c0fdda .. ): one rest test (`window_rests`), `predict_window_poses` in four steps with the chaining through
+  `place_window_after`, `tools/function_lengths.py`; every commit identical. No tier-1 function above 80 lines; the rest
+  waits for its region (table in the stage 6 design).
 - **Verdict limits decided (user, 2026-11-17)**, after the readings of full runs of 44, Livox 3 and Livox 4 (task 6.1 of
   `solver-and-window-verdict`): all agreed limits stay (bent 3°, bent severely 10°, run trigger above 1 % bent; fast
   2.5 m/s; bias high 0.5 °/s; velocity chi² of the weak windows median 5 / p95 20). Three recordings, one map judged
@@ -876,7 +880,7 @@ owner needs to read the code anyway, and Livox 4 doesn't wait for them.
 
 | Lines | Function | Region | Tier | When |
 |---|---|---|---|---|
-| 84 | `predict_window_poses` (`window_steps.cpp`) | inertial / window loop | 1 | **this stage** |
+| 84 | `predict_window_poses` (`window_steps.cpp`) | inertial / window loop | 1 | done in stage 6 (30 lines, four steps) |
 | 84 | `update_rgd_legacy` (`ndt_map.cpp`; the default cell statistics) | map | 2 | before the map region's first job |
 | 336 | `run_loop_closure` | back-end | 2 | before the back-end region's first job |
 | 311 | `Consistency` | back-end | 2 | same |
