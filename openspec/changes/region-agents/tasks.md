@@ -76,22 +76,39 @@
 - [ ] 5.1 The two standing worktrees (`C:/Repo/dMapper-worktrees/region-a`, `region-b`), each configured and built once
   with the `x64-Release` preset. Verify: `step_checks.py` run in each reports identical everywhere; the full build's time
   is noted.
-- [ ] 5.2 `.claude/agents/region-<name>.md` for the eight regions (one text, the region's name and contract filled in;
+- [x] 5.2 `.claude/agents/region-<name>.md` for the eight regions (one text, the region's name and contract filled in;
   Opus, medium; Sonnet for verification) and `conclusion-reviewer.md` (Sonnet, read-only); `master-reviewer.md` gets the
   repo's present path. Verify: `tools/check_agent_setup.py` passes.
-- [ ] 5.3 `CLAUDE.md`: a "Regions" section (the list, the rules, the protocol in short, the kit) and the worktree
+  Result: fcdc15c; the rules sharpened after the first starts (task 5.4). `check_agent_setup.py` passes. New definitions
+  are read at a session's start: in the running session they were offered only after a while; until then the same
+  text ran through a general agent with the definition's model (the design's fallback).
+- [x] 5.3 `CLAUDE.md`: a "Regions" section (the list, the rules, the protocol in short, the kit) and the worktree
   exception to "do not add other build trees"; `AGENTS.md`: a pointer to `docs/regions/` and the ownership list.
   Verify: the text matches the files.
-- [ ] 5.5 The guide (`docs/index.html`) gets a section "Internals" (menu entry, linked from the opening paragraph):
+  Result: fcdc15c.
+- [x] 5.5 The guide (`docs/index.html`) gets a section "Internals" (menu entry, linked from the opening paragraph):
   how the code is laid out (the layers, the pipeline, the window loop's four steps, the terms, the solver, the noise
   model, the verdict, capture and replay, the checks) and how the work is organised (the regions and what each owns,
   the agents and their models, worktrees and branches, the gate, the protocol from question to merge), with links to
   `ARCHITECTURE.md`, the plan, `docs/regions/` and the pages in depth. Verify: a Sonnet reviewer checks it against the
   code and the region files; every link resolves.
-- [ ] 5.4 Each region agent is started once, read-only: it states its contract and its files and names what in its
+  Result: 09c8868: a section "Internals" (layers, one window in the code, how a change is checked, regions and agents,
+  from a question to a merge), in the menu and the opening paragraph; a Sonnet reviewer found no false statement and
+  two imprecise ones (what infrastructure and presentation may include), corrected, and three additions (building
+  and testing, adding a setting, baselines in their own commit), made. Every link resolves.
+- [x] 5.4 Each region agent is started once, read-only: it states its contract and its files and names what in its
   knowledge file it could not find in the code. Verify: every agent answered from its files; the corrections are in the
   knowledge files. (If a new definition is not offered in the running session: the same text through a general agent
   with the definition's model, and the fact noted.)
+  Result: the eight agents, each started once read-only (Opus; verification Sonnet), stated their contract and files from
+  their knowledge files and checked 14 to about 30 statements each against the code: map, lidar-matching,
+  back-end, verification found none wrong; inertial, solver, noise-budget one or two (a wording, a stale comment
+  worse than written, a second place the model is built, a stale open question); front-end four (acceleration
+  rejection off for the whole run, two tracker remarks out of date, a duplicated note). Corrected. Their questions
+  on the rules led to: a build-only command (`step_checks.py --build-only`), the capture paths and the `--diff` base
+  in the README and the tasks, absolute paths (the shell keeps no working directory), the agent creates its
+  experiment folder, "runs wanted" in the hand-back for code replays don't reach (front-end, back-end), sweeps and
+  snapshot runs as the orchestrator's, `--owner` saying what a shared test file means.
 
 ## 6. Try-out
 

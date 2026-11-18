@@ -47,8 +47,8 @@ residuals and Jacobians of these terms; their weights come from the noise model 
   `prepare_acc_term(..., i > 0, ...)`). The first window is registered against the seed map, built from points not yet motion-compensated.
 - Each term can be called alone on an empty `WindowEquations` with const inputs: the per-term table
   (`window_term_table.cpp::term_rows`) relies on it. The edges add their cost only when `equations.with_cost` is set.
-- Only the next window is placed after a window is done (change `chain-next-window-only`); on a cancelled run
-  `place_windows_after` places the rest once.
+- Only the next window is placed after a window is done (change `chain-next-window-only`); on a run stopped by a non-finite
+  window distance `place_windows_after` places the rest once (the other cancelled exits do not call it).
 - The rest test is one function, `window_rests` (50 ms average, `rest_smoothing_half_width_s = 0.025`), used by the
   prediction, `window_at_rest` and `log_accelerometer_fit`.
 - The weights' formulas this region's code calls are the noise-budget's: `time_scaled_rotation_sigma` (through the

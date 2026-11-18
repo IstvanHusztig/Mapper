@@ -18,7 +18,7 @@ Stage 7 of the [code-split plan](../code-split-and-region-agents-plan.md) built 
 | inertial | A window's guess and its inertial terms: motion edges, velocity continuity, accelerometer terms, the gyro-bias and velocity carried from window to window, the hand-off. | [inertial.md](inertial.md) |
 | solver | From the terms' equations to the window's result: the normal equations, the Levenberg-Marquardt iterations and why they stop, the step, the window verdict. | [solver.md](solver.md) |
 | back-end | The corrections after the odometry: loop closure and the consistency pass; the odometry snapshot. | [back-end.md](back-end.md) |
-| noise-budget | Every weight of a window and its effect: the noise model, the per-term table, the weak-axis and fit diagnostics. It owns the weights' formulas, not the terms. | [noise-budget.md](noise-budget.md) |
+| noise-budget | Every weight of a window and its effect: the noise model, the per-term table, the weak-axis and heading diagnostics. It owns the weights' formulas, not the terms. | [noise-budget.md](noise-budget.md) |
 | verification | Whether a result is what it claims: the verification kit, the verify skills, the baselines, the analysis tools. It never edits `src/`. | [verification.md](verification.md) |
 
 The **orchestrator** is the main session. It owns what the regions share (the shared types and settings, the window
@@ -53,8 +53,11 @@ Two boundaries worth knowing:
 4. **Work only in the worktree you were given, on its branch.** Commit your change there. Never touch the main tree,
    never merge, never push.
 5. **Work by replay**, started through `python tools/run_replay.py` (never `dMapper --replay` directly). You never start
-   a full run and never change `settings/`: a settings idea is tried on a copy in your experiment folder, under a file
-   name of your own.
+   a full run, a `--from-snapshot` run or a perturbation sweep, and never change `settings/`: a settings idea is tried
+   on a copy in your experiment folder, under a file name of your own. Where a replay does not reach your code (loading,
+   the AHRS and the window cut of the front-end; loop closure and consistency of the back-end), ask for the runs you
+   need in your hand-back ("runs wanted": which recording, which settings, built from which branch); the orchestrator
+   runs them, one at a time, and gives you the result folders in a follow-up task.
 6. **Numbers, not verdicts.** No statement about the map, no "better". What a reading means for the map is the user's
    to judge, by eye.
 7. **No dead code**: a rejected idea is removed, not switched off. **Precision before speed**: when the two trade, take
@@ -63,6 +66,15 @@ Two boundaries worth knowing:
    calls verification and the reviewer.
 
 ## Worktrees and the gate
+
+Every task names the worktree, the commit it was reset to (the base for `region_owners.py --diff <base>..HEAD`) and,
+where needed, the capture. The shell does not keep a working directory between commands: give every command the
+worktree's absolute path (`git -C <worktree> ...`, `python <worktree>/tools/run_replay.py ...`). The captures of the
+step checks are listed in `tools/local_paths.toml`: `<guards>/44short-20-40/window_capture_20.0-40.0s.bin` and
+`<guards>/livox3-100-130/window_capture_100.0-130.0s.bin` with their `settings.toml`, `<guards>` being
+`C:/Users/User/Downloads/dLidar/experiments/guards`. An agent creates its own experiment folder
+(`C:/Users/User/Downloads/dLidar/experiments/regions/<name>/<date>-<question>/`). A quick build without the checks:
+`python <worktree>/tools/step_checks.py --build-only`.
 
 Each editing agent gets a git worktree and a branch of its own (`region/<name>/<date>-<question>`). There are two
 standing worktrees, `C:/Repo/dMapper-worktrees/region-a` and `region-b`, reset to the main tree's commit before each job;

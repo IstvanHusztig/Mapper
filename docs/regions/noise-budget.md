@@ -19,7 +19,8 @@ diagnostics show how the weights balance. It owns the weights' formulas, not the
 - The layout `WindowUnknowns` from the solver's `layout_window_unknowns` (which unknowns and terms exist, the anchors).
 
 **Gives**
-- `WindowNoiseModel` (`src/domain/window_noise_model.h`), built in `prepare_window` (`run_odometry.cpp:1036`), read
+- `WindowNoiseModel` (`src/domain/window_noise_model.h`), built in `prepare_window` (`run_odometry.cpp:1036`; the
+  tests' single iteration `optimize_lidar_odometry` builds its own, `scan_to_map.cpp:102-103`), read
   `const` by `WindowProblem`, every term (`add_*` of inertial, `fix_origin` of the solver, the NDT term's `NdtNoise` of
   lidar-matching), the per-term table and `ndt_window_cost`.
 - Formula helpers others call: `time_scaled_rotation_sigma` (also consistency's gyro term, `consistency.cpp:93`, which
@@ -185,7 +186,7 @@ None: no function of this region is above 80 lines (`python tools/function_sizes
   bends on livox/1 but not the sensitivity to perturbations.
 - `log_weak_axis_diagnostics` computes the motion model's stiffness from `mm.x_sigma_m` without
   `imu_position_information_scale`, so on the Livox (scale 0.1) it reports 10× the stiffness the edges have (found
-  while writing this file; not in the tracker).
+  while writing this file; now tracker row C39).
 - Accelerometer density on the Livox: 0.0013 is the L2's; Livox measured 0.003–0.011 (memory note
   `fast-turn-fragility-state.md`).
 - At the guess the accelerometer row is ~3000× its result cost (Livox 3 point 8): read only result rows until the

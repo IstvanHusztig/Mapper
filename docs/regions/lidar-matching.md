@@ -73,7 +73,7 @@ that information calls blind.
     the spot; the window cost lowest at the truth; the NDT point terms' right-hand side is minus half their cost's
     gradient (with and without Huber and scale); the per-term table's NDT cases (sideways offset and stretch, corridor).
   - `tests/window_terms_test.cpp`: "the degeneracy projection passes strong directions and removes weak ones".
-  - Run only these: `lidar_odometry_tests -tc="scan-to-map*,window terms: the degeneracy*,window terms: the NDT*,window term table: NDT*,window term table: in a corridor*"`.
+  - Run these (the `scan-to-map*` pattern also runs the solver's and the inertial region's cases of that shared file): `lidar_odometry_tests -tc="scan-to-map*,window terms: the degeneracy*,window terms: the NDT*,window term table: NDT*,window term table: in a corridor*"`.
   - The characterization guard ("scan-to-map characterization", skipped; it covers Huber and scales, the projection
     and the cost) runs inside `python tools/step_checks.py`.
 - **Replays:** `python tools/run_replay.py <capture> <settings>`; then `python tools/step_checks.py` (both captures,

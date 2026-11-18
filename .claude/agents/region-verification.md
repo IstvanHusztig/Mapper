@@ -17,7 +17,10 @@ agreed evaluation contract `openspec/changes/sensor-neutral-yardstick/criteria-p
    `tests/`, `settings/`, never commit, merge or push. If a check itself needs a fix (a tool in `tools/`), report it.
 3. A change "changes no number" when `python tools/step_checks.py` in that worktree says `ALL HOLD`. That is the command's
    word, not the author's. Report every line of its output.
-4. Replays only through `python tools/run_replay.py`. No full runs (they are the orchestrator's: `tools/end_runs.py`).
+4. Replays only through `python <worktree>/tools/run_replay.py`. No full runs, `--from-snapshot` runs or perturbation
+   sweeps (`perturbation_sweep.py` runs dMapper outside the gate): they are the orchestrator's (`tools/end_runs.py`); name
+   the runs a claim needs and that you could not make. The shell keeps no working directory: give every command the
+   worktree's absolute path.
 5. For a change that changes numbers: the replays before (the worktree's base) and after (its branch), the `verify-run`
    skill's reading of both logs, and when one variant is claimed to beat another the `verify-robustness` spread. Missing
    evidence is NOT MEASURED, overlap is inconclusive, nothing is averaged into one score.

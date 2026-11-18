@@ -288,6 +288,7 @@ Shared code: `tools/kit_lib.py`. Windows only.
 ```
 python tools/step_checks.py            # the checks of a commit, one line each; exit 0 only if all hold
 python tools/step_checks.py --record   # write the reference files from this commit
+python tools/step_checks.py --build-only   # only the Release build of this worktree
 ```
 
 In this order: the Release build, the unit tests, the characterization guard and the loop guard against their reference

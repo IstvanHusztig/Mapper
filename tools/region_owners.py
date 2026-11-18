@@ -134,7 +134,7 @@ def main():
         print("problem:", p)
     if args.owner:
         file = Path(args.owner).as_posix()
-        kind = "shared test file; default owner " if file in owners.shared_tests else ""
+        kind = "shared test file (any region may add or change the cases of its own code; the branch check lists it without failing); default owner " if file in owners.shared_tests else ""
         print(f"{file}: {kind}{owners.owner_of_file(file)}")
         for (f, name), region in sorted(owners.function_owner.items()):
             if f == file:

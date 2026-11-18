@@ -2,6 +2,7 @@
 
     python tools/step_checks.py            # run the checks, one line each; exit 0 only if all hold
     python tools/step_checks.py --record   # write the reference files from this commit (no uncommitted source changes)
+    python tools/step_checks.py --build-only   # only the Release build of this worktree (dMapper and the tests)
 
 In this order, one at a time: the Release build; the unit tests; the characterization guard and the loop guard against
 their reference files (exact hexadecimal doubles); the replays of the captures of tools/local_paths.toml, every window
@@ -62,6 +63,7 @@ def terms_settings(capture, folder):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--record", action="store_true", help="write the reference files from this commit instead of comparing")
+    ap.add_argument("--build-only", action="store_true", help="only build this worktree (Release: dMapper and the tests)")
     args = ap.parse_args()
     paths = kit.load_paths()
     folder, refs = kit.run_folder(paths), paths["guards"] / "refs"
@@ -72,7 +74,7 @@ def main():
     if args.record and dirty:
         sys.exit("--record needs a tree without uncommitted changes in src/, tests/ and CMakeLists.txt")
     recorded = refs / "recorded.json"
-    if not args.record:
+    if not args.record and not args.build_only:
         if not recorded.is_file():
             sys.exit(f"no reference files in {refs}: record them from a known-good commit with --record")
         say(f"references: {json.loads(recorded.read_text())}")
@@ -81,8 +83,8 @@ def main():
 
     ok, errors = kit.build(paths)
     check("build", ok, "ok" if ok else "FAILED " + " | ".join(errors))
-    if not ok:
-        sys.exit(1)
+    if not ok or args.build_only:
+        sys.exit(0 if ok else 1)
 
     r = subprocess.run([str(kit.BIN / "lidar_odometry_tests.exe")], capture_output=True, text=True, cwd=kit.BIN)
     counts = " ".join(l.strip() for l in (r.stdout + r.stderr).splitlines() if "test cases:" in l)

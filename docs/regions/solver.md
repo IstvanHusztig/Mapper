@@ -122,8 +122,8 @@ window verdict. It knows no term's maths; it owns the order in which a window's 
   `next_lm_factor` raises the damping at once).
 
 - **C41** (reported): `SumBlocks` / `Blocks` (`normal_equations.*`) are used only by tests; the comments in
-  `phase_timing.h` (`pose_band_to_sparse`) and on `ScanToMapWorkspace::steps_skipped` (`scan_to_map.h`, from before the C7
-  fix) are stale. No result affected.
+  `phase_timing.h` (`pose_band_to_sparse`) and on `ScanToMapWorkspace` (`scan_to_map.h:23-24`: `steps_skipped` from before the C7
+  fix, and big-jump nodes "not moved" from before C8: the whole step is rejected now) are stale. No result affected.
 
 ## To split in the first job
 

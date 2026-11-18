@@ -116,8 +116,8 @@ a node. It also owns the IMU kinematics helpers that the window loop and consist
 - **C2** (partly fixed). The heading reset during Fusion's start-up is gone
   (D1, 11bdd55, `fusion_orientation_estimator.cpp::update`), measured on the cuts s0–s5 without a verdict
   (`openspec/changes/imu-front-end/tasks.md`, task 2.3 open). Still true: the windows (and `m_g`, so the seed map) start
-  inside Fusion's 3 s ramp with gain 10 → `ahrs_gain` and acceleration rejection off while initialising
-  (`FusionAhrs.c:116–146`). The tracker row is not updated.
+  inside Fusion's 3 s ramp with gain 10 → `ahrs_gain` and acceleration rejection off for the whole run
+  (the adapter's `rejectionTimeout` is 0, so Fusion sets the threshold to `FLT_MAX`, `FusionAhrs.c:83–84`).
 - **C19** (reported). `lidar_odometry.cpp::compute_step_1` (point loop after the window's nodes): a point takes the node
   before it, no interpolation; a point more than 10 ms after its node is dropped, with no counter. Recording 44 has 58
   IMU gaps of 3–12 ms and one of 0.40 s at 2.6 s. Also roadmap finding T2 (`docs/agents/roadmap.md`).
@@ -131,14 +131,12 @@ a node. It also owns the IMU kinematics helpers that the window loop and consist
   Evidence: `openspec/changes/map-precision-leaks/findings.md` F3.
 - **Crossing findings owned elsewhere:** C14 and C30 (map: `decimate`, which `compute_step_1` calls in the sensor
   frame); C15 (inertial): its front-end parts are done in the code (the hand-off by D5, a203f1c/76e2922; dropped
-  windows now warned and counted), but the tracker row still says "reported".
+  windows now warned and counted), and the tracker row says "fixed".
 - **Not in the tracker** (code, 2026-11-18):
   - T1 (roadmap): no setting for an IMU–LiDAR time offset; 44 was restamped outside dMapper.
   - T3 (roadmap): first AHRS step 1/200 s and dt ≤ 0 → 0.002 s are fixed constants (`calculate_trajectory`).
-  - `load_imu` reports missing CSV columns only when all three groups are missing (`recording_folder_source.cpp:62`);
-    a partial header throws inside the row loop, which is caught and logged at info level, and the samples read so
-    far are returned.
-  - `compute_step_1` reads `windows[0]` with no check that a window was kept.
+  - (The `load_imu` column check and the unchecked `windows[0]` are tracker row C42, below. Detail: a partial header
+    throws inside the row loop, which is caught and logged at info level, and the samples read so far are returned.)
 
 - **C42** (reported): `load_imu` rejects a CSV for missing columns only when all three column groups are missing;
   nothing checks for an empty `windows` before `windows[0]` is read in `compute_step_1`.
