@@ -114,6 +114,17 @@ None (`python tools/function_sizes.py src --min 80`, 2026-11-18: no function of 
 
 ## Experiments
 
+- **2026-11-18** Livox 4 passage stall (stage 8), NDT information split by each cell's normal (new per-term rows
+  `ndt_normal` / `ndt_in_plane`, merged 7a9d031): in windows 288–292 the in-plane part has 67–84 % of the NDT's
+  stretch-along weight and pulls −33 to −43 mm at the result, the normal part −12 to +3.5 mm; calm windows 270–280:
+  normal 82 %, in-plane −5.7 mm. 94 % of the weight in 288–294 comes from points ahead of their node.
+  `experiments/regions/lidar-matching/2026-11-18-passage-pull/`.
+- **2026-11-18** In-plane ablation (experiment branch `…-in-plane-ablation`, 0feae07; rule A: normal + g × in-plane,
+  rule B: only directions with σ ≥ 0.2 cell scaled), measured gyro noise. Passage 100–110 s (true about 10 m): 6.04 m
+  → A 7.85 / 8.90 / 9.55 m at g 0.3 / 0.1 / 0, B 6.72 / 7.26 / 8.00 m. Full runs with A g 0: Livox 4 passage 9.38 m
+  but the speed runs to 2.4–4.2 m/s at 329–354 s (about 50 m of false path); Livox 3 start-to-end 0.07 → 1.65 m. On
+  the stairs the first flight's path grows 6.03 → 7.5–8.2 m (207–215 s); which is right is not known.
+  `experiments/regions/lidar-matching/2026-11-18-in-plane-ablation/`, `experiments/stage8/`
 - **2026-11-17** Per-term table, Livox 3 100-130 s (84 windows, replay): the NDT grids hold a median 90 % of the weight on
   stretch along travel (indoor 56 %, outdoor 33 %); turn about vertical: NDT indoor 56 % / outdoor 44 %, gyro 0.13 %. The
   projection cuts the NDT weight in 12 windows (to 14-15 % in windows 313-314, information ratio 0.12-0.13). The two grids'
@@ -162,6 +173,9 @@ None (`python tools/function_sizes.py src --min 80`, 2026-11-18: no function of 
 
 ## Open questions
 
+- The in-plane part causes the passage stall and cannot be removed yet: without it the inertial carry must hold where
+  the normal part says little along travel, and it runs away in one stretch (Experiments 2026-11-18). What biases the
+  in-plane residual of points ahead of their node (sparse cells first seen from far are the candidate) is not measured.
 - Does `sum n n^T` over the stored normals measure blindness well enough on real data (C20 / P1), and should an honest
   measure be rebuilt on the split code (roadmap step 3)?
 - What do C16 and C31 do to a real degenerate stretch? Neither has been measured on its own.

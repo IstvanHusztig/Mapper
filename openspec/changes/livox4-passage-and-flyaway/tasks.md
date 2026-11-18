@@ -107,12 +107,22 @@
   gyro, rule A gain 0): `experiments/stage8/runaway_capture`.
   Result: `experiments/stage8/runaway_capture/result/window_capture_315.0-362.0s.bin` (719 MB), settings
   `runaway_capture.toml`, experiment build 0feae07.
-- [ ] 3.8 Region job, experiment branch `region/lidar-matching/2026-11-18-rotation-prior-experiment` (not for merge):
+- [x] 3.8 Region job, experiment branch `region/lidar-matching/2026-11-18-rotation-prior-experiment` (not for merge):
   a prior with a sigma on node 0's rotation in place of the hard fix (`origin_rotation_prior_sigma_deg` 0.005 /
   0.02 / 0.08) and a gyro scale correction (`gyro_scale_correction_z` 0.004), alone and together, on the passage
   and Livox 3 captures, then on the stairs; then with the in-plane rule A at gain 0 / 0.03 / 0.1 on the runaway,
   passage and Livox 3 captures. Readings: the bias estimate's swing, the tilt the accelerometer sees, how far
   node 0 is turned, the speeds of the runaway stretch.
+  Result: commit 5869043 (24 replays, none at the time limit) and four more of mine (`experiments/stage8/extra_rotation`).
+  One replay per variant, measured gyro noise everywhere. Passage 100-110 s / stairs largest speed / end stretch
+  largest speed walking, standing: gyro only 6.04 m / 1.38 m/s / (full run fine); in-plane removed 9.55 / 1.65 / 3.31,
+  4.16; in-plane removed + scale 9.46 / 1.76 / 3.29, 4.16; in-plane removed + scale + prior 0.02 deg 9.05 / 2.58 /
+  2.41, 0.67 (mean 0.12 m/s while standing); scale + prior (in-plane as shipped) 6.09 / 4.60 / -; prior alone 6.01 /
+  4.96 / -. On the stairs the prior lets node 0's pitch be turned 0.5-0.85 deg per window (windows 689-691). The
+  scale correction brings the yaw bias slope to -0.0004 (passage) and -0.0008 (Livox 3). Reviewed: the numbers hold;
+  no replay has the prior alone on the end stretch or another prior size on the stairs, and the first staircase's
+  path grows 36 % without the in-plane part (6.03 -> 8.19 m), which of the two is right is not known. No variant
+  is clean on all three stretches.
 - [x] 3.7 Research (two Sonnet passes; `experiments/stage8/research_rotation_and_inplane.md`, the second pass read
   the sources): VoxelMap, FAST-LIO2 and GICP match points to planes only (GICP: a point constrains only along
   its normal); FAST-LIO2 and VINS-Mono correct the attitude as a state, the window's oldest pose carries a prior
@@ -124,7 +134,7 @@
 
 - [ ] 4.1 The numbers for the user, without a verdict; the conclusion reviewed (Sonnet) before it is stated.
 - [ ] 4.2 The user's decision: which fix is proposed as its own change, or what is looked at next.
-- [ ] 4.3 Knowledge entries of the regions that took part; tracker rows for defects found.
+- [x] 4.3 Knowledge entries of the regions that took part; tracker rows for defects found.
 
 ## Open, for a later look at higher effort
 

@@ -127,6 +127,24 @@ None: no function of this region is above 80 lines (`python tools/function_sizes
 
 ## Experiments
 
+- **2026-11-18** Livox gyro weight (stage 8, change `livox-measured-gyro-noise`): the gyro's measured noise (ARW 0.0094 /
+  0.0224 / 0.0144 °/√s, k 1, floor 0.0002°) in place of the L2's values with k 7.09. Full Livox 4: windows bent > 3°
+  96 → 0, largest speed 8.5 → 1.62 m/s, end height −78 → −0.7 m, largest bias estimate 5.1 → 0.58 °/s; Livox 3:
+  largest bend 1.98 → 0.30°, start-to-end 0.08 → 0.07 m. k 1 alone (L2's ARW) still gives speed bursts to 5.5 m/s on
+  the flyaway capture. The user's look: Livox 4 "a huge win" with "rotation drifts generally", Livox 3 "crisp as
+  expected". Shipped in `livox-vertical.toml`. `experiments/stage8/`
+- **2026-11-18** Gyro scale: with the measured gyro noise the yaw bias estimate follows the yaw rate (slope −0.0022 …
+  −0.0032 °/s per °/s, R² 0.20–0.25 on Livox 4, 0.46–0.58 on Livox 3) and not the yaw acceleration (R² 0–0.02). A
+  full Livox 4 run with the yaw rate × 1.004 brings the slope to about 0 (R² 0.00–0.10) and the run closes:
+  start-to-end 3.73 → 0.77 m, loop corrections' rotation median 2.1 → 1.2°. The user's look: "even better". Not
+  shipped (a scaled copy of the recording; needs a setting or an estimated scale). `experiments/stage8/`
+- **2026-11-18** A prior with a sigma on node 0's rotation in place of the hard fix (experiment branch
+  `region/lidar-matching/2026-11-18-rotation-prior-experiment`, 5869043, replays): σ 0.02° with the scale correction
+  narrows the yaw bias estimate's range (passage −0.23..+0.37 → −0.10..+0.22 °/s) and, with the in-plane part removed,
+  turns the end-stretch runaway (3.3 / 4.2 m/s) into one burst of 2.4 m/s (mean 0.12 m/s while the user stands). But
+  σ 0.02° on the stairs capture runs away to 4.6–5.0 m/s after node 0 pitch turns of 0.5–0.85° per window: the NDT's
+  claimed rotation hold (about 0.01°) outweighs the prior. σ 0.005° changes little, σ 0.08° bends the passage by 1.3°.
+  One replay per variant; other sizes on the stairs not tried. `experiments/regions/lidar-matching/2026-11-18-rotation-prior/`.
 - 2026-11-18 Stage 5 (`window-noise-model`): one model per window, pure refactor. 44, Livox 3, 44_short IDENTICAL
   (4b48184); 44_short with `log_window_noise`: 70 `window noise` lines, 28 `noise_*` columns; Debug ctest pass.
   `ndt_window_cost` now follows the term's per-grid rules; the 26 weak-axis lines of the 44_short replay are unchanged
@@ -181,7 +199,12 @@ None: no function of this region is above 80 lines (`python tools/function_sizes
   between windows missing? Stage 5 put the covariance in one place so this can be measured as its own change.
 - C34: what do looser edge translation σ under `imu_always_on` do (44_short: result − guess, start-velocity chi²,
   `trajectory_seams.py`)?
-- k and ARW: the Livox runs with the L2's ARW and k 7.09; the Livox gyro at rest is 13–30× better (memory note
+- (Answered for the Livox 2026-11-18: its file carries the measured ARW with k 1, see Experiments. Open: the L2's k.)
+- The rotation model: each window's node 0 is hard-fixed (`fix_origin` adds diagonal weight, no anchor) and the edges
+  follow the gyro, so the attitude is corrected only through the gyro bias estimate, which swings by ±0.4 °/s while
+  walking. A fixed-sigma prior on node 0 is not safe as tried (Experiments). To design: a prior whose size follows
+  what the previous window knew, or a tilt correction from gravity the LiDAR cannot override; a gyro scale state.
+- Formerly: the Livox ran with the L2's ARW and k 7.09; the Livox gyro at rest is 13–30× better (memory note
   `livox-state-2026-11-15.md`), the yaw edge σ ~17× its own noise. A sensor-measured gyro weight is open; k = 1 removes
   bends on livox/1 but not the sensitivity to perturbations.
 - `log_weak_axis_diagnostics` computes the motion model's stiffness from `mm.x_sigma_m` without
