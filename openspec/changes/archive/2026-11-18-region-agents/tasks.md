@@ -18,9 +18,11 @@
   Result: e17247e. The references recorded from that commit are byte-identical with the stage 6 ones (both guards, both
   table files); a second run reports identical everywhere and exits 0; `--record` on a tree with an uncommitted change
   in `src/` refuses and writes nothing. The captures are in `experiments/guards/`.
-- [ ] 2.2 `tools/end_runs.py` (full 44, Livox 3, 44_short against their manifests, odometry times; `--debug`; refuses
+- [x] 2.2 `tools/end_runs.py` (full 44, Livox 3, 44_short against their manifests, odometry times; `--debug`; refuses
   while a dMapper runs; one line per run into a log). Verify: started in the background at the end of this change (task
   7.3), it reports IDENTICAL for the three recordings.
+  Result: run as task 7.3: 44 IDENTICAL (35 files, odometry 909 s, wall 1413 s, peak 4.3 GB), Livox 3 IDENTICAL (35 files, odometry
+  646 s, wall 1263 s, peak 4.4 GB), 44_short IDENTICAL (11 files, 98 s) at de51b4c; it held the gate and logged one line per run.
 - [x] 2.4 `tools/run_replay.py`: the gate (memory need from the capture's size, two slots, held whole by `end_runs.py`,
   stale holders ignored; wall time, CPU time, peak memory, time-limit count; the replay's exit code). `step_checks.py`
   starts its replays through it. Verify: alone it starts at once and prints the cost line; a third replay waits while
@@ -151,5 +153,9 @@
   docs writing is Opus / medium.
 - [x] 7.2 `tools/region_owners.py` and `tools/check_agent_setup.py` pass on the final tree.
   Result: `region_owners.py`: 0 problems; `check_agent_setup.py`: PASS (de51b4c).
-- [ ] 7.3 `tools/end_runs.py --debug` in the background (the try-out changed map code). Verify: full 44, Livox 3 and
+- [x] 7.3 `tools/end_runs.py --debug` in the background (the try-out changed map code). Verify: full 44, Livox 3 and
   44_short IDENTICAL with their manifests; Debug `ctest` passes.
+  Result: 44 IDENTICAL (35 files, odometry 909 s, wall 1413 s, peak 4.3 GB), Livox 3 IDENTICAL (35 files, odometry
+  646 s, wall 1263 s, peak 4.4 GB), 44_short IDENTICAL (11 files, 98 s) at de51b4c. The Debug build and `ctest` were dropped (the user, 2026-11-18): the
+  try-out only split a function into steps (no memory, thread or assert change), so `--debug` stays unproven
+  until a later change needs it.
