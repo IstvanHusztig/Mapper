@@ -1010,12 +1010,12 @@ several regions share. The list is one file, `docs/regions/owners.toml`, with th
   `run_odometry.cpp`; the orchestrator's `save_result` in the front-end's `lidar_odometry.cpp`);
 - **shared test files** (`window_terms_test.cpp`, `scan_to_map_test.cpp`, `window_capture_test.cpp`): their cases don't
   separate by name, so any region may add or change the cases of its own code there, and the orchestrator reads that
-  part of the patch.
+  part of the branch's diff.
 
 **Whatever the list does not name belongs to the orchestrator.** So every file has one owner by construction, and
 `tools/region_owners.py` checks the rest: every named file and function exists, nothing is named twice. With
-`--patch <file> --region <name>` it lists the files and functions a patch touches outside that region's entries: an
-agent's definition can't fence it into paths, so this is the fence.
+`--diff <base>..<branch> --region <name>` it lists the files and functions a branch touches outside that region's
+entries: an agent's definition can't fence it into paths, so this is the fence.
 
 | Owner | Whole files | Functions in shared files | Tests |
 |---|---|---|---|
@@ -1092,26 +1092,39 @@ the region's name and contract filled in:
 - Read first: `CLAUDE.md`, your knowledge file, `docs/regions/README.md`.
 - Say what you will do before you do it (the first lines of your report).
 - Edit only what you own. What you need from a shared file or another region, you report; you don't edit it.
-- Work by replay. You never start a full run, never commit, never push, never change `settings/`; a settings idea is
-  tried on a copy in your experiment folder.
+- Work by replay. You never start a full run and never change `settings/`; a settings idea is tried on a copy in your
+  experiment folder, under a file name of your own (a replay names its table files after the settings file, next to
+  the capture). After a replay with settings other than the capture's, check that the verdict summary shows no window
+  stopped by the time limit (another job's load can cause it); if one did, run it again alone.
 - Numbers, not verdicts: no statement about the map, no "better". No dead code. Precision before speed.
-- Leave the tree as you found it: save your change as a patch, then restore the files.
+- Work only in the worktree you were given, on its branch; commit your change there. Never touch the main tree, never
+  merge, never push.
 - Hand back in the fixed form (below), with your knowledge entry.
 - You can't start other agents; the orchestrator calls verification and the reviewer.
 
 **Hand-back form:** the question; what was run; the finding with its numbers; where the evidence is; the proposed
-change (the patch file, the files it touches, whose contract it touches); what could not be measured; the knowledge
-entry.
+change (the branch and its commits, the files it touches, whose contract it touches); what could not be measured; the
+knowledge entry.
 
-**One working tree, one agent at a time, and the tree is left clean.** A region agent builds and replays in the repo's
-one tree (`out/build/x64-Release`). The orchestrator starts it only when `src/` and `tests/` have no uncommitted
-change. At the end the agent saves its change as a patch in its experiment folder
-(`experiments/regions/<name>/<date>-<question>/`) and restores the files, so nothing unaccepted stays where a later
-commit could pick it up. The orchestrator checks the patch against the ownership list, applies it for verification,
-and restores the tree again unless the user accepts. Agents that only read (the reviewers, a region asked for its
-view) may run beside it; two jobs never run on one recording folder. Separate worktrees are not used for region jobs:
-each would need its own build tree, which `CLAUDE.md` rules out, and they share the recordings' caches anyway
-(`AGENTS.md` keeps them for Codex's simultaneous editing).
+**Each editing agent in its own worktree; the main agent decides and merges** (user, 2026-11-18). A region agent gets
+a git worktree and a branch of its own (`region/<name>/<date>-<question>`), builds there with the same `x64-Release`
+preset (its own `out/build`, about 1.6 GB), replays, commits its change on its branch and reports back. The main tree
+is never touched by an agent: it stays free for full runs and for the orchestrator's own work, and nothing unaccepted
+can be picked up by a commit there. The orchestrator checks the branch against the ownership list, has verification
+and the reviewer look at it, and then decides: merge it into the main tree, or leave it. A branch not taken is kept
+until its knowledge entry is written, then deleted with its worktree.
+
+- Two standing worktrees (`C:/Repo/dMapper-worktrees/region-a`, `region-b`), reset to the main tree's commit before each
+  job, so that a build is incremental instead of full. At most two editing agents at once.
+- Agents replay only. Full runs stay with the orchestrator, one at a time, from the main tree (they share each
+  recording's cache and make the baselines).
+- Verification runs `step_checks.py` in the agent's worktree, on the branch as committed.
+- `CLAUDE.md`'s rule "do not add other build trees" gets this exception written in, beside the `/fp:fast` scratch
+  worktree it already has.
+
+**What the main agent may take on its own.** A branch whose `step_checks.py` is identical everywhere changes no
+number: the orchestrator merges it on its own judgment and reports it. A branch that changes a number is merged only
+after the user's decision on the numbers (step 6 of the protocol).
 
 **Two more definitions:** `conclusion-reviewer` (Sonnet, read-only: checks a finding and its numbers before they are
 stated, today an ad-hoc prompt each time), and Claude's `master-reviewer` gets the repo's present path (its Codex twin
@@ -1126,12 +1139,13 @@ background script does that job, and `tools/end_runs.py` is that script.
    to, with the rows. If two regions are possible, both are asked for their view, read-only.
 3. **Region job.** The region's agent gets the question, the capture, the settings, what is known and what is ruled out
    (effort high when a fix is asked for). It hands back in the fixed form.
-4. **Verification.** The orchestrator checks the patch against the ownership list and applies it; the verification
-   agent runs `step_checks.py`. Identical everywhere: the change changes no number. Otherwise: the replays before and
-   after, `verify-run` on their logs, and the spread of small perturbations (`verify-robustness`) when one variant is
-   claimed to beat another. Then the tree is restored.
+4. **Verification.** The orchestrator checks the agent's branch against the ownership list; the verification agent
+   runs `step_checks.py` in the agent's worktree. Identical everywhere: the change changes no number. Otherwise: the
+   replays before and after, `verify-run` on their logs, and the spread of small perturbations (`verify-robustness`)
+   when one variant is claimed to beat another.
 5. **Review.** The conclusion reviewer checks the finding against its evidence.
-6. **The user decides** on the numbers, shown without a verdict: reject (it goes to the knowledge file's "Ideas
+6. **Merge or decision.** A branch that changes no number: the orchestrator decides, merges and reports. A branch that
+   changes a number: **the user decides** on the numbers, shown without a verdict: reject (it goes to the knowledge file's "Ideas
    rejected"), or full runs (`verify-run`, `verify-map`, the before and after clouds for the user's look), or accept. An
    accepted change is an OpenSpec change (propose, apply, archive), baselines in their own commit. A change that
    changes a number enters the code only here, after the user's word; nothing is called better from log readings, and
@@ -1149,17 +1163,18 @@ commit. What goes wrong in the chain is fixed in the definitions before Livox 4
 depends on them.
 
 A Sonnet reviewer checked this design against the repository (2026-11-18); its findings are worked in: the default
-owner and the shared test files, the flaws mapped by today's code, the patch-only hand-back with the ownership check,
+owner and the shared test files, the flaws mapped by today's code, the hand-back checked against the ownership list,
 knowledge entries through the orchestrator, the limits of what a definition can enforce.
 
 #### Checks and commit order
 
 1. The verification kit; its references equal the ones of stage 6. `tools/README.md`.
 2. `owners.toml` and `tools/region_owners.py`: every named file and function exists, none twice; `--patch` tried on a
-   made-up patch that leaves its region.
+   made-up branch that leaves its region.
 3. The knowledge files and `docs/regions/README.md`, each checked against the code by a reviewer; the tracker's
    references brought to today's files; the docs maps.
-4. The agent definitions; `CLAUDE.md` gets a "Regions" section, `AGENTS.md` a pointer (the definitions are Claude's; the
+4. The two standing worktrees, each built once; the agent definitions; `CLAUDE.md` gets a "Regions" section and the
+   worktree exception, `AGENTS.md` a pointer (the definitions are Claude's; the
    knowledge files and the ownership bind Codex too); `tools/check_agent_setup.py` still passes.
 5. Each region agent is started once, read-only: it states its contract and its files and names what in its knowledge
    file it could not find in the code. Corrections go into the files.
@@ -1176,9 +1191,10 @@ No Debug build except for the try-out's end (it changes map code).
    only reads.
 3. **Capture, replay, the loop's skeleton, shared types and settings stay with the orchestrator; verification never
    edits `src/`.** Recommended.
-4. **One working tree, one editing agent at a time; it hands back a patch and leaves the tree clean; agents never
-   commit, push, run full runs or touch `settings/`.** Recommended (one rebuild more per job, and nothing unaccepted
-   can slip into a commit). Alternative: the change stays in the tree for verification (faster, riskier).
+4. **Each editing agent works in its own worktree on its own branch and reports back; the main agent decides and
+   merges** (the user's idea, 2026-11-18): two standing worktrees, at most two editing agents at once, agents never
+   merge, push, run full runs or touch `settings/`. The main agent merges a branch that changes no number on its own
+   judgment; one that changes a number only after the user's decision.
 5. **The knowledge file's form, its seeding from what is written, a reviewer's check of each, about 300 lines; agents
    hand in entries, the orchestrator writes the file.** Recommended. Alternative: agents edit their file directly
    (less work for the orchestrator; a rejected change can leave traces).
