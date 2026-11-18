@@ -1169,7 +1169,7 @@ knowledge entries through the orchestrator, the limits of what a definition can 
 #### Checks and commit order
 
 1. The verification kit; its references equal the ones of stage 6. `tools/README.md`.
-2. `owners.toml` and `tools/region_owners.py`: every named file and function exists, none twice; `--patch` tried on a
+2. `owners.toml` and `tools/region_owners.py`: every named file and function exists, none twice; `--diff` tried on a
    made-up branch that leaves its region.
 3. The knowledge files and `docs/regions/README.md`, each checked against the code by a reviewer; the tracker's
    references brought to today's files; the docs maps.
