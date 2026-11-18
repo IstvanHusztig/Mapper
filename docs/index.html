@@ -270,8 +270,8 @@ points of one sweep are placed with the motion during the sweep, not with one po
 <dl class="terms">
 <dt id="t-window">Window</dt>
 <dd>A run of consecutive nodes, <code>threshold_nr_poses</code> of them (360 ≈ 0.4 s on the L2, 180 ≈ 0.36 s on the
-Mid-360S), with the points recorded in that time. The odometry optimizes one window at a time, in order; recording 44 has
-690 windows. <span class="more">→ <a href="#s-windows">step 3</a>, <a href="PIPELINE.md">How a run works</a></span></dd>
+Mid-360S), with the points recorded in that time. The odometry optimizes one window at a time, in order; a 5-minute recording has
+about 690 windows. <span class="more">→ <a href="#s-windows">step 3</a>, <a href="PIPELINE.md">How a run works</a></span></dd>
 <dt id="t-guess">Guess (initial guess)</dt>
 <dd>A window's poses before its optimization: chained onto the previous window's optimized end, rotations from the IMU minus
 the <a class="term" href="#t-gyro-bias">gyro bias</a>, positions from the accelerometer (or a constant velocity).
@@ -872,11 +872,11 @@ the next window, and add this window's points to the map.</li>
 <h3 id="i-checks">How a change is checked</h3>
 <ul>
 <li><b>A refactor must not change a bit.</b> <code>python tools/step_checks.py</code> builds, runs the unit tests, compares
-two guards (a characterization of single iterations and a loop guard, both as exact hexadecimal numbers), replays two
-captured stretches (44_short 20–40 s, Livox 3 100–130 s) window by window, compares the per-term table, and runs 44_short
-against its manifest (about 2 of the 7 minutes). "IDENTICAL" everywhere means the change changes no number.</li>
-<li><b>Once per change</b>, <code>python tools/end_runs.py</code> runs the full 44, Livox 3 and 44_short against their
-manifests (about 50 minutes, in the background); with <code>--debug</code> also the Debug build and its tests.</li>
+two guards (a characterization of single iterations and a loop guard, both as exact hexadecimal numbers), replays
+captured stretches of reference recordings window by window, compares the per-term table, and runs a short reference
+recording against its manifest (the recordings and captures are named in <code>tools/local_paths.toml</code>). "IDENTICAL" everywhere means the change changes no number.</li>
+<li><b>Once per change</b>, <code>python tools/end_runs.py</code> runs the full reference recordings against their
+manifests (in the background; on a 5-minute recording about 25 minutes each); with <code>--debug</code> also the Debug build and its tests.</li>
 <li><b>A stretch in seconds:</b> a run with <code>capture_windows_from_s</code> / <code>_to_s</code> saves a stretch;
 <code>python tools/run_replay.py &lt;capture&gt; &lt;settings&gt;</code> runs only that stretch again, through a gate that
 waits until enough memory and a slot are free (a replay needs about three times its capture file).</li>
@@ -908,7 +908,7 @@ decides what is merged. Who owns which file and function is one list, <code>docs
 region. A separate read-only <b>conclusion reviewer</b> (Sonnet) checks each finding against its evidence before it is
 stated to the user.</p>
 <p><b>Several agents, one machine: the gate.</b> Agents work side by side, and a replay costs memory (about three times its
-capture file: 0.2 GB for the 44_short capture, 1.6 GB and about 5 cores for the Livox 3 one) while a full run of a recording
+capture file: a 30-second capture of a Livox Mid-360S recording needs about 1.6 GB and 5 cores) while a full run of a recording
 must not be slowed down (a window that runs past the time limit changes the result). So every replay and every full run goes
 through one gate, the script <code>tools/run_replay.py</code> (and <code>tools/end_runs.py</code> for full runs):</p>
 <ul>
