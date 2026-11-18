@@ -2,41 +2,53 @@
 
     python tools/function_sizes.py [src] [--min 80]
 
-A function is counted from its first line at column 0 (not a comment, preprocessor line, declaration ending in ';',
-namespace, struct, class, enum, using, typedef or template line) to the next line that starts with '}'. This is the
-code style of dMapper's .cpp files; functions inside an anonymous namespace are indented and are not counted (their
-enclosing namespace is skipped). The count is approximate (blank lines and comments included) and is meant for tracking
-the "huge functions" of docs/code-split-and-region-agents-plan.md, not for exact sizes.
+A function is counted from its header line (a name followed by an opening parenthesis, not a control statement) to the
+brace that closes its body, at any indentation: functions inside a namespace or a class are counted too, and so are the
+ones in headers. A rough reader: no preprocessor, a lambda counts inside its function, and a brace in a string or a
+comment can mislead it. The count includes blank lines and comments and is meant for tracking the "huge functions" of
+docs/code-split-and-region-agents-plan.md (stage 6: none above about 80 lines in the window loop and its terms), not
+for exact sizes. `root` may also be a single file.
 """
 import argparse
 import re
 from pathlib import Path
 
-SKIP = re.compile(r"(namespace|struct|class|enum|using|typedef|template)\b")
-NAME = re.compile(r"([A-Za-z_][\w:~]*)\s*\(")
+HEAD = re.compile(r"^\s*(?:[\w:<>,\*&~]+\s+)*?([~\w:]+)\s*\([^;{]*$|^\s*(?:[\w:<>,\*&~]+\s+)*?([~\w:]+)\s*\(.*\)\s*(const)?\s*(override)?\s*\{?\s*$")
+SKIP = ("if", "for", "while", "switch", "return", "else", "catch", "do")
 
 
 def functions(path):
     lines = path.read_text(encoding="utf-8-sig", errors="replace").splitlines()
-    start = None
-    for i, line in enumerate(lines):
-        if start is None:
-            if line and not line[0].isspace() and line[0] not in "#/}{*" and not SKIP.match(line) and not line.rstrip().endswith(";"):
-                start = i
-        elif line.startswith("}"):
-            head = " ".join(l.strip() for l in lines[start:start + 3])
-            m = NAME.search(head)
-            yield i - start + 1, start + 1, m.group(1) if m else head[:40]
-            start = None
+    i = 0
+    while i < len(lines):
+        stripped = lines[i].strip()
+        m = HEAD.match(lines[i])
+        if m and not stripped.startswith(SKIP) and not stripped.startswith(("//", "#")):
+            name = m.group(1) or m.group(2)
+            j = i
+            while j < len(lines) and "{" not in lines[j] and ";" not in lines[j]:
+                j += 1
+            if j < len(lines) and "{" in lines[j] and ";" not in lines[j].split("{")[0] and name not in SKIP:
+                depth, k = 0, j
+                while k < len(lines):
+                    depth += lines[k].count("{") - lines[k].count("}")
+                    if depth == 0:
+                        break
+                    k += 1
+                yield k - i + 1, i + 1, name
+                i = k
+        i += 1
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("root", nargs="?", default="src", help="folder to scan for .cpp files (default: src)")
+    ap.add_argument("root", nargs="?", default="src", help="folder to scan for .cpp and .h files, or one file (default: src)")
     ap.add_argument("--min", type=int, default=80, help="smallest length to list, in lines (default: 80)")
     args = ap.parse_args()
+    root = Path(args.root)
+    paths = sorted(list(root.rglob("*.cpp")) + list(root.rglob("*.h"))) if root.is_dir() else [root]
     rows = []
-    for path in sorted(Path(args.root).rglob("*.cpp")):
+    for path in paths:
         rows += [(n, path.as_posix(), line, name) for n, line, name in functions(path)]
     rows.sort(key=lambda r: -r[0])
     listed = [r for r in rows if r[0] >= args.min]

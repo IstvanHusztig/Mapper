@@ -26,7 +26,8 @@ Progress:
   commit identical on the guards, replays, 44_short and the per-term table.
 - Stage 6 designed 2026-11-18 (below), decisions taken, OpenSpec `split-window-prediction`; implemented 2026-11-18
   (3c0fdda .. ): one rest test (`window_rests`), `predict_window_poses` in four steps with the chaining through
-  `place_window_after`, `tools/function_lengths.py`; every commit identical. No tier-1 function above 80 lines; the rest
+  `place_window_after`; every commit identical (`tools/function_sizes.py` now also counts functions in namespaces and
+  headers). No tier-1 function above 80 lines; the rest
   waits for its region (table in the stage 6 design).
 - **Verdict limits decided (user, 2026-11-17)**, after the readings of full runs of 44, Livox 3 and Livox 4 (task 6.1 of
   `solver-and-window-verdict`): all agreed limits stay (bent 3°, bent severely 10°, run trigger above 1 % bent; fast
@@ -927,8 +928,9 @@ Each step is under 40 lines and has a test: the mean shift and its drop at 1 m, 
 **What the measurement leaves for later.** The table goes into each region's knowledge file in stage 7 (front-end, map,
 back-end): a region splits its functions in its first job, as this plan says, before it changes them.
 
-**A tool for the measurement:** `tools/function_lengths.py <limit> <files or folders>` prints every function above the
-limit (the reader above, pure Python). The verification region runs it; the region contracts of stage 7 can name it.
+**A tool for the measurement:** `tools/function_sizes.py [src] [--min 80]` prints every function above the limit (it
+exists since stage 0; a second tool added here by mistake, `function_lengths.py`, was removed on 2026-11-18 and its
+reader, which also counts functions inside namespaces and in headers, moved into `function_sizes.py`). The verification region runs it; the region contracts of stage 7 can name it.
 
 **Checks and commit order.** Every commit: Release build, unit tests, characterization guard, loop guard (it runs the
 prediction through the window loop), the two replays, 44_short against its manifest, the per-term table of the 44_short
@@ -938,7 +940,7 @@ when they can matter").
 
 1. `window_rests` and its named constant; the three callers use it; test.
 2. `predict_window_poses` in its four steps, chaining through `place_window_after`; tests of the steps.
-3. `tools/function_lengths.py`, `tools/README.md`; the plan's table and progress; `CLAUDE.md` where it names the window steps.
+3. `tools/function_sizes.py`, `tools/README.md`; the plan's table and progress; `CLAUDE.md` where it names the window steps.
 
 ### Decisions (user, 2026-11-18: all as recommended)
 
@@ -949,7 +951,7 @@ when they can matter").
    diagnostic). Recommended: the same test with the same constant written three times can drift apart.
 3. **Tiers 2 and 3 stay deferred** to their region's first job, and the measured table goes into the region knowledge
    files in stage 7. Recommended; `update_rgd_legacy` (map) joins tier 2, which the old table did not list.
-4. **`tools/function_lengths.py`** in the repo for the verification region. Recommended. Alternative: keep the measurement
+4. **`tools/function_sizes.py`** in the repo for the verification region. Recommended. Alternative: keep the measurement
    as a one-off.
 5. **No Debug build at the end of the stage.** Recommended (a pure split; the rule in CLAUDE.md).
 

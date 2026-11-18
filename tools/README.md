@@ -275,17 +275,6 @@ python tools/holdout_sharpness.py [--block 0.01] --sets <ref_s0>,<res_s0> <ref_s
 - All results of a set must hold the same points (same recording and hold-out), else it stops.
 - Reference (2026-10-18, 44_short at `holdout_block_s` 0.01, research runs): consistency +1.85 mm all-time against odometry only, the scratch gyro term (s = 3) −0.87 mm.
 
-## function_lengths.py
-
-Lists every function longer than a limit in C++ files or folders, longest first, with its file and line: the measurement
-of stage 6 of `docs/code-split-and-region-agents-plan.md` (no function above about 80 lines in the window loop and its
-terms; the longer ones elsewhere are split in their region's first job). A rough brace-matching reader, pure Python, not
-a build check.
-
-```
-python tools/function_lengths.py 80 src
-```
-
 ## Regression baseline (compare_baseline.py, cut_recording)
 
 Refactors must reproduce `44_short` and the full 44 bit for bit (see `docs/ARCHITECTURE.md`). Two reference datasets live next to the raw data, outside git:
@@ -379,9 +368,10 @@ Lists the functions of a source tree longer than a limit, largest first: the "hu
 python tools/function_sizes.py [src] [--min 80]
 ```
 
-- A function runs from its first line at column 0 to the next line starting with `}` (dMapper's .cpp style); functions
-  inside an anonymous namespace are indented and not counted. The length includes blank lines and comments, so it is
-  approximate, and a class body defined at column 0 can show up under the name of its first member.
+- A function runs from its header line to the brace that closes its body, at any indentation: functions inside a
+  namespace or a class and the ones in headers are counted too. A rough reader (no preprocessor, a lambda counts inside
+  its function); the length includes blank lines and comments, so it is approximate.
+- `src` may be a folder (its `.cpp` and `.h` files) or a single file.
 
 ## window_terms.py
 
