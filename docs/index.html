@@ -165,6 +165,13 @@
   <a href="#tuning">Tuning cheat sheet</a>
   <a href="#fixes">Fixes and map sharpness</a>
   <a href="#limits">Known limitations</a>
+  <div class="group">Internals</div>
+  <a href="#internals">Code and work</a>
+  <a class="indent" href="#i-window">One window, in the code</a>
+  <a class="indent" href="#i-checks">How a change is checked</a>
+  <a class="indent" href="#i-regions">Regions and agents</a>
+  <a class="indent" href="#i-flow">Question to merge</a>
+  <a class="page" href="regions/README.md">↗ Regions</a>
   <div class="group">Reference</div>
   <a href="ARCHITECTURE.md">↗ Architecture</a>
   <a href="code-split-and-region-agents-plan.md">↗ Code-split plan</a>
@@ -175,10 +182,11 @@
 <main>
 <button class="theme-btn" id="themeBtn" type="button">Theme</button>
 <h1>dMapper guide</h1>
-<p class="lead"><code>dMapper</code> turns a LiDAR + IMU recording into a trajectory and a point cloud. Four ways into this guide:
+<p class="lead"><code>dMapper</code> turns a LiDAR + IMU recording into a trajectory and a point cloud. Five ways into this guide:
 <a href="#fundamentals">the basic terms</a> (pose, node, window, term …), explained once and linked from every page;
 <a href="#pipeline">how it works</a>, step by step from the recorder's LAZ file to the final map, with the pages that explain each
-step in depth; <a href="#params">the settings</a>, every parameter of the settings file; and <a href="#documents">all documents</a>,
+step in depth; <a href="#params">the settings</a>, every parameter of the settings file; <a href="#internals">the internals</a>,
+how the code is laid out and how the work on it is organised; and <a href="#documents">all documents</a>,
 every page of <code>docs/</code> by what it is for.</p>
 
 <h2 id="overview">What the odometry does with the points it reads</h2>
@@ -817,6 +825,111 @@ See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 <li><b>Loop closure also moves a correct trajectory.</b> On the synthetic two-lap recording of the unit tests (<code>tests/loop_closure_test.cpp</code>) it halves a second-lap drift, but a trajectory that is already exact is moved by up to 3 cm and 0.1°: every revisit registers with a residual of 1–3 cm, and the pose graph trusts loop edges to 5 cm. With points only within 6 m it accepted a wrong registration and moved the trajectory by 1.5 m; the overlap threshold alone does not catch that.</li>
 <li><b>The consistency pass also moves a correct trajectory</b>, on the same synthetic recording (<code>tests/consistency_test.cpp</code>): by up to 6 mm (spread evenly, the noise of the NDT fit). It removes offsets between windows.</li>
 </ul>
+<h2 id="internals">Internals: how the code is laid out and how the work is organised</h2>
+<p>This part is for whoever changes dMapper: where each part of the processing lives in the code, how a change is checked,
+and how the work is divided between the main session and the agents that own the regions of the code. The pages in depth
+are <a href="ARCHITECTURE.md">Architecture</a> (the target design), <a href="regions/README.md">Regions</a> (the rules and
+the protocol) and the <a href="code-split-and-region-agents-plan.md">code-split plan</a> (why the code is shaped this way).</p>
+
+<h3 id="i-layers">Layers</h3>
+<p>The code is in <code>src/</code>, one folder per layer, each built as its own library; a file that includes something its
+layer may not see does not compile.</p>
+<div class="table-wrap"><table>
+<tr><th>Layer</th><th>What is in it</th><th>May use</th></tr>
+<tr><td>src/domain</td><td>The entities and the mathematics: windows, poses, the NDT map, the window's terms, the noise model, the solver, the window verdict, the settings struct</td><td>Eigen, manif, the generated observation equations</td></tr>
+<tr><td>src/application</td><td>The use cases: the pipeline, the window loop, loop closure, consistency, capture and replay; the ports (interfaces) to the outside</td><td>the domain</td></tr>
+<tr><td>src/infrastructure</td><td>The adapters: recording folders, LAZ, CSV, TOML, the Fusion AHRS, the thread pool, the result files</td><td>the application and the domain, and the libraries of those formats (LASzip, CSV, JSON, Fusion, TBB); no ImGui, GLUT or GL</td></tr>
+<tr><td>src/presentation</td><td>The command line and the GUI</td><td>everything above; only the GUI's viewer and main window (compiled into the program) use ImGui, GLUT and GL, the GUI's view-model is built without them</td></tr>
+</table></div>
+
+<p>Building and testing: Release only (<code>x64-Release</code>; <code>x64-Debug</code> only for a change that can behave
+differently there), with <code>vcvars64.bat</code> loaded; the commands and the rules are in <code>CLAUDE.md</code>,
+sections "Build" and "Testing". A new setting goes into both <code>TomlIO::POINTERS</code> and the right
+<code>CATEGORIES</code> section, and the golden TOML test files are regenerated in their own commit.</p>
+
+<h3 id="i-window">One window, in the code</h3>
+<p>The <a href="#pipeline">pipeline</a> above in code terms: <code>OdometryPipeline</code> loads the recording and cuts it
+into windows (<code>compute_step_1</code>), then the window loop (<code>process_windows</code>,
+<code>src/application/run_odometry.cpp</code>) runs four steps for each <a class="term" href="#t-window">window</a>:</p>
+<ol>
+<li><b>prepare_window</b>: load the window's points, make its <a class="term" href="#t-guess">guess</a> from the previous
+window (<code>predict_window_poses</code>: chaining, the rest test, the translation guess), set the carried priors, and build
+the window's <b>noise model</b> (<code>WindowNoiseModel</code>): every weight of the window, computed once.</li>
+<li><b>solve_window</b>: the <a class="term" href="#t-lm">Levenberg–Marquardt iterations</a> (<code>lm_solve</code>,
+<code>src/domain/lm_solver.cpp</code>) over the window's problem (<code>WindowProblem</code>). Each iteration asks every
+<a class="term" href="#t-term">term</a> for its equations in a fixed order: the NDT point terms per grid
+(<code>ndt_term</code>), the motion edges, gyro-bias prior and velocity continuity (<code>motion_model_terms</code>), the
+accelerometer terms and the velocity and offset priors (<code>accelerometer_term</code>), the origin fix. The terms read
+their weights from the noise model and never compute them. The solver records why the iterations stopped.</li>
+<li><b>report_window</b>: the log lines, the optional per-term table (<code>log_window_terms</code>) and noise line
+(<code>log_window_noise</code>), and the <a class="term" href="#t-verdict">window verdict</a>.</li>
+<li><b>finish_window</b>: hand the gyro bias, velocity and offset to the next window, re-propagate the window's tail, place
+the next window, and add this window's points to the map.</li>
+</ol>
+<p>After the loop: loop closure and the consistency pass (<code>post_process</code>), then the result files. Every run logs a
+<code>noise budget</code> line at the start and a <code>window verdict summary</code> at the end of the odometry.</p>
+
+<h3 id="i-checks">How a change is checked</h3>
+<ul>
+<li><b>A refactor must not change a bit.</b> <code>python tools/step_checks.py</code> builds, runs the unit tests, compares
+two guards (a characterization of single iterations and a loop guard, both as exact hexadecimal numbers), replays two
+captured stretches (44_short 20–40 s, Livox 3 100–130 s) window by window, compares the per-term table, and runs 44_short
+against its manifest (about 2 of the 7 minutes). "IDENTICAL" everywhere means the change changes no number.</li>
+<li><b>Once per change</b>, <code>python tools/end_runs.py</code> runs the full 44, Livox 3 and 44_short against their
+manifests (about 50 minutes, in the background); with <code>--debug</code> also the Debug build and its tests.</li>
+<li><b>A stretch in seconds:</b> a run with <code>capture_windows_from_s</code> / <code>_to_s</code> saves a stretch;
+<code>python tools/run_replay.py &lt;capture&gt; &lt;settings&gt;</code> runs only that stretch again, through a gate that
+waits until enough memory and a slot are free (a replay needs about three times its capture file).</li>
+<li><b>A number that changes</b> is judged on the run's log (the run check), on the map (the map check, and the user's own
+look at the clouds), and against the spread of small perturbations when one variant is claimed to beat another. Once
+accepted, the new manifests (and baseline folders) go into a commit of their own. See
+<a href="#fixes">Fixes and map sharpness</a>.</li>
+</ul>
+
+<h3 id="i-regions">Regions and agents</h3>
+<p>The code is divided into eight regions. Each has an <b>owner agent</b> that starts with no memory of earlier work and
+learns its region from its <b>knowledge file</b>: its contract (what it takes and gives), its files, how to check its work,
+its known flaws, what was tried and what was rejected.</p>
+<div class="table-wrap"><table>
+<tr><th>Region</th><th>Its part of the processing</th><th>Agent's model</th></tr>
+<tr><td><a href="regions/front-end.md">front-end</a></td><td>loading, the AHRS orientation, cutting windows, attaching points to nodes</td><td>Opus</td></tr>
+<tr><td><a href="regions/map.md">map</a></td><td>the NDT map: cell statistics, the seed, the update after each window, the sliding rebuild</td><td>Opus</td></tr>
+<tr><td><a href="regions/lidar-matching.md">lidar-matching</a></td><td>a point against its cell, the degeneracy projection</td><td>Opus</td></tr>
+<tr><td><a href="regions/inertial.md">inertial</a></td><td>the guess, the motion edges, the accelerometer terms, what passes from window to window</td><td>Opus</td></tr>
+<tr><td><a href="regions/solver.md">solver</a></td><td>the normal equations, the iterations, the step, the window verdict</td><td>Opus</td></tr>
+<tr><td><a href="regions/back-end.md">back-end</a></td><td>loop closure, the consistency pass, the odometry snapshot</td><td>Opus</td></tr>
+<tr><td><a href="regions/noise-budget.md">noise-budget</a></td><td>every weight of a window (the noise model), the per-term table</td><td>Opus</td></tr>
+<tr><td><a href="regions/verification.md">verification</a></td><td>the checks: the verification kit, the verify skills, the baselines, the analysis tools</td><td>Sonnet</td></tr>
+</table></div>
+<p>The <b>main session</b> (the orchestrator) owns what the regions share: the shared types and settings, the window loop's
+skeleton, capture and replay, the pipeline, the presentation layer, the docs. It talks to the user, starts the agents and
+decides what is merged. Who owns which file and function is one list, <code>docs/regions/owners.toml</code>;
+<code>python tools/region_owners.py</code> checks it, and with <code>--diff</code> lists what a branch touches outside its
+region. A separate read-only <b>conclusion reviewer</b> (Sonnet) checks each finding against its evidence before it is
+stated to the user.</p>
+
+<h3 id="i-flow">From a question to a merged change</h3>
+<ol>
+<li><b>Question and capture.</b> The main session states the question and captures the stretch.</li>
+<li><b>Triage.</b> It reads the stretch's verdict lines, per-term table and noise lines, and names the region they point to.</li>
+<li><b>Region job.</b> The region's agent works in a <b>worktree of its own</b> (a second checkout of the repository with its
+own build: <code>C:/Repo/dMapper-worktrees/region-a</code> or <code>region-b</code>) on a branch of its own. It changes only
+what its region owns, measures by replay, commits on its branch and hands the branch back with its numbers. It never
+touches the main checkout, never merges, pushes, starts a full run or changes the settings files. At most two agents work
+at once.</li>
+<li><b>Verification.</b> The main session checks the branch against the ownership list; the verification agent runs the
+step checks in the agent's worktree, and for a change that moves numbers the replays before and after and the run and
+robustness checks.</li>
+<li><b>Review.</b> The conclusion reviewer checks the finding.</li>
+<li><b>Merge or decision.</b> A branch that changes no number the main session merges on its own judgment. A branch that
+changes a number is merged only after the user has seen its numbers (without a verdict) and, for anything that changes the
+map, looked at the before and after clouds. After each merge the step checks run on the main checkout again, because two
+branches merged one after the other were never tested together.</li>
+</ol>
+<div class="deep"><b>In depth</b><a href="regions/README.md">Regions: the rules, the worktree flow, the hand-back form</a> ·
+<a href="code-split-and-region-agents-plan.md">The code-split plan</a> (stage 7) · <a href="code-review-tracker.md">Code-review tracker</a> ·
+<a href="../tools/README.md">tools/README.md</a> (the verification kit)</div>
+
 <h2 id="documents">All documents</h2>
 <p>Every page of <code>docs/</code>, by what it is for. The same map is in <code>docs/README.md</code>; the Hungarian pages are under <code>docs/hu/</code>. Also outside <code>docs/</code>: <code>CLAUDE.md</code> (how the code is built, tested and laid out), <code>tools/README.md</code> (the analysis tools) and <code>openspec/specs/</code> (the requirements).</p>
 <h3>Using dMapper</h3>
