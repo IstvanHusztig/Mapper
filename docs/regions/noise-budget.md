@@ -116,6 +116,10 @@ from `raw data/43/static`, also in the Livox file); `rotation_sigma_floor_deg` 0
 - Fixed: **C5** (the rotation prior × Cauchy 1/π, D4 519b3e8, sigmas ×√π: k 4 → 7.0898, floor ×√π); the tracker still
   says "verified".
 
+- **C39** (verified): `run_odometry.cpp::log_weak_axis_diagnostics` computes the motion model's stiffness from the
+  x/y/z sigmas without `imu_position_information_scale`; with the Livox settings it reports 10× the edges' stiffness.
+  A diagnostic only.
+
 ## To split in the first job
 
 None: no function of this region is above 80 lines (`python tools/function_sizes.py src --min 80`, 2026-11-18).

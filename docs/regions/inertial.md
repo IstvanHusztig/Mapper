@@ -124,7 +124,7 @@ orchestrator).
   `finish_window`) before the window's points enter the map (`add_window_to_map`), and the next window starts from it:
   each hand-off carries (bias error) × ~33 ms of yaw (30 nodes on the L2, 15 at 500 Hz on the Livox). Reported; the
   test `handoff_tail_nodes = 0` was not run. Crosses to the map.
-- Fixed in the code, tracker status not yet updated: **C5** (the Cauchy factor 1/π on the rotation prior; removed by D4,
+- Fixed in the code (tracker updated 2026-11-18): **C5** (the Cauchy factor 1/π on the rotation prior; removed by D4,
   519b3e8, sigmas ×√π; no Cauchy factor left in the window problem), **C6** (bias subtracted twice; D3, 48734fc: only the update is
   subtracted, test "a gyro bias carried from window to window is removed once"), **C15** (hand-off off-by-one and
   silently dropped windows; D5, a203f1c and 76e2922: `imu_motion_from_previous`, points up to the next window's first

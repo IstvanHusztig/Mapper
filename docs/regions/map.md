@@ -125,6 +125,9 @@ lidar-matching's.
 - Accepted as they are: C10 (`ndt_cell_index` floors instead of truncating towards zero; the fix accepted by the user,
   c22d79a, 2026-10-14).
 
+- **C40** (verified): `state.reference_points` is never filled in a run, so the "clear only if empty" test of
+  `add_window_to_map` is always true and a rebuild always clears the maps (see the rebuild above).
+
 ## To split in the first job
 
 From `python tools/function_sizes.py src --min 80` (2026-11-18): `update_rgd_legacy` (84 lines, `ndt_map.cpp:65`), the

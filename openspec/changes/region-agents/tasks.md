@@ -36,10 +36,15 @@
 
 ## 3. Ownership
 
-- [ ] 3.1 `docs/regions/owners.toml` after the plan's table (files, `file::function` entries, shared test files) and
+- [x] 3.1 `docs/regions/owners.toml` after the plan's table (files, `file::function` entries, shared test files) and
   `tools/region_owners.py` (the list's check; `--diff <base>..<branch> --region <name>`). Verify: the check exits 0 on
   the list; a made-up branch that changes `ndt_map.cpp` only passes for `map`, one that also changes `window.h` and an
   unowned function of `run_odometry.cpp` fails with both listed, a shared test file is listed without failing.
+  Result: e17247e (list and tool), 883fd0d (`run_consistency` to the back-end, `log_accelerometer_fit` to the inertial
+  region). The check: 9 owners, 135 files and 18 functions named, 0 problems. In a throw-away worktree two made-up
+  branches: one changing `ndt_map.cpp`, `ndt_map_test.cpp`, `add_window_to_map` and a shared test file passes for
+  `map` (exit 0, the shared file listed); one also changing `window.h` and `prepare_window` fails with both listed
+  (exit 1). The main tree's HEAD and status were checked unchanged after the test.
 
 ## 4. Knowledge files
 
@@ -55,10 +60,16 @@
   code by a Sonnet reviewer; their corrections are in (one reviewer claim was wrong and left out: `ndt_window_cost`
   does apply the information scale). 181 to 215 lines each. Two boundaries settled while reading the contracts:
   `run_consistency` is the back-end's and `log_accelerometer_fit` the inertial region's, by function entries.
-- [ ] 4.3 `docs/code-review-tracker.md`: the references of the findings that are not fixed, moot or rejected point to
+- [x] 4.3 `docs/code-review-tracker.md`: the references of the findings that are not fixed, moot or rejected point to
   today's files. Verify: each cited file and function exists.
-- [ ] 4.4 Both docs maps (`docs/README.md`, the guide's "All documents") get the group "Region knowledge files".
+  Result: C2 partly fixed, C5, C6, C15 fixed (the region files found them fixed in the code); C13, C16, C17, C18, C31,
+  C34 point to today's files; new rows C39 (weak-axis stiffness without the position scale), C40 (the rebuild always
+  clears), C41 (test-only helpers, stale comments), C42 (`load_imu` column check, empty windows). Every file and
+  function the open rows cite exists (checked by a script). The region files follow.
+- [x] 4.4 Both docs maps (`docs/README.md`, the guide's "All documents") get the group "Region knowledge files".
   Verify: every new page is in both maps; the links resolve.
+  Result: the group "Region knowledge files" (nine pages) in `docs/README.md` and the guide's "All documents"; every
+  page has the top line and "See also"; every link of the region files resolves (checked by a script).
 
 ## 5. Worktrees and agent definitions
 

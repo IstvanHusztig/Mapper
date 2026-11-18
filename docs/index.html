@@ -849,6 +849,19 @@ See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 <tr><td><a href="ml-research-roadmap.html">Machine-learning learning guide</a></td><td><code>ml-research-roadmap.html</code></td><td>Modules M1-M9 to work through before any machine-learning work on dMapper.</td></tr>
 <tr><td><a href="dlidar-timestamp-fix-prompt.md">dLidar time alignment (task text)</a></td><td><code>dlidar-timestamp-fix-prompt.md</code></td><td>Historical task text for the recorder (dLidar): the LiDAR-IMU time alignment of L2 recordings. The recorder is outside dMapper&#x27;s scope.</td></tr>
 </table></div>
+<h3>Region knowledge files</h3>
+<p class="meta">One knowledge file per code region: what an agent that starts cold reads to own its part of the code (stage 7 of the code-split plan). Kept by the orchestrator from the agents' entries; English only.</p>
+<div class="table-wrap"><table>
+<tr><td><a href="regions/README.md">Regions: who owns what</a></td><td><code>regions/README.md</code></td><td>The eight regions, who owns which file and function (<code>owners.toml</code>), the rules for a region agent, worktrees and the replay gate, the protocol from a question to a merged change, the hand-back form.</td></tr>
+<tr><td><a href="regions/front-end.md">Region: front-end</a></td><td><code>regions/front-end.md</code></td><td>Loading, the AHRS orientation, cutting windows, attaching points to nodes.</td></tr>
+<tr><td><a href="regions/map.md">Region: map</a></td><td><code>regions/map.md</code></td><td>The NDT map: cell statistics, the seed, the update after each window, the sliding rebuild.</td></tr>
+<tr><td><a href="regions/lidar-matching.md">Region: lidar-matching</a></td><td><code>regions/lidar-matching.md</code></td><td>A point against its cell: residual, Jacobian, the per-point rules, the degeneracy projection.</td></tr>
+<tr><td><a href="regions/inertial.md">Region: inertial</a></td><td><code>regions/inertial.md</code></td><td>A window's guess, the motion edges, the accelerometer terms, the states carried from window to window, the hand-off.</td></tr>
+<tr><td><a href="regions/solver.md">Region: solver</a></td><td><code>regions/solver.md</code></td><td>The normal equations, the Levenberg-Marquardt iterations and why they stop, the step, the window verdict.</td></tr>
+<tr><td><a href="regions/back-end.md">Region: back-end</a></td><td><code>regions/back-end.md</code></td><td>Loop closure, the consistency pass, the odometry snapshot.</td></tr>
+<tr><td><a href="regions/noise-budget.md">Region: noise-budget</a></td><td><code>regions/noise-budget.md</code></td><td>Every weight of a window (the noise model), the per-term table, the weak-axis and heading diagnostics.</td></tr>
+<tr><td><a href="regions/verification.md">Region: verification</a></td><td><code>regions/verification.md</code></td><td>The verification kit and its gate, the verify skills, the baselines, the analysis tools.</td></tr>
+</table></div>
 <h3>Agent working notes</h3>
 <p class="meta">Working notes of the Codex agent setup (read through AGENTS.md); kept by the agents, not edited as documentation.</p>
 <div class="table-wrap"><table>

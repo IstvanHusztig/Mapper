@@ -36,6 +36,20 @@ Drafts, research notes and task texts; each says how current it is.
 - [Machine-learning learning guide](ml-research-roadmap.html): Modules M1-M9 to work through before any machine-learning work on dMapper.
 - [dLidar time alignment (task text)](dlidar-timestamp-fix-prompt.md): Historical task text for the recorder (dLidar): the LiDAR-IMU time alignment of L2 recordings. The recorder is outside dMapper's scope.
 
+## Region knowledge files
+
+One knowledge file per code region: what an agent that starts cold reads to own its part of the code (stage 7 of the code-split plan). Kept by the orchestrator from the agents' entries; English only.
+
+- [Regions: who owns what](regions/README.md): The eight regions, who owns which file and function (`owners.toml`), the rules for a region agent, worktrees and the replay gate, the protocol from a question to a merged change, the hand-back form.
+- [Region: front-end](regions/front-end.md): Loading, the AHRS orientation, cutting windows, attaching points to nodes.
+- [Region: map](regions/map.md): The NDT map: cell statistics, the seed, the update after each window, the sliding rebuild.
+- [Region: lidar-matching](regions/lidar-matching.md): A point against its cell: residual, Jacobian, the per-point rules, the degeneracy projection.
+- [Region: inertial](regions/inertial.md): A window's guess, the motion edges, the accelerometer terms, the states carried from window to window, the hand-off.
+- [Region: solver](regions/solver.md): The normal equations, the Levenberg-Marquardt iterations and why they stop, the step, the window verdict.
+- [Region: back-end](regions/back-end.md): Loop closure, the consistency pass, the odometry snapshot.
+- [Region: noise-budget](regions/noise-budget.md): Every weight of a window (the noise model), the per-term table, the weak-axis and heading diagnostics.
+- [Region: verification](regions/verification.md): The verification kit and its gate, the verify skills, the baselines, the analysis tools.
+
 ## Agent working notes
 
 Working notes of the Codex agent setup (read through AGENTS.md); kept by the agents, not edited as documentation.

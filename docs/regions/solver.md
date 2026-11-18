@@ -121,6 +121,10 @@ window verdict. It knows no term's maths; it owns the order in which a window's 
   (a big-jump node was left out of a step that was otherwise applied; now `apply_window_step` rejects the whole step and
   `next_lm_factor` raises the damping at once).
 
+- **C41** (reported): `SumBlocks` / `Blocks` (`normal_equations.*`) are used only by tests; the comments in
+  `phase_timing.h` (`pose_band_to_sparse`) and on `ScanToMapWorkspace::steps_skipped` (`scan_to_map.h`, from before the C7
+  fix) are stale. No result affected.
+
 ## To split in the first job
 
 None (`python tools/function_sizes.py src --min 80`, 2026-11-18: no function of the solver's files, nor

@@ -113,7 +113,7 @@ a node. It also owns the IMU kinematics helpers that the window loop and consist
 
 ## Known flaws
 
-- **C2** (verified in the tracker; partly fixed in the code). The heading reset during Fusion's start-up is gone
+- **C2** (partly fixed). The heading reset during Fusion's start-up is gone
   (D1, 11bdd55, `fusion_orientation_estimator.cpp::update`), measured on the cuts s0–s5 without a verdict
   (`openspec/changes/imu-front-end/tasks.md`, task 2.3 open). Still true: the windows (and `m_g`, so the seed map) start
   inside Fusion's 3 s ramp with gain 10 → `ahrs_gain` and acceleration rejection off while initialising
@@ -139,6 +139,9 @@ a node. It also owns the IMU kinematics helpers that the window loop and consist
     a partial header throws inside the row loop, which is caught and logged at info level, and the samples read so
     far are returned.
   - `compute_step_1` reads `windows[0]` with no check that a window was kept.
+
+- **C42** (reported): `load_imu` rejects a CSV for missing columns only when all three column groups are missing;
+  nothing checks for an empty `windows` before `windows[0]` is read in `compute_step_1`.
 
 ## To split in the first job
 
