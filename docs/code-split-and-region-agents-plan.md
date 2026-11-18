@@ -29,6 +29,11 @@ Progress:
   `place_window_after`; every commit identical (`tools/function_sizes.py` now also counts functions in namespaces and
   headers). No tier-1 function above 80 lines; the rest
   waits for its region (table in the stage 6 design).
+- Stage 7 designed 2026-11-18 (below), decisions taken, OpenSpec `region-agents`; implemented 2026-11-18 (e17247e ..
+  f285eda): the verification kit with the replay gate in the repo, the ownership list and its check, eight knowledge
+  files and the protocol page reviewed against the code, ten agent definitions, two standing worktrees, the guide's
+  Internals section; each agent started once read-only; the try-out (the map region split `update_rgd_legacy`
+  in its worktree, verified, reviewed, merged) worked end to end, identical on every check.
 - **Verdict limits decided (user, 2026-11-17)**, after the readings of full runs of 44, Livox 3 and Livox 4 (task 6.1 of
   `solver-and-window-verdict`): all agreed limits stay (bent 3°, bent severely 10°, run trigger above 1 % bent; fast
   2.5 m/s; bias high 0.5 °/s; velocity chi² of the weak windows median 5 / p95 20). Three recordings, one map judged

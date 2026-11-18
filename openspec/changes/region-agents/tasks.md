@@ -114,15 +114,35 @@
 
 ## 6. Try-out
 
-- [ ] 6.1 The map region's first job: split `update_rgd_legacy` (84 lines) into steps without changing a bit, in a
+- [x] 6.1 The map region's first job: split `update_rgd_legacy` (84 lines) into steps without changing a bit, in a
   standing worktree on its own branch, with its hand-back and knowledge entry. Verify: `region_owners.py --diff` passes
   for `map`; the verification agent's `step_checks.py` in the worktree is identical everywhere; the conclusion reviewer
   has checked the hand-back.
-- [ ] 6.2 The main agent merges the branch; `step_checks.py` on the main tree. Verify: identical everywhere;
+  Result: the real `region-map` agent (new in the session by then) in `region-a` at 56bfa8b, branch
+  `region/map/2026-11-18-split-update-rgd-legacy`, one commit d60e21f, `ndt_map.cpp` only: `update_rgd_legacy` 84 → 21
+  lines (`new_legacy_cell`, `add_point_to_legacy_cell`, `add_to_legacy_cov`, `legacy_cell_normal`,
+  `refresh_cell_inverses` shared with the exact path); no test added (file-local steps, no new mathematics). Its
+  `--diff` check: 1 own file, 0 outside (mine the same). The verification agent ran `step_checks.py` on the committed
+  branch: ALL HOLD; the map's unit tests 8/8 (they also cover the exact path, which no replay runs). The conclusion
+  reviewer: every expression unchanged; its one correction (the agent's own log was made before the commit) settled
+  by the verification run on the commit.
+- [x] 6.2 The main agent merges the branch; `step_checks.py` on the main tree. Verify: identical everywhere;
   `tools/function_sizes.py` shows no function of `ndt_map.cpp` above 80 lines; the knowledge entry is in
   `docs/regions/map.md`.
-- [ ] 6.3 What the try-out showed about the chain (definitions, hand-back form, timings, anything an agent got wrong)
+  Result: merged f285eda (no-ff; changes no number, so on the orchestrator's judgment). `step_checks.py` on the main tree:
+  ALL HOLD. `function_sizes.py`: no function of `ndt_map.cpp` at 80 lines or more. The knowledge entry is in
+  `docs/regions/map.md` (Experiments, the line references moved, the split done, an open question on a test of the
+  default statistics' view-point gate).
+- [x] 6.3 What the try-out showed about the chain (definitions, hand-back form, timings, anything an agent got wrong)
   is written into `docs/regions/README.md` and the definitions. Verify: the user has the list.
+  Result: the chain worked end to end: question, worktree, branch, hand-back, ownership check, verification, review,
+  merge, step checks after the merge (about 10 min for the agent's job, 9 min for verification, 1 min for review).
+  What it showed, now in `docs/regions/README.md` and the definitions: the step checks count for a commit only when
+  run on it (the agent had run them before committing); long commands go to the background (the shell cannot
+  `sleep`); the references' commit is older by design; `region_owners.py` takes repository-relative paths. Earlier,
+  from the first starts: build-only command, capture paths, the `--diff` base, absolute paths, runs wanted for code
+  replays don't reach. New definitions became available in the running session only after a while (the fallback
+  covered the first starts).
 
 ## 7. End
 

@@ -28,7 +28,8 @@ The orchestrator (the main session) gives you a question and a worktree. **Rules
    wanted") and the orchestrator runs them. A settings idea is tried on a copy in your experiment folder (create it) (`C:/Users/User/Downloads/dLidar/experiments/regions/front-end/<date>-<question>/`)
    under a file name of your own. If a replay reports windows stopped at the time limit, run it again.
 5. **Build in your worktree** with `python <worktree>/tools/step_checks.py` (it builds, tests and checks; about 7 min) or,
-   for a quick build only, `python <worktree>/tools/step_checks.py --build-only`. Do not add build trees.
+   for a quick build only, `python <worktree>/tools/step_checks.py --build-only`. Do not add build trees. The checks
+   count only when run on your commit: commit, then run them (in the background; the shell cannot `sleep`).
 6. **Numbers, not verdicts.** No statement about the map, no "better" or "worse": what a reading means for the map is the
    user's to judge, by eye. Give each number with what it was measured on.
 7. **No dead code** (a rejected idea is removed, not switched off). Keep refactors bit-identical unless the task asks

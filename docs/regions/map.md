@@ -39,7 +39,9 @@ lidar-matching's.
 - Cell key: `ndt_cell_index` = `floor(p / resolution)` per axis, cast to `int16_t` and packed into 48 bits
   (`ndt_cell_key`), so the index wraps beyond ±32 768 cells per axis (±4.9 km at 0.15 m). The same key is used by
   `tools/ndt_cell_history.py`.
-- **Default statistics** (`update_rgd_legacy`, `ndt_map.cpp:65`): a new cell's mean is its first point and never moves;
+- **Default statistics** (`update_rgd_legacy`, `ndt_map.cpp:152`, with its steps `new_legacy_cell`,
+  `add_point_to_legacy_cell`, `add_to_legacy_cov`, `legacy_cell_normal`; `refresh_cell_inverses` is shared with the exact
+  path): a new cell's mean is its first point and never moves;
   its covariance starts at 0.03² I; the 2nd and 3rd points update the covariance about that mean; at the 3rd the normal
   is fixed (eigenvectors col 1 × col 2, turned towards that call's viewport); later points update the covariance only if
   `normal · (viewport − mean) ≥ 0`, but `number_of_points` counts every point (C33). The result depends on insertion
@@ -112,10 +114,10 @@ lidar-matching's.
   shipped thresholds, mean and covariance tested separately.
 - **C30** (reported; crosses to front-end). `compute_step_1` decimates in the sensor frame (`lidar_odometry.cpp:404`),
   `decimate` returns the points in sensor-frame key order (`ndt_map.cpp:44–52`), and a new cell's mean is its first point
-  (`ndt_map.cpp:130`): each new cell's mean is its smallest-key point, a constant body-fixed pull. Test asked: reversed /
+  (`ndt_map.cpp::new_legacy_cell`): each new cell's mean is its smallest-key point, a constant body-fixed pull. Test asked: reversed /
   shuffled insertion order, yaw probe.
-- **C33** (reported; neutral for yaw). `update_rgd_legacy` increments `number_of_points` (`ndt_map.cpp:81`) before the
-  viewpoint gate skips the covariance update (`:120`), so later updates are weighted by a count that includes skipped
+- **C33** (reported; neutral for yaw). `update_rgd_legacy` increments `number_of_points` (`ndt_map.cpp:117`,
+  `add_point_to_legacy_cell`) before the viewpoint gate skips the covariance update (`:141`), so later updates are weighted by a count that includes skipped
   points.
 - **C21** (verified; crosses to front-end). `seed_map` places the ≈ 0.94 s of initial points with the one pose `m_g`.
 - **C32** (inertial's, crosses to map): the window's points enter the map with the tail re-propagated from the gyro
@@ -130,12 +132,17 @@ lidar-matching's.
 
 ## To split in the first job
 
-From `python tools/function_sizes.py src --min 80` (2026-11-18): `update_rgd_legacy` (84 lines, `ndt_map.cpp:65`), the
-stage 7 try-out (split without changing a bit, the order of its sums kept). `seed_map` and `add_window_to_map` are
-under 80.
+None (2026-11-18): `update_rgd_legacy` was split in the stage 7 try-out (now 21 lines). The longest function of
+`ndt_map.cpp` is `update_rgd` (74 lines, the exact statistics). `seed_map` and `add_window_to_map` are under 80.
 
 ## Experiments
 
+- **2026-11-18** Stage 7 try-out (the first region job): `update_rgd_legacy` split into `new_legacy_cell`,
+  `add_point_to_legacy_cell`, `add_to_legacy_cov` (the covariance update written out three times before),
+  `legacy_cell_normal` and `refresh_cell_inverses` (shared with the exact path), bit-identical: `step_checks.py` ALL
+  HOLD on the committed branch (both replays 0.000000 m, the per-term table and 44_short identical), the map's 8 unit
+  tests pass, the conclusion reviewer found every expression unchanged. Merged f285eda. Evidence:
+  `experiments/regions/map/2026-11-18-split-update-rgd-legacy/`.
 - **2026-11-13** Livox 2 window 754 (271.08 s): three high-occupancy outdoor-grid cells carry the far-range terms;
   omitting only those three: tilt 15.19 → 2.33°, end speed 0.89 → 0.36 m/s. Their insertion histories (windows
   623–633): no rejected viewpoint updates, thin geometry. Not a filter to ship (hard-coded cells).
@@ -189,6 +196,9 @@ under 80.
 
 ## Open questions
 
+- No unit test covers the default statistics' view-point gate on the 4th and later points, nor the count C33 that
+  the gate leaves behind; the exact statistics' shared tail (`refresh_cell_inverses`) is checked by the unit tests only
+  (no replay runs `use_exact_ndt_bucket_statistics = true`).
 - The map horizon: reject, or keep for an "old cells constrain rotation only" design (pending since 2026-10-13).
 - Finer cells (V5): judge again on top of the IMU front-end fixes, with consistency kept at 0.15 m as a control and a
   map-level sharpness measure (`odometry-map-model/tasks.md` 3.4).

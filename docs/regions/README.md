@@ -76,6 +76,16 @@ step checks are listed in `tools/local_paths.toml`: `<guards>/44short-20-40/wind
 (`C:/Users/User/Downloads/dLidar/experiments/regions/<name>/<date>-<question>/`). A quick build without the checks:
 `python <worktree>/tools/step_checks.py --build-only`.
 
+- **The step checks count for a commit only when run on it.** Commit first, then run `step_checks.py` (its first line
+  prints the commit and whether the tree has uncommitted source changes). A run before the commit is a rehearsal.
+- **Long commands**: the shell does not allow waiting with `sleep`. Start `step_checks.py` (about 7 min) in the
+  background and wait for its completion notice.
+- **The references** the step checks compare with are shared by all worktrees (`<guards>/refs`); the line `references:
+  commit ...` names the commit they were recorded from, which is normally older than yours. That is right: they are
+  the bits the code must keep. They are recorded again only by the orchestrator, after a change that is meant to move
+  them.
+- `tools/region_owners.py --owner` and `--diff` take paths relative to the repository (`src/domain/ndt_map.cpp`).
+
 Each editing agent gets a git worktree and a branch of its own (`region/<name>/<date>-<question>`). There are two
 standing worktrees, `C:/Repo/dMapper-worktrees/region-a` and `region-b`, reset to the main tree's commit before each job;
 each has its own build (`out/build/x64-Release`, the same preset as the main tree). At most two editing agents work at
