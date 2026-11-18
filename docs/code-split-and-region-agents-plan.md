@@ -15,7 +15,7 @@ Progress:
 - Stage 3 designed 2026-11-17 (below); implemented 2026-11-17 (OpenSpec `per-term-window-log`, 0e4d42a .. ): the four
   splits bit-identical, `window_term_table`, setting `log_window_terms`, the CSV files, `tools/window_terms.py`. Livox 3
   replay with the setting on: 84 of 84 windows identical.
-  Archived 2026-11-17 (b234b6a); the first reading of the table is `docs/window-terms-livox3.html`.
+  Archived 2026-11-17 (b234b6a); the first reading of the table is `docs/window-terms.html`.
 - Stage 4 designed 2026-11-17 (below), decisions taken, OpenSpec `solver-and-window-verdict`; implemented 2026-11-17
   (4ed2f46 .. ): loop guard, `lm_solver` + `WindowProblem`, `process_windows` in four steps, the window verdict and its
   summary; every commit identical on the guards, replays and 44_short. End runs identical (manifests 4896eeb), Debug
@@ -1243,6 +1243,6 @@ hand it to its region.
 ## See also
 
 - [Architecture](ARCHITECTURE.md)
-- [The per-term table: Livox 3](window-terms-livox3.html)
+- [The per-term table](window-terms.html)
 - [Code-review tracker](code-review-tracker.md)
 - [All documents](README.md)

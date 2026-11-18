@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Per-term table: Livox 3, 100–130 s</title>
+<title>The per-term table</title>
 <style>
   :root {
     --bg: #fbfbfa; --panel: #ffffff; --text: #1d2126; --muted: #5b6470; --line: #e3e5e8;
@@ -70,10 +70,12 @@
 <main>
 <p class="docs-nav" style="font-size:13px;margin:0 0 8px;color:var(--muted)"><a href="index.html">dMapper docs</a> › How the odometry works · <a href="index.html#documents">All documents</a></p>
 
-<h1>What the per-term table says: Livox 3, 100–130 s</h1>
-<p class="lead">The first reading of the per-term window table (<code>log_window_terms</code>, stage 3 of the code split) on a
-real stretch: 84 windows of the Livox 3 recording, replayed from a capture on 2026-11-17. This page reports what the
-numbers show and where the table's limits lie. It gives no verdict on the map and proposes no fix.</p>
+<h1>The per-term table: what it is and how to read it</h1>
+<p class="lead">A window's result is where about ten terms (the LiDAR against the map, the gyro, the accelerometer, the
+priors) agree. The per-term table takes them apart: for each term on its own, how strongly it holds the window and where
+it would move it. It tells which term decides a window, which one is overruled, and where the terms disagree. This page
+explains the table and then reads it on a real stretch: 30 seconds of an indoor walk. The reading gives no verdict on the
+map and proposes no fix.</p>
 <p class="terms-line" style="font-size:14px;color:var(--muted)">Terms used here: <a href="index.html#t-window">window</a>, <a href="index.html#t-guess">guess</a>, <a href="index.html#t-term">term</a>, <a href="index.html#t-residual">residual</a>, <a href="index.html#t-sigma">sigma and information</a>, <a href="index.html#t-cost">cost</a>, <a href="index.html#t-prior">prior</a>, <a href="index.html#t-unknowns">unknowns</a>, <a href="index.html#t-degeneracy">information ratio</a>, <a href="index.html#t-term-table">per-term table</a>, <a href="index.html#t-bend">bend</a>, <a href="index.html#t-chi2">velocity chi²</a>. All basic terms: the guide's <a href="index.html#fundamentals">Fundamentals</a>.</p>
 
 <div class="tldr">
@@ -82,6 +84,33 @@ numbers show and where the table's limits lie. It gives no verdict on the map an
   <div class="card"><div class="big">0.13 %</div><div class="lbl">of the weight on a window's heading bend is the gyro's (median)</div></div>
   <div class="card"><div class="big">2.9 σ</div><div class="lbl">median distance (rms) of the start velocity from its prior, after the solve</div></div>
 </div>
+
+<h2>What the table is</h2>
+<p>Each term of a window's optimization adds its equations to one least-squares problem (its part of the normal matrix
+<i>H</i> and the right-hand side <i>b</i>). The table builds each term's equations <b>on their own</b>, with the same term
+functions the solver calls, and asks of each one: if this term were alone, how firmly would it hold the window, and
+where would it move it?</p>
+<p>It does not ask this of every unknown (a window has more than a thousand), but of twelve motions a person can picture:
+four kinds of motion of the whole window (below), each along the direction of travel, sideways and vertical. For a motion
+<i>m</i> (a vector over the window's unknowns, at an amplitude of 1 m or 1°) a term's <b>weight</b> is
+<i>m</i>ᵀ<i>H</i><i>m</i>: the curvature of its cost along that motion. Its <b>hold</b> is 1/√weight, a sigma in metres or
+degrees. Its <b>pull</b> is <i>m</i>ᵀ<i>b</i> / weight: how far along that motion its own minimum lies.</p>
+<ul>
+<li><b>Rows:</b> one per term (the fine and the coarse NDT grid, the NDT before the degeneracy projection, the edges'
+position and rotation rows, the gyro-bias prior, the velocity continuity, the accelerometer, the velocity prior, zero
+velocity, the end-velocity tie, the acceleration-offset prior, the origin fix), plus a <b>total</b> row (all terms
+together) and a <b>damping</b> row (what the solver's damping adds).</li>
+<li><b>Twice per window:</b> at the <b>guess</b> (before the first iteration) and at the <b>result</b> (after the last).</li>
+<li><b>Also per term:</b> its cost and number of residuals.</li>
+</ul>
+<p><b>How to get it.</b> Set <code>log_window_terms = true</code> in <code>[lidar_odometry_debug_info]</code>. Every window
+then logs one <code>window terms N</code> line, and a run writes <code>window_terms.csv</code> (every row of every window)
+and <code>window_features.csv</code> (one line per window: its readings, its verdict, its noise model) to the output folder;
+a replay writes them next to the capture. <code>python tools/window_terms.py &lt;file&gt;_window_terms.csv</code> prints a
+summary of a range, and with <code>--window N</code> one window's table. The table changes no result; a replay takes about
+9 % longer with it.</p>
+<p><b>Its limit.</b> A pull is one linear step with everything else held still. It shows where a term pulls, not where the
+window would end if that term were changed (see "How far the table can be trusted" below).</p>
 
 <h2>How to read the table</h2>
 <p>For every window the optimizer adds up about ten terms (LiDAR against the map, gyro, accelerometer, priors) and solves
@@ -105,18 +134,19 @@ about 1 only where that weight is a noise model.</li>
 </ul>
 <p>Each row exists at the <b>guess</b> (before the first iteration) and at the <b>result</b> (after the last).</p>
 
-<h2>The stretch</h2>
+<h2>An example reading: 30 seconds of an indoor walk</h2>
+<p>The rest of this page reads the table on one stretch.</p>
 <div class="table-wrap"><table>
-<tr><td>Recording, settings</td><td>Livox 3, <code>settings/livox-vertical.toml</code> with <code>log_window_terms = true</code></td></tr>
-<tr><td>Windows</td><td>279 to 362 (84), 100.1 to 130.0 s, each 180 nodes over 0.358 s</td></tr>
+<tr><td>Recording, settings</td><td>a handheld indoor walk with a Livox Mid-360S, its settings file (<code>settings/livox-vertical.toml</code>) with <code>log_window_terms = true</code></td></tr>
+<tr><td>Windows</td><td>84 in a row (numbered 279 to 362 below), 30 s, each 180 nodes over 0.358 s</td></tr>
 <tr><td>Replay</td><td>84 of 84 windows bit-identical with the captured run; 96.7 s with the table, 88.9 s without</td></tr>
 <tr><td>Motion</td><td>walking, horizontal speed median 0.87 m/s (0.19 to 1.14 m/s); no window at rest, no turn window</td></tr>
 <tr><td>Iterations</td><td>100 in every window; the damping factor ends at 5e9</td></tr>
 <tr><td>LiDAR points per window</td><td>median 66,500 point terms matched, 10,500 in range without a cell</td></tr>
-<tr><td>Geometry</td><td>information ratio median 0.30, lowest 0.117 (112–113 s)</td></tr>
+<tr><td>Geometry</td><td>information ratio median 0.30, lowest 0.117 (in the middle of the stretch)</td></tr>
 </table></div>
 
-<h2>What the numbers show</h2>
+<h2>What the example shows</h2>
 
 <h3>1. Along the twelve motions, every window ended in balance</h3>
 <p>At the result the remaining step is 0.0000 m for shift, stretch and curve in all three directions in every window
@@ -253,20 +283,21 @@ first node never moves.</p>
 <ul>
 <li><b>Which side is right.</b> Where the LiDAR and the IMU terms disagree (points 3, 5 and 6) the table shows the size
 of the disagreement and who wins it. It has no reference to say who should.</li>
-<li><b>Whether the windows of 111–114 s lost distance.</b> The table shows the mechanism at work there (the projection
+<li><b>Whether the windows of point 6 lost distance.</b> The table shows the mechanism at work there (the projection
 cuts the LiDAR, the prior holds, the window still ends beyond its guess six times in a row, then a jump). Whether the
 path came out short needs a reference, such as the plan or a second pass.</li>
-<li><b>Anything about Livox 4.</b> This stretch is from Livox 3, whose map is the good one. The passage and the flyaway
-of Livox 4 need their own captures (stage 8).</li>
+<li><b>Anything about another recording.</b> This stretch comes from a recording whose map was judged good. A stretch
+that goes wrong needs its own capture and its own reading.</li>
 </ul>
 
-<h2>How to reproduce</h2>
-<pre>dMapper --replay &lt;window_capture_100.0-130.0s.bin&gt; &lt;settings with log_window_terms = true&gt;
+<h2>How to make such a reading</h2>
+<p>Capture a stretch of a run (<code>capture_windows_from_s</code> / <code>capture_windows_to_s</code>), then replay it with
+the table on:</p>
+<pre>python tools/run_replay.py &lt;window_capture_&lt;from&gt;-&lt;to&gt;s.bin&gt; &lt;settings with log_window_terms = true&gt;
 python tools/window_terms.py &lt;params name&gt;_window_terms.csv                # per-term summary of the range
 python tools/window_terms.py &lt;params name&gt;_window_terms.csv --window 313   # one window's table</pre>
-<p class="meta">Data: <code>experiments/stage1/livox3-100-130/result/livox3_terms_window_terms.csv</code> and
-<code>livox3_terms_window_features.csv</code>, code at commit 28952e4. Written 2026-11-17; the numbers were recomputed
-independently by a reviewer before this page was written.</p>
+<p class="meta">The example was read on 2026-11-17 (code at commit 28952e4); its numbers were recomputed independently by a
+reviewer before the page was written.</p>
 
 <h2>See also</h2>
 <ul class="docs-nav"><li><a href="degeneracy-information.html">Degeneracy information</a></li><li><a href="window-chaining.html">Poses, windows and window chaining</a></li><li><a href="code-split-and-region-agents-plan.md">The code-split plan (stage 3)</a></li><li><a href="../tools/README.md">tools/README.md: window_terms.py</a></li><li><a href="index.html#documents">All documents</a></li></ul>

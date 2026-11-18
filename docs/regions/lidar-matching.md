@@ -117,7 +117,7 @@ None (`python tools/function_sizes.py src --min 80`, 2026-11-18: no function of 
 - **2026-11-17** Per-term table, Livox 3 100-130 s (84 windows, replay): the NDT grids hold a median 90 % of the weight on
   stretch along travel (indoor 56 %, outdoor 33 %); turn about vertical: NDT indoor 56 % / outdoor 44 %, gyro 0.13 %. The
   projection cuts the NDT weight in 12 windows (to 14-15 % in windows 313-314, information ratio 0.12-0.13). The two grids'
-  pulls for the travel distance differ by a median 1.6 mm, up to 25 mm (window 312). `docs/window-terms-livox3.html`.
+  pulls for the travel distance differ by a median 1.6 mm, up to 25 mm (window 312). `docs/window-terms.html`.
 - **2026-11-16** The Livox 3 map the user judged good came from a side build with Huber cutoff 3 and NDT information x0.1
   (and position prior x0.1); ported as `ndt_huber_cutoff`, `ndt_information_scale`, shipped in `livox-vertical.toml`.
   Memory `livox-state-2026-11-16.md`.
@@ -175,7 +175,7 @@ None (`python tools/function_sizes.py src --min 80`, 2026-11-18: no function of 
 
 - [Regions](README.md)
 - [Degeneracy and the information matrix](../degeneracy-information.html)
-- [Per-term table: Livox 3, 100-130 s](../window-terms-livox3.html)
+- [The per-term table](../window-terms.html)
 - [Code-review tracker](../code-review-tracker.md)
 - [Code-split plan](../code-split-and-region-agents-plan.md) (stages 2 and 3)
 - [All documents](../README.md)

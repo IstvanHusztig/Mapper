@@ -138,7 +138,7 @@
   <a class="indent" href="#s-guess">5 · Initial guess per window</a>
   <a class="indent" href="#s-opt">6 · Optimization</a>
   <a class="page" href="degeneracy-information.html">↗ Degeneracy information</a>
-  <a class="page" href="window-terms-livox3.html">↗ The per-term table</a>
+  <a class="page" href="window-terms.html">↗ The per-term table</a>
   <a class="indent" href="#s-handoff">7 · Hand-off and bias</a>
   <a class="indent" href="#s-update">8 · Map update</a>
   <a class="indent" href="#s-export">9 · Export</a>
@@ -381,7 +381,7 @@ the map. <span class="more">→ <a href="#p-misc">[lidar_odometry_debug_info]</a
 <dd>For each window and each <a class="term" href="#t-term">term</a>: how strongly the term alone holds four motions of the
 window (shift, stretch, curve, turn) along travel, sideways and vertical (the <b>hold</b>, a sigma), and where the term
 alone would move it (the <b>pull</b>). The <b>remaining step</b> is the pull of all terms together.
-<span class="more">→ <a href="window-terms-livox3.html">The per-term table</a></span></dd>
+<span class="more">→ <a href="window-terms.html">The per-term table</a></span></dd>
 </dl>
 
 <h3 id="f-after">After the odometry</h3>
@@ -535,7 +535,7 @@ by file. <span class="more">→ <a href="../tools/README.md">tools/README.md</a>
 <li><b>Bias prior:</b> the bias stays near the previous window's estimate, within its uncertainty grown by the bias random walk.</li>
 </ul>
 <p>The system is solved with a sparse Cholesky factorization. Up to <code>nr_iter</code> iterations run; the damping starts at <code>lm_factor_initial</code> and is multiplied by 10 every 10 iterations and after each rejected step (pose unknowns only). A window stops early when the sum of all parameter updates of one iteration falls below <code>convergence_delta_threshold</code> (default 1e-12, which is practically never reached, so all iterations run), or once it has run for longer than <code>real_time_threshold_seconds</code>. Only the band of the normal matrix that can hold values (neighbouring nodes and the bias unknowns) is converted to sparse form each iteration.</p>
-<div class="deep"><b>In depth</b><a href="degeneracy-information.html">Degeneracy information</a> (when the LiDAR can't see the motion; the degeneracy projection) · <a href="window-terms-livox3.html">The per-term table</a> (which term holds a window and where it pulls it)</div>
+<div class="deep"><b>In depth</b><a href="degeneracy-information.html">Degeneracy information</a> (when the LiDAR can't see the motion; the degeneracy projection) · <a href="window-terms.html">The per-term table</a> (which term holds a window and where it pulls it)</div>
 <div class="params"><span>nr_iter</span><span>convergence_delta_threshold</span><span>lm_factor_initial</span><span>min_distance_lidar</span><span>max_distance_lidar</span><span>motion_model_uncertainty.*</span><span>gyro_arw_*</span><span>rotation_sigma_*</span></div>
 </li>
 
@@ -753,7 +753,7 @@ See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 <tr><td>working_directory_preview, current_output_dir</td><td class="val">(paths)</td><td>Written by the program: the preview folder (<code>&lt;input&gt;/preview</code>, which holds a temporary point cloud of window 1 and every 100th window after it) and the output folder. Recalculated on every run, so the stored value doesn't matter.</td></tr>
 <tr><td>clear_color <span class="badge b-gui">GUI only</span></td><td class="val">RGBA</td><td>Background colour of the 3-D view.</td></tr>
 <tr><td>software_version, config_version, build_date</td><td class="val">0.1.0</td><td>Compatibility check when loading: the file counts as compatible when major and minor version match the program (0.1); otherwise a warning is printed. A run always records the program's own version, whatever the file says.</td></tr>
-<tr><td>log_window_terms</td><td class="val">false</td><td>The per-term table of every window: each term's cost, and how strongly it holds the window and where it pulls it, at the guess and at the result; one <code>window terms N</code> line, and <code>window_terms.csv</code> / <code>window_features.csv</code> in the output folder (<a href="window-terms-livox3.html">how to read it</a>). Results unchanged.</td></tr>
+<tr><td>log_window_terms</td><td class="val">false</td><td>The per-term table of every window: each term's cost, and how strongly it holds the window and where it pulls it, at the guess and at the result; one <code>window terms N</code> line, and <code>window_terms.csv</code> / <code>window_features.csv</code> in the output folder (<a href="window-terms.html">how to read it</a>). Results unchanged.</td></tr>
 <tr><td>log_window_verdict</td><td class="val">false</td><td>One <code>window verdict N</code> line per window with a flag (bent more than 3° against the gyro, faster than 2.5 m/s, gyro bias above 0.5 °/s), with all its readings. The <code>window verdict summary</code> is logged in every run: how many windows have each flag, and the run's triggers. Investigation triggers, not a statement about the map. Results unchanged.</td></tr>
 <tr><td>log_window_noise</td><td class="val">false</td><td>One <code>window noise N</code> line per window with its noise model as sigmas: the motion edges' translation and rotation sigmas, the velocity-continuity and accelerometer sigmas, the start-velocity, gyro-bias and acceleration-offset priors, the zero-velocity sigma at rest, the NDT scale and Huber cutoff (<a href="#t-sigma">sigma</a>). The <code>noise budget</code> line with the settings' constants is logged in every run. With <code>log_window_terms</code> the same values are columns of <code>window_features.csv</code>. Results unchanged.</td></tr>
 <tr><td>capture_windows_from_s, capture_windows_to_s</td><td class="val">−1, −1 (off)</td><td>Window capture, for working on one stretch of a recording: the command line writes <code>window_capture_&lt;from&gt;-&lt;to&gt;s.bin</code> to the output folder with the odometry's state before the first window that starts at or after <i>from</i> seconds (counted from the first window's start, like <code>time_s</code> of <code>log_window_diagnostics</code>), the windows up to the last one that starts at or before <i>to</i>, their points, and what the run made of them. <code>dMapper --replay &lt;capture&gt; &lt;settings.toml&gt;</code> then runs only those windows again, in seconds or minutes instead of a whole run. With the settings of the captured run every window must come out bit for bit as in the run (the iteration counts are taken from the capture, so the time limit plays no part; exit 1 if not). With changed settings the replay reports how far the windows move: a quick screen of an idea on the stretch where it matters, starting from the run's own map, to be confirmed by a full run. A capture of 20 s of the L2 recording is about 70 MB. Doesn't change results.</td></tr>
@@ -959,7 +959,7 @@ branches merged one after the other were never tested together.</li>
 <div class="table-wrap"><table>
 <tr><td><a href="window-chaining.html">Poses, windows and window chaining</a></td><td><code>window-chaining.html</code></td><td>What a pose is, how a window&#x27;s trajectory and its points&#x27; positions are computed, and the window-chaining fix. <i>From pipeline steps 3, 5 and 7.</i></td></tr>
 <tr><td><a href="degeneracy-information.html">Degeneracy information</a></td><td><code>degeneracy-information.html</code></td><td>When the LiDAR can&#x27;t see where the sensor moved, how dMapper measures it, and how to read its log line. <i>From pipeline step 6.</i></td></tr>
-<tr><td><a href="window-terms-livox3.html">The per-term table: Livox 3</a></td><td><code>window-terms-livox3.html</code></td><td>Which term of the optimization holds a window and where it pulls it; the first reading on a real stretch. <i>From pipeline step 6.</i></td></tr>
+<tr><td><a href="window-terms.html">The per-term table</a></td><td><code>window-terms.html</code></td><td>What the per-term table is (which term of the optimization holds a window and where it pulls it), how to get it and read it, with an example reading on a real stretch. <i>From pipeline step 6.</i></td></tr>
 <tr><td><a href="performance.html">Performance</a></td><td><code>performance.html</code></td><td>How the full recording got 2.2 times faster: the overview. <i>From the parameters ([performance]).</i></td></tr>
 <tr><td><a href="PERFORMANCE.md">Performance fixes</a></td><td><code>PERFORMANCE.md</code></td><td>Every performance fix with its method and numbers. <i>From the parameters ([performance]).</i></td></tr>
 </table></div>

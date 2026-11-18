@@ -137,7 +137,7 @@ None: no function of this region is above 80 lines (`python tools/function_sizes
 - 2026-11-17 First reading of the table (Livox 3 100–130 s, 84 windows): the LiDAR carries 90 % of the stretch-along
   weight (median); the gyro 0.13 % of the heading-bend weight, its hold 0.242° = 0.057 °/√s × 7.09 × √0.358 s (0.034°
   without k), NDT ~800:1; velocity prior cost per residual median 8.65 (max 65.4), its σ along travel 4.6 mm/s; edge
-  positions hold stretch at 4.21 mm; projection keeps 14–15 % of NDT in windows 313–314. `docs/window-terms-livox3.html`.
+  positions hold stretch at 4.21 mm; projection keeps 14–15 % of NDT in windows 313–314. `docs/window-terms.html`.
 - 2026-11-17 Stage 3 (`per-term-window-log`): table on +7–9 % time; Livox 3 replay 84/84 identical with it on.
   `openspec/changes/archive/2026-11-17-per-term-window-log/`.
 - 2026-11-16 Huber 3 + NDT information ×0.1 (α) + position information ×0.1 (β) ported from Codex's side build as
@@ -195,7 +195,7 @@ None: no function of this region is above 80 lines (`python tools/function_sizes
 ## See also
 
 - [Regions](README.md)
-- [Per-term table: Livox 3, 100–130 s](../window-terms-livox3.html)
+- [The per-term table](../window-terms.html)
 - [Degeneracy information](../degeneracy-information.html)
 - [The code-split plan](../code-split-and-region-agents-plan.md) (stages 3 and 5)
 - [Code-review tracker](../code-review-tracker.md)

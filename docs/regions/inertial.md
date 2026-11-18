@@ -142,7 +142,7 @@ None: no function of this region is above 80 lines (`python tools/function_sizes
 - 2026-11-17 First per-term table, Livox 3 100–130 s (84 windows): start velocity ends a median 2.9 σ (rms) from its
   prior, above 1 σ in 81 of 84; accelerometer cost per residual 359 at the guess, 0.114 at the result; guess cost /
   (velocity change)² median 1.05e6 (corr. 0.69), consistent with `prepare_velocity_state` setting end = start velocity
-  (not shown). `docs/window-terms-livox3.html` points 4 and 8.
+  (not shown). `docs/window-terms.html` points 4 and 8.
 - 2026-11-15 Livox 4 passage (100–110 s): the carried speed decays 1.15 → 0.13 m/s, a 10 m walk is measured as 5.3 m.
   On the 125 s prefix exact cell statistics, projection 0.3/0.5, accelerometer floor 0.02 and fix (a) don't fix passage
   and gallery together. `docs/agents/roadmap.md`, "Flyaway and passage-stall findings".
@@ -207,7 +207,7 @@ None: no function of this region is above 80 lines (`python tools/function_sizes
 
 - [Regions](README.md)
 - [Poses, windows and window chaining](../window-chaining.html)
-- [Per-term table: Livox 3, 100–130 s](../window-terms-livox3.html)
+- [The per-term table](../window-terms.html)
 - [Degeneracy information](../degeneracy-information.html)
 - [Pipeline](../PIPELINE.md)
 - [Code-review tracker](../code-review-tracker.md)

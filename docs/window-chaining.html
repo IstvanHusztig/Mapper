@@ -162,7 +162,7 @@ terms of the optimization pull towards its shape.</li>
 LiDAR points fit the NDT map while the motion stays close to the IMU's: the gyro's rotation between nodes, the
 accelerometer's change of velocity, the velocity carried from the previous window. The first node is held fixed (the
 origin fix); the window can only change how it continues from there. What each of these terms contributes is shown by
-the per-term table (<a href="window-terms-livox3.html">first reading</a>).</li>
+the per-term table (<a href="window-terms.html">first reading</a>).</li>
 <li><b>Hand-off.</b> The window's last few nodes are re-propagated from the IMU with the bias estimated in this window
 (<code>repropagate_window_tail</code>), and the next window is placed after its new last node
 (<code>place_window_after</code>, section 2 is about this step). The estimated gyro bias, end velocity and acceleration
@@ -413,7 +413,7 @@ change, the change writes new baselines for <code>44_short</code> and <code>44</
 </ul>
 
 <h2>See also</h2>
-<ul class="docs-nav"><li><a href="PIPELINE.md">How a run works: windows</a></li><li><a href="degeneracy-information.html">Degeneracy information</a></li><li><a href="window-terms-livox3.html">The per-term table: Livox 3</a></li><li><a href="performance.html">Performance</a></li><li><a href="index.html#documents">All documents</a></li></ul>
+<ul class="docs-nav"><li><a href="PIPELINE.md">How a run works: windows</a></li><li><a href="degeneracy-information.html">Degeneracy information</a></li><li><a href="window-terms.html">The per-term table: Livox 3</a></li><li><a href="performance.html">Performance</a></li><li><a href="index.html#documents">All documents</a></li></ul>
 </main>
 </body>
 </html>

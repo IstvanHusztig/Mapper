@@ -15,7 +15,7 @@ Explanations with measurements: one mechanism per page.
 
 - [Poses, windows and window chaining](window-chaining.html): What a pose is, how a window's trajectory and its points' positions are computed, and the window-chaining fix. *From pipeline steps 3, 5 and 7.*
 - [Degeneracy information](degeneracy-information.html): When the LiDAR can't see where the sensor moved, how dMapper measures it, and how to read its log line. *From pipeline step 6.*
-- [The per-term table: Livox 3](window-terms-livox3.html): Which term of the optimization holds a window and where it pulls it; the first reading on a real stretch. *From pipeline step 6.*
+- [The per-term table](window-terms.html): What the per-term table is (which term of the optimization holds a window and where it pulls it), how to get it and read it, with an example reading on a real stretch. *From pipeline step 6.*
 - [Performance](performance.html): How the full recording got 2.2 times faster: the overview. *From the parameters ([performance]).*
 - [Performance fixes](PERFORMANCE.md): Every performance fix with its method and numbers. *From the parameters ([performance]).*
 

@@ -139,7 +139,7 @@ None (`python tools/function_sizes.py src --min 80`, 2026-11-18: no function of 
 - **2026-11-17** Solver unit and window verdict (stage 4): every commit identical on the guards, replays and 44_short.
   `openspec/changes/archive/2026-11-17-solver-and-window-verdict/`.
 - **2026-11-17** Livox 3 100-130 s, per-term table: all 84 windows ran 100 iterations, damping ends at 5e9; remaining step
-  0.0000 m in all twelve motions (largest 0.009 mm). `docs/window-terms-livox3.html`.
+  0.0000 m in all twelve motions (largest 0.009 mm). `docs/window-terms.html`.
 - **2026-10-18** C13 twin test on 44_short: each window solved twice from the same state with λ0 5 and 0.5 differs p50
   0.0006 mm, max 0.026 mm; chained runs differ at the windows' first node p50 0.65 -> 4.2 mm. A stop rule of 1e-5 m /
   1e-6 rad cuts the iterations about 45 % and does not remove the difference. Tracker C13.
@@ -190,7 +190,7 @@ None (`python tools/function_sizes.py src --min 80`, 2026-11-18: no function of 
 
 - [Regions](README.md)
 - [Code-split plan](../code-split-and-region-agents-plan.md) (stage 4: the solver unit and the window verdict)
-- [Per-term table: Livox 3, 100-130 s](../window-terms-livox3.html)
+- [The per-term table](../window-terms.html)
 - [Performance](../PERFORMANCE.md)
 - [Code-review tracker](../code-review-tracker.md)
 - [All documents](../README.md)
