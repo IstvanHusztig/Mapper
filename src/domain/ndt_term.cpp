@@ -11,6 +11,14 @@
 #include <stdexcept>
 #include <string>
 
+Eigen::Matrix3d ndt_information_part(const Eigen::Matrix3d &information, NdtInformationPart part)
+{
+    const Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eig(information);
+    const Eigen::Vector3d e = eig.eigenvectors().col(2); // eigenvalues in increasing order: the largest
+    const Eigen::Matrix3d normal = eig.eigenvalues()(2) * e * e.transpose();
+    return part == NdtInformationPart::normal ? normal : Eigen::Matrix3d(information - normal);
+}
+
 NdtGrid indoor_ndt_grid(const NDTBucketMapType &buckets, const ScanToMapOptions &scan_to_map, const NdtNoise &noise)
 {
     return NdtGrid{buckets,
@@ -85,15 +93,17 @@ namespace
             t.sums.node_unmatched[p.index_pose]++;
     }
 
-    // cost (lm_step_check): the point's w r^T M r (Huber cost when on), times the information scale
-    void count_matched(const Point3Di &p, const Eigen::Vector3d &point_global, const Eigen::Vector3d &mean, const Eigen::Matrix3d &infm, double w,
-                       const NdtNoise &noise, NdtPointTarget &t)
+    // cost (lm_step_check): the point's w r^T M r (Huber cost when on), times the information scale. For a part of the
+    // information (term_infm not infm): w times the whole's Huber weight times r^T M_part r
+    void count_matched(const Point3Di &p, const Eigen::Vector3d &point_global, const Eigen::Vector3d &mean, const Eigen::Matrix3d &infm,
+                       const Eigen::Matrix3d &term_infm, double w, const NdtNoise &noise, NdtPointTarget &t)
     {
         if (!t.with_cost)
             return;
         const Eigen::Vector3d r = point_global - mean;
         const double s = r.dot(infm * r);
-        const double point_cost = w * (noise.huber_cutoff > 0.0 ? ndt_huber(s, noise.huber_cutoff).cost : s);
+        const double point_cost = &term_infm == &infm ? w * (noise.huber_cutoff > 0.0 ? ndt_huber(s, noise.huber_cutoff).cost : s)
+                                                      : w * ndt_huber(s, noise.huber_cutoff).weight * r.dot(term_infm * r);
         t.sums.node_cost[p.index_pose] += noise.information_scale != 1.0 ? noise.information_scale * point_cost : point_cost;
         t.sums.node_matched[p.index_pose]++;
     }
@@ -184,15 +194,20 @@ namespace
             return;
         const Eigen::Matrix3d &infm = *inverse;
         const Eigen::Vector3d &p_s = p.point;
+        // the information the block and right-hand side carry: the whole, or (the per-term table) one part of it
+        Eigen::Matrix3d part_scratch;
+        if (grid.part != NdtInformationPart::whole)
+            part_scratch = ndt_information_part(infm, grid.part);
+        const Eigen::Matrix3d &ti = grid.part == NdtInformationPart::whole ? infm : part_scratch;
 
         Eigen::Matrix<double, 6, 6, Eigen::RowMajor> AtPA;
         point_to_point_source_to_target_tait_bryan_wc_AtPA_simplified(
             AtPA, pose_s.px, pose_s.py, pose_s.pz, pose_s.om, pose_s.fi, pose_s.ka, p_s.x(), p_s.y(), p_s.z(),
-            infm(0, 0), infm(0, 1), infm(0, 2), infm(1, 0), infm(1, 1), infm(1, 2), infm(2, 0), infm(2, 1), infm(2, 2));
+            ti(0, 0), ti(0, 1), ti(0, 2), ti(1, 0), ti(1, 1), ti(1, 2), ti(2, 0), ti(2, 1), ti(2, 2));
         Eigen::Matrix<double, 6, 1> AtPB;
         point_to_point_source_to_target_tait_bryan_wc_AtPB_simplified(
             AtPB, pose_s.px, pose_s.py, pose_s.pz, pose_s.om, pose_s.fi, pose_s.ka, p_s.x(), p_s.y(), p_s.z(),
-            infm(0, 0), infm(0, 1), infm(0, 2), infm(1, 0), infm(1, 1), infm(1, 2), infm(2, 0), infm(2, 1), infm(2, 2),
+            ti(0, 0), ti(0, 1), ti(0, 2), ti(1, 0), ti(1, 1), ti(1, 2), ti(2, 0), ti(2, 1), ti(2, 2),
             bucket->mean.x(), bucket->mean.y(), bucket->mean.z());
 
         const double w = ndt_point_weight(grid, *bucket, p_s);
@@ -202,7 +217,7 @@ namespace
             AtPA *= w;
             AtPB *= w;
         }
-        count_matched(p, point_global, bucket->mean, infm, weighted ? w : 1.0, grid.noise, t);
+        count_matched(p, point_global, bucket->mean, infm, ti, weighted ? w : 1.0, grid.noise, t);
         apply_huber_and_scale(AtPA, AtPB, point_global, bucket->mean, infm, grid.noise, t);
 
         if (t.equations == nullptr)

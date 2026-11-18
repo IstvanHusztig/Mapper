@@ -1444,3 +1444,51 @@ TEST_CASE("window term table: in a corridor NDT holds the window across, far les
     MESSAGE("corridor NDT shift weight along ", raw->weight[0][0], ", sideways ", raw->weight[0][1]);
     CHECK(raw->weight[0][0] < 0.05 * raw->weight[0][1]);
 }
+
+TEST_CASE("window term table: in a corridor the cells' in-plane information carries the weight along, and the parts add up")
+{
+    const OdometryConfig c = test_config();
+    const Options o = options_from(c);
+    const Scene s = corridor();
+    const Maps maps = build_maps(s, o.scan_to_map);
+    const std::vector<Eigen::Affine3d> truth = true_poses();
+    const std::vector<Point3Di> points = observe(s, truth);
+    MotionModelRotationOptions rotation = o.rotation;
+    rotation.estimate_bias = false;
+    // a guess off the truth, so the pulls are not zero
+    std::vector<Eigen::Affine3d> guess = truth;
+    for (int k = 0; k < n_nodes; k++)
+        guess[k].translation() += Eigen::Vector3d(0.02 * k / double(n_nodes - 1), 0.01, 0.0);
+    const WindowTermTable t = table_of(points, make_window(guess), maps, o, {}, rotation);
+    REQUIRE(t.failure.empty());
+    const WindowTermRow *raw = table_row(t, "ndt_unprojected");
+    const WindowTermRow *normal = table_row(t, "ndt_normal");
+    const WindowTermRow *in_plane = table_row(t, "ndt_in_plane");
+    REQUIRE(raw != nullptr);
+    REQUIRE(normal != nullptr);
+    REQUIRE(in_plane != nullptr);
+    CHECK_FALSE(normal->in_total);
+    CHECK_FALSE(in_plane->in_total);
+    CHECK(normal->residuals == raw->residuals);
+    CHECK(in_plane->residuals == raw->residuals);
+    MESSAGE("corridor shift weight along: unprojected ", raw->weight[0][0], ", normal ", normal->weight[0][0], ", in-plane ", in_plane->weight[0][0]);
+    MESSAGE("corridor shift weight sideways: unprojected ", raw->weight[0][1], ", normal ", normal->weight[0][1], ", in-plane ", in_plane->weight[0][1]);
+    CHECK(normal->weight[0][0] < 0.05 * in_plane->weight[0][0]);
+    CHECK(normal->weight[1][0] < 0.05 * in_plane->weight[1][0]);
+    // the parts add up to the whole: weights, and weight * pull, for every motion
+    for (int a = 0; a < kTermMotions; a++)
+        for (int d = 0; d < kTermDirections; d++)
+        {
+            CAPTURE(a);
+            CAPTURE(d);
+            const double w = raw->weight[a][d];
+            CHECK(std::abs(normal->weight[a][d] + in_plane->weight[a][d] - w) <= 1e-9 * std::abs(w));
+            if (std::isfinite(raw->pull[a][d]))
+            {
+                const double pn = std::isfinite(normal->pull[a][d]) ? normal->pull[a][d] * normal->weight[a][d] : 0.0;
+                const double pi = std::isfinite(in_plane->pull[a][d]) ? in_plane->pull[a][d] * in_plane->weight[a][d] : 0.0;
+                const double whole = raw->pull[a][d] * w;
+                CHECK(std::abs(pn + pi - whole) <= 1e-6 * std::max(std::abs(whole), 1e-9 * std::abs(w)));
+            }
+        }
+}
