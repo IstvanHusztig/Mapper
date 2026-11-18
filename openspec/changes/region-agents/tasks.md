@@ -73,9 +73,11 @@
 
 ## 5. Worktrees and agent definitions
 
-- [ ] 5.1 The two standing worktrees (`C:/Repo/dMapper-worktrees/region-a`, `region-b`), each configured and built once
+- [x] 5.1 The two standing worktrees (`C:/Repo/dMapper-worktrees/region-a`, `region-b`), each configured and built once
   with the `x64-Release` preset. Verify: `step_checks.py` run in each reports identical everywhere; the full build's time
   is noted.
+  Result: both at 27d6873, each configured and built once (full build about 3 min, 311 steps) and checked:
+  `step_checks.py` ALL HOLD in both (region-a 596 s, region-b 616 s in all, the full build included).
 - [x] 5.2 `.claude/agents/region-<name>.md` for the eight regions (one text, the region's name and contract filled in;
   Opus, medium; Sonnet for verification) and `conclusion-reviewer.md` (Sonnet, read-only); `master-reviewer.md` gets the
   repo's present path. Verify: `tools/check_agent_setup.py` passes.
