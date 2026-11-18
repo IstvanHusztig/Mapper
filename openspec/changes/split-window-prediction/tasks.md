@@ -49,5 +49,6 @@
 
 ## 5. End of stage
 
-- [ ] 5.1 Full 44 and Livox 3 against their manifests with the shipped settings (sequential, in the background). Verify:
+- [x] 5.1 Full 44 and Livox 3 against their manifests with the shipped settings (sequential, in the background). Verify:
   IDENTICAL (no setting changes, the manifests stay).
+  Result: 44 IDENTICAL, 35 files (odometry 888 s); Livox 3 IDENTICAL, 35 files (odometry 636 s).
