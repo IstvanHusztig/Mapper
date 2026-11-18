@@ -988,6 +988,208 @@ through the orchestrator. A region never changes another region's files; it repo
 **Models.** Region owners: Opus, medium. Verification and the reviewer: Sonnet. Design questions stay with the main
 session on Fable, high.
 
+### Stage 7 design (2026-11-18, Fable, high)
+
+**What exists today.** One agent definition (`.claude/agents/master-reviewer.md`; it still names the repo's old folder).
+The four verify skills. The Codex setup (`AGENTS.md`, `docs/agents/`, `tools/check_agent_setup.py`). The checks of
+every commit of stages 2 to 6 (build, tests, the two guards, the two replays, 44_short, the per-term table) exist only
+as scripts and reference files in a session's scratch folder, with this workstation's paths typed in; a clean-up
+removes them. What the regions will need to know is spread over `CLAUDE.md`, the code-review tracker, the agents' notes
+and the session memory, which an agent started cold does not see.
+
+**The stage builds four things:** who owns what, the verification kit, a knowledge file and an agent definition per
+region, and the protocol; then it tries them once on a small real job.
+
+#### 1. Who owns what
+
+Every file under `src/` and `tests/` has exactly one owner: a region, or the orchestrator (the main session) for what
+several regions share. The list is one file, `docs/regions/owners.toml`, with three kinds of entries:
+
+- **files** a region owns;
+- **functions**: an entry `file::function` overrides its file's owner (a region's function in the orchestrator's
+  `run_odometry.cpp`; the orchestrator's `save_result` in the front-end's `lidar_odometry.cpp`);
+- **shared test files** (`window_terms_test.cpp`, `scan_to_map_test.cpp`, `window_capture_test.cpp`): their cases don't
+  separate by name, so any region may add or change the cases of its own code there, and the orchestrator reads that
+  part of the patch.
+
+**Whatever the list does not name belongs to the orchestrator.** So every file has one owner by construction, and
+`tools/region_owners.py` checks the rest: every named file and function exists, nothing is named twice. With
+`--patch <file> --region <name>` it lists the files and functions a patch touches outside that region's entries: an
+agent's definition can't fence it into paths, so this is the fence.
+
+| Owner | Whole files | Functions in shared files | Tests |
+|---|---|---|---|
+| front-end | `lidar_odometry.{h,cpp}`, `imu_kinematics`, `imu_sample.h`, `recording_files`, `recording_folder_source`, `fusion_orientation_estimator`, `folder_inputs` | (not `save_result`: orchestrator) | `recording_files_test`, `orientation_test`, `fusion_orientation_test`, `imu_kinematics_test`, `window_cut_test` |
+| map | `ndt_map`, `ndt_types.h` | `seed_map`, `add_window_to_map` | `ndt_map_test` |
+| lidar-matching | `ndt_term` | | the NDT cases of `window_terms_test` and `scan_to_map_test` |
+| inertial | `motion_model_terms`, `accelerometer_term`, `window_steps` | `load_and_predict`, `prepare_acc_term`, `window_at_rest`, `prepare_velocity_state`, `update_acc_term_after_window`, `update_gyro_bias_after_window` | `window_steps_test`, the motion and accelerometer cases of `window_terms_test` |
+| solver | `lm_solver`, `window_problem`, `window_solver`, `window_equations`, `normal_equations`, `scan_to_map`, `window_verdict` | `run_lm_iterations`, `solve_window`, `window_evidence` | `lm_solver_test`, `normal_equations_test`, `window_verdict_test`, the convergence cases of `scan_to_map_test` |
+| back-end | `loop_closure`, `consistency`, `odometry_snapshot.h`, `odometry_snapshot_file` | | `loop_closure_test`, `consistency_test`, `odometry_snapshot_test` |
+| noise-budget | `window_noise_model`, `window_term_table`, `window_term_sink.h`, `window_term_csv` | `record_window_terms`, `log_weak_axis_diagnostics`, `log_accelerometer_fit`, `log_heading_diagnostics` | `window_noise_model_test`, the table cases of `scan_to_map_test` |
+| verification | `tools/`, `tools/baseline/`, `.claude/skills/verify-*` (and their Codex copies), the test helpers (`tests/synthetic_recording.*`, `tests/serial_executor.h`), `tests/test_verification_tools.py` | | the characterization guard and the loop guard (cases in shared test files) |
+| orchestrator | everything not named above: the shared types and settings (`window.h`, `odometry_config.h`, `optimizer_options`, `odometry_state.h`, `structures.h`, `transformations.h`, `point_placement.h`, the reporting and timing headers, `holdout.h`), the loop's skeleton (`run_odometry.cpp` outside the functions above: `process_windows`, `prepare_window`, `report_window`, `finish_window`, `prepare_run`, the run's summaries; `window_loop.h`), capture and replay, the pipeline and the ports, the rest of `src/infrastructure` and the presentation layer, CMake, `settings/`, `CLAUDE.md`, `docs/`, `openspec/` | `save_result` | the remaining tests, `tests/data/` |
+
+Two boundaries the old table left open:
+
+- **The noise-budget region owns the weights, not the terms.** Since stage 5 every weight is computed in
+  `window_noise_model`. A term's region owns its residual and Jacobian; the weight's formula is the noise-budget's. A
+  change of a weight (the velocity prior's covariance, say) is the noise-budget's edit, with the term's region asked for
+  its view.
+- **The verification region never edits `src/`**, so capture and replay (code in `src/`) stay with the orchestrator;
+  verification owns their use: the captures, the scripts, the references.
+- **A finding can cross two regions.** `decimate` is the map's, but `compute_step_1` (front-end) calls it; the hand-off
+  runs through the inertial steps and the map update. Such a job names both regions, and the orchestrator edits what
+  lies between them.
+
+#### 2. The verification kit, in the repo
+
+- `tools/step_checks.py`: the per-commit checks as one command (Release build, unit tests, characterization guard, loop
+  guard, the two replays, 44_short against its manifest, the per-term table of the 44_short replay), one line per check.
+  `--record` writes the reference files from a clean commit and notes its hash.
+- `tools/end_runs.py`: the end-of-change batch (full 44, Livox 3, 44_short against their manifests; `--debug` adds the
+  Debug build and `ctest`), sequential, for the background, one line per run.
+- `tools/local_paths.toml`: this workstation's paths (recordings, captures, the references' folder, `vcvars64.bat`),
+  read by both (`tomllib`, standard library); today they are typed into each script. Committed, as
+  `docs/agents/environment.md` already records the same paths. The references and captures live outside the repo, under
+  `experiments/guards/`.
+- Whether a change "changes no number" is what `step_checks.py` says (guards, replays and 44_short identical), never
+  what its author says.
+
+#### 3. A knowledge file and an agent definition per region
+
+**Knowledge file** `docs/regions/<name>.md`, the region's memory, in git. One form for all:
+
+1. *Contract*: what the region takes, what it gives, what others rely on.
+2. *Owns*: its entries of `owners.toml`, in words.
+3. *How to check your work*: its tests, the replay, the readings that are its own (which rows of the per-term table,
+   which parts of the noise line and the verdict), the tools and the verify skill that apply.
+4. *Known flaws*: every finding of `docs/code-review-tracker.md` that is not fixed, moot or rejected, in the file of the
+   region that owns the code *today* (the tracker still cites lines of `scan_to_map.cpp` from before the split; its
+   references are brought up to date in the same task), one line each. As the code stands: C2, C19, C21, C38
+   front-end (C38 is a fault of recording 44's data: also the recording check's); C4, C14, C20, C30, C33 map (C14,
+   C21 and C30 cross to the front-end); C16, C18, C31 lidar-matching; C5, C6, C15, C17, C26, C32 inertial (C15 crosses
+   to the front-end, C26 to the solver, C32 to the map); C13 solver; C34, C37 noise-budget; C1, C24, C25, C35 back-end.
+5. *To split in the first job*: its functions above 80 lines (the stage 6 table).
+6. *Experiments*: a dated log, newest first: the question, what was run, the numbers, the folder with the evidence.
+7. *Ideas rejected*, with the evidence, so nobody tries them a third time.
+8. *Open questions*.
+
+An agent does not edit its knowledge file. It writes its entry (the experiment, what it learned, a question left
+open) into its experiment folder; the orchestrator adds it to the file after the review, and changes "Known flaws",
+"Ideas rejected" and the contract only after the user's decision. So a rejected idea leaves a line under "Ideas
+rejected" and nothing else.
+
+The file is seeded from what is already written (`CLAUDE.md`, the tracker, `docs/agents/roadmap.md`, the archived OpenSpec
+changes, the session memory's findings on the turn fragility and the Livox states), and a Sonnet reviewer checks each
+seeded file against the code, as it did the guide's Fundamentals. It stays short (about 300 lines): an old experiment
+shrinks to one line and its folder. `docs/regions/README.md` holds the table above and the protocol. The folder is a new
+group of both docs maps ("Region knowledge files"); each page carries the top line and "See also" like every page;
+written by the orchestrator from the agents' entries; English only.
+
+**Agent definition** `.claude/agents/region-<name>.md`: Opus, medium (Sonnet for verification). One text for all, with
+the region's name and contract filled in:
+
+- Read first: `CLAUDE.md`, your knowledge file, `docs/regions/README.md`.
+- Say what you will do before you do it (the first lines of your report).
+- Edit only what you own. What you need from a shared file or another region, you report; you don't edit it.
+- Work by replay. You never start a full run, never commit, never push, never change `settings/`; a settings idea is
+  tried on a copy in your experiment folder.
+- Numbers, not verdicts: no statement about the map, no "better". No dead code. Precision before speed.
+- Leave the tree as you found it: save your change as a patch, then restore the files.
+- Hand back in the fixed form (below), with your knowledge entry.
+- You can't start other agents; the orchestrator calls verification and the reviewer.
+
+**Hand-back form:** the question; what was run; the finding with its numbers; where the evidence is; the proposed
+change (the patch file, the files it touches, whose contract it touches); what could not be measured; the knowledge
+entry.
+
+**One working tree, one agent at a time, and the tree is left clean.** A region agent builds and replays in the repo's
+one tree (`out/build/x64-Release`). The orchestrator starts it only when `src/` and `tests/` have no uncommitted
+change. At the end the agent saves its change as a patch in its experiment folder
+(`experiments/regions/<name>/<date>-<question>/`) and restores the files, so nothing unaccepted stays where a later
+commit could pick it up. The orchestrator checks the patch against the ownership list, applies it for verification,
+and restores the tree again unless the user accepts. Agents that only read (the reviewers, a region asked for its
+view) may run beside it; two jobs never run on one recording folder. Separate worktrees are not used for region jobs:
+each would need its own build tree, which `CLAUDE.md` rules out, and they share the recordings' caches anyway
+(`AGENTS.md` keeps them for Codex's simultaneous editing).
+
+**Two more definitions:** `conclusion-reviewer` (Sonnet, read-only: checks a finding and its numbers before they are
+stated, today an ad-hoc prompt each time), and Claude's `master-reviewer` gets the repo's present path (its Codex twin
+already has it). No batch-run agent: a
+background script does that job, and `tools/end_runs.py` is that script.
+
+#### 4. The protocol
+
+1. **Question and capture.** The orchestrator states the question and captures the stretch (a full run with the capture
+   settings, in the background).
+2. **Triage.** It reads the stretch's verdict lines, per-term table and noise lines and names the region the rows point
+   to, with the rows. If two regions are possible, both are asked for their view, read-only.
+3. **Region job.** The region's agent gets the question, the capture, the settings, what is known and what is ruled out
+   (effort high when a fix is asked for). It hands back in the fixed form.
+4. **Verification.** The orchestrator checks the patch against the ownership list and applies it; the verification
+   agent runs `step_checks.py`. Identical everywhere: the change changes no number. Otherwise: the replays before and
+   after, `verify-run` on their logs, and the spread of small perturbations (`verify-robustness`) when one variant is
+   claimed to beat another. Then the tree is restored.
+5. **Review.** The conclusion reviewer checks the finding against its evidence.
+6. **The user decides** on the numbers, shown without a verdict: reject (it goes to the knowledge file's "Ideas
+   rejected"), or full runs (`verify-run`, `verify-map`, the before and after clouds for the user's look), or accept. An
+   accepted change is an OpenSpec change (propose, apply, archive), baselines in their own commit. A change that
+   changes a number enters the code only here, after the user's word; nothing is called better from log readings, and
+   nothing that changes the map is pushed before the user has looked at the clouds.
+
+A change that crosses a contract (a shared type, a setting, another region's input) is edited by the orchestrator, and
+both regions' knowledge files say so.
+
+#### 5. Try-out
+
+Before stage 8 the whole chain runs once on a job whose result can be checked exactly: the map region's first job, the
+split of `update_rgd_legacy` (84 lines, the default cell statistics: every replay, 44_short and `ndt_map_test` run it)
+without changing a bit, the order of its sums kept. Region agent, verification agent, reviewer, the user's decision,
+commit. What goes wrong in the chain is fixed in the definitions before Livox 4
+depends on them.
+
+A Sonnet reviewer checked this design against the repository (2026-11-18); its findings are worked in: the default
+owner and the shared test files, the flaws mapped by today's code, the patch-only hand-back with the ownership check,
+knowledge entries through the orchestrator, the limits of what a definition can enforce.
+
+#### Checks and commit order
+
+1. The verification kit; its references equal the ones of stage 6. `tools/README.md`.
+2. `owners.toml` and `tools/region_owners.py`: every named file and function exists, none twice; `--patch` tried on a
+   made-up patch that leaves its region.
+3. The knowledge files and `docs/regions/README.md`, each checked against the code by a reviewer; the tracker's
+   references brought to today's files; the docs maps.
+4. The agent definitions; `CLAUDE.md` gets a "Regions" section, `AGENTS.md` a pointer (the definitions are Claude's; the
+   knowledge files and the ownership bind Codex too); `tools/check_agent_setup.py` still passes.
+5. Each region agent is started once, read-only: it states its contract and its files and names what in its knowledge
+   file it could not find in the code. Corrections go into the files.
+6. The try-out, with `step_checks.py` and the full 44 and Livox 3 at its end.
+
+No Debug build except for the try-out's end (it changes map code).
+
+#### Decisions (for the user)
+
+1. **Ownership by file, by function in shared files, in one checked list** (`docs/regions/owners.toml`,
+   `tools/region_owners.py`). Recommended. Alternative: ownership only in words in each knowledge file.
+2. **The noise-budget region owns the weights' formulas** (`window_noise_model`), the terms' regions their residuals and
+   Jacobians. Recommended: it follows stage 5. Alternative: each term's region also owns its weight, and the noise-budget
+   only reads.
+3. **Capture, replay, the loop's skeleton, shared types and settings stay with the orchestrator; verification never
+   edits `src/`.** Recommended.
+4. **One working tree, one editing agent at a time; it hands back a patch and leaves the tree clean; agents never
+   commit, push, run full runs or touch `settings/`.** Recommended (one rebuild more per job, and nothing unaccepted
+   can slip into a commit). Alternative: the change stays in the tree for verification (faster, riskier).
+5. **The knowledge file's form, its seeding from what is written, a reviewer's check of each, about 300 lines; agents
+   hand in entries, the orchestrator writes the file.** Recommended. Alternative: agents edit their file directly
+   (less work for the orchestrator; a rejected change can leave traces).
+6. **The verification kit moves into the repo** (`step_checks.py`, `end_runs.py`, `local_paths.toml`, the references
+   under `experiments/guards/`). Recommended: today it can be lost with the scratch folder.
+7. **`conclusion-reviewer` as a definition, `master-reviewer`'s path fixed, no batch-run agent.** Recommended.
+8. **The try-out: the map region splits `update_rgd_legacy`.** Recommended: small, real, exactly checkable.
+   Alternatives: the front-end's split of `calculate_trajectory` and `compute_step_1` (larger; the front-end may be
+   needed in stage 8), or no try-out.
+9. **`docs/regions/` is a group of the docs map, English only**, kept by the agents. Recommended.
+
 ## Stage 8: resume Livox 4
 
 Capture 95–125 s (passage) and 195–285 s (flyaway) from one full run, replay with the per-term log, name the term,
