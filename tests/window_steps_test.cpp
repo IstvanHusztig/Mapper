@@ -378,3 +378,103 @@ TEST_CASE("window_rests: still with gravity only, not while walking")
     CHECK(window_rests(poses, ts, still, angles, 1.0, 0.1, 0.01));
     CHECK_FALSE(window_rests(poses, ts, walking, angles, 1.0, 0.1, 0.01));
 }
+
+namespace
+{
+    // n nodes 2 ms apart turning about z and x, starting at the origin
+    Window turning_window(int n)
+    {
+        Window w;
+        for (int k = 0; k < n; k++)
+        {
+            Eigen::Affine3d p = Eigen::Affine3d::Identity();
+            p.linear() = (Eigen::AngleAxisd(0.01 * k, Eigen::Vector3d::UnitZ()) * Eigen::AngleAxisd(0.003 * k, Eigen::Vector3d::UnitX())).toRotationMatrix();
+            p.translation() = Eigen::Vector3d(0.002 * k, 0.0005 * k, 0.0);
+            w.poses.push_back(p);
+            w.timestamps.push_back({1.0 + 0.002 * k, 1.0 + 0.002 * k});
+        }
+        w.imu_motion_from_previous.linear() = Eigen::AngleAxisd(0.002, Eigen::Vector3d::UnitZ()).toRotationMatrix();
+        return w;
+    }
+}
+
+TEST_CASE("predict_window_poses steps: the mean shift per node and its limit")
+{
+    Window before = turning_window(360), previous = turning_window(360);
+    before.poses.back().translation() = Eigen::Vector3d(1.0, 2.0, 0.0);
+    previous.poses.back().translation() = Eigen::Vector3d(1.36, 2.0, 0.0);
+    bool dropped = true;
+    const Eigen::Vector3d shift = mean_shift_of(previous, &before, dropped);
+    CHECK_FALSE(dropped);
+    CHECK(shift.x() == doctest::Approx(0.001));
+    CHECK(shift.y() == doctest::Approx(0.0));
+    previous.poses.back().translation() = Eigen::Vector3d(501.0, 2.0, 0.0);
+    CHECK(mean_shift_of(previous, &before, dropped).isZero());
+    CHECK(dropped);
+    CHECK(mean_shift_of(previous, nullptr, dropped).isZero());
+    CHECK_FALSE(dropped);
+}
+
+TEST_CASE("predict_window_poses steps: the chained guess equals place_window_after")
+{
+    Window previous = turning_window(20);
+    previous.poses.back().translation() = Eigen::Vector3d(3.0, -1.0, 0.5);
+    Window placed = turning_window(30), predicted = turning_window(30);
+    place_window_after(placed, previous.poses.back());
+    // no velocity and no mean shift: the translations stay as chained (+ 0)
+    predict_window_poses(predicted, previous, nullptr, Eigen::Vector3d::Zero(), PosePredictionOptions());
+    REQUIRE(predicted.poses.size() == placed.poses.size());
+    for (size_t k = 0; k < placed.poses.size(); k++)
+    {
+        CAPTURE(k);
+        CHECK(predicted.poses[k].linear() == placed.poses[k].linear());
+        CHECK(predicted.poses[k].translation() == placed.poses[k].translation());
+    }
+    CHECK(predicted.motion_model_poses.size() == predicted.poses.size());
+}
+
+TEST_CASE("predict_window_poses steps: the four ways to the translations")
+{
+    const Window w = turning_window(11);
+    const std::vector<Eigen::Vector3d> a(11, Eigen::Vector3d(0.5, 0.0, 0.0));
+    const Eigen::Vector3d v0(1.0, 0.2, 0.0), shift(0.001, 0.0, 0.0);
+    const double gap = 0.002;
+    const auto run = [&](bool imu_ok, bool stationary, const PosePredictionOptions &o)
+    {
+        std::vector<Eigen::Affine3d> poses = w.poses;
+        guess_window_translations(poses, w.timestamps, a, imu_ok, stationary, v0, shift, gap, o);
+        return poses;
+    };
+    const Eigen::Vector3d start = w.poses[0].translation();
+    SUBCASE("accelerometer integration: p = v t + a t^2 / 2 from the gap on")
+    {
+        PosePredictionOptions o;
+        o.use_imu_pred = true;
+        const auto poses = run(true, false, o);
+        const double t = 0.02; // the last node, 10 steps of 2 ms
+        const Eigen::Vector3d expected = start + v0 * gap + v0 * t + 0.5 * a[0] * t * t;
+        CHECK((poses.back().translation() - expected).norm() < 1e-12);
+    }
+    SUBCASE("at rest: no motion")
+    {
+        PosePredictionOptions o;
+        o.use_zupt = true;
+        const auto poses = run(true, true, o);
+        for (const Eigen::Affine3d &p : poses)
+            CHECK(p.translation() == start);
+    }
+    SUBCASE("constant velocity over the node times and the gap")
+    {
+        PosePredictionOptions o;
+        o.constant_velocity = true;
+        const auto poses = run(false, false, o);
+        for (size_t k = 0; k < poses.size(); k++)
+            CHECK((poses[k].translation() - (w.poses[k].translation() + v0 * (0.002 * k + gap))).norm() < 1e-12);
+    }
+    SUBCASE("the mean shift per node")
+    {
+        const auto poses = run(false, false, PosePredictionOptions());
+        for (size_t k = 0; k < poses.size(); k++)
+            CHECK((poses[k].translation() - (w.poses[k].translation() + shift * double(k))).norm() < 1e-15);
+    }
+}

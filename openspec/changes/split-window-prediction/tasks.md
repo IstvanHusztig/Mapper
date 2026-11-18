@@ -29,11 +29,14 @@
   `log_accelerometer_fit` call it, their size checks and the threshold conversion unchanged. Test: a still and a walking
   window. Verify: step checks; the `accelerometer fit` lines identical with task 2.1's. Result: step checks and the
   per-term table identical; the 21 fit lines identical; the test passes.
-- [ ] 3.2 `predict_window_poses` in four steps: `mean_shift_of`, the chaining through `place_window_after` (with the
+- [x] 3.2 `predict_window_poses` in four steps: `mean_shift_of`, the chaining through `place_window_after` (with the
   empty-window guard), the rest test, `guess_window_translations`. Tests of each step (mean shift and its drop, chaining
   bit-identical with `place_window_after`, the four translation branches). Verify: step checks; the existing
   `predict_window_poses` tests pass unchanged; `tools/function_lengths.py` (task 4.1) or a manual count shows every
   function of `window_steps.cpp` under 80 lines.
+  Result: `mean_shift_of`, `place_window_after` (empty-window guard), `window_rests`, `guess_window_translations`;
+  `predict_window_poses` 30 lines; 3 new test cases, the existing ones unchanged; step checks and the per-term table
+  identical; no function of `window_steps.cpp` above 80 lines.
 
 ## 4. Tool and docs
 

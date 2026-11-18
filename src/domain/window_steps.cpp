@@ -63,11 +63,8 @@ bool window_rests(const std::vector<Eigen::Affine3d> &poses, const std::vector<s
                                 acc_threshold_mps2, gyro_threshold_rad_s);
 }
 
-PosePrediction predict_window_poses(Window &window, const Window &previous, const Window *before_previous,
-                                    const Eigen::Vector3d &prev_velocity, const PosePredictionOptions &options)
+Eigen::Vector3d mean_shift_of(const Window &previous, const Window *before_previous, bool &dropped)
 {
-    PosePrediction r;
-    const bool imu_translation = options.use_imu_pred || options.use_zupt;
     Eigen::Vector3d mean_shift(0.0, 0.0, 0.0);
     if (before_previous)
     {
@@ -75,71 +72,74 @@ PosePrediction predict_window_poses(Window &window, const Window &previous, cons
                      before_previous->poses[before_previous->poses.size() - 1].translation();
         mean_shift /= (previous.poses.size());
     }
-
-    if (mean_shift.norm() > 1.0)
-    {
-        r.mean_shift_dropped = true;
+    dropped = mean_shift.norm() > 1.0;
+    if (dropped)
         mean_shift = Eigen::Vector3d(0.0, 0.0, 0.0);
+    return mean_shift;
+}
+
+void guess_window_translations(std::vector<Eigen::Affine3d> &poses, const std::vector<std::pair<double, double>> &ts,
+                               const std::vector<Eigen::Vector3d> &a, bool imu_sizes_ok, bool stationary, const Eigen::Vector3d &prev_velocity,
+                               const Eigen::Vector3d &mean_shift, double gap_s, const PosePredictionOptions &options)
+{
+    if (imu_sizes_ok && (options.use_imu_pred || stationary))
+    {
+        // integrate the accelerometer from the previous window's final velocity;
+        // a window at rest (zero-velocity detection) is predicted without motion
+        Eigen::Vector3d v = stationary ? Eigen::Vector3d::Zero() : prev_velocity;
+        Eigen::Vector3d p = poses[0].translation() + v * gap_s;
+        poses[0].translation() = p;
+        for (size_t tr = 1; tr < poses.size(); tr++)
+        {
+            const double dt = std::max(ts[tr].first - ts[tr - 1].first, 0.0);
+            const Eigen::Vector3d a_k = (options.use_imu_pred && !stationary) ? a[tr - 1] : Eigen::Vector3d::Zero();
+            p += v * dt + 0.5 * a_k * dt * dt;
+            v += a_k * dt;
+            poses[tr].translation() = p;
+        }
     }
+    else if (options.constant_velocity && ts.size() == poses.size())
+    {
+        // timestamp-aware constant-velocity prediction from the previous window's final velocity
+        for (int tr = 0; tr < poses.size(); tr++)
+            poses[tr].translation() += prev_velocity * (ts[tr].first - ts[0].first + gap_s);
+    }
+    else
+    {
+        for (int tr = 0; tr < poses.size(); tr++)
+            poses[tr].translation() += mean_shift * tr;
+    }
+}
+
+PosePrediction predict_window_poses(Window &window, const Window &previous, const Window *before_previous,
+                                    const Eigen::Vector3d &prev_velocity, const PosePredictionOptions &options)
+{
+    PosePrediction r;
+    const Eigen::Vector3d mean_shift = mean_shift_of(previous, before_previous, r.mean_shift_dropped);
 
     // the window starts after the IMU's motion since the previous window's last node (one sample interval); its first
-    // position follows the prediction over that time too
-    std::vector<Eigen::Affine3d> new_trajectory;
-    Eigen::Affine3d current_node = previous.poses[previous.poses.size() - 1] * window.imu_motion_from_previous;
-    new_trajectory.push_back(current_node);
+    // position follows the prediction over that time too. An empty window (never cut) gets one node there, as before.
+    if (window.poses.empty())
+        window.poses.resize(1, Eigen::Affine3d::Identity());
+    place_window_after(window, previous.poses[previous.poses.size() - 1]);
     const double gap_s = !window.timestamps.empty() && !previous.timestamps.empty()
                              ? std::max(window.timestamps[0].first - previous.timestamps.back().first, 0.0)
                              : 0.0;
 
-    for (int tr = 1; tr < window.poses.size(); tr++)
-    {
-        auto update = window.poses[tr - 1].inverse() * window.poses[tr];
-        current_node = current_node * update;
-        new_trajectory.push_back(current_node);
-    }
-
     const auto &ts = window.timestamps;
     const auto &acc = window.imu_acc;
-    const bool imu_sizes_ok = imu_translation && ts.size() == new_trajectory.size() && acc.size() == new_trajectory.size() &&
-                              window.imu_angles.size() == new_trajectory.size();
+    const bool imu_sizes_ok = (options.use_imu_pred || options.use_zupt) && ts.size() == window.poses.size() &&
+                              acc.size() == window.poses.size() && window.imu_angles.size() == window.poses.size();
     std::vector<Eigen::Vector3d> a;
     if (imu_sizes_ok)
     {
-        a = world_acceleration(new_trajectory, ts, acc, window.imu_angles, options.gravity_norm, options.acc_smoothing_half_width_s);
-        r.stationary = options.use_zupt && window_rests(new_trajectory, ts, acc, window.imu_angles, options.gravity_norm,
+        a = world_acceleration(window.poses, ts, acc, window.imu_angles, options.gravity_norm, options.acc_smoothing_half_width_s);
+        r.stationary = options.use_zupt && window_rests(window.poses, ts, acc, window.imu_angles, options.gravity_norm,
                                                         options.zupt_acc_threshold_mps2, options.zupt_gyro_threshold_rad_s);
     }
 
-    if (imu_sizes_ok && (options.use_imu_pred || r.stationary))
-    {
-        // integrate the accelerometer from the previous window's final velocity;
-        // a window at rest (zero-velocity detection) is predicted without motion
-        Eigen::Vector3d v = r.stationary ? Eigen::Vector3d::Zero() : prev_velocity;
-        Eigen::Vector3d p = new_trajectory[0].translation() + v * gap_s;
-        new_trajectory[0].translation() = p;
-        for (size_t tr = 1; tr < new_trajectory.size(); tr++)
-        {
-            const double dt = std::max(ts[tr].first - ts[tr - 1].first, 0.0);
-            const Eigen::Vector3d a_k = (options.use_imu_pred && !r.stationary) ? a[tr - 1] : Eigen::Vector3d::Zero();
-            p += v * dt + 0.5 * a_k * dt * dt;
-            v += a_k * dt;
-            new_trajectory[tr].translation() = p;
-        }
-    }
-    else if (options.constant_velocity && ts.size() == new_trajectory.size())
-    {
-        // timestamp-aware constant-velocity prediction from the previous window's final velocity
-        for (int tr = 0; tr < new_trajectory.size(); tr++)
-            new_trajectory[tr].translation() += prev_velocity * (ts[tr].first - ts[0].first + gap_s);
-    }
-    else
-    {
-        for (int tr = 0; tr < new_trajectory.size(); tr++)
-            new_trajectory[tr].translation() += mean_shift * tr;
-    }
-
-    window.poses = new_trajectory;
-    window.motion_model_poses = new_trajectory;
+    guess_window_translations(window.poses, ts, a, imu_sizes_ok, r.stationary, prev_velocity, mean_shift, gap_s, options);
+    window.motion_model_poses = window.poses;
     return r;
 }
 

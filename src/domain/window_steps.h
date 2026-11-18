@@ -59,6 +59,16 @@ struct PosePrediction
 PosePrediction predict_window_poses(Window &window, const Window &previous, const Window *before_previous,
                                     const Eigen::Vector3d &prev_velocity, const PosePredictionOptions &options);
 
+// the steps of predict_window_poses. mean_shift_of: the mean shift per node between before_previous's and previous's last
+// nodes (zero without before_previous); above 1 m it is set to zero and dropped is set
+Eigen::Vector3d mean_shift_of(const Window &previous, const Window *before_previous, bool &dropped);
+// the translations of a chained guess: with the IMU (imu_sizes_ok; use_imu_pred or rest) integrated from prev_velocity (zero
+// at rest) with the world accelerations a, else constant velocity from prev_velocity (constant_velocity and timestamps),
+// else the mean shift per node; the first two also over gap_s before the first node
+void guess_window_translations(std::vector<Eigen::Affine3d> &poses, const std::vector<std::pair<double, double>> &ts,
+                               const std::vector<Eigen::Vector3d> &a, bool imu_sizes_ok, bool stationary, const Eigen::Vector3d &prev_velocity,
+                               const Eigen::Vector3d &mean_shift, double gap_s, const PosePredictionOptions &options);
+
 // gyro-bias prior of window: the carried estimate, its covariance grown by the bias random walk over the window;
 // sets window.gyro_bias to it and removes the carried bias from the guess's rotation increments (translations unchanged);
 // returns the prior
