@@ -9,21 +9,30 @@
 
 ## 2. The verification kit
 
-- [ ] 2.1 `tools/local_paths.toml` (recordings, captures, the references' folder, `vcvars64.bat`) and
+- [x] 2.1 `tools/local_paths.toml` (recordings, captures, the references' folder, `vcvars64.bat`) and
   `tools/step_checks.py` (build, unit tests, characterization guard, loop guard, the two replays, 44_short against its
   manifest, the per-term table of the 44_short replay; `--record`; runs on the worktree it is started in; prints the
   commit). The captures and references move to `experiments/guards/`. Verify: `--record` on the current commit gives
   references byte-identical with the stage 6 ones; a second run reports identical everywhere and exits 0; `--record`
   refuses with an uncommitted source change.
+  Result: e17247e. The references recorded from that commit are byte-identical with the stage 6 ones (both guards, both
+  table files); a second run reports identical everywhere and exits 0; `--record` on a tree with an uncommitted change
+  in `src/` refuses and writes nothing. The captures are in `experiments/guards/`.
 - [ ] 2.2 `tools/end_runs.py` (full 44, Livox 3, 44_short against their manifests, odometry times; `--debug`; refuses
   while a dMapper runs; one line per run into a log). Verify: started in the background at the end of this change (task
   7.3), it reports IDENTICAL for the three recordings.
-- [ ] 2.4 `tools/run_replay.py`: the gate (memory need from the capture's size, two slots, held whole by `end_runs.py`,
+- [x] 2.4 `tools/run_replay.py`: the gate (memory need from the capture's size, two slots, held whole by `end_runs.py`,
   stale holders ignored; wall time, CPU time, peak memory, time-limit count; the replay's exit code). `step_checks.py`
   starts its replays through it. Verify: alone it starts at once and prints the cost line; a third replay waits while
   two run and starts after; a replay waits while a made-up full-run lock is held; a lock of a dead process is ignored.
-- [ ] 2.3 `tools/README.md` sections for the four; `tests/test_verification_tools.py` gets a case for
+  Result: tried on real replays of the 44_short capture: alone it starts at once (wall 28 s, CPU 65 s, peak 0.2 GB,
+  time limit 0); a lock of a dead process is ignored and removed; behind a held full-run lock it waits and starts
+  when the holder ends; of three at once the third waits for a slot, all three identical with the capture. Measured
+  for the Livox 3 capture: 1.6 GB peak, 5.1 cores.
+- [x] 2.3 `tools/README.md` sections for the four; `tests/test_verification_tools.py` gets a case for
   `step_checks.py`'s reading of the paths file if it fits its form. Verify: the text matches the tools.
+  Result: `tools/README.md` has the kit (the three commands, the gate) and `region_owners.py`. No case added to
+  `tests/test_verification_tools.py`: the kit's parts were tried on real runs instead (tasks 2.1 and 2.4).
 
 ## 3. Ownership
 
@@ -34,13 +43,18 @@
 
 ## 4. Knowledge files
 
-- [ ] 4.1 `docs/regions/README.md`: the ownership table in words, the knowledge file's form, the agents' rules, the
+- [x] 4.1 `docs/regions/README.md`: the ownership table in words, the knowledge file's form, the agents' rules, the
   worktree flow, the protocol, the hand-back form.
-- [ ] 4.2 The eight knowledge files (`front-end`, `map`, `lidar-matching`, `inertial`, `solver`, `back-end`,
+  Result: `docs/regions/README.md` (883fd0d).
+- [x] 4.2 The eight knowledge files (`front-end`, `map`, `lidar-matching`, `inertial`, `solver`, `back-end`,
   `noise-budget`, `verification`), seeded from `CLAUDE.md`, the tracker, `docs/agents/roadmap.md`, the archived OpenSpec
   changes and the session memory's findings; each with the top line and "See also". Verify: a Sonnet reviewer checks
   each file against the code (contract, files, flaws); its corrections are worked in; each file is under about 300
   lines.
+  Result: 883fd0d. Drafted by four agents from the code and the written sources, each file then checked against the
+  code by a Sonnet reviewer; their corrections are in (one reviewer claim was wrong and left out: `ndt_window_cost`
+  does apply the information scale). 181 to 215 lines each. Two boundaries settled while reading the contracts:
+  `run_consistency` is the back-end's and `log_accelerometer_fit` the inertial region's, by function entries.
 - [ ] 4.3 `docs/code-review-tracker.md`: the references of the findings that are not fixed, moot or rejected point to
   today's files. Verify: each cited file and function exists.
 - [ ] 4.4 Both docs maps (`docs/README.md`, the guide's "All documents") get the group "Region knowledge files".
