@@ -84,6 +84,9 @@ struct NdtNoise
 // the NDT term's rules from the run's scan-to-map settings
 NdtNoise ndt_noise(const ScanToMapOptions &scan_to_map);
 
+// a joint covariance of (velocity, acceleration offset): rows and columns 0-2 the velocity [m/s], 3-5 the offset [m/s^2]
+using JointPriorCov = Eigen::Matrix<double, 6, 6>;
+
 // the weak tie of the end velocity to the start velocity when the end has no accelerometer term (sigma 1 m/s)
 constexpr double weak_end_velocity_tie_weight = 1.0;
 
@@ -118,6 +121,12 @@ struct WindowNoiseModel
     Eigen::Vector3d offset_prior_mean = Eigen::Vector3d::Zero();
     Eigen::Matrix3d offset_prior_cov = Eigen::Matrix3d::Zero();
     Eigen::Matrix3d offset_prior_information = Eigen::Matrix3d::Zero();
+    // imu_carry_joint_covariance: the prior on (start velocity, acceleration offset) as one joint Gaussian, its covariance
+    // [[velocity_prior_cov, C], [C^T, offset_prior_cov]] (C: velocity_offset_prior_cov of the options) and its information.
+    // The two 3x3 informations above stay the inverses of their own blocks (the separate carry and the diagnostics).
+    bool joint_prior = false;
+    JointPriorCov joint_prior_cov = JointPriorCov::Zero();
+    JointPriorCov joint_prior_information = JointPriorCov::Zero();
 
     // the origin fix: x, y, z, om, fi, ka. The rotation sigmas are used as they are set, in degrees, without conversion
     // to radians (1e-6 gives 1e12 instead of 3.3e15; both hold the first node practically fixed): kept as it was,
@@ -133,6 +142,18 @@ Eigen::Matrix3d random_walk_prior_cov(const Eigen::Matrix3d &carried, double rw,
 // the start velocity's prior from the previous window's end velocity, grown over the gap between the windows by the
 // accelerometer's noise: carried + I (density^2 gap + floor^2 gap^2)
 Eigen::Matrix3d velocity_prior_cov_over_gap(const Eigen::Matrix3d &carried, double density, double floor, double gap_s);
+
+// the joint covariance [[velocity, cross], [cross^T, offset]] (cross: velocity rows, offset columns)
+JointPriorCov joint_prior_cov(const Eigen::Matrix3d &velocity, const Eigen::Matrix3d &cross, const Eigen::Matrix3d &offset);
+// imu_carry_joint_covariance: the next window's prior on (start velocity, offset) from the previous window's joint
+// covariance of (end velocity, offset). Over the gap the true acceleration is the measured one minus the offset (the
+// accelerometer term's mean_acc - acc_offset), so the start velocity is the end velocity - offset * gap: transition
+// F = [[I, -gap I], [0, I]], F carried F^T. Then grown as the separate priors: the velocity block by
+// velocity_prior_cov_over_gap (density, floor, gap), the offset block by random_walk_prior_cov (offset_rw over the
+// window's duration_s); the cross block is not grown. With gap 0, or with a zero cross block and a zero carried offset
+// block, the two diagonal blocks are those two functions' results bit for bit.
+JointPriorCov joint_prior_cov_over_gap(const JointPriorCov &carried, double density, double floor, double gap_s, double offset_rw,
+                                       double duration_s);
 
 WindowNoiseModel build_window_noise_model(const Window &window, const ScanToMapOptions &scan_to_map, const MotionModelOptions &motion_model,
                                           const MotionModelRotationOptions &rotation_options,

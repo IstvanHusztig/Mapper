@@ -292,3 +292,132 @@ TEST_CASE("window noise model: the priors grow by their random walk over the win
     CHECK(v(0, 0) > carried(0, 0));
     CHECK(v(0, 1) == carried(0, 1));
 }
+
+namespace
+{
+    Eigen::Matrix3d spd(double scale)
+    {
+        Eigen::Matrix3d a;
+        a << 4.0, 0.5, 0.0, 0.5, 3.0, 0.2, 0.0, 0.2, 2.0;
+        return a * scale;
+    }
+
+    Eigen::Matrix3d cross_block()
+    {
+        Eigen::Matrix3d c;
+        c << 2.0, -0.3, 0.1, 0.4, -1.5, 0.0, -0.2, 0.3, 1.0;
+        return c * 1e-6;
+    }
+}
+
+TEST_CASE("window noise model: the joint velocity-offset prior moves over the gap by the offset")
+{
+    const double density = 0.0013, floor = 0.1, rw = 2e-4, duration = 0.4;
+    SUBCASE("against a hand computation, one axis")
+    {
+        // velocity variance a, cross c, offset variance b (isotropic): start velocity = end velocity - offset * gap
+        const double a = 4e-4, c = -3e-5, b = 1e-4, gap = 0.05;
+        const JointPriorCov p = joint_prior_cov(Eigen::Matrix3d::Identity() * a, Eigen::Matrix3d::Identity() * c,
+                                                Eigen::Matrix3d::Identity() * b);
+        const JointPriorCov q = joint_prior_cov_over_gap(p, density, floor, gap, rw, duration);
+        const double vv = a - 2.0 * c * gap + b * gap * gap + density * density * gap + floor * floor * gap * gap;
+        const double ve = c - b * gap;
+        const double ee = b + rw * rw * duration;
+        for (int k = 0; k < 3; k++)
+        {
+            CHECK(q(k, k) == doctest::Approx(vv).epsilon(1e-14));
+            CHECK(q(k, k + 3) == doctest::Approx(ve).epsilon(1e-14));
+            CHECK(q(k + 3, k) == doctest::Approx(ve).epsilon(1e-14));
+            CHECK(q(k + 3, k + 3) == doctest::Approx(ee).epsilon(1e-14));
+        }
+        CHECK(q(0, 1) == 0.0);
+        CHECK(q(0, 4) == 0.0);
+    }
+    SUBCASE("F P F^T plus the growth, full blocks")
+    {
+        const double gap = 0.02;
+        const JointPriorCov p = joint_prior_cov(spd(1e-4), cross_block(), spd(1e-6));
+        JointPriorCov f = JointPriorCov::Identity();
+        f.topRightCorner<3, 3>() = -gap * Eigen::Matrix3d::Identity();
+        JointPriorCov expected = f * p * f.transpose();
+        expected.topLeftCorner<3, 3>() += Eigen::Matrix3d::Identity() * (density * density * gap + floor * floor * gap * gap);
+        expected.bottomRightCorner<3, 3>() += Eigen::Matrix3d::Identity() * (rw * rw * duration);
+        const JointPriorCov q = joint_prior_cov_over_gap(p, density, floor, gap, rw, duration);
+        CHECK((q - expected).cwiseAbs().maxCoeff() < 1e-18);
+        CHECK(q.isApprox(q.transpose(), 0.0));
+    }
+    SUBCASE("with a zero cross block it is today's two formulas, bit for bit")
+    {
+        const Eigen::Matrix3d velocity = spd(1e-4), offset = spd(1e-6);
+        // no gap: the transition does nothing
+        const JointPriorCov at_zero = joint_prior_cov_over_gap(joint_prior_cov(velocity, Eigen::Matrix3d::Zero(), offset), density, floor,
+                                                               0.0, rw, duration);
+        CHECK(Eigen::Matrix3d(at_zero.topLeftCorner<3, 3>()) == velocity_prior_cov_over_gap(velocity, density, floor, 0.0));
+        CHECK(Eigen::Matrix3d(at_zero.bottomRightCorner<3, 3>()) == random_walk_prior_cov(offset, rw, duration));
+        CHECK(at_zero.topRightCorner<3, 3>().isZero(0.0));
+        CHECK(at_zero.bottomLeftCorner<3, 3>().isZero(0.0));
+        // a gap with a known offset (zero carried offset block): only the growth
+        const double gap = 0.02;
+        const JointPriorCov known = joint_prior_cov_over_gap(joint_prior_cov(velocity, Eigen::Matrix3d::Zero(), Eigen::Matrix3d::Zero()),
+                                                             density, floor, gap, rw, duration);
+        CHECK(Eigen::Matrix3d(known.topLeftCorner<3, 3>()) == velocity_prior_cov_over_gap(velocity, density, floor, gap));
+        CHECK(Eigen::Matrix3d(known.bottomRightCorner<3, 3>()) == random_walk_prior_cov(Eigen::Matrix3d::Zero(), rw, duration));
+        CHECK(known.topRightCorner<3, 3>().isZero(0.0));
+    }
+    SUBCASE("an offset error adds up coherently over the gaps")
+    {
+        // only the offset uncertain (sigma), no other noise: after N gaps of length g the velocity sigma is sigma * N * g
+        const double sigma = 0.02, g = 0.3;
+        JointPriorCov p = joint_prior_cov(Eigen::Matrix3d::Zero(), Eigen::Matrix3d::Zero(), Eigen::Matrix3d::Identity() * (sigma * sigma));
+        for (int n = 1; n <= 15; n++)
+        {
+            p = joint_prior_cov_over_gap(p, 0.0, 0.0, g, 0.0, 0.0);
+            CAPTURE(n);
+            CHECK(std::sqrt(p(0, 0)) == doctest::Approx(sigma * n * g).epsilon(1e-12));
+            CHECK(p(0, 3) == doctest::Approx(-sigma * sigma * n * g).epsilon(1e-12));
+        }
+    }
+}
+
+TEST_CASE("window noise model: the joint velocity-offset prior, only with imu_carry_joint_covariance")
+{
+    const Window w = uneven_window(30, 0.002);
+    const MotionModelOptions m = motion_model();
+    Imu off;
+    imu_term(off, 30, false);
+    off.options.velocity_offset_prior_cov = cross_block(); // present, but not used without the setting
+    const WindowNoiseModel separate = build_window_noise_model(w, ScanToMapOptions{}, m, rotation(true), off.options, VelocityPrior{});
+    REQUIRE(separate.unknowns.acc_term);
+    CHECK_FALSE(separate.joint_prior);
+    CHECK(separate.joint_prior_cov.isZero(0.0));
+    CHECK(separate.joint_prior_information.isZero(0.0));
+
+    Imu on;
+    imu_term(on, 30, false);
+    on.options.velocity_offset_prior_cov = cross_block();
+    on.options.joint_covariance = true;
+    const WindowNoiseModel joint = build_window_noise_model(w, ScanToMapOptions{}, m, rotation(true), on.options, VelocityPrior{});
+    REQUIRE(joint.joint_prior);
+    CHECK(joint.joint_prior_cov == joint_prior_cov(on.options.velocity_prior_cov, cross_block(), on.options.offset_prior_cov));
+    CHECK((joint.joint_prior_information * joint.joint_prior_cov - JointPriorCov::Identity()).cwiseAbs().maxCoeff() < 1e-9);
+    CHECK((joint.joint_prior_cov * joint.joint_prior_information - JointPriorCov::Identity()).cwiseAbs().maxCoeff() < 1e-9);
+    // the separate blocks stay as they are, for the separate carry and the diagnostics
+    CHECK(joint.velocity_prior_information == separate.velocity_prior_information);
+    CHECK(joint.offset_prior_information == separate.offset_prior_information);
+    CHECK(joint.velocity_prior_cov == separate.velocity_prior_cov);
+    CHECK(joint.offset_prior_cov == separate.offset_prior_cov);
+    // with a zero cross block the joint information is the two separate ones
+    on.options.velocity_offset_prior_cov.setZero();
+    const WindowNoiseModel zero = build_window_noise_model(w, ScanToMapOptions{}, m, rotation(true), on.options, VelocityPrior{});
+    CHECK(zero.joint_prior_information.topLeftCorner<3, 3>().isApprox(zero.velocity_prior_information, 1e-12));
+    CHECK(zero.joint_prior_information.bottomRightCorner<3, 3>().isApprox(zero.offset_prior_information, 1e-12));
+    CHECK(zero.joint_prior_information.topRightCorner<3, 3>().cwiseAbs().maxCoeff() < 1e-6);
+
+    SUBCASE("no accelerometer term: no joint prior")
+    {
+        const WindowNoiseModel first = build_window_noise_model(w, ScanToMapOptions{}, m, rotation(false), MotionModelTranslationImuOptions{},
+                                                                VelocityPrior{});
+        CHECK_FALSE(first.joint_prior);
+        CHECK(first.joint_prior_information.isZero(0.0));
+    }
+}
