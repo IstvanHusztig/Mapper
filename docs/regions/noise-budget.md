@@ -127,6 +127,11 @@ None: no function of this region is above 80 lines (`python tools/function_sizes
 
 ## Experiments
 
+- 2026-11-19 Joint (start velocity, offset) prior for layer 2 of `honest-inertial-carry` (job J4a, ef95898): fields
+  `joint_prior*` in `WindowNoiseModel`, helpers `joint_prior_cov` and `joint_prior_cov_over_gap` (transition
+  F = [[I, -gap I], [0, I]], then today's growth). An offset-only chain of 15 gaps gives the coherent velocity sigma
+  (sigma x N x gap); off: step checks identical. Open: should the offset's random walk during the gap feed the velocity
+  block too (today it grows over the next window's duration only)?
 - **2026-11-18** Livox gyro weight (stage 8, change `livox-measured-gyro-noise`): the gyro's measured noise (ARW 0.0094 /
   0.0224 / 0.0144 °/√s, k 1, floor 0.0002°) in place of the L2's values with k 7.09. Full Livox 4: windows bent > 3°
   96 → 0, largest speed 8.5 → 1.62 m/s, end height −78 → −0.7 m, largest bias estimate 5.1 → 0.58 °/s; Livox 3:
