@@ -1,11 +1,11 @@
 {
   "dataset": "44_short",
   "params": "settings/l2-vertical.toml",
-  "commit": "63e15e2",
+  "commit": "2f36a2b",
   "hd_cpu_optimization": "AUTO",
-  "created": "2026-11-18",
+  "created": "2026-11-19",
   "files": {
-    "dMapper_params_0.1.0_<DATETIME>.toml": "67d72b4f1e4b2180462a5b17a060424cebd92123ada1d3449dea8fdae7dd7e0c",
+    "dMapper_params_0.1.0_<DATETIME>.toml": "6a188234544248890ce55005d7e3d0b9683ca6d5b0fb7a08785f89954af38231",
     "dMapper_results_0.1.0_<DATETIME>.json": "adb8842f5b7fc1815c52e2be68cb59c744b3b02025863fb8035d8fb84ccf3bcc",
     "point_sizes_per_chunk.json": "b6e08154b974053f41ce9594e0fd93304cb8316a01b4d4156f915df491d9d9cf",
     "scan_lio_0.laz": "77f4da0f9be4773c14fb3dcc91e4f17ed9e2069aedde7262b0ce07cf37181d0d",
