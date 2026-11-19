@@ -13,7 +13,9 @@ namespace
     using binary_io::Writer;
 
     constexpr char MAGIC[8] = {'D', 'M', 'C', 'A', 'P', 'T', '0', '1'};
-    constexpr std::uint32_t FORMAT_VERSION = 1;
+    // 2: the carry's velocity-offset cross block (change honest-inertial-carry); format 1 is still read, with a zero block
+    constexpr std::uint32_t FORMAT_VERSION = 2;
+    constexpr std::uint32_t OLDEST_READ_VERSION = 1;
 
     // everything a window needs, beyond what the snapshot's window record holds
     void write_full_window(Writer &w, const Window &win)
@@ -96,7 +98,7 @@ namespace
         return r.ok();
     }
 
-    void write_carry(Writer &w, const WindowLoopCarry &c)
+    void write_carry(Writer &w, const WindowLoopCarry &c, std::uint32_t version)
     {
         w.matrix(c.bias.mean);
         w.matrix(c.bias.covariance);
@@ -111,9 +113,11 @@ namespace
         w.matrix(c.velocity_cov);
         w.value(c.velocity_time_s);
         w.value(c.first_window_at_rest);
+        if (version >= 2)
+            w.matrix(c.velocity_offset_cov);
     }
 
-    bool read_carry(Reader &r, WindowLoopCarry &c)
+    bool read_carry(Reader &r, WindowLoopCarry &c, std::uint32_t version)
     {
         r.matrix(c.bias.mean);
         r.matrix(c.bias.covariance);
@@ -129,12 +133,17 @@ namespace
         r.matrix(c.velocity_cov);
         r.value(c.velocity_time_s);
         r.value(c.first_window_at_rest);
+        c.velocity_offset_cov.setZero(); // format 1: the code that wrote it carried no cross block
+        if (version >= 2)
+            r.matrix(c.velocity_offset_cov);
         return r.ok();
     }
 } // namespace
 
-bool write_window_capture(const std::filesystem::path &file, const WindowCapture &capture, const OdometryConfig &config, std::string &why)
+bool write_window_capture(const std::filesystem::path &file, const WindowCapture &capture, const OdometryConfig &config, std::string &why,
+                          std::uint32_t format_version)
 {
+    const std::uint32_t version = format_version == 0 ? FORMAT_VERSION : format_version;
     std::error_code ec;
     if (file.has_parent_path())
         std::filesystem::create_directories(file.parent_path(), ec);
@@ -146,7 +155,7 @@ bool write_window_capture(const std::filesystem::path &file, const WindowCapture
     }
     Writer w(out);
     out.write(MAGIC, sizeof(MAGIC));
-    w.value(FORMAT_VERSION);
+    w.value(version);
     w.value(odometry_settings_hash(config));
     for (std::uint64_t v : {std::uint64_t(capture.n_windows), std::uint64_t(capture.first), std::uint64_t(capture.last),
                             std::uint64_t(capture.windows_begin)})
@@ -160,7 +169,7 @@ bool write_window_capture(const std::filesystem::path &file, const WindowCapture
     w.list(capture.state.reference_points, [&](const Point3Di &p) { write_point(w, p); });
     write_buckets(w, capture.state.buckets_indoor);
     write_buckets(w, capture.state.buckets_outdoor);
-    write_carry(w, capture.carry);
+    write_carry(w, capture.carry, version);
     w.list(capture.outcomes, [&](const WindowOutcome &o)
            {
                w.value(o.last_iteration);
@@ -188,9 +197,9 @@ bool read_window_capture(const std::filesystem::path &file, WindowCapture &captu
     in.read(magic, sizeof(magic));
     std::uint32_t version = 0;
     r.value(version);
-    if (!in || std::memcmp(magic, MAGIC, sizeof(MAGIC)) != 0 || version != FORMAT_VERSION)
+    if (!in || std::memcmp(magic, MAGIC, sizeof(MAGIC)) != 0 || version < OLDEST_READ_VERSION || version > FORMAT_VERSION)
     {
-        why = "'" + file.string() + "' is not a window capture of format " + std::to_string(FORMAT_VERSION);
+        why = "'" + file.string() + "' is not a window capture of format " + std::to_string(OLDEST_READ_VERSION) + " to " + std::to_string(FORMAT_VERSION);
         return false;
     }
     WindowCapture c;
@@ -226,7 +235,7 @@ bool read_window_capture(const std::filesystem::path &file, WindowCapture &captu
     if (!r.list(c.state.reference_points, [&](Point3Di &p) { read_point(r, p); }) || !read_buckets(r, c.state.buckets_indoor) ||
         !read_buckets(r, c.state.buckets_outdoor))
         return damaged("map");
-    if (!read_carry(r, c.carry))
+    if (!read_carry(r, c.carry, version))
         return damaged("loop state");
     if (!r.list(c.outcomes, [&](WindowOutcome &o)
                 {

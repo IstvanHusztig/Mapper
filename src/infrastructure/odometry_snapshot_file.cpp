@@ -73,7 +73,8 @@ std::uint64_t odometry_settings_hash(const OdometryConfig &config)
     // removal are refused.
     static const std::set<std::string> added_later = {
         "holdout_block_s", "lm_step_check", "ndt_huber_cutoff", "ndt_information_scale", "imu_position_information_scale",
-        "gyro_scale_x", "gyro_scale_y", "gyro_scale_z"};
+        "gyro_scale_x", "gyro_scale_y", "gyro_scale_z", "imu_edges_follow_state", "imu_carry_joint_covariance",
+        "imu_accel_window_sigma_mps2"};
     static const OdometryConfig defaults{};
 
     Hash h;

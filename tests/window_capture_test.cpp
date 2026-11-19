@@ -301,3 +301,49 @@ TEST_CASE("window verdict: the run is the same with log_window_verdict on")
     for (size_t i = 0; i < plain.size(); i++)
         CHECK(same_poses(plain[i].poses, logged[i].poses));
 }
+
+// change honest-inertial-carry: the three carry settings are in the hash only away from their defaults, so captures and
+// snapshots written before they existed still count as made with the same settings
+TEST_CASE("settings hash: the honest-carry settings change it only away from their defaults")
+{
+    const OdometryConfig c = capture_config();
+    const std::uint64_t base = odometry_settings_hash(c);
+    OdometryConfig edges = c, joint = c, window = c;
+    edges.imu_edges_follow_state = true;
+    joint.imu_carry_joint_covariance = true;
+    window.imu_accel_window_sigma_mps2 = 0.05;
+    CHECK(odometry_settings_hash(edges) != base);
+    CHECK(odometry_settings_hash(joint) != base);
+    CHECK(odometry_settings_hash(window) != base);
+    OdometryConfig back = window;
+    back.imu_accel_window_sigma_mps2 = 0.0;
+    CHECK(odometry_settings_hash(back) == base);
+}
+
+// format 2 added the carry's velocity-offset cross block; a format-1 file (written before it) still reads, with a zero
+// block, and still replays bit for bit with its own settings
+TEST_CASE("window capture: a file of the previous format reads and replays")
+{
+    const Recording r = loop_recording(1);
+    OdometryConfig c = capture_config();
+    c.capture_windows_from_s = 5.0;
+    c.capture_windows_to_s = 12.0;
+    KeepCapture sink;
+    run(r, c, &sink);
+    REQUIRE(sink.written);
+
+    const fs::path file = fs::temp_directory_path() / "lidar_odometry_tests_window_capture_v1.bin";
+    std::string why;
+    REQUIRE(write_window_capture(file, sink.kept, c, why, 1));
+    WindowCapture read;
+    std::uint64_t hash = 0;
+    REQUIRE(read_window_capture(file, read, hash, why));
+    fs::remove(file);
+    CHECK(hash == odometry_settings_hash(c));
+    CHECK(read.carry.velocity_offset_cov == Eigen::Matrix3d::Zero());
+
+    NullLogger logger;
+    const WindowReplayResult same = replay_window_capture(read, c, true, logger);
+    CHECK_FALSE(same.cancelled);
+    CHECK(same.identical == sink.kept.outcomes.size());
+}

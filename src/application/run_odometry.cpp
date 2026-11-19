@@ -113,6 +113,9 @@ namespace
             t.options.floor_sigma_mps2 = params.imu_accel_floor_sigma_mps2;
             t.options.position_information_scale = params.imu_position_information_scale;
             t.options.zero_velocity_sigma_mps = params.imu_zero_velocity_sigma_mps;
+            t.options.edges_follow_state = params.imu_edges_follow_state;
+            t.options.joint_covariance = params.imu_carry_joint_covariance;
+            t.options.window_sigma_mps2 = params.imu_accel_window_sigma_mps2;
         }
         return t;
     }

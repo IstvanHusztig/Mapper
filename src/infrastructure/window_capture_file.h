@@ -12,8 +12,10 @@
 #include <filesystem>
 #include <string>
 
-// false (and `why` says why) if the file can't be written
-bool write_window_capture(const std::filesystem::path &file, const WindowCapture &capture, const OdometryConfig &config, std::string &why);
+// false (and `why` says why) if the file can't be written. format_version: 0 = the current format; an older one only for
+// tests that check older files still read
+bool write_window_capture(const std::filesystem::path &file, const WindowCapture &capture, const OdometryConfig &config, std::string &why,
+                          std::uint32_t format_version = 0);
 
 // false (and `why` says why) if the file can't be read or isn't a window capture of this format; settings_hash: the
 // odometry settings hash of the run that made it

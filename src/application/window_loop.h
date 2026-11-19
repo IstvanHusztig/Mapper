@@ -68,6 +68,7 @@ struct WindowLoopCarry
     Eigen::Vector3d velocity_mean = Eigen::Vector3d::Zero();     // ... the prior of the next window's start velocity
     Eigen::Matrix3d velocity_cov = Eigen::Matrix3d::Identity();
     double velocity_time_s = 0.0;                                // ... at the previous window's last node
+    Eigen::Matrix3d velocity_offset_cov = Eigen::Matrix3d::Zero(); // imu_carry_joint_covariance: covariance of that velocity with the offset
     bool first_window_at_rest = false;
     std::vector<IterationConvergence> convergence; // per window, with log_iteration_convergence
     std::vector<WindowVerdict> verdicts;           // per window: the window verdict (not written to a capture)

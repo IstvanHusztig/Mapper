@@ -253,6 +253,15 @@ struct OdometryConfig
     // Multiplier on the x/y/z motion-model position weights in windows where the accelerometer term is active. 1 = off.
     // Codex's good Livox 3 build had 0.1, as DMAPPER_EXPERIMENT_MOTION_XYZ_SCALE ("beta").
     double imu_position_information_scale = 1.0;
+    // honest inertial carry (change honest-inertial-carry; each off by default, results unchanged):
+    // the motion edges' position measurement follows the window's start velocity and acceleration offset, so the edges
+    // keep the accelerometer path's shape and assert nothing about those two states (windows whose guess was integrated)
+    bool imu_edges_follow_state = false;
+    // start velocity and acceleration offset carried to the next window with their joint covariance (the cross block too)
+    bool imu_carry_joint_covariance = false;
+    // sigma of an accelerometer error constant over one window, independent between windows; only the slow part of the
+    // estimated offset is folded into gravity [m/s^2]. 0 = off
+    double imu_accel_window_sigma_mps2 = 0.0;
 
     // motion_model first trajectory node prior uncertainty
     double lidar_odometry_motion_model_fix_origin_x_1_sigma_m = 0.000001;

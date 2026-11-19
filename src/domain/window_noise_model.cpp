@@ -301,7 +301,9 @@ void log_noise_budget(const OdometryConfig &p, Logger &logger)
                      << "; velocity continuity " << v(p.lidar_odometry_motion_model_acc_1_sigma_mps2) << " m/s^2 (without the accelerometer term); "
                      << "accelerometer term " << (p.imu_always_on ? "on" : "off") << ", density " << v(p.imu_accel_noise_density_mps2_sqrt_hz)
                      << " m/s^2/sqrt(Hz), floor " << v(p.imu_accel_floor_sigma_mps2) << " m/s^2, span " << v(p.imu_acceleration_span_s)
-                     << " s; zero velocity sigma " << v(p.imu_zero_velocity_sigma_mps) << " m/s; first start velocity sigma "
+                     << " s, window error " << v(p.imu_accel_window_sigma_mps2) << " m/s^2; edges follow the state "
+                     << (p.imu_edges_follow_state ? "yes" : "no") << ", joint velocity-offset carry "
+                     << (p.imu_carry_joint_covariance ? "yes" : "no") << "; zero velocity sigma " << v(p.imu_zero_velocity_sigma_mps) << " m/s; first start velocity sigma "
                      << v(p.imu_velocity_initial_sigma_mps) << " m/s; gyro bias " << (p.use_gyro_bias_estimation ? "estimated" : "off")
                      << ", initial sigma " << v(p.gyro_bias_initial_sigma_deg_s) << " deg/s, random walk " << v(p.gyro_bias_rw_deg_s_sqrt_s)
                      << " deg/s/sqrt(s); acceleration offset initial sigma " << v(p.imu_acceleration_offset_initial_sigma_mps2)
