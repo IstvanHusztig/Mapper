@@ -190,7 +190,7 @@ bool add_acceleration_terms(WindowEquations &equations, const WindowNoiseModel &
 
 void add_start_velocity_prior(WindowEquations &equations, const WindowNoiseModel &noise, const Window &window)
 {
-    if (!noise.unknowns.acc_term)
+    if (!noise.unknowns.acc_term || noise.joint_prior)
         return;
     const int iv = noise.unknowns.iv;
     const Eigen::Matrix3d &velocity_inf = noise.velocity_prior_information;
@@ -246,7 +246,7 @@ void add_velocity_priors(WindowEquations &equations, const WindowNoiseModel &noi
 
 void add_acceleration_offset_prior(WindowEquations &equations, const WindowNoiseModel &noise, const Eigen::Vector3d &acc_offset)
 {
-    if (!noise.unknowns.acc_term)
+    if (!noise.unknowns.acc_term || noise.joint_prior)
         return;
     BandedNormalMatrix &AtPAndt = equations.matrix;
     Eigen::MatrixXd &AtPBndt = equations.rhs;
@@ -260,4 +260,25 @@ void add_acceleration_offset_prior(WindowEquations &equations, const WindowNoise
     AtPBndt.block<3, 1>(io, 0) += prior_inf * (noise.offset_prior_mean - acc_offset);
     motion_cost += (noise.offset_prior_mean - acc_offset).dot(prior_inf * (noise.offset_prior_mean - acc_offset));
     equations.residuals += 3;
+}
+
+void add_joint_velocity_offset_prior(WindowEquations &equations, const WindowNoiseModel &noise, const Window &window,
+                                     const Eigen::Vector3d &acc_offset)
+{
+    if (!noise.unknowns.acc_term || !noise.joint_prior)
+        return;
+    const int column[2] = {noise.unknowns.iv, noise.unknowns.io};
+    Eigen::Matrix<double, 6, 1> r;
+    r.head<3>() = noise.velocity_prior_mean - window.velocity.start;
+    r.tail<3>() = noise.offset_prior_mean - acc_offset;
+    const JointPriorCov &information = noise.joint_prior_information;
+    const Eigen::Matrix<double, 6, 1> rhs = information * r;
+    equations.motion_cost += r.dot(rhs);
+    equations.residuals += 6;
+    for (int a = 0; a < 6; a++)
+    {
+        for (int b = 0; b < 6; b++)
+            equations.matrix.add(column[a / 3] + a % 3, column[b / 3] + b % 3, information(a, b));
+        equations.rhs(column[a / 3] + a % 3, 0) += rhs(a);
+    }
 }

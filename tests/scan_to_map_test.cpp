@@ -1588,3 +1588,140 @@ TEST_CASE("scan-to-map: a step taken back restores the joint covariance of end v
     CHECK(f.w.velocity.end_covariance == accepted_v_end);
     CHECK(f.acc_offset_cov == accepted_offset);
 }
+
+// imu_carry_joint_covariance (change honest-inertial-carry, design D2): blind windows chained through the joint carry. Each
+// window has no LiDAR point; its covariance is the solve's (one undamped iteration at the guess, as the window problem takes
+// it), and it is carried to the next window as the window loop does (run_odometry.cpp: update_acc_term_after_window keeps
+// the end velocity's covariance, its cross block with the offset and the offset's; prepare_velocity_state moves them over
+// the gap with joint_prior_cov_over_gap). Reduced: the window's estimates stay at the guess (the data are noise-free), so
+// the fold of the offset into the gravity vector is not modelled.
+namespace
+{
+    struct BlindChainNoise
+    {
+        double velocity_sigma0 = 1e-3;       // the first window's start-velocity sigma [m/s]
+        double offset_sigma = 0.02;          // the offset's prior sigma at the start [m/s^2]
+        double offset_rw = 0.0;              // the offset's random walk [m/s^2/sqrt(s)]
+        double density = 1e-5, floor = 1e-3; // accelerometer white noise
+        double rotation_sigma_deg = 1e-4;    // > 0: constant rotation sigmas, else the gyro's (time-scaled ARW)
+        bool edges_follow_state = true;
+    };
+
+    struct BlindChainWindow
+    {
+        double start_sigma = 0.0, end_sigma = 0.0; // along x [m/s]
+    };
+
+    constexpr int blind_nodes = 37; // 0.36 s at 10 ms
+    constexpr double blind_duration_s = (blind_nodes - 1) * node_dt;
+    constexpr double blind_gap_s = node_dt; // from one window's last node to the next one's first
+
+    std::vector<BlindChainWindow> run_blind_chain(int windows, const BlindChainNoise &n)
+    {
+        OdometryConfig c = test_config();
+        if (n.rotation_sigma_deg > 0.0)
+        {
+            c.use_time_scaled_rotation_sigma = false;
+            c.lidar_odometry_motion_model_om_1_sigma_deg = c.lidar_odometry_motion_model_fi_1_sigma_deg =
+                c.lidar_odometry_motion_model_ka_1_sigma_deg = n.rotation_sigma_deg;
+        }
+        Options o = options_from(c);
+        Maps maps; // empty: nothing to see
+        std::vector<Point3Di> points;
+        const Eigen::Vector3d velocity(1.0, 0.0, 0.0);
+        Eigen::Matrix3d velocity_cov = Eigen::Matrix3d::Identity() * (n.velocity_sigma0 * n.velocity_sigma0);
+        Eigen::Matrix3d velocity_offset_cov = Eigen::Matrix3d::Zero();
+        Eigen::Matrix3d offset_cov = Eigen::Matrix3d::Identity() * (n.offset_sigma * n.offset_sigma);
+        std::vector<BlindChainWindow> chain;
+        for (int i = 0; i < windows; i++)
+        {
+            Window w;
+            for (int k = 0; k < blind_nodes; k++)
+            {
+                const double t = i * (blind_duration_s + blind_gap_s) + k * node_dt;
+                w.poses.push_back(pose(Eigen::Vector3d(t, 0.0, 1.5) + grid_offset, 0.0));
+                w.timestamps.push_back({t, t});
+            }
+            w.motion_model_poses = w.poses;
+            AccData acc;
+            make_acc_data(acc, w.poses, Eigen::Vector3d::Zero());
+            MotionModelTranslationImuOptions &imu = o.translation_imu;
+            imu = acc.imu;
+            imu.acc = &acc.acc;
+            imu.span_s = 0.008; // one term per node
+            imu.noise_density_mps2_sqrt_hz = n.density;
+            imu.floor_sigma_mps2 = n.floor;
+            // the prior: the first window's as set, the others carried over the gap
+            const JointPriorCov carried = joint_prior_cov(velocity_cov, velocity_offset_cov, offset_cov);
+            const JointPriorCov p =
+                i == 0 ? carried : joint_prior_cov_over_gap(carried, n.density, n.floor, blind_gap_s, n.offset_rw, blind_duration_s);
+            imu.joint_covariance = true;
+            imu.velocity_prior_mean = velocity;
+            imu.velocity_prior_cov = p.topLeftCorner<3, 3>();
+            imu.velocity_offset_prior_cov = p.topRightCorner<3, 3>();
+            imu.offset_prior_cov = p.bottomRightCorner<3, 3>();
+            imu.edges_follow_state = n.edges_follow_state;
+            imu.velocity_guess = velocity;
+            imu.guess_integrated = true;
+            w.velocity.start = w.velocity.end = velocity;
+
+            const WindowNoiseModel noise = build_window_noise_model(w, o.scan_to_map, o.motion_model, o.rotation, imu, o.velocity_prior);
+            REQUIRE(noise.joint_prior);
+            Eigen::Vector3d acc_offset = Eigen::Vector3d::Zero();
+            Eigen::Matrix3d acc_offset_cov = imu.offset_prior_cov;
+            NullLogger logger;
+            ScanToMapWorkspace workspace;
+            WindowProblem problem(points, w, maps.indoor, maps.outdoor, o.scan_to_map, o.motion_model, o.rotation, imu, noise, acc_offset,
+                                  acc_offset_cov, logger, nullptr, nullptr, workspace);
+            double delta = 0.0;
+            lm_iteration(problem, 5.0, false, false, false, delta, LmWorkspace{workspace.covariance, workspace.damped});
+
+            chain.push_back({std::sqrt(p(0, 0)), std::sqrt(w.velocity.end_covariance(0, 0))});
+            velocity_cov = w.velocity.end_covariance;
+            velocity_offset_cov = w.velocity.end_offset_covariance;
+            offset_cov = acc_offset_cov;
+        }
+        return chain;
+    }
+}
+
+TEST_CASE("scan-to-map, imu carry joint covariance: an offset error adds up over blind windows")
+{
+    // the other noises small: after N windows the velocity's sigma is sigma_e x (the time from the first window's start to
+    // the N-th window's end), plus the first prior in quadrature
+    BlindChainNoise n;
+    const std::vector<BlindChainWindow> chain = run_blind_chain(15, n);
+    for (int i = 0; i < static_cast<int>(chain.size()); i++)
+    {
+        CAPTURE(i);
+        const int windows = i + 1;
+        const double elapsed = windows * blind_duration_s + (windows - 1) * blind_gap_s;
+        const double offset_part = n.offset_sigma * elapsed;
+        const double closed_form = std::sqrt(n.velocity_sigma0 * n.velocity_sigma0 + offset_part * offset_part);
+        CHECK(chain[i].end_sigma == doctest::Approx(closed_form).epsilon(0.01));
+    }
+    MESSAGE("velocity sigma after 1 / 5 / 15 blind windows: ", chain[0].end_sigma, " / ", chain[4].end_sigma, " / ", chain[14].end_sigma,
+            " m/s");
+}
+
+TEST_CASE("scan-to-map, imu carry joint covariance: fifteen blind windows")
+{
+    // the noises of the L2 settings (accelerometer density and floor, the gyro's time-scaled rotation sigmas), offset sigma
+    // 0.02 m/s^2: the start-velocity prior grows in every window, and after fifteen windows of 0.36 s it is at least 0.1 m/s
+    BlindChainNoise n;
+    n.velocity_sigma0 = 0.005;
+    n.density = 0.0013;
+    n.floor = 0.1;
+    n.rotation_sigma_deg = 0.0;
+    const std::vector<BlindChainWindow> chain = run_blind_chain(16, n);
+    for (size_t i = 1; i < chain.size(); i++)
+    {
+        CAPTURE(i);
+        CHECK(chain[i].start_sigma > chain[i - 1].start_sigma);
+    }
+    CHECK(chain.back().start_sigma >= 0.1); // the prior of the window after the fifteenth
+    n.edges_follow_state = false;
+    const std::vector<BlindChainWindow> held = run_blind_chain(16, n);
+    MESSAGE("start-velocity prior sigma after 15 blind windows: ", chain.back().start_sigma, " m/s (edges holding the guess: ",
+            held.back().start_sigma, ")");
+}

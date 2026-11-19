@@ -132,7 +132,8 @@ namespace
 
     // imu_always_on: the start velocity prior (the previous window's end velocity, its covariance grown over the gap; in the first
     // window with the term zero if the recording starts at rest, else the previous window's velocity with imu_velocity_initial_sigma_mps)
-    // and the window's velocity unknowns started from it
+    // and the window's velocity unknowns started from it. With imu_carry_joint_covariance the prior's covariance with the
+    // offset too; it stays zero where the prior does not come from the previous window
     void prepare_velocity_state(Window &window, const PreviousVelocity &previous, bool at_rest, const OdometryRunSetup &setup,
                                 const WindowLoopCarry &carry, AccTerm &t, const OdometryConfig &params)
     {
@@ -146,7 +147,21 @@ namespace
             const double gap = std::max(window.timestamps.front().first - carry.velocity_time_s, 0.0);
             const double density = params.imu_accel_noise_density_mps2_sqrt_hz, floor = params.imu_accel_floor_sigma_mps2;
             mean = carry.velocity_mean;
-            cov = velocity_prior_cov_over_gap(carry.velocity_cov, density, floor, gap);
+            if (t.options.joint_covariance)
+            {
+                // imu_carry_joint_covariance: (end velocity, offset) carried together, moved over the gap (the velocity
+                // changes by -offset x gap) and grown as below; the helper grows the offset by its random walk from the
+                // carried covariance once, as prepare_acc_term did (same function, same arguments: the same value)
+                const JointPriorCov p =
+                    joint_prior_cov_over_gap(joint_prior_cov(carry.velocity_cov, carry.velocity_offset_cov, carry.acc_offset_cov), density,
+                                             floor, gap, params.imu_acceleration_offset_rw_mps2_sqrt_s, t.window_duration_s);
+                cov = p.topLeftCorner<3, 3>();
+                t.options.velocity_offset_prior_cov = p.topRightCorner<3, 3>();
+                t.options.offset_prior_cov = p.bottomRightCorner<3, 3>();
+                t.offset_cov = t.options.offset_prior_cov;
+            }
+            else
+                cov = velocity_prior_cov_over_gap(carry.velocity_cov, density, floor, gap);
         }
         else if (!carry.velocity_valid && carry.first_window_at_rest)
         {
@@ -174,6 +189,12 @@ namespace
             // fold the estimated offset into the gravity vector; its uncertainty carries over as the next prior
             carry.acc_gravity += acc_offset / t.options.to_mps2;
             carry.acc_offset_cov = t.offset_cov;
+            // imu_carry_joint_covariance: the solve's cov(end velocity, offset). The offset is folded into the gravity vector, so
+            // the next window's offset (prior mean zero) is the error left in the fold, minus that of this window's estimate:
+            // its prior error is this window's offset error, and its covariance with the velocity's error is this block as it
+            // is (the to_mps2 rescale of the fold, a factor 1 - O(|offset| / 9.8), is neglected)
+            if (t.options.joint_covariance)
+                carry.velocity_offset_cov = window.velocity.end_offset_covariance;
             {
                 const Eigen::Vector3d s = t.offset_cov.diagonal().cwiseMax(0.0).cwiseSqrt();
                 log_info(logger) << "acceleration offset [m/s^2] window " << i + 1 << ": " << std::fixed << std::setprecision(3)

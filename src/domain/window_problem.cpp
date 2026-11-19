@@ -46,6 +46,7 @@ LmLinearization WindowProblem::linearize(bool with_cost)
     const bool end_tied = add_acceleration_terms(equations, noise_, window_, translation_imu_options_, acc_offset_);
     add_velocity_priors(equations, noise_, window_, end_tied);
     add_acceleration_offset_prior(equations, noise_, acc_offset_);
+    add_joint_velocity_offset_prior(equations, noise_, window_, acc_offset_);
 
     motion_terms_timer.stop();
 
