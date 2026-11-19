@@ -137,6 +137,42 @@ None: no function of this region is above 80 lines (`python tools/function_sizes
 
 ## Experiments
 
+- 2026-11-19 Layer 1 of `honest-inertial-carry` (`imu_edges_follow_state`, fb48605, merged 2b41eaa, off by default): the
+  edges' position measurement follows the start velocity and offset. Replays on the five stage 8 Livox 4 captures
+  (families of seven on lower, upper, end; `experiments/regions/inertial/2026-11-19-edges-follow-state/summary.md`,
+  reviewed): the prior sigma now grows through blind stretches (lower 6.2 -> 36.7 mm/s, today's ceiling 10.7; like
+  sqrt(N) without layer 2); the speed two windows after the exit 1.09-1.24 m/s in every member (today 0.16-0.54); path
+  in the slow stretch lower 8.50-8.55 m, upper 8.12-8.13 m (today 5.9-6.4, 5.8-7.5). Misses against the design's
+  targets: a one-window speed spike at the lower exit (+462 mm, 1.51-1.52 m/s; the decay inside the blind windows stays,
+  0.81 -> 0.34 m/s), and end stretch / passage end positions 0.69 / 0.30 m from today (today's spread 0.02). Full Livox 3
+  run: within 0.13 m of today (only after its blind stretch at 214 s), no flags, chi2 median 26 (25).
+  `experiments/stage8/carry/livox3_efs/`.
+- 2026-11-19 Code review of the region (the owner agent, reading only; stage 8). Findings, none in the tracker yet:
+  (1) the rotation edges measure the orientation filter's output, not the gyro: `compute_step_1`
+  (`lidar_odometry.cpp:334-341`) makes the nodes and `motion_model_poses` from Fusion's orientation and
+  `edge_measurement` (`motion_model_terms.cpp:89-108`) takes their relative rotation; Fusion adds gain · (â × ĝ) to the
+  gyro (`ahrs_gain` 0.05 in both sensor files, rejection off), by the review's estimate about 0.4 °/s rms while walking
+  and 0.06° per window, 5–11 times the edges' sigma with the measured gyro noise (0.006 / 0.013 / 0.009° per window);
+  the accelerometer is so used twice. (2) No code path loses rotation in proportion to the turn rate (integration,
+  units, bias removal, timing checked); a gyro scale is not modelled and k = 1 leaves no room for one (0.4 % at 30 °/s
+  is 5 σ per window); an IMU clock 0.4 % slow against the LiDAR would look the same (not checked). (3) The hard-fixed
+  node 0 turns an attitude error ε0 into a bias demand of 1.5 ε0 / T = 4.2 (°/s)/° at T = 0.36 s. (4) `to_mps2 =
+  9.80665 / |acc_gravity|` is recomputed after each fold of the offset (`run_odometry.cpp:108`, `:172`): a vertical
+  offset of 0.1 m/s² rescales every acceleration by 1 %. (5) The gap between windows gets no bias correction
+  (`place_window_after`, `window_steps.cpp:10`; about 0.05° per 30 s at 0.3 °/s). (6) The hand-off extrapolates with
+  the finite-difference velocity while the carried velocity is the solve's (mm level). Checked from existing runs: the
+  bias estimate swings on all three axes while walking (Livox 4, measured gyro noise: x −0.43…+0.20, y −0.58…+0.36,
+  z −0.37…+0.39 °/s; Livox 3 within ±0.36). Not run: `ahrs_gain = 0`; the clock check.
+- 2026-11-18 The acceleration offset's random walk (`imu_acceleration_offset_rw_mps2_sqrt_s`, 0.0001 in both sensor
+  files, built-in 0.05; the offset is folded into the gravity vector, so it is the state that can follow a tilt of the
+  attitude): its prior sigma on the Livox 4 stairs is 0.002 m/s² and the accelerometer's steady misfit against the path
+  is up to 1.0° as a tilt (stairs), 0.7° (end stretch), 0.1° (passage, Livox 3). At 0.01 the misfit and the velocity
+  chi² fall (stairs 267 → 37; partly by construction: both are measured with the gravity vector the offset adjusts), but
+  with the default cell statistics the passage then runs to 11.2 and 20.9 m at up to 3.7 m/s. Full runs with 0.01,
+  the exact cell statistics and the projection at 0.02 / 0.04 (the stage 8 candidate): Livox 4 passage 5.94 → 9.53 m,
+  no flags, largest bias 0.58 → 0.49 °/s, start-to-end 3.73 → 5.03 m; Livox 3 unchanged (0.06 m). The user's look at
+  Livox 4: fewer double walls around the start rooms than before, double walls remain. `openspec/changes/
+  livox4-passage-and-flyaway/tasks.md` 3.11, 3.12; `experiments/regions/lidar-matching/2026-11-18-cell-statistics/`.
 - 2026-11-18 Stage 6 split of `predict_window_poses` into four steps and one rest test; pure refactor. Full 44 and
   Livox 3 IDENTICAL (35 files each). `openspec/changes/archive/2026-11-18-split-window-prediction/`.
 - 2026-11-17 First per-term table, Livox 3 100–130 s (84 windows): start velocity ends a median 2.9 σ (rms) from its
@@ -187,6 +223,16 @@ None: no function of this region is above 80 lines (`python tools/function_sizes
 
 ## Open questions
 
+- Do the rotation edges have to carry the orientation filter's accelerometer feedback (review 2026-11-19, finding 1)?
+  Runs 2026-11-19 (`experiments/stage8/candidate_runs_summary.md`, one run each, no verdict on cause): `ahrs_gain = 0`
+  alone did not clearly change the bias swings (rms x/y/z 0.100/0.111/0.114 -> 0.102/0.089/0.100 deg/s) nor the walls;
+  the scale alone removed the bias's dependence on the yaw rate (slope -0.22 % -> -0.01 %; the factor was fitted on
+  the same recording) but not the swings; both together gave the user's "perfect" map (visit pair difference p50
+  0.039 -> 0.020 m). Being confirmed by change `gyro-scale-correction` (repeats, Livox 3).
+- The gyro scale: a setting now (`gyro_scale_x/y/z`, `[sensor_calibration]`, change `gyro-scale-correction`), applied
+  to the raw gyro as read. Later: measured once by a tool and stored as a calculated value; an estimated state after
+  that (the user, 2026-11-19). Gyro sensitivity or a slow IMU clock: not told apart (`tools/imu_time_offset.py`, rate).
+  Livox 3 shows the same yaw signature (bias against rate slope -0.26 / -0.29 %, correlation -0.70 / -0.78).
 - Is the velocity chi² high on all three recordings (Livox 3 weak windows median 35, judged good) because the prior is
   too tight, or because process noise between windows is missing? (Plan progress, "Verdict limits decided"; shared with
   noise-budget.)

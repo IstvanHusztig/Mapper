@@ -44,14 +44,14 @@ and the two guards.
 
 ## 3. Layer 1: the edges follow the state (inertial, J2, worktree region-a)
 
-- [ ] 3.1 `add_motion_edge_terms`: the position measurement follows the start velocity and the acceleration offset in
+- [x] 3.1 `add_motion_edge_terms`: the position measurement follows the start velocity and the acceleration offset in
   windows whose guess was integrated (design D1), behind `imu_edges_follow_state`. Verify: the two invariance tests of
   the spec, the gradient test of the term, a window at rest unchanged, the per-term table still builds each term
   alone; off: 44_short and guards bit-identical (`step_checks.py`).
-- [ ] 3.2 Replays with layer 1 alone on the five captures, families on lower, upper and end; one full Livox 3 run.
+- [x] 3.2 Replays with layer 1 alone on the five captures, families on lower, upper and end; one full Livox 3 run.
   Report the readings of design D4 (the prior sigma through each blind stretch must pass today's ceiling), largest
   speed, flags. Hand-back with the tables; no verdict.
-- [ ] 3.3 Orchestrator: ownership check, step checks in the worktree, conclusion reviewer, merge with the switch off;
+- [x] 3.3 Orchestrator: ownership check, step checks in the worktree, conclusion reviewer, merge with the switch off;
   the numbers to the user.
 
 ## 4. Layer 2: the joint covariance (solver J3 in region-b, then noise-budget and inertial J4 in region-a)
