@@ -5,6 +5,7 @@
 #include "ndt_term.h"
 #include "window_equations.h"
 #include "window_solver.h"
+#include "window_steps.h"
 #include <transformations.h>
 
 #include <cmath>
@@ -245,7 +246,7 @@ TEST_CASE("window terms: the motion-model edges' right-hand side is minus half t
             const Term term = [&](WindowEquations &e, const Window &win)
             {
                 e.with_cost = true;
-                add_motion_edge_terms(e, noise, win, m, rotation);
+                add_motion_edge_terms(e, noise, win, m, rotation, {}, Eigen::Vector3d::Zero());
             };
             check_gradient(u, w, term, columns, [&](Window &win, int c, double h) { shift_pose_or_bias(win, c, h, u); }, 1e-7, false);
         }
@@ -265,7 +266,7 @@ TEST_CASE("window terms: the motion-model edges' right-hand side is minus half t
     {
         WindowEquations e(u);
         e.with_cost = true;
-        add_motion_edges(e, u, w, m, rotation, weights);
+        add_motion_edges(e, u, w, m, rotation, {}, Eigen::Vector3d::Zero(), weights);
         return e;
     };
     const WindowEquations all = edges(full), pos = edges(position), rot = edges(rotation_only);
@@ -433,6 +434,238 @@ TEST_CASE("window terms: the acceleration-offset prior's right-hand side is minu
     check_acc_gradient(u, k.state, term, {u.io, u.io + 1, u.io + 2}, 1e-6, 1e-5);
 }
 
+namespace
+{
+    // imu_edges_follow_state: a turning window of 30 nodes about 2 ms apart (uneven), with the accelerometer, whose guess
+    // is integrated from velocity_guess (integrate_window_translations), as prepare_window makes it
+    struct FollowCase
+    {
+        Window guess;
+        std::vector<Eigen::Vector3d> acc;
+        MotionModelTranslationImuOptions imu;
+        MotionModelOptions m;
+        MotionModelRotationOptions rotation;
+        WindowNoiseModel noise;
+    };
+
+    void rebuild_follow_noise(FollowCase &k)
+    {
+        k.noise = build_window_noise_model(k.guess, ScanToMapOptions{}, k.m, k.rotation, k.imu, VelocityPrior{});
+    }
+
+    void make_follow_case(FollowCase &k, bool bias)
+    {
+        constexpr int n = 30;
+        k.guess = straight_window(n, 0.002);
+        std::mt19937 rng(13);
+        std::uniform_real_distribution<double> noise(-1.0, 1.0);
+        for (int i = 0; i < n; i++)
+        {
+            const double t = i * 0.002 + (i % 3) * 0.0003;
+            k.guess.timestamps[i] = {t, t};
+            k.guess.poses[i].linear() = (Eigen::AngleAxisd(0.5 * t, Eigen::Vector3d::UnitZ()) * Eigen::AngleAxisd(0.02, Eigen::Vector3d::UnitX()) *
+                                         Eigen::AngleAxisd(-0.03, Eigen::Vector3d::UnitY())).toRotationMatrix();
+            k.acc.push_back(Eigen::Vector3d(0.05 * noise(rng), 0.05 * noise(rng), 1.0 + 0.02 * noise(rng)));
+        }
+        k.guess.imu_acc = k.acc;
+        k.imu.enabled = true;
+        k.imu.acc = &k.acc;
+        k.imu.gravity = Eigen::Vector3d(0.0, 0.0, 1.0);
+        k.imu.to_mps2 = 9.80665;
+        k.imu.span_s = 0.005;
+        k.imu.noise_density_mps2_sqrt_hz = 0.0013;
+        k.imu.floor_sigma_mps2 = 0.1;
+        k.imu.velocity_prior_mean = Eigen::Vector3d(0.8, 0.1, -0.05);
+        k.imu.velocity_prior_cov = Eigen::Matrix3d::Identity() * 1e-2;
+        k.imu.offset_prior_cov = Eigen::Matrix3d::Identity() * 1e-2;
+        k.imu.edges_follow_state = true;
+        k.imu.velocity_guess = k.imu.velocity_prior_mean;
+        k.guess.velocity.start = k.guess.velocity.end = k.imu.velocity_guess;
+        k.imu.guess_integrated = integrate_window_translations(k.guess, k.imu.velocity_guess, k.imu.gravity, k.imu.to_mps2);
+        k.m.x_sigma_m = k.m.y_sigma_m = k.m.z_sigma_m = 1e-3;
+        k.m.om_sigma_deg = k.m.fi_sigma_deg = k.m.ka_sigma_deg = 0.1;
+        k.rotation.estimate_bias = bias;
+        k.rotation.bias_prior_mean = Eigen::Vector3d(0.01, -0.012, 0.025);
+        k.guess.gyro_bias.mean = Eigen::Vector3d(0.02, -0.01, 0.03);
+        rebuild_follow_noise(k);
+    }
+
+    // the node translations of the guess's path for start velocity v and acceleration offset e: the guess integrated again
+    // with mean acceleration - e (the gravity vector + e in accelerometer units)
+    std::vector<Eigen::Vector3d> path_of(const FollowCase &k, const Eigen::Vector3d &v, const Eigen::Vector3d &e)
+    {
+        Window w = k.guess;
+        integrate_window_translations(w, v, k.imu.gravity + e / k.imu.to_mps2, k.imu.to_mps2);
+        std::vector<Eigen::Vector3d> p;
+        for (const Eigen::Affine3d &pose : w.poses)
+            p.push_back(pose.translation());
+        return p;
+    }
+
+    WindowEquations follow_edges(const FollowCase &k, const AccState &s)
+    {
+        WindowEquations e(k.noise.unknowns);
+        e.with_cost = true;
+        add_motion_edge_terms(e, k.noise, s.window, k.m, k.rotation, k.imu, s.offset);
+        return e;
+    }
+
+    // a state near the guess: node translations off by up to 0.1 mm, at the guess's start velocity and zero offset
+    AccState near_guess(const FollowCase &k)
+    {
+        AccState s{k.guess, Eigen::Vector3d::Zero()};
+        std::mt19937 rng(17);
+        std::uniform_real_distribution<double> offset(-1e-4, 1e-4);
+        for (Eigen::Affine3d &p : s.window.poses)
+            p.translation() += Eigen::Vector3d(offset(rng), offset(rng), offset(rng));
+        return s;
+    }
+
+    // s moved along the path from (v_guess, 0) to (v_guess + dv, e): the nodes, the start velocity and the offset
+    AccState moved_along_path(const FollowCase &k, const AccState &s, const Eigen::Vector3d &dv, const Eigen::Vector3d &e)
+    {
+        const std::vector<Eigen::Vector3d> from = path_of(k, k.imu.velocity_guess, Eigen::Vector3d::Zero());
+        const std::vector<Eigen::Vector3d> to = path_of(k, k.imu.velocity_guess + dv, e);
+        AccState moved = s;
+        for (size_t i = 0; i < moved.window.poses.size(); i++)
+            moved.window.poses[i].translation() += to[i] - from[i];
+        moved.window.velocity.start += dv;
+        moved.offset += e;
+        return moved;
+    }
+
+    // the same cost, and the same right-hand side in the translation, velocity and offset columns; with rotations = true
+    // also in the rotation columns. (Off the guess the rotation columns differ: d(R_k-1^T (p_k - p_k-1))/d(theta) grows
+    // with the step p_k - p_k-1, which the other path changes; at the guess the position residuals are zero and so is
+    // that part of the rotation columns.)
+    void check_same_edges(const WindowUnknowns &u, const WindowEquations &a, const WindowEquations &b, bool rotations)
+    {
+        CHECK(std::abs(a.motion_cost - b.motion_cost) <= 1e-8 * std::max(a.motion_cost, 1e-12));
+        double scale = 1e-3, diff = 0.0; // [weight x m]: the edges' right-hand side off the path is ~1e5 here
+        for (int c = 0; c < u.n_params; c++)
+        {
+            if (c < u.n_pose_params && c % 6 >= 3 && !rotations)
+                continue;
+            scale = std::max(scale, std::abs(a.rhs(c, 0)));
+            diff = std::max(diff, std::abs(a.rhs(c, 0) - b.rhs(c, 0)));
+        }
+        CHECK(diff <= 1e-7 * scale);
+        CHECK(a.residuals == b.residuals);
+    }
+}
+
+TEST_CASE("window terms: with imu_edges_follow_state the edges follow the start velocity and the acceleration offset")
+{
+    for (bool bias : {false, true})
+    {
+        CAPTURE(bias);
+        FollowCase k;
+        make_follow_case(k, bias);
+        REQUIRE(k.imu.guess_integrated);
+        REQUIRE(k.noise.unknowns.acc_term);
+        const WindowUnknowns &u = k.noise.unknowns;
+        const AccState guess{k.guess, Eigen::Vector3d::Zero()};
+        const WindowEquations at_guess = follow_edges(k, guess);
+        const AccState s = near_guess(k);
+        const WindowEquations at = follow_edges(k, s);
+        REQUIRE(at.motion_cost > 0.0);
+        FollowCase off = k;
+        off.imu.edges_follow_state = false;
+
+        SUBCASE("a start velocity 0.5 m/s larger, the nodes moved along its path: cost and right-hand side unchanged")
+        {
+            for (int axis = 0; axis < 3; axis++)
+            {
+                CAPTURE(axis);
+                const Eigen::Vector3d dv = 0.5 * Eigen::Vector3d::Unit(axis);
+                const AccState moved = moved_along_path(k, s, dv, Eigen::Vector3d::Zero());
+                check_same_edges(u, at, follow_edges(k, moved), false);
+                check_same_edges(u, at_guess, follow_edges(k, moved_along_path(k, guess, dv, Eigen::Vector3d::Zero())), true);
+                CHECK(follow_edges(off, moved).motion_cost > 10.0 * follow_edges(off, s).motion_cost); // without the setting it costs
+            }
+        }
+        SUBCASE("an acceleration offset of 0.1 m/s^2, the nodes moved along its path: cost and right-hand side unchanged")
+        {
+            for (int axis = 0; axis < 3; axis++)
+            {
+                CAPTURE(axis);
+                const Eigen::Vector3d e = 0.1 * Eigen::Vector3d::Unit(axis);
+                const AccState moved = moved_along_path(k, s, Eigen::Vector3d::Zero(), e);
+                check_same_edges(u, at, follow_edges(k, moved), false);
+                check_same_edges(u, at_guess, follow_edges(k, moved_along_path(k, guess, Eigen::Vector3d::Zero(), e)), true);
+                // without the setting the move costs (from the guess: 2 ms edges, so a small cost)
+                CHECK(follow_edges(off, moved_along_path(k, guess, Eigen::Vector3d::Zero(), e)).motion_cost > at_guess.motion_cost);
+            }
+            const AccState both = moved_along_path(k, s, Eigen::Vector3d(0.3, -0.2, 0.1), Eigen::Vector3d(0.05, 0.08, -0.06));
+            check_same_edges(u, at, follow_edges(k, both), false);
+        }
+        SUBCASE("the right-hand side is minus half the cost's gradient, with the velocity and offset columns")
+        {
+            // rotations off the guess too, the velocity and the offset away from it: every residual non-zero
+            AccState x = moved_along_path(k, s, Eigen::Vector3d(0.2, -0.1, 0.05), Eigen::Vector3d(0.03, -0.02, 0.04));
+            x.window.velocity.start += Eigen::Vector3d(0.01, 0.02, -0.01);
+            x.offset += Eigen::Vector3d(-0.02, 0.01, 0.03);
+            std::mt19937 rng(19);
+            std::uniform_real_distribution<double> angle(-0.003, 0.003);
+            for (Eigen::Affine3d &p : x.window.poses)
+                p.linear() = (Eigen::AngleAxisd(angle(rng), Eigen::Vector3d::UnitX()) * Eigen::AngleAxisd(angle(rng), Eigen::Vector3d::UnitY()) *
+                              Eigen::AngleAxisd(angle(rng), Eigen::Vector3d::UnitZ())).toRotationMatrix() * p.linear();
+            std::vector<int> columns;
+            for (int c = 0; c < u.n_pose_params; c++)
+                columns.push_back(c);
+            for (int r = 0; r < 3; r++)
+            {
+                columns.push_back(u.iv + r);
+                columns.push_back(u.io + r);
+                if (bias)
+                    columns.push_back(u.ib + r);
+            }
+            const auto term = [&](WindowEquations &e, const AccState &state)
+            {
+                e.with_cost = true;
+                add_motion_edge_terms(e, k.noise, state.window, k.m, k.rotation, k.imu, state.offset);
+            };
+            check_acc_gradient(u, x, term, columns, 1e-7, 1e-5);
+
+            // the residual is linear in v and e and the pose Jacobian does not depend on them: the matrix's v and e columns
+            // are exactly minus the change of the right-hand side
+            const Eigen::MatrixXd A = Eigen::MatrixXd(follow_edges(k, x).matrix.to_sparse());
+            for (int c : {u.iv, u.iv + 1, u.iv + 2, u.io, u.io + 1, u.io + 2})
+            {
+                CAPTURE(c);
+                constexpr double h = 1e-3;
+                AccState plus = x, minus = x;
+                shift_acc_state(plus, c, h, u);
+                shift_acc_state(minus, c, -h, u);
+                const Eigen::VectorXd column = -(follow_edges(k, plus).rhs - follow_edges(k, minus).rhs) / (2.0 * h);
+                CHECK((A.col(c) - column).norm() <= 1e-6 * column.norm());
+                CHECK(A(c, c) > 0.0);
+            }
+        }
+        SUBCASE("a window at rest or a guess not integrated: the edges as without the setting, bit for bit")
+        {
+            AccState x = s;
+            x.window.velocity.start += Eigen::Vector3d(0.2, -0.1, 0.05);
+            x.offset = Eigen::Vector3d(0.03, -0.02, 0.04);
+            FollowCase rest = k, not_integrated = k;
+            rest.imu.at_rest = true;
+            rebuild_follow_noise(rest);
+            not_integrated.imu.guess_integrated = false;
+            for (const FollowCase *c : {&rest, &not_integrated})
+            {
+                FollowCase c_off = *c;
+                c_off.imu.edges_follow_state = false;
+                const WindowEquations before = follow_edges(c_off, x);
+                const WindowEquations e = follow_edges(*c, x);
+                CHECK(e.motion_cost == before.motion_cost);
+                CHECK(e.rhs == before.rhs);
+                CHECK(Eigen::MatrixXd(e.matrix.to_sparse()) == Eigen::MatrixXd(before.matrix.to_sparse()));
+                CHECK(e.residuals == before.residuals);
+            }
+        }
+    }
+}
+
 TEST_CASE("window terms: each term counts the scalar residuals it adds")
 {
     SUBCASE("accelerometer term, velocity priors, offset prior")
@@ -475,7 +708,7 @@ TEST_CASE("window terms: each term counts the scalar residuals it adds")
         const VelocityPrior previous{true, Eigen::Vector3d(1.0, 0.0, 0.0)};
         const WindowNoiseModel noise = build_window_noise_model(w, ScanToMapOptions{}, m, rotation, {}, previous);
         WindowEquations edges(u);
-        add_motion_edge_terms(edges, noise, w, m, rotation);
+        add_motion_edge_terms(edges, noise, w, m, rotation, {}, Eigen::Vector3d::Zero());
         CHECK(edges.residuals == 6 * 11); // position and rotation, per edge
         WindowEquations bias(u);
         add_gyro_bias_prior(bias, noise, w);

@@ -172,11 +172,91 @@ namespace
             equations.rhs(ib + r, 0) -= (-dt_i) * w_rot(r) * delta_odo(3 + r, 0);
         }
     }
+
+    // imu_edges_follow_state (change honest-inertial-carry, design D1), in a window whose guess was integrated from the
+    // accelerometer: the guess is linear in the start velocity v and the acceleration offset e (integrate_window_translations;
+    // the accelerometer term reads mean acceleration - e), and for another v, e node k moves by (v - v_guess)(t_k - t_0) -
+    // e (t_k - t_0)^2 / 2. So edge k-1 -> k, whose position rows measure R_k-1^T (p_k - p_k-1) of the guess, measures
+    //   m_k(v, e) = m_k(guess) + R_guess,k-1^T [(v - v_guess) dt_k - e ((t_k - t_0)^2 - (t_k-1 - t_0)^2) / 2]
+    struct EdgeStateFollow
+    {
+        bool active = false;
+        int iv = 0, io = 0;
+        Eigen::Vector3d dv = Eigen::Vector3d::Zero(); // v - v_guess [m/s]
+        Eigen::Vector3d e = Eigen::Vector3d::Zero();  // [m/s^2]
+    };
+
+    EdgeStateFollow edge_state_follow(const WindowUnknowns &unknowns, const Window &window, const MotionModelTranslationImuOptions &translation,
+                                      const Eigen::Vector3d &acc_offset)
+    {
+        EdgeStateFollow f;
+        f.active = unknowns.acc_term && translation.enabled && translation.edges_follow_state && translation.guess_integrated &&
+                   !translation.at_rest && window.timestamps.size() == window.poses.size() &&
+                   window.motion_model_poses.size() == window.poses.size();
+        if (f.active)
+        {
+            f.iv = unknowns.iv;
+            f.io = unknowns.io;
+            f.dv = window.velocity.start - translation.velocity_guess;
+            f.e = acc_offset;
+        }
+        return f;
+    }
+
+    // d(m_k position)/dv and d(m_k position)/de of edge `first` -> first + 1 (the formula above)
+    struct EdgeStateJacobian
+    {
+        Eigen::Matrix3d v, e;
+    };
+
+    EdgeStateJacobian edge_state_jacobian(const Window &window, size_t first)
+    {
+        const double t0 = window.timestamps.front().first;
+        const double ta = window.timestamps[first].first - t0, tb = window.timestamps[first + 1].first - t0;
+        const double dt = std::max(tb - ta, 0.0);
+        const double s = 0.5 * (tb * tb - ta * ta);
+        const Eigen::Matrix3d Rt = window.motion_model_poses[first].linear().transpose();
+        return {Rt * dt, -Rt * s};
+    }
+
+    // the edge's position rows against the v and e columns: delta = m(v, e) - f(pose_1, pose_2), d(delta)/d(pose) = J,
+    // d(delta)/d(v, e) = the edge's state Jacobian
+    void add_edge_state_coupling(WindowEquations &equations, const EdgeStateFollow &follow, const EdgeStateJacobian &js, const TaitBryanPose &a,
+                                 const TaitBryanPose &b, int ic_1, int ic_2, const Eigen::Matrix<double, 6, 1> &m, const MotionEdgeWeights &weights)
+    {
+        Eigen::Matrix<double, 6, 12, Eigen::RowMajor> J;
+        relative_pose_obs_eq_tait_bryan_wc_case1_jacobian_simplified_1(J, a.px, a.py, a.pz, a.om, a.fi, a.ka, b.px, b.py, b.pz, b.om, b.fi, b.ka);
+        Eigen::Matrix<double, 6, 1> delta;
+        relative_pose_obs_eq_tait_bryan_wc_case1_simplified_1(delta, a.px, a.py, a.pz, a.om, a.fi, a.ka, b.px, b.py, b.pz, b.om, b.fi, b.ka,
+                                                              m(0, 0), m(1, 0), m(2, 0), m(3, 0), m(4, 0), m(5, 0));
+        const Eigen::Vector3d w(weights.x, weights.y, weights.z);
+        Eigen::Matrix<double, 3, 6> Js;
+        Js << js.v, js.e;
+        const int columns[6] = {follow.iv, follow.iv + 1, follow.iv + 2, follow.io, follow.io + 1, follow.io + 2};
+        const Eigen::Matrix<double, 3, 6> WJs = w.asDiagonal() * Js;
+        for (int c = 0; c < 6; c++)
+        {
+            for (int col = 0; col < 6; col++)
+            {
+                const double v1 = J.block<3, 1>(0, col).dot(WJs.col(c));
+                const double v2 = J.block<3, 1>(0, col + 6).dot(WJs.col(c));
+                equations.matrix.add(ic_1 + col, columns[c], v1);
+                equations.matrix.add(columns[c], ic_1 + col, v1);
+                equations.matrix.add(ic_2 + col, columns[c], v2);
+                equations.matrix.add(columns[c], ic_2 + col, v2);
+            }
+            for (int c2 = 0; c2 < 6; c2++)
+                equations.matrix.add(columns[c], columns[c2], Js.col(c).dot(WJs.col(c2)));
+            equations.rhs(columns[c], 0) -= WJs.col(c).dot(delta.head<3>());
+        }
+    }
 }
 
 void add_motion_edges(WindowEquations &equations, const WindowUnknowns &unknowns, const Window &window, const MotionModelOptions &motion_model,
-                      const MotionModelRotationOptions &rotation_options, const MotionEdgeWeights &weights)
+                      const MotionModelRotationOptions &rotation_options, const MotionModelTranslationImuOptions &translation_imu_options,
+                      const Eigen::Vector3d &acc_offset, const MotionEdgeWeights &weights)
 {
+    const EdgeStateFollow follow = edge_state_follow(unknowns, window, translation_imu_options, acc_offset);
     std::vector<TaitBryanPose> poses;
     std::vector<TaitBryanPose> poses_desired;
     for (size_t i = 0; i < window.poses.size(); i++)
@@ -188,8 +268,14 @@ void add_motion_edges(WindowEquations &equations, const WindowUnknowns &unknowns
     {
         const size_t first = i, second = i + 1;
         const Eigen::Vector3d bias_update = window.gyro_bias.mean - rotation_options.bias_prior_mean;
-        const Eigen::Matrix<double, 6, 1> m =
+        Eigen::Matrix<double, 6, 1> m =
             edge_measurement(poses_desired[first], poses_desired[second], motion_model, unknowns.estimate_bias, bias_update, weights.dt[i]);
+        EdgeStateJacobian js;
+        if (follow.active)
+        {
+            js = edge_state_jacobian(window, first);
+            m.head<3>() += js.v * follow.dv + js.e * follow.e;
+        }
         const Eigen::Vector3d &w_rot = weights.rotation[i];
         const int ic_1 = static_cast<int>(first) * 6;
         const int ic_2 = static_cast<int>(second) * 6;
@@ -200,11 +286,14 @@ void add_motion_edges(WindowEquations &equations, const WindowUnknowns &unknowns
             equations.motion_cost += edge_cost(poses[first], poses[second], m, weights, w_rot);
         if (unknowns.estimate_bias)
             add_edge_bias_coupling(equations, unknowns.ib, poses[first], poses[second], ic_1, ic_2, m, w_rot, weights.dt[i]);
+        if (follow.active)
+            add_edge_state_coupling(equations, follow, js, poses[first], poses[second], ic_1, ic_2, m, weights);
     }
 }
 
 void add_motion_edge_terms(WindowEquations &equations, const WindowNoiseModel &noise, const Window &window, const MotionModelOptions &motion_model,
-                           const MotionModelRotationOptions &rotation_options)
+                           const MotionModelRotationOptions &rotation_options, const MotionModelTranslationImuOptions &translation_imu_options,
+                           const Eigen::Vector3d &acc_offset)
 {
-    add_motion_edges(equations, noise.unknowns, window, motion_model, rotation_options, noise.edges);
+    add_motion_edges(equations, noise.unknowns, window, motion_model, rotation_options, translation_imu_options, acc_offset, noise.edges);
 }

@@ -15,13 +15,19 @@
 
 // the edges between consecutive nodes: each node pair's relative pose should match the motion model's (the IMU's), rotation
 // and position in one block; with bias estimation the rotation increment is corrected by the bias update, which couples
-// each edge to the bias unknowns. The edges' cost is added only when equations.with_cost is set.
+// each edge to the bias unknowns. With translation_imu_options.edges_follow_state, in a window whose guess was integrated
+// from the accelerometer (guess_integrated, not at rest), the position measurement follows the start velocity
+// (window.velocity.start against velocity_guess) and the acceleration offset acc_offset as the integrated guess does, which
+// couples each edge to those unknowns; otherwise the position measurement is the guess's. The edges' cost is added only
+// when equations.with_cost is set.
 void add_motion_edges(WindowEquations &equations, const WindowUnknowns &unknowns, const Window &window, const MotionModelOptions &motion_model,
-                      const MotionModelRotationOptions &rotation_options, const MotionEdgeWeights &weights);
+                      const MotionModelRotationOptions &rotation_options, const MotionModelTranslationImuOptions &translation_imu_options,
+                      const Eigen::Vector3d &acc_offset, const MotionEdgeWeights &weights);
 
 // add_motion_edges with the noise model's edge weights
 void add_motion_edge_terms(WindowEquations &equations, const WindowNoiseModel &noise, const Window &window, const MotionModelOptions &motion_model,
-                           const MotionModelRotationOptions &rotation_options);
+                           const MotionModelRotationOptions &rotation_options, const MotionModelTranslationImuOptions &translation_imu_options,
+                           const Eigen::Vector3d &acc_offset);
 
 // the gyro bias stays near the previous window's estimate: the noise model's prior (only with bias estimation)
 void add_gyro_bias_prior(WindowEquations &equations, const WindowNoiseModel &noise, const Window &window);
