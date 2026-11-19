@@ -18,7 +18,8 @@ a node. It also owns the IMU kinematics helpers that the window loop and consist
 - `load_imu` reads the legacy CSV format only when there is no `timestamp` column, and keeps a legacy line only if
   its `imuId` is the one in use. `calculate_trajectory` gets `imu_data` already merged and sorted by `load_data`; it
   does not check that the timestamps strictly increase, it only guards `dt <= 0`.
-- Settings from `OdometryConfig`: `filter_threshold_xy_inner/outer`, `lidar_imu_lever_arm_*`, `fusionConvention*`,
+- Settings from `OdometryConfig`: `filter_threshold_xy_inner/outer`, `lidar_imu_lever_arm_*`, `gyro_scale_x/y/z`
+  (`[sensor_calibration]`, 1 = untouched), `fusionConvention*`,
   `ahrs_gain`, `use_remove_imu_bias_from_first_stationary_scan`, `startup_gyro_bias_nr_samples`,
   `startup_gyro_bias_max_variance_deg2_s2`, `threshold_initial_points` (60 000 in both sensor settings; built-in
   default 10 000), `threshold_nr_poses` (360 in `l2-vertical.toml`, 180 in `livox-vertical.toml`, 300 in
@@ -28,6 +29,11 @@ a node. It also owns the IMU kinematics helpers that the window loop and consist
 1. `load_data` (`lidar_odometry.cpp`):
    - `Imu` (`imu_sample.h`): one `ImuSample` per CSV row; `timestamps.first` = IMU time [s] (CSV ns / 1e9),
      `.second` = unix time [s]; `gyro` [rad/s] and `acc` [g], float, body frame (NWU output axes of the recorder).
+     The gyro is multiplied per axis by `gyro_scale_*` inside `load_imu` (`ImuCalibration`, passed through
+     `RecordingSource::read_imu`): the parsed double times the factor, narrowed to float once. The CSV library's own
+     decimal parser is not correctly rounded, so the result can be one float step away from a copy of the recording
+     whose column was multiplied (about 179 of 183137 Livox 4 samples at 1.004, by an emulation). A window capture
+     holds the scaled data: `--replay` with another factor does not rescale.
      The chunks are merged and sorted by time.
    - `points_per_file`: `Point3Di` per chunk, sorted by `timestamp` (`std::sort`, not stable), in the sensor frame
      shifted by the lever arm (translation only, `load_point_cloud`). The xy radius filter acts on the raw point,
@@ -157,6 +163,11 @@ From `python tools/function_sizes.py src --min 80` (2026-11-18):
 `run_consistency` there is the back-end's.
 
 ## Experiments
+
+- **2026-11-19** `gyro_scale_x/y/z` added (change `gyro-scale-correction`, branch commit 0c49c59): defaults bit-identical
+  (step checks; 44_short differs only in the saved settings file's new section). The Livox gyro reads yaw about 0.4 %
+  low (stage 8, `livox4-passage-and-flyaway` tasks 3.5 / 3.11); confirmation runs of the Livox value are task 2 of the
+  change.
 
 - **2026-11-16** Dynamic AHRS gain (0 while |a| outside 0.9–1.1 g), made effective by e41bd08, on Livox 3 with Huber 3 +
   information scales 0.1: same odometry, loop-closure corrections up to 1.48 m (0.33 m without), route 355 vs 313 m.

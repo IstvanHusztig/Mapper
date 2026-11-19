@@ -152,6 +152,7 @@
   <a class="indent" href="#p-origin">first_node_prior</a>
   <a class="indent" href="#p-mmc">motion_model_correction</a>
   <a class="indent" href="#p-ahrs">madgwick_filter</a>
+  <a class="indent" href="#p-calibration">sensor_calibration</a>
   <a class="indent" href="#p-ext">lidar_imu_extrinsics</a>
   <a class="indent" href="#p-imu">imu_translation</a>
   <a class="indent" href="#p-loop">loop_closure</a>
@@ -473,6 +474,7 @@ by file. <span class="more">→ <a href="../tools/README.md">tools/README.md</a>
 <li>Points with timestamp 0 are dropped.</li>
 <li>Points whose <b>horizontal</b> distance √(x²+y²) in the sensor frame is below <code>filter_threshold_xy_inner</code> (the handle, your hand, the housing) or above <code>filter_threshold_xy_outer</code> are dropped.</li>
 <li>The points of each file are sorted by time. The IMU CSVs are read, merged and sorted by time.</li>
+<li>Each gyro axis is multiplied by its <b>scale factor</b> (<code>gyro_scale_x/y/z</code>, 1 = untouched) as the value is read, before anything else uses the gyro. A gyro that reads its rate a fraction of a percent too low makes every turn too short; the bias estimate then follows the turn rate and the heading drifts in every turn.</li>
 </ul>
 <div class="params"><span>filter_threshold_xy_inner</span><span>filter_threshold_xy_outer</span><span>lidar_imu_lever_arm_*</span></div>
 </li>
@@ -664,6 +666,12 @@ See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 <tr><td>use_remove_imu_bias_from_first_stationary_scan</td><td class="val">true</td><td>Subtract the median gyro of the first <code>startup_gyro_bias_nr_samples</code> samples, but only if they look stationary (variance below <code>startup_gyro_bias_max_variance_deg2_s2</code>). Usually skipped on handheld data. The online bias estimation covers it.</td></tr>
 <tr><td>startup_gyro_bias_nr_samples</td><td class="val">1000</td><td>The start-up gyro bias is the per-axis median of the first N IMU samples. Set N to about 1 s of the sensor's IMU rate (e.g. 200 for a 200 Hz IMU).</td></tr>
 <tr><td>startup_gyro_bias_max_variance_deg2_s2</td><td class="val">5.0 (°/s)²</td><td>If the summed per-axis gyro variance of those samples is above this value, the start is treated as movement ("Excessive movement detected") and the bias is 0.</td></tr>
+</table></div>
+
+<h3 id="p-calibration">[sensor_calibration]</h3>
+<div class="table-wrap"><table>
+<tr><th>Parameter</th><th>Value</th><th>Meaning</th></tr>
+<tr><td>gyro_scale_x / y / z</td><td class="val">1.0</td><td>Scale factor of each gyro axis (sensor frame), applied to the IMU values as they are read: the parsed value times the factor, narrowed to float once, the same as a recording whose gyro column was multiplied. 1.0 leaves the axis untouched. Sign of a wrong scale: the estimated gyro bias of that axis rises or falls with the turn rate (the bias absorbs part of the missing rate). A slow IMU clock gives the same sign; the factor corrects the data either way. The run logs <code>gyro scale x/y/z …</code> when a factor is set. A window capture holds the IMU data as loaded, so <code>--replay</code> with another factor does not rescale it.</td></tr>
 </table></div>
 
 <h3 id="p-ext">[lidar_imu_extrinsics]</h3>
