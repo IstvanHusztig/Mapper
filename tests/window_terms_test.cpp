@@ -434,6 +434,83 @@ TEST_CASE("window terms: the acceleration-offset prior's right-hand side is minu
     check_acc_gradient(u, k.state, term, {u.io, u.io + 1, u.io + 2}, 1e-6, 1e-5);
 }
 
+// imu_carry_joint_covariance (change honest-inertial-carry, design D2): one prior on (start velocity, offset) together
+TEST_CASE("window terms: the joint velocity-offset prior's right-hand side is minus half its cost's gradient")
+{
+    AccCase k;
+    make_acc_case(k);
+    // a cross block that keeps the 6x6 covariance positive definite ([[4, 0.5], [0.5, 1]] x a, x 1e-4) and is not symmetric
+    Eigen::Matrix3d a;
+    a << 1.0, 0.1, 0.0, 0.1, 1.2, 0.05, 0.0, 0.05, 0.8;
+    Eigen::Matrix3d asymmetric;
+    asymmetric << 0.0, 0.2, -0.1, 0.0, 0.0, 0.1, 0.0, 0.0, 0.0;
+    k.imu.velocity_offset_prior_cov = (0.5 * a + 0.1 * asymmetric) * 1e-4;
+    k.imu.joint_covariance = true;
+    rebuild_noise(k);
+    REQUIRE(k.noise.joint_prior);
+    const WindowUnknowns &u = k.unknowns;
+    const auto term = [&](WindowEquations &e, const AccState &s) { add_joint_velocity_offset_prior(e, k.noise, s.window, s.offset); };
+    const std::vector<int> columns = {u.iv, u.iv + 1, u.iv + 2, u.io, u.io + 1, u.io + 2};
+    check_acc_gradient(u, k.state, term, columns, 1e-6, 1e-5);
+
+    // the matrix on (iv, io) is the joint information; the cost is the residual's quadratic form
+    WindowEquations joint(u);
+    term(joint, k.state);
+    Eigen::Matrix<double, 6, 1> r;
+    r << k.noise.velocity_prior_mean - k.state.window.velocity.start, k.noise.offset_prior_mean - k.state.offset;
+    CHECK(joint.motion_cost == doctest::Approx(r.dot(k.noise.joint_prior_information * r)).epsilon(1e-12));
+    CHECK(joint.residuals == 6);
+    for (int p = 0; p < 6; p++)
+        for (int q = 0; q < 6; q++)
+            CHECK(joint.matrix(columns[p], columns[q]) == k.noise.joint_prior_information(p, q));
+    // the cross block matters: the velocity's right-hand side depends on the offset's residual
+    REQUIRE(k.noise.joint_prior_information.topRightCorner<3, 3>().cwiseAbs().maxCoeff() > 0.0);
+
+    // with the joint prior the two separate priors add nothing
+    WindowEquations separate(u);
+    add_start_velocity_prior(separate, k.noise, k.state.window);
+    add_acceleration_offset_prior(separate, k.noise, k.state.offset);
+    CHECK(separate.motion_cost == 0.0);
+    CHECK(separate.residuals == 0);
+    CHECK(separate.rhs.cwiseAbs().maxCoeff() == 0.0);
+}
+
+TEST_CASE("window terms: the joint velocity-offset prior with a zero cross block equals the two separate priors")
+{
+    AccCase k;
+    make_acc_case(k);
+    const WindowUnknowns &u = k.unknowns;
+    const auto all_priors = [&](WindowEquations &e)
+    {
+        add_start_velocity_prior(e, k.noise, k.state.window);
+        add_acceleration_offset_prior(e, k.noise, k.state.offset);
+        add_joint_velocity_offset_prior(e, k.noise, k.state.window, k.state.offset);
+    };
+    WindowEquations separate(u);
+    all_priors(separate);
+    REQUIRE_FALSE(k.noise.joint_prior);
+    k.imu.joint_covariance = true; // velocity_offset_prior_cov stays zero
+    rebuild_noise(k);
+    REQUIRE(k.noise.joint_prior);
+    WindowEquations joint(u);
+    all_priors(joint);
+
+    CHECK(joint.residuals == separate.residuals);
+    CHECK(joint.motion_cost == doctest::Approx(separate.motion_cost).epsilon(1e-9));
+    const double rhs_scale = separate.rhs.cwiseAbs().maxCoeff();
+    REQUIRE(rhs_scale > 0.0);
+    CHECK((joint.rhs - separate.rhs).cwiseAbs().maxCoeff() <= 1e-9 * rhs_scale);
+    const std::vector<int> columns = {u.iv, u.iv + 1, u.iv + 2, u.io, u.io + 1, u.io + 2};
+    double matrix_scale = 0.0, matrix_difference = 0.0;
+    for (int p : columns)
+        for (int q : columns)
+        {
+            matrix_scale = std::max(matrix_scale, std::abs(separate.matrix(p, q)));
+            matrix_difference = std::max(matrix_difference, std::abs(joint.matrix(p, q) - separate.matrix(p, q)));
+        }
+    CHECK(matrix_difference <= 1e-9 * matrix_scale);
+}
+
 namespace
 {
     // imu_edges_follow_state: a turning window of 30 nodes about 2 ms apart (uneven), with the accelerometer, whose guess
