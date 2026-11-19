@@ -82,6 +82,7 @@ void WindowProblem::take_covariance(const Eigen::MatrixXd &cols)
     {
         acc_offset_cov_ = cols.block<3, 3>(unknowns_.io, unknowns_.io - n_pose_params);
         window_.velocity.end_covariance = cols.block<3, 3>(unknowns_.ie, unknowns_.ie - n_pose_params);
+        window_.velocity.end_offset_covariance = cols.block<3, 3>(unknowns_.ie, unknowns_.io - n_pose_params);
     }
 }
 

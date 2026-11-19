@@ -1492,3 +1492,93 @@ TEST_CASE("window term table: in a corridor the cells' in-plane information carr
             }
         }
 }
+
+// The joint covariance of end velocity and acceleration offset (honest-inertial-carry, D2): take_covariance keeps the end
+// velocity's, the offset's and their cross block from the columns of the extra unknowns; a step taken back restores them.
+namespace
+{
+    struct JointCovarianceFixture
+    {
+        Options o;
+        Maps maps;
+        std::vector<Point3Di> points;
+        AccData acc;
+        Window w;
+        Eigen::Vector3d acc_offset = Eigen::Vector3d(0.001, -0.002, 0.0005);
+        Eigen::Matrix3d acc_offset_cov = Eigen::Matrix3d::Identity() * 1e-4;
+        NullLogger logger;
+        ScanToMapWorkspace workspace;
+
+        JointCovarianceFixture()
+        {
+            OdometryConfig c = test_config();
+            c.use_gyro_bias_estimation = true; // the bias columns come before the offset's
+            o = options_from(c);
+            const Scene s = room();
+            maps = build_maps(s, o.scan_to_map);
+            const std::vector<Eigen::Affine3d> truth = true_poses();
+            points = observe(s, truth);
+            make_acc_data(acc, truth, Eigen::Vector3d::Zero());
+            o.translation_imu = acc.imu;
+            o.translation_imu.acc = &acc.acc;
+            std::vector<Eigen::Affine3d> guess = truth;
+            for (int i = 0; i < n_nodes; i++)
+                guess[i].translation() += Eigen::Vector3d(0.03, -0.018, 0.009) * (double(i) / (n_nodes - 1));
+            w = make_window(guess);
+            w.velocity.start = w.velocity.end = o.translation_imu.velocity_prior_mean;
+        }
+    };
+}
+
+TEST_CASE("scan-to-map: the joint covariance of end velocity and offset is the dense inverse's block")
+{
+    JointCovarianceFixture f;
+    const WindowNoiseModel noise = build_window_noise_model(f.w, f.o.scan_to_map, f.o.motion_model, f.o.rotation, f.o.translation_imu, f.o.velocity_prior);
+    const WindowUnknowns &u = noise.unknowns;
+    REQUIRE(u.acc_term);
+    REQUIRE(u.estimate_bias);
+    WindowProblem problem(f.points, f.w, f.maps.indoor, f.maps.outdoor, f.o.scan_to_map, f.o.motion_model, f.o.rotation, f.o.translation_imu,
+                          noise, f.acc_offset, f.acc_offset_cov, f.logger, nullptr, nullptr, f.workspace);
+    // the undamped matrix at the guess, and the covariance the iteration takes at the same state (no step)
+    const Eigen::MatrixXd dense = Eigen::MatrixXd(problem.linearize(false).AtPA);
+    double delta = 0.0;
+    lm_iteration(problem, 5.0, false, false, false, delta, LmWorkspace{f.workspace.covariance, f.workspace.damped});
+    const Eigen::MatrixXd inverse = dense.ldlt().solve(Eigen::MatrixXd::Identity(dense.rows(), dense.cols()));
+
+    const Eigen::Matrix3d v_end = inverse.block<3, 3>(u.ie, u.ie);
+    const Eigen::Matrix3d offset = inverse.block<3, 3>(u.io, u.io);
+    const Eigen::Matrix3d cross = inverse.block<3, 3>(u.ie, u.io);
+    const double scale = std::max({v_end.cwiseAbs().maxCoeff(), offset.cwiseAbs().maxCoeff(), cross.cwiseAbs().maxCoeff()});
+    MESSAGE("joint block: v_end ", v_end.diagonal().transpose(), ", offset ", offset.diagonal().transpose(), ", cross ", cross.row(0));
+    REQUIRE(cross.cwiseAbs().maxCoeff() > 1e-6 * scale); // the cross block is not empty, so the check below means something
+    CHECK((f.w.velocity.end_covariance - v_end).cwiseAbs().maxCoeff() <= 1e-6 * scale);
+    CHECK((f.acc_offset_cov - offset).cwiseAbs().maxCoeff() <= 1e-6 * scale);
+    CHECK((f.w.velocity.end_offset_covariance - cross).cwiseAbs().maxCoeff() <= 1e-6 * scale);
+    // and the offset's with the end velocity is its transpose
+    CHECK((inverse.block<3, 3>(u.io, u.ie).transpose() - cross).cwiseAbs().maxCoeff() <= 1e-6 * scale);
+}
+
+TEST_CASE("scan-to-map: a step taken back restores the joint covariance of end velocity and offset")
+{
+    JointCovarianceFixture f;
+    const WindowNoiseModel noise = build_window_noise_model(f.w, f.o.scan_to_map, f.o.motion_model, f.o.rotation, f.o.translation_imu, f.o.velocity_prior);
+    REQUIRE(noise.unknowns.acc_term);
+    WindowProblem problem(f.points, f.w, f.maps.indoor, f.maps.outdoor, f.o.scan_to_map, f.o.motion_model, f.o.rotation, f.o.translation_imu,
+                          noise, f.acc_offset, f.acc_offset_cov, f.logger, nullptr, nullptr, f.workspace);
+    const LmWorkspace ws{f.workspace.covariance, f.workspace.damped};
+    double delta = 0.0;
+    // the accepted state: the guess, with its covariance
+    lm_iteration(problem, 5.0, false, true, true, delta, ws);
+    problem.accept_snapshot();
+    const Eigen::Matrix3d accepted_cross = f.w.velocity.end_offset_covariance;
+    const Eigen::Matrix3d accepted_v_end = f.w.velocity.end_covariance;
+    const Eigen::Matrix3d accepted_offset = f.acc_offset_cov;
+    // a step, then the covariance at the stepped state
+    REQUIRE(lm_iteration(problem, 5.0, true, false, false, delta, ws).applied);
+    lm_iteration(problem, 5.0, false, false, false, delta, ws);
+    REQUIRE(f.w.velocity.end_offset_covariance != accepted_cross); // the step changed the block
+    problem.restore_accepted();
+    CHECK(f.w.velocity.end_offset_covariance == accepted_cross); // bit for bit
+    CHECK(f.w.velocity.end_covariance == accepted_v_end);
+    CHECK(f.acc_offset_cov == accepted_offset);
+}

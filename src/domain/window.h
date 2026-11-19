@@ -22,6 +22,9 @@ struct VelocityState
     Eigen::Vector3d start = Eigen::Vector3d::Zero();              // [m/s]
     Eigen::Vector3d end = Eigen::Vector3d::Zero();                // [m/s]
     Eigen::Matrix3d end_covariance = Eigen::Matrix3d::Identity(); // [(m/s)^2]
+    // covariance of the end velocity (rows) with the window's acceleration offset (columns) [m/s * m/s^2]; with
+    // end_covariance and the offset's covariance the 6x6 joint block of (end velocity, offset)
+    Eigen::Matrix3d end_offset_covariance = Eigen::Matrix3d::Zero();
 };
 
 // one optimization window: consecutive trajectory nodes (one per IMU sample) and what the odometry estimates for them

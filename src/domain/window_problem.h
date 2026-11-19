@@ -2,7 +2,7 @@
 
 // A window's scan-to-map optimization as a problem for the Levenberg-Marquardt solver (lm_solver.h): it linearizes with
 // the term functions (ndt_term, motion_model_terms, accelerometer_term, the origin fix), takes the covariance of the
-// extra unknowns (gyro bias, acceleration offset, end velocity), applies a step to the window (window_solver.h) and keeps
+// extra unknowns (gyro bias, acceleration offset, end velocity, and the end velocity's covariance with the offset), applies a step to the window (window_solver.h) and keeps
 // snapshots of the window's state for the step check.
 
 #include "lm_solver.h"
