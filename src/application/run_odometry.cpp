@@ -132,8 +132,7 @@ namespace
 
     // imu_always_on: the start velocity prior (the previous window's end velocity, its covariance grown over the gap; in the first
     // window with the term zero if the recording starts at rest, else the previous window's velocity with imu_velocity_initial_sigma_mps)
-    // and the window's velocity unknowns started from it. With imu_carry_joint_covariance the prior's covariance with the
-    // offset too; it stays zero where the prior does not come from the previous window
+    // and the window's velocity unknowns started from it
     void prepare_velocity_state(Window &window, const PreviousVelocity &previous, bool at_rest, const OdometryRunSetup &setup,
                                 const WindowLoopCarry &carry, AccTerm &t, const OdometryConfig &params)
     {
@@ -147,6 +146,8 @@ namespace
             const double gap = std::max(window.timestamps.front().first - carry.velocity_time_s, 0.0);
             const double density = params.imu_accel_noise_density_mps2_sqrt_hz, floor = params.imu_accel_floor_sigma_mps2;
             mean = carry.velocity_mean;
+            // with imu_carry_joint_covariance also the prior's covariance with the offset; it stays zero (the AccTerm's
+            // default) where the prior does not come from the previous window
             if (t.options.joint_covariance)
             {
                 // imu_carry_joint_covariance: (end velocity, offset) carried together, moved over the gap (the velocity
