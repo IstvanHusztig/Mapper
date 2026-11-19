@@ -35,6 +35,11 @@ struct OdometryConfig
     bool fusionConventionNed = false;
     double ahrs_gain = 0.05;
 
+    // [sensor_calibration] gyro scale factors per sensor axis, applied as the IMU is read (ImuCalibration); 1 = off
+    double gyro_scale_x = 1.0;
+    double gyro_scale_y = 1.0;
+    double gyro_scale_z = 1.0;
+
     //lidar odometry control
     bool use_motion_from_previous_step = true;
     int nr_iter = 100;

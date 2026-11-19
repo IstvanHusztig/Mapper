@@ -35,7 +35,7 @@ public:
     // complete LiDAR + IMU pairs
     virtual std::size_t chunk_count() const = 0;
     // may be called from several threads at once
-    virtual Imu read_imu(std::size_t chunk, Logger &logger) = 0;
+    virtual Imu read_imu(std::size_t chunk, const ImuCalibration &calibration, Logger &logger) = 0;
     virtual std::vector<Point3Di> read_points(std::size_t chunk, const PointFilter &filter, Logger &logger) = 0;
 };
 

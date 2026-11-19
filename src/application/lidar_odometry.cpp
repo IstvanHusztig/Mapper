@@ -32,9 +32,15 @@ bool load_data(RecordingSource& recording,
     // Each thread loads into its own local vector
     std::vector<Imu> imuChunks(minSize);
 
+    ImuCalibration calibration;
+    calibration.gyro_scale = Eigen::Vector3d(params.gyro_scale_x, params.gyro_scale_y, params.gyro_scale_z);
+    if (!calibration.is_identity())
+        log_info(logger) << "gyro scale x/y/z " << std::setprecision(9) << calibration.gyro_scale.x() << " " << calibration.gyro_scale.y()
+                         << " " << calibration.gyro_scale.z() << " (applied to the IMU values as read)";
+
     parallel.for_each_index(minSize, [&](size_t i)
         {
-            imuChunks[i] = recording.read_imu(i, logger);
+            imuChunks[i] = recording.read_imu(i, calibration, logger);
         });
 
     // Merge all chunks sequentially at the end

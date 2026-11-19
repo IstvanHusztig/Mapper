@@ -21,9 +21,9 @@ bool RecordingFolderSource::open(Logger &logger)
     return true;
 }
 
-Imu RecordingFolderSource::read_imu(std::size_t chunk, Logger &logger)
+Imu RecordingFolderSource::read_imu(std::size_t chunk, const ImuCalibration &calibration, Logger &logger)
 {
-    return load_imu(files_.csv[chunk].c_str(), 0, logger);
+    return load_imu(files_.csv[chunk].c_str(), 0, logger, calibration);
 }
 
 std::vector<Point3Di> RecordingFolderSource::read_points(std::size_t chunk, const PointFilter &filter, Logger &logger)
@@ -31,7 +31,7 @@ std::vector<Point3Di> RecordingFolderSource::read_points(std::size_t chunk, cons
     return load_point_cloud(files_.laz[chunk].c_str(), filter.omit_zero_timestamp, filter.xy_inner, filter.xy_outer, filter.lever_arm, logger);
 }
 
-Imu load_imu(const std::string &imu_file, int imuToUse, Logger &logger)
+Imu load_imu(const std::string &imu_file, int imuToUse, Logger &logger, const ImuCalibration &calibration)
 {
     Imu all_data;
 
@@ -82,9 +82,9 @@ Imu load_imu(const std::string &imu_file, int imuToUse, Logger &logger)
                     double timestamp = row["timestamp"].get<double>();
                     double timestampUnix = row["timestampUnix"].get<double>();
                     Eigen::Vector3f gyr;
-                    gyr.x() = row["gyroX"].get<double>();
-                    gyr.y() = row["gyroY"].get<double>();
-                    gyr.z() = row["gyroZ"].get<double>();
+                    gyr.x() = calibration.gyro(0, row["gyroX"].get<double>());
+                    gyr.y() = calibration.gyro(1, row["gyroY"].get<double>());
+                    gyr.z() = calibration.gyro(2, row["gyroZ"].get<double>());
                     Eigen::Vector3f acc;
                     acc.x() = row["accX"].get<double>();
                     acc.y() = row["accY"].get<double>();
@@ -118,9 +118,9 @@ Imu load_imu(const std::string &imu_file, int imuToUse, Logger &logger)
                     if (data[0] > 0 && imuId == imuToUse)
                     {
                         Eigen::Vector3f gyr;
-                        gyr.x() = data[1];
-                        gyr.y() = data[2];
-                        gyr.z() = data[3];
+                        gyr.x() = calibration.gyro(0, data[1]);
+                        gyr.y() = calibration.gyro(1, data[2]);
+                        gyr.z() = calibration.gyro(2, data[3]);
 
                         Eigen::Vector3f acc;
                         acc.x() = data[4];

@@ -4,7 +4,10 @@
 #include "recording_files.h"
 #include "recording_folder_source.h"
 
+#include <array>
 #include <filesystem>
+#include <fstream>
+#include <iomanip>
 #include <string>
 #include <vector>
 
@@ -91,5 +94,40 @@ TEST_CASE("loading points: the xy filter drops points without a return, written 
     REQUIRE(loaded.size() == 1); // only (1, 0.5, 0.2): the origin and (0.1, 0.1) are inside 0.35 m, (30, 0) is beyond 25 m
     CHECK(loaded[0].point.x() == doctest::Approx(1.0).epsilon(1e-3));
     CHECK(loaded[0].point.y() == doctest::Approx(0.5).epsilon(1e-3));
+    fs::remove(file);
+}
+
+TEST_CASE("load_imu scales the gyro as parsed, one rounding to float, axes at 1 untouched")
+{
+    // values as the Livox recorder writes them (17 significant digits)
+    const std::vector<std::array<double, 3>> gyro = {{0.00301514565944672, -0.01316380687057972, -0.00219087721779943},
+                                                     {-0.00337643921375275, 0.00707621872425079, -0.00645193504169583},
+                                                     {0.51234567890123456, -1.2345678901234567, 2.3456789012345678}};
+    const fs::path file = test_folder() / "imu_scale.csv";
+    {
+        std::ofstream out(file);
+        out << "gyroX gyroY gyroZ accX accY accZ imuId timestamp timestampUnix\n";
+        out << std::setprecision(17);
+        for (std::size_t i = 0; i < gyro.size(); ++i)
+            out << gyro[i][0] << " " << gyro[i][1] << " " << gyro[i][2] << " 0.1 0.2 0.97 0 " << (i + 1) * 2000000 << " "
+                << 1794586153591994709LL + (long long)i * 2000000 << "\n";
+    }
+    NullLogger logger;
+    const Imu plain = load_imu(file.string(), 0, logger);
+    ImuCalibration calibration;
+    calibration.gyro_scale = Eigen::Vector3d(1.0, 1.0, 1.004);
+    const Imu scaled = load_imu(file.string(), 0, logger, calibration);
+    REQUIRE(plain.size() == gyro.size());
+    REQUIRE(scaled.size() == gyro.size());
+    for (std::size_t i = 0; i < gyro.size(); ++i)
+    {
+        CHECK(plain[i].gyro.x() == static_cast<float>(gyro[i][0]));
+        CHECK(plain[i].gyro.z() == static_cast<float>(gyro[i][2]));
+        CHECK(scaled[i].gyro.x() == plain[i].gyro.x());
+        CHECK(scaled[i].gyro.y() == plain[i].gyro.y());
+        CHECK(scaled[i].gyro.z() == static_cast<float>(gyro[i][2] * 1.004));
+        CHECK(scaled[i].acc == plain[i].acc);
+        CHECK(scaled[i].timestamps == plain[i].timestamps);
+    }
     fs::remove(file);
 }

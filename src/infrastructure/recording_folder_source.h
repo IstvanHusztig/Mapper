@@ -16,7 +16,7 @@ public:
 
     bool open(Logger &logger) override;
     std::size_t chunk_count() const override { return files_.pair_count(); }
-    Imu read_imu(std::size_t chunk, Logger &logger) override;
+    Imu read_imu(std::size_t chunk, const ImuCalibration &calibration, Logger &logger) override;
     std::vector<Point3Di> read_points(std::size_t chunk, const PointFilter &filter, Logger &logger) override;
 
     const RecordingFiles &files() const { return files_; }
@@ -31,8 +31,9 @@ private:
 //! @note imu_id is an optional column, if not present, it is assumed that all data comes from the same IMU.
 //! @param imu_file - path to file with IMU data
 //! @param imuToUse - id number of IMU to use, the same index as in pointcloud return by @ref load_point_cloud
+//! @param calibration - gyro scale applied to the parsed values before they are stored (see ImuCalibration)
 //! @return the samples ((timestamp, timestampUnix), angular_velocity, linear_acceleration)
-Imu load_imu(const std::string &imu_file, int imuToUse, Logger &logger);
+Imu load_imu(const std::string &imu_file, int imuToUse, Logger &logger, const ImuCalibration &calibration = {});
 
 //! This function load point cloud from LAS/LAZ file.
 //! Each point is shifted by the LiDAR-IMU lever arm.

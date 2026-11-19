@@ -72,7 +72,8 @@ std::uint64_t odometry_settings_hash(const OdometryConfig &config)
     // The [robust_lidar_odometry] settings, removed the same day, were always hashed: snapshots written before their
     // removal are refused.
     static const std::set<std::string> added_later = {
-        "holdout_block_s", "lm_step_check", "ndt_huber_cutoff", "ndt_information_scale", "imu_position_information_scale"};
+        "holdout_block_s", "lm_step_check", "ndt_huber_cutoff", "ndt_information_scale", "imu_position_information_scale",
+        "gyro_scale_x", "gyro_scale_y", "gyro_scale_z"};
     static const OdometryConfig defaults{};
 
     Hash h;
