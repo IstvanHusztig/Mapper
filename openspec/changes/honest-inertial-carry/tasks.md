@@ -56,7 +56,7 @@ and the two guards.
 
 ## 4. Layer 2: the joint covariance (solver J3 in region-b, then noise-budget and inertial J4 in region-a)
 
-- [ ] 4.1 Solver: `take_covariance` hands out the 6×6 block of end velocity and offset, kept in the window problem's
+- [x] 4.1 Solver: `take_covariance` hands out the 6×6 block of end velocity and offset, kept in the window problem's
   saved state. Verify: unit test against a dense inverse; a rejected step restores the block; results unchanged while
   nobody reads the cross block.
 - [ ] 4.2 Noise-budget: the joint prior information on start velocity and offset in `WindowNoiseModel`, with the

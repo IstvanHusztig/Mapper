@@ -23,8 +23,9 @@ window verdict. It knows no term's maths; it owns the order in which a window's 
 **Gives**
 - The window's poses, velocities (`Window::velocity`), gyro bias (`Window::gyro_bias`) and acceleration offset, changed in
   place, and the covariances of the extra unknowns (`take_covariance`: the bias and end-velocity covariances into
-  `Window`, the offset covariance into `WindowProblem::acc_offset_cov_`) that the inertial region carries to the next
-  window.
+  `Window`, the end velocity's covariance with the offset into `Window::velocity.end_offset_covariance` (rows end velocity,
+  columns offset; with the two others the 6×6 joint block), the offset covariance into `WindowProblem::acc_offset_cov_`)
+  that the inertial region carries to the next window.
 - `WindowOptimization` (an `LmResult`: last iteration, delta, damping, rejected steps, `LmStop`), the counts of failed
   solves and big-jump nodes (warnings in `solve_window`; `silent events` at the end of the run).
 - `WindowVerdict` (`judge_window`), pushed to `WindowLoopCarry::verdicts`; `summarize_run` and `log_run_verdict` at the
@@ -132,6 +133,11 @@ None (`python tools/function_sizes.py src --min 80`, 2026-11-18: no function of 
 
 ## Experiments
 
+- **2026-11-19** Joint covariance of end velocity and offset (change `honest-inertial-carry`, job J3, design D2):
+  `take_covariance` also keeps cov(end velocity, offset) in `VelocityState::end_offset_covariance` (rows `ie`, columns
+  `io`); the saved State restores it with `window_.velocity`. It matches a dense inverse within 1e-6 of the block's largest
+  entry on the synthetic room, a step taken back restores it bit for bit, step checks identical (nobody reads it yet).
+  Not in the window records of `binary_io.h`; the carry's copy is in the capture format 2. Merged 820ee9e.
 - **2026-11-17** Verdict readings on full runs of 44, Livox 3 and Livox 4; all limits kept by the user. Bent and fast
   mark Livox 4's flyaway (76 of 85 bent, all 124 fast windows in 200-280 s), not its passage; bias high in 634 of 689
   windows of 44 (L2 gyro); velocity chi² triggers on all three (Livox 3 weak windows median 35).
