@@ -247,7 +247,7 @@ namespace
         {
             WindowEquations e(u);
             e.with_cost = true;
-            add_motion_edges(e, u, in.window, in.motion_model, in.rotation_options, *w);
+            add_motion_edges(e, u, in.window, in.motion_model, in.rotation_options, in.translation_imu_options, in.acc_offset, *w);
             rows.push_back(reduce.row(name, e, e.motion_cost, 3 * edges));
         }
     }

@@ -1026,7 +1026,11 @@ namespace
             // the guess (and so the motion model) follows the accelerometer from the start velocity prior; a window at rest
             // keeps its motionless guess
             if (w.acc_term.options.enabled && !w.at_rest)
-                integrate_window_translations(window, window.velocity.start, carry.acc_gravity, w.acc_term.options.to_mps2);
+            {
+                w.acc_term.options.velocity_guess = window.velocity.start;
+                w.acc_term.options.guess_integrated =
+                    integrate_window_translations(window, window.velocity.start, carry.acc_gravity, w.acc_term.options.to_mps2);
+            }
         }
         w.velocity_prior = VelocityPrior{w.previous.use, w.previous.velocity};
 

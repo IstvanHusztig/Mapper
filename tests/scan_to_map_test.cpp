@@ -1273,6 +1273,12 @@ TEST_CASE("window term table: the rows add up to the window's complete equations
     make_acc_data(acc, truth, Eigen::Vector3d::Zero());
     MotionModelRotationOptions rotation = o.rotation;
     rotation.estimate_bias = true;
+    SUBCASE("edges at the guess") {}
+    SUBCASE("edges following the start velocity (imu_edges_follow_state)")
+    {
+        acc.imu.edges_follow_state = acc.imu.guess_integrated = true;
+        acc.imu.velocity_guess = Eigen::Vector3d(0.9, 0.05, -0.02);
+    }
 
     const WindowTermTable t = table_of(points, w, maps, o, acc.imu, rotation);
     REQUIRE(t.failure.empty());
@@ -1291,7 +1297,7 @@ TEST_CASE("window term table: the rows add up to the window's complete equations
     WindowEquations all(u);
     const NdtSums ndt = sum_ndt_point_terms(all, w, points, maps.indoor, maps.outdoor, o.scan_to_map, noise.ndt, false, false, nullptr);
     add_projected_ndt_blocks(all, ndt, noise.ndt);
-    add_motion_edge_terms(all, noise, w, o.motion_model, rotation);
+    add_motion_edge_terms(all, noise, w, o.motion_model, rotation, acc.imu, offset);
     add_gyro_bias_prior(all, noise, w);
     add_velocity_continuity(all, noise, w);
     const bool end_tied = add_acceleration_terms(all, noise, w, acc.imu, offset);
