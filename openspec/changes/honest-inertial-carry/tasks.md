@@ -59,13 +59,14 @@ and the two guards.
 - [x] 4.1 Solver: `take_covariance` hands out the 6×6 block of end velocity and offset, kept in the window problem's
   saved state. Verify: unit test against a dense inverse; a rejected step restores the block; results unchanged while
   nobody reads the cross block.
-- [ ] 4.2 Noise-budget: the joint prior information on start velocity and offset in `WindowNoiseModel`, with the
+- [x] 4.2 Noise-budget: the joint prior information on start velocity and offset in `WindowNoiseModel`, with the
   transition over the time between windows; inertial: the prior term on both unknowns, the carry of the cross block
   (`prepare_acc_term`, `prepare_velocity_state`, `update_acc_term_after_window`), a zero cross block in the fallbacks,
   behind `imu_carry_joint_covariance`. Verify: the N-blind-windows test and the fifteen-windows scenario of the spec;
   off: bit-identical.
 - [ ] 4.3 Replays with layers 1 + 2 and one full Livox 3 run as 3.2. Hand-back; orchestrator's checks and merge as
-  3.3; the numbers to the user.
+  3.3; the numbers to the user. (2026-11-20: replays done, merged 164e9c8; `experiments/regions/inertial/
+  2026-11-19-joint-carry/summary.md`; the full Livox 3 run is still owed.)
 
 ## 5. Layer 3: measured first (noise-budget and inertial, J6)
 

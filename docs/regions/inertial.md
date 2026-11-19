@@ -147,6 +147,13 @@ None: no function of this region is above 80 lines (`python tools/function_sizes
   0.81 -> 0.34 m/s), and end stretch / passage end positions 0.69 / 0.30 m from today (today's spread 0.02). Full Livox 3
   run: within 0.13 m of today (only after its blind stretch at 214 s), no flags, chi2 median 26 (25).
   `experiments/stage8/carry/livox3_efs/`.
+- 2026-11-20 Layer 2 of `honest-inertial-carry` (`imu_carry_joint_covariance`, 3d6c03f + 85057e4, merged 164e9c8, off:
+  identical): (end velocity, offset) carried with their cross covariance into one 6x6 prior. Tests: a blind chain's
+  sigma follows sigma_e x elapsed time within 1 %. Replays with layers 1+2 (`experiments/regions/inertial/
+  2026-11-19-joint-carry/summary.md`, reviewed): blind sigma grows ~linearly (lower 5.9 -> 90.6 mm/s, p 1.03); the exit
+  correction stays ~1.2 m/s (12.3 sigma, today 6.6); the window after it 87.5 sigma (sigma back to 5.5 mm/s after one
+  seen window); lower speed up to 1.86 m/s; end stretch 1.64-2.38 m and passage 0.06 m from today (spread 0.02). Open:
+  the sigma collapse after the exit; the end-stretch shift.
 - 2026-11-19 Code review of the region (the owner agent, reading only; stage 8). Findings, none in the tracker yet:
   (1) the rotation edges measure the orientation filter's output, not the gyro: `compute_step_1`
   (`lidar_odometry.cpp:334-341`) makes the nodes and `motion_model_poses` from Fusion's orientation and
