@@ -18,15 +18,17 @@ files they name;** the orchestrator adds them when it integrates a hand-back.
 
 ## 2. The exact control: testing the instruments (verification)
 
-- [ ] 2.1 A linear-Gaussian chain written in the test (increments, absolute measurements, a prior): solved as one
+- [x] 2.1 A linear-Gaussian chain written in the test (increments, absolute measurements, a prior): solved as one
   batch and by exact sequential elimination of the same factors; the normalised-error sum and its chi-square
   quantiles, checked on inputs with known values; a function that gives the smallest number of runs meeting a power
   target for a prespecified variance multiplier and its reciprocal, with the tail probabilities corrected for the
   number of primary comparisons. Verify: batch and sequential agree to rounding in mean and covariance; the honest
   chain lies inside its interval; with the reported covariance multiplied by 1.5 and by its reciprocal, on a state
   that the scaled quantity dominates and over the number of runs the function gives, the test rejects low and high.
-- [ ] 2.2 Orchestrator: integrate (CMake, ownership, in the commit that adds the files). Verify: `python
-  tools/region_owners.py` and `ctest` pass.
+- [x] 2.2 Orchestrator: integrate (CMake, ownership, in the commit that adds the files). Verify: `python
+  tools/region_owners.py` and `ctest` pass. (2026-11-20: c345927, merged d763f7f; batch vs sequential 2e-15; honest
+  chain 2 of 200 seeds rejected at 1 %; M = 96 runs of 2 dof for 1.5, measured rejection 88.5 % / 93 %; q averages
+  1.002, the old form 0.501; 5 cases 0.5 s; step checks ALL HOLD on c345927.)
 
 ## 3. The record and the readings (noise-budget, solver, orchestrator; results unchanged)
 

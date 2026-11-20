@@ -131,6 +131,13 @@ Not applicable to the Python tools. The region's C++ (`tools/cut_recording/cut_r
 
 ## Experiments
 
+- **2026-11-20, the exact control** (c345927, merged d763f7f; `consistency-harness` task 2.1):
+  `tests/truth_statistics.{h,cpp}` (`normalised_error`, chi-square cdf / quantile / interval,
+  `power_of_variance_ratio`, `runs_for_power`, a platform-stable `Rng`) and `tests/truth_statistics_test.cpp` (a
+  6-node, 2-state linear-Gaussian chain). Batch and Kalman elimination of the same factors agree to 2e-15; the honest
+  sum lies inside the 1 % interval (2 of 200 seeds rejected); for a variance multiplier of 1.5, one comparison, 1 %,
+  90 % power: M = 96 runs of 2 dof, measured rejection 88.5 % (claim x1.5) and 93 % (claim /1.5); the normalised move
+  averages 1.002 (scalar) and 1.001 (3 unknowns), the old form 0.501. The 5 cases take 0.5 s; step checks ALL HOLD.
 - **2026-11-18, the kit in the repo** (e17247e): a replay's peak memory is 2.9× its capture file on both captures (0.2 GB
   for 44_short 20–40 s, 1.6 GB and 5.5 cores for Livox 3 100–130 s). `docs/code-split-and-region-agents-plan.md` stage 7.
 - **2026-11-12, tool validation:** the verification tests pass (10, then 11 with the shipped-TOML case); the snapshot

@@ -201,7 +201,9 @@ descriptively and nothing is asserted.
 - **Direction.** A claimed sigma that is too small (a ceiling against a growing error) drives the value **up**.
 - **Alternative and size.** A prespecified variance multiplier (1.5) and its reciprocal; tail probabilities corrected
   for the number of primary comparisons; the smallest M that meets a 90 % power target in both directions. For one
-  two-sided test at 1 %, 200 degrees of freedom give about 94 % power for 1.5 and 92 % for its reciprocal. With 6
+  two-sided test at 1 %, 200 degrees of freedom give 91.8 % power when the claimed covariance is 1.5 times the true
+  one and 93.8 % when it is 1/1.5 of it (measured by the exact control, task 2.1; an earlier draft had the labels
+  swapped). With 2 degrees of freedom per run that needs M = 96 runs. With 6
   runs the scalar interval per degree of freedom is [0.11, 3.09]: a smoke check, not an honesty test.
 - **Before sampling:** the instant, the axis, the primary comparisons, the decision rule, the numerical tolerances
   and the individual term comparisons are written down. Successive windows of one run are not pooled as independent
