@@ -480,3 +480,13 @@ python tools/window_terms.py <window_terms.csv> [--from S] [--to S] [--state res
   motion edges' translation and rotation sigmas, smallest / median / largest per axis, the velocity-continuity and
   accelerometer sigmas, the three priors' sigmas, the zero-velocity sigma, the NDT scale and Huber cutoff; empty where
   the window has no such weight).
+
+## build_docs_index.py
+
+Builds the documentation's search index (`docs/search-index.js`, read by `docs/search.html`) and the indexed contents page (`docs/contents.html`, grouped as in `docs/README.md`, with each page's main sections). Standard library only; output is deterministic.
+
+    python tools/build_docs_index.py            rebuild both files
+    python tools/build_docs_index.py --fix-ids  also add ids to h2/h3 headings that have none
+    python tools/build_docs_index.py --check    exit 1 if a file is stale, an anchor is missing or a page is not in docs/README.md
+
+Run it after adding or changing a page. It also prints local links of the HTML pages whose file or anchor is missing. The Hungarian pages (`docs/hu/`) are not indexed yet.

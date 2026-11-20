@@ -89,7 +89,7 @@
 </head>
 <body>
 <main>
-<p class="docs-nav" style="font-size:13px;margin:0 0 8px;color:var(--muted)"><a href="index.html">dMapper docs</a> › Plans and research · <a href="index.html#documents">All documents</a></p>
+<p class="docs-nav" style="font-size:13px;margin:0 0 8px;color:var(--muted)"><a href="index.html">dMapper docs</a> › Plans and research · <a href="index.html#documents">All documents</a> · <a href="contents.html">Contents</a> · <a href="search.html">Search</a></p>
 <h1>Machine learning for dMapper: a learning guide</h1>
 <p class="lead">A guided course for learning machine learning on dMapper's own problems, started 2026-10-27. <a href="#path">Part I</a> is the learning path: nine modules to follow in order, each with something to read or watch, something to do and questions to check yourself. <a href="#theory">Part II</a> holds the explanations the modules point to (T1–T16). <a href="#part3">Part III</a> is the research roadmap: how these methods could improve dMapper later. The <a href="#journal">journal</a> at the end records what was learned, session by session. Statements marked <span class="inf">(inference)</span> are reasoning, not taken from a source or a measurement.</p>
 <p class="terms-line" style="font-size:14px;color:var(--muted)">Terms used here: <a href="index.html#t-window">window</a>, <a href="index.html#t-term">term</a>, <a href="index.html#t-residual">residual</a>, <a href="index.html#t-sigma">sigma and information</a>, <a href="index.html#t-cost">cost</a>, <a href="index.html#t-lm">LM iteration</a>, <a href="index.html#t-gyro-bias">gyro bias</a>, <a href="index.html#t-verdict">window verdict</a>. All basic terms: the guide's <a href="index.html#fundamentals">Fundamentals</a>.</p>
@@ -114,7 +114,7 @@ explanations in <a href="#theory">Part II</a> (T1–T16). Part III, the dMapper 
 <p class="meta">Tools: M1–M4 need only numpy and matplotlib (installed). Install scikit-learn before M5, PyTorch before M6 and Optuna before M7; the commands are in <a href="#t15">T15</a>.</p>
 
 <div class="module" id="m1">
-<h3>M1 · The big picture: learning is fitting</h3>
+<h3 id="m1--the-big-picture-learning-is-fitting">M1 · The big picture: learning is fitting</h3>
 <dl>
 <dt>Goal</dt><dd>See that training a model is an optimization, the same kind of computation as dMapper's odometry, and what makes it different.</dd>
 <dt>Read</dt><dd><a href="#t1">T1</a>, <a href="#t2">T2</a>. Optional: Goodfellow et al., <i>Deep Learning</i>, chapter 5 (machine learning basics).</dd>
@@ -163,7 +163,7 @@ product or another nonlinearity. Networks learn such nonlinearities.</details>
 </div>
 
 <div class="module" id="m2">
-<h3>M2 · What a network computes</h3>
+<h3 id="m2--what-a-network-computes">M2 · What a network computes</h3>
 <dl>
 <dt>Goal</dt><dd>Compute a network's output by hand, so it stops being a black box.</dd>
 <dt>Watch, then read</dt><dd>3Blue1Brown, "But what is a neural network?" (chapter 1 of the series), then <a href="#t3">T3</a>.</dd>
@@ -189,7 +189,7 @@ With equal weights, every neuron of a layer computes the same thing and receives
 </div>
 
 <div class="module" id="m3">
-<h3>M3 · Loss and gradient descent</h3>
+<h3 id="m3--loss-and-gradient-descent">M3 · Loss and gradient descent</h3>
 <dl>
 <dt>Goal</dt><dd>Understand what the loss measures, and how the weights move to make it smaller.</dd>
 <dt>Watch, then read</dt><dd>3Blue1Brown, "Gradient descent, how neural networks learn" (chapter 2), then <a href="#t4">T4</a> and <a href="#t5">T5</a>.</dd>
@@ -211,7 +211,7 @@ costs only a few forward passes. For tiny networks on a full dataset, second-ord
 </div>
 
 <div class="module" id="m4">
-<h3>M4 · Backpropagation</h3>
+<h3 id="m4--backpropagation">M4 · Backpropagation</h3>
 <dl>
 <dt>Goal</dt><dd>Know exactly how the gradient of every weight is computed. This is the core of all of deep learning.</dd>
 <dt>Watch, then read</dt><dd>3Blue1Brown, "What is backpropagation really doing?" and "Backpropagation calculus" (chapters 3–4), then <a href="#t6">T6</a>.
@@ -246,7 +246,7 @@ The backward pass needs to know where the ReLU was active (z &gt; 0), and the la
 </div>
 
 <div class="module" id="m5">
-<h3>M5 · Generalisation: fooling yourself, and how not to</h3>
+<h3 id="m5--generalisation-fooling-yourself-and-how-not-to">M5 · Generalisation: fooling yourself, and how not to</h3>
 <dl>
 <dt>Goal</dt><dd>Learn to measure honestly. With dMapper's data, this matters more than any choice of model.</dd>
 <dt>Read</dt><dd><a href="#t7">T7</a>. Optional: Goodfellow et al., chapter 7 (regularisation); Hastie et al., chapter 7 (model assessment).</dd>
@@ -269,7 +269,7 @@ Once, at the very end. Anything chosen after looking at it has been tuned on it,
 </div>
 
 <div class="module" id="m6">
-<h3>M6 · PyTorch: what the tool does for you</h3>
+<h3 id="m6--pytorch-what-the-tool-does-for-you">M6 · PyTorch: what the tool does for you</h3>
 <dl>
 <dt>Goal</dt><dd>Use PyTorch knowing what it does behind the scenes, and why it is worth its install size.</dd>
 <dt>Read</dt><dd><a href="#t8">T8</a>, then the PyTorch tutorial "Learn the Basics" (tensors, autograd, building a model, optimization). If you watched Karpathy's micrograd video in M4, you have already built a tiny PyTorch yourself.</dd>
@@ -290,7 +290,7 @@ on (that was M4), and it isn't needed to <i>use</i> a trained model: the C++ for
 </div>
 
 <div class="module" id="m7">
-<h3>M7 · Trees and Bayesian optimization</h3>
+<h3 id="m7--trees-and-bayesian-optimization">M7 · Trees and Bayesian optimization</h3>
 <dl>
 <dt>Goal</dt><dd>Know the two classical methods that the roadmap ranks above neural networks for dMapper's current situation.</dd>
 <dt>Watch, then read</dt><dd>StatQuest (Josh Starmer) on decision trees and on gradient boosting (regression), then <a href="#t9">T9</a> and <a href="#t10">T10</a>. Optional: the Optuna tutorial.</dd>
@@ -310,7 +310,7 @@ Few settings, no gradient, a noisy result, and every evaluation costs a full run
 </div>
 
 <div class="module" id="m8">
-<h3>M8 · Sequences, point clouds, reinforcement learning, uncertainty</h3>
+<h3 id="m8--sequences-point-clouds-reinforcement-learning-uncertainty">M8 · Sequences, point clouds, reinforcement learning, uncertainty</h3>
 <dl>
 <dt>Goal</dt><dd>Understand the bigger architectures well enough to judge when they fit, and when they don't.</dd>
 <dt>Read and watch</dt><dd><a href="#t11">T11</a>–<a href="#t14">T14</a>. For attention: 3Blue1Brown's chapters on Transformers and attention. For RL: Sutton &amp; Barto, chapter 1 and chapter 2 (bandits).
@@ -334,7 +334,7 @@ A cave after training on buildings is exactly this case.</details>
 </div>
 
 <div class="module" id="m9">
-<h3>M9 · Back to dMapper</h3>
+<h3 id="m9--back-to-dmapper">M9 · Back to dMapper</h3>
 <dl>
 <dt>Goal</dt><dd>Read the roadmap with the understanding you now have, and be able to criticise it.</dd>
 <dt>Read</dt><dd><a href="#part3">Part III</a>, sections 1–7.</dd>
@@ -803,7 +803,7 @@ needs to know how a run was made, which A1 records. <span class="inf">(inference
 
 <h3 id="track-a">Track A — now: make every scan and run count</h3>
 <div class="phase">
-<h3>A1 — Provenance <span class="tag">small code change</span></h3>
+<h3 id="a1--provenance-small-code-change">A1 — Provenance <span class="tag">small code change</span></h3>
 <dl>
 <dt>Today</dt><dd>A result records <code>software_version</code> (<code>0.1.0</code>, unchanged through many baseline refreshes), a settings-schema
 version and <code>build_date</code> (<code>__DATE__</code>, to the day). It cannot say which code made it, and it cannot say which recording it came from: only the output and preview folders are recorded.</dd>
@@ -825,7 +825,7 @@ Mechanics:
 </div>
 
 <div class="phase">
-<h3>A2 — Window telemetry in the results JSON <span class="tag">one OpenSpec change, numbers unchanged</span></h3>
+<h3 id="a2--window-telemetry-in-the-results-json-one-openspec-change-numbers-unchanged">A2 — Window telemetry in the results JSON <span class="tag">one OpenSpec change, numbers unchanged</span></h3>
 <dl>
 <dt>Do</dt><dd>A <code>window_telemetry</code> block next to <code>gyro_bias_per_window</code>: per window, the features of <a href="#state">section 4</a>
 and the odometry's start and end pose <i>before</i> loop closure and consistency. With these poses, the Phase-3 label (how much the window
@@ -839,7 +839,7 @@ manifests are reset in their own commit, with the numbers unchanged.</dd>
 </div>
 
 <div class="phase">
-<h3>A3 — Recording cards and fixed roles <span class="tag">no code</span></h3>
+<h3 id="a3--recording-cards-and-fixed-roles-no-code">A3 — Recording cards and fixed roles <span class="tag">no code</span></h3>
 <dl>
 <dt>Do</dt><dd>A <code>recording.json</code> in each recording folder (dMapper ignores files that are neither LAZ/LAS nor CSV). It holds:
 <ul>
@@ -861,7 +861,7 @@ tuning on the test data without noticing.</dd>
 </div>
 
 <div class="phase">
-<h3>A4 — Recording protocol for new scans <span class="tag">no code</span></h3>
+<h3 id="a4--recording-protocol-for-new-scans-no-code">A4 — Recording protocol for new scans <span class="tag">no code</span></h3>
 <dl>
 <dt>Do</dt><dd>For each new scan, at little extra effort:
 <ul>
@@ -876,7 +876,7 @@ Variety beats repetition: a new place teaches more than the same corridor twice.
 </div>
 
 <div class="phase">
-<h3>A5 — Run archive <span class="tag">one script</span></h3>
+<h3 id="a5--run-archive-one-script">A5 — Run archive <span class="tag">one script</span></h3>
 <dl>
 <dt>Do</dt><dd>Before an experiment folder is deleted (test outputs are cleaned up regularly), copy its small files (parameter TOML, results JSON, map-quality output)
 to <code>dLidar/run_archive/&lt;recording&gt;/&lt;commit&gt;_&lt;label&gt;/</code>. The point clouds go, the record stays.</dd>
@@ -885,7 +885,7 @@ to <code>dLidar/run_archive/&lt;recording&gt;/&lt;commit&gt;_&lt;label&gt;/</cod
 </div>
 
 <div class="phase">
-<h3>A6 — A general objective <span class="tag">already planned</span></h3>
+<h3 id="a6--a-general-objective-already-planned">A6 — A general objective <span class="tag">already planned</span></h3>
 <dl>
 <dt>Do</dt><dd>The planned map-quality report: revisits found automatically, doubled walls, surface thickness, and optional hand measurements, on any recording.</dd>
 <dt>Why</dt><dd>Every learned component needs an objective that works on any recording, and <code>map_quality.py</code> is specific to recording 44
@@ -894,7 +894,7 @@ to <code>dLidar/run_archive/&lt;recording&gt;/&lt;commit&gt;_&lt;label&gt;/</cod
 </div>
 
 <div class="phase">
-<h3>A7 — Learning on the existing data <span class="tag">continuous</span></h3>
+<h3 id="a7--learning-on-the-existing-data-continuous">A7 — Learning on the existing data <span class="tag">continuous</span></h3>
 <dl>
 <dt>Do</dt><dd>Work through the Phase-0 concepts. Then explore the existing data with numpy and matplotlib, which are installed: parse
 <code>44_diag.log</code> (690 windows) and plot result − guess, iterations and info ratio along the route; check what moves together and what doesn't. Write one journal row per session.
@@ -928,10 +928,10 @@ since grazing points account for about a fifth of 44's heading drift. If it ship
   <li class="back"><b>Gate, then back to step 3</b><span>off: golden baseline; on: the general objective (A6) beyond the s0/s1/s2 spread. Any change to the numerics regenerates the dataset and retrains.</span></li>
 </ol>
 
-<h3>Phase details (for when each phase starts)</h3>
+<h3 id="phase-details-for-when-each-phase-starts">Phase details (for when each phase starts)</h3>
 
 <div class="phase">
-<h3>Phase 0 — Foundations <span class="tag">learning only</span></h3>
+<h3 id="phase-0--foundations-learning-only">Phase 0 — Foundations <span class="tag">learning only</span></h3>
 <dl>
 <dt>Learn</dt><dd>Linear and logistic regression, gradient descent, a 2-layer MLP and backpropagation (derive it by hand, then check it
 against a numerical gradient, the same central-difference trick <code>log_weak_axis_diagnostics</code> uses for the NDT stiffness);
@@ -947,7 +947,7 @@ true trajectory is known, to practise the plumbing.</dd>
 </div>
 
 <div class="phase">
-<h3>Phase 1 — Telemetry dataset <span class="tag">started now as A2; the Python side later</span></h3>
+<h3 id="phase-1--telemetry-dataset-started-now-as-a2-the-python-side-later">Phase 1 — Telemetry dataset <span class="tag">started now as A2; the Python side later</span></h3>
 <dl>
 <dt>Learn</dt><dd>Feature engineering, normalisation, the difference between causal features (known when the window is optimized) and
 non-causal ones (known only later).</dd>
@@ -962,7 +962,7 @@ show, or fail to show, the expected relation.</dd>
 </div>
 
 <div class="phase">
-<h3>Phase 2 — Black-box tuning baseline <span class="tag">no neural network</span></h3>
+<h3 id="phase-2--black-box-tuning-baseline-no-neural-network">Phase 2 — Black-box tuning baseline <span class="tag">no neural network</span></h3>
 <dl>
 <dt>Learn</dt><dd>Bayesian optimization (a Gaussian-process or TPE surrogate plus an acquisition function), CMA-ES, multi-objective
 trade-offs, the noise of the objective (s0/s1/s2 spread).</dd>
@@ -978,7 +978,7 @@ Both are useful results. <span class="inf">(inference)</span> The second is like
 </div>
 
 <div class="phase">
-<h3>Phase 3 — First learned model: per-window error predictor <span class="tag">diagnostic, changes no map</span></h3>
+<h3 id="phase-3--first-learned-model-per-window-error-predictor-diagnostic-changes-no-map">Phase 3 — First learned model: per-window error predictor <span class="tag">diagnostic, changes no map</span></h3>
 <dl>
 <dt>Learn</dt><dd>Regression with uncertainty (predicting a log-sigma, Gaussian negative log-likelihood), calibration plots,
 gradient-boosted trees against a small MLP, feature importance.</dd>
@@ -996,7 +996,7 @@ hand feature (for example the info ratio alone). If it doesn't, the features are
 </div>
 
 <div class="phase">
-<h3>Phase 4 — Learned point weighting <span class="tag">changes the map, off by default</span></h3>
+<h3 id="phase-4--learned-point-weighting-changes-the-map-off-by-default">Phase 4 — Learned point weighting <span class="tag">changes the map, off by default</span></h3>
 <dl>
 <dt>Learn</dt><dd>Point-cloud features (eigenvalue shape features, incidence angle), heteroscedastic regression, robust losses,
 point-cloud networks (PointNet, KPConv) and why they are not the first choice here.</dd>
@@ -1019,7 +1019,7 @@ incidence-angle rule. If only the rule helps, ship the rule.</dd>
 </div>
 
 <div class="phase">
-<h3>Phase 5 — Per-window parameter policy <span class="tag">changes the map, off by default</span></h3>
+<h3 id="phase-5--per-window-parameter-policy-changes-the-map-off-by-default">Phase 5 — Per-window parameter policy <span class="tag">changes the map, off by default</span></h3>
 <dl>
 <dt>Learn</dt><dd>Contextual bandits, offline policy evaluation and its pitfalls (confounding, distribution shift), constrained outputs.</dd>
 <dt>Build</dt><dd>A small model maps a window's features to a few bounded scale factors on sigmas and weights that are already per-window in
@@ -1036,7 +1036,7 @@ every window before it. Treat them as noisy and confirm with full runs.</dd>
 </div>
 
 <div class="phase">
-<h3>Phase 6 — Keeping the model current (idea 4) <span class="tag">process</span></h3>
+<h3 id="phase-6--keeping-the-model-current-idea-4-process">Phase 6 — Keeping the model current (idea 4) <span class="tag">process</span></h3>
 <dl>
 <dt>Learn</dt><dd>Dataset and model versioning, distribution-shift detection, why "online learning" during a mapping run conflicts with reproducibility.</dd>
 <dt>Build</dt><dd>A retraining script tied to the baseline procedure. Whenever a change sets new golden baselines, regenerate the dataset with
@@ -1047,7 +1047,7 @@ manifest (<code>tools/baseline/44.manifest.json</code>) the model was trained ag
 </dl>
 </div>
 
-<h3>Working with Claude through the phases</h3>
+<h3 id="working-with-claude-through-the-phases">Working with Claude through the phases</h3>
 <ul>
 <li><b>Learn on this code base, not on toy data alone.</b> Ask for the concept and then for where it appears in dMapper. The NDT cost is
 a negative log-likelihood, the LM iterations are second-order optimization, and the gyro-bias prior is Bayesian updating. Many ML ideas
@@ -1080,7 +1080,7 @@ model, with no training at all. dMapper already estimates its gyro bias and velo
 policy is proposed, write the hand-made or statistical version next to it and compare the two on the gates.</div>
 
 <h2 id="state">4. State representation: the input vectors (question 3)</h2>
-<h3>Per-window feature vector</h3>
+<h3 id="per-window-feature-vector">Per-window feature vector</h3>
 <p>Some of these values are computed inside <code>optimize_windows</code> and printed by <code>log_window_diagnostics</code>
 (<code>src/application/run_odometry.cpp</code>). Others are new. The column "known" matters for any model used <i>inside</i> the odometry
 (Phase 5): values known only <i>after</i> a window's optimization can steer the <i>next</i> window, never the window itself. For the
@@ -1107,7 +1107,7 @@ diagnostic model of Phase 3 every column may be used.</p>
 <li><b>Out-of-range check:</b> store the training range per feature. Outside it, the model returns the neutral output (scale 1) and the run logs a warning. <span class="inf">(inference)</span> A cave will produce values that 44 never showed.</li>
 </ul>
 
-<h3>Per-point feature vector</h3>
+<h3 id="per-point-feature-vector">Per-point feature vector</h3>
 <div class="table-wrap"><table>
 <tr><th>Feature</th><th>Why</th><th>Cost</th></tr>
 <tr><td>range; log range</td><td>noise grows with range; mixed pixels at depth edges</td><td>free</td></tr>
@@ -1124,7 +1124,7 @@ third point arrives, from those three points and the initial isotropic covarianc
 (<a href="degeneracy-information.html">Degeneracy information</a>).
 Shape and incidence features taken from the cells inherit that error. Compute them from a neighbour search for training, and measure how much worse the cell-based version is before using it inside the odometry.</div>
 
-<h3>"Adaptive dropping in narrow passages", reconsidered</h3>
+<h3 id="adaptive-dropping-in-narrow-passages-reconsidered">"Adaptive dropping in narrow passages", reconsidered</h3>
 <p>In a narrow passage the near walls supply most points, and the info ratio is already low. Dropping points there removes information
 exactly where it is scarce. <span class="inf">(inference)</span> The goals behind the idea — not letting one near wall dominate, and not
 trusting points while the gyro bias is uncertain — are better served by <b>reweighting</b>: a per-point weight (Phase 4), and per-window sigma
@@ -1201,7 +1201,7 @@ judged by whether they beat the global settings, never against the old defaults.
 <li>G. Ke et al., "LightGBM: A Highly Efficient Gradient Boosting Decision Tree", NeurIPS 2017.</li>
 <li>dMapper: <code>CLAUDE.md</code>, <code>docs/ARCHITECTURE.md</code>, <a href="degeneracy-information.html">Degeneracy information</a>, <a href="loop-closure-research.html">Loop closure research</a>, <code>tools/README.md</code>, <code>tools/holdout_sharpness.py</code>, <code>src/application/run_odometry.cpp</code>.</li>
 </ul>
-<h2>See also</h2>
+<h2 id="see-also">See also</h2>
 <ul class="docs-nav"><li><a href="window-terms.html">The per-term table (window_features.csv)</a></li><li><a href="degeneracy-information.html">Degeneracy information</a></li><li><a href="loop-closure-research.html">Loop closure research</a></li><li><a href="index.html#documents">All documents</a></li></ul>
 </main>
 </body>

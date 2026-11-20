@@ -68,7 +68,7 @@
 </head>
 <body>
 <main>
-<p class="docs-nav" style="font-size:13px;margin:0 0 8px;color:var(--muted)"><a href="index.html">dMapper docs</a> › How the odometry works · <a href="index.html#documents">All documents</a> · <a href="hu/window-chaining.html" hreflang="hu" lang="hu">Magyar nyelven</a></p>
+<p class="docs-nav" style="font-size:13px;margin:0 0 8px;color:var(--muted)"><a href="index.html">dMapper docs</a> › How the odometry works · <a href="index.html#documents">All documents</a> · <a href="contents.html">Contents</a> · <a href="search.html">Search</a> · <a href="hu/window-chaining.html" hreflang="hu" lang="hu">Magyar nyelven</a></p>
 
 <h1>Window chaining: what was wrong, and what the fix changed</h1>
 <p class="lead">Change <code>chain-next-window-only</code>, October 2026. After every window, the odometry loop used to place
@@ -88,9 +88,9 @@ The old loop was correct but did about 345 times more placement work than needed
 number of windows; the fix does each placement once. On today's recordings the saving is about 7 seconds, because the
 scan-to-map optimization takes almost all of the time; on much longer recordings the old loop would have become a real cost.</div>
 
-<h2>1. Background: windows and placing a window</h2>
+<h2 id="1-background-windows-and-placing-a-window">1. Background: windows and placing a window</h2>
 
-<h3>1.1 What a pose is</h3>
+<h3 id="11-what-a-pose-is">1.1 What a pose is</h3>
 <p>(The short definitions of pose, node and window are in the guide's <a href="index.html#f-poses">Fundamentals</a>; this section goes into the detail.) A <strong>pose</strong> is the sensor's position and orientation at one moment, in the world frame: x, y, z in metres
 and three angles om, fi, ka (roll, pitch, yaw, Tait-Bryan). In the code it is a 4 × 4 <code>Eigen::Affine3d</code>: a
 rotation R and a translation t, so that a point p given in the sensor's frame lies at <code>R p + t</code> in the world.
@@ -99,7 +99,7 @@ The optimizer works with the six numbers (x, y, z, om, fi, ka) per pose.</p>
 consecutive nodes, <code>threshold_nr_poses</code> of them (360 in <code>l2-vertical.toml</code>, about 0.4 s at the L2's
 IMU rate; 180 in <code>livox-vertical.toml</code>, 0.36 s).</p>
 
-<h3>1.2 Windows</h3>
+<h3 id="12-windows">1.2 Windows</h3>
 <p>A run cuts the recording into <strong>windows</strong> (see <code>docs/PIPELINE.md</code>). Each window is a short
 trajectory: a list of poses (<code>Window::poses</code>), one node every few milliseconds. On <code>raw data/44</code> there are
 <strong>690 windows of 360 nodes</strong> (248,400 nodes in all).</p>
@@ -131,7 +131,7 @@ void place_window_after(Window &amp;window, const Eigen::Affine3d &amp;start)
 <p>One placement costs, per node, an inverse and two 4×4 matrix products, plus a copy of the window's pose vector
 (360 × 128 bytes ≈ 46 KB).</p>
 
-<h3>1.3 How a window's trajectory is computed, step by step</h3>
+<h3 id="13-how-a-windows-trajectory-is-computed-step-by-step">1.3 How a window's trajectory is computed, step by step</h3>
 <p>The placement above is one step of a longer chain. From the recording to the final trajectory:</p>
 <ol>
 <li><b>Orientation from the IMU</b> (<code>calculate_trajectory</code>, <code>src/application/lidar_odometry.cpp</code>).
@@ -171,7 +171,7 @@ offset become the next window's priors.</li>
 positions written to the output are the poses after these.</li>
 </ol>
 
-<h3>1.4 How the points' positions are computed</h3>
+<h3 id="14-how-the-points-positions-are-computed">1.4 How the points' positions are computed</h3>
 <p>A LiDAR point is stored as it was measured: its coordinates in the sensor's frame at its own time (already shifted by
 the lever arm to the IMU), its timestamp and its intensity. It never gets a world position of its own; it is placed with
 a pose each time it is needed.</p>
@@ -200,7 +200,7 @@ Everything a run outputs is "points placed with poses". The odometry decides the
 starts where the previous one ended; a window that ends a few millimetres off hands that offset to every later window,
 until loop closure or consistency corrects it.</div>
 
-<h2>2. The old code</h2>
+<h2 id="2-the-old-code">2. The old code</h2>
 
 <p>At the end of each window <code>i</code>, after its optimization, the loop placed every later window again:</p>
 
@@ -274,12 +274,12 @@ Only the blue cell of each row is ever read.</figcaption>
   <tr><td>Needed placements</td><td class="num">n − 1</td><td class="num">689</td></tr>
 </table></div>
 
-<h2>3. What was wrong with it</h2>
+<h2 id="3-what-was-wrong-with-it">3. What was wrong with it</h2>
 
 <p>The results were <strong>correct</strong>: every window was processed starting from the right place. Three things were wrong
 with how it got there.</p>
 
-<h3>3.1 Almost all of the work was thrown away</h3>
+<h3 id="31-almost-all-of-the-work-was-thrown-away">3.1 Almost all of the work was thrown away</h3>
 <p>A placement of window <code>j</code> only matters if something reads window <code>j</code>'s absolute poses before the next
 placement overwrites them. Going through every step of the loop:</p>
 
@@ -296,7 +296,7 @@ placement overwrites them. Going through every step of the loop:</p>
 <code>j − 1</code>. So of the 689 placements after window 0, only the one of window 1 was ever used; the other 688 were
 overwritten before anyone looked at them. That is 237,016 wasted placements out of 237,705, about 99.7 %.</p>
 
-<h3>3.2 The cost grew with the square of the recording</h3>
+<h3 id="32-the-cost-grew-with-the-square-of-the-recording">3.2 The cost grew with the square of the recording</h3>
 <p>The waste is not a constant factor. The number of placements is n(n−1)/2, so a recording twice as long does four times the
 placement work, while everything else in the loop (the optimization, the map update) only doubles:</p>
 
@@ -310,14 +310,14 @@ placement work, while everything else in the loop (the optimization, the map upd
 <p class="meta">Times scaled from the benchmark in section 5 (old ∝ n², new ∝ n), for windows of 360 nodes. A whole run takes
 about 2.4 s per window, so 44 needs about 27 minutes.</p>
 
-<h3>3.3 It added rounding error that meant nothing</h3>
+<h3 id="33-it-added-rounding-error-that-meant-nothing">3.3 It added rounding error that meant nothing</h3>
 <p>Each placement rebuilds the window from its own relative poses, <code>tmp[k − 1].inverse() * tmp[k]</code>. That is exact in
 theory, but in floating point each rebuild rounds a little. Window <code>j</code> was rebuilt <code>j</code> times, so window
 689 went through 689 rebuilds before it was processed, each adding a little rounding noise. The benchmark measures how far the
 repeated placement drifts from a single one: at most 1.75e-8 (in metres for the translations) after 689 rebuilds on the synthetic windows. Tiny, but it is noise with no meaning, and it made the results
 depend on how many windows came before.</p>
 
-<h2>4. The fix</h2>
+<h2 id="4-the-fix">4. The fix</h2>
 
 <p>Only the next window is placed after each window:</p>
 
@@ -333,7 +333,7 @@ depend on how many windows came before.</p>
 guess doesn't place it itself: with <code>use_motion_from_previous_step = false</code>, and for window 1 when the velocity prior
 is off. Simply deleting the loop would have been a real behaviour change, so it was not done.</p>
 
-<h3>4.1 The one place where the later windows did matter: a failed run</h3>
+<h3 id="41-the-one-place-where-the-later-windows-did-matter-a-failed-run">4.1 The one place where the later windows did matter: a failed run</h3>
 <p>When the NaN check stops a run at window <code>i</code>, <code>optimize_windows</code> returns <code>false</code>, but the run
 is still post-processed and saved. With the old code, the windows after <code>i</code> happened to be chained from the earlier
 placements, so the saved trajectory had no jump. Without the full loop they would lie at their IMU-only positions. So the
@@ -351,9 +351,9 @@ failure path now places all remaining windows once:</p>
 once. It has a unit test (<code>tests/window_steps_test.cpp</code>) that checks the chaining, the kept relative poses, that
 earlier windows don't move, and that one call matches the old repeated placement within 1e-9.</p>
 
-<h2>5. How much faster</h2>
+<h2 id="5-how-much-faster">5. How much faster</h2>
 
-<h3>5.1 The placement work alone (benchmark)</h3>
+<h3 id="51-the-placement-work-alone-benchmark">5.1 The placement work alone (benchmark)</h3>
 <p>A small benchmark (<code>bench_chain.cpp</code>, compiled with the same <code>/O2 /fp:fast</code> flags as the Release
 build) runs both loops on 690 synthetic windows of 360 nodes, the size of 44, using a copy of
 <code>place_window_after</code>:</p>
@@ -365,7 +365,7 @@ build) runs both loops on 690 synthetic windows of 360 nodes, the size of 44, us
   <tr><td><b>Saved</b></td><td></td><td class="num"><b>≈ 6.7 s (about 370× less)</b></td></tr>
 </table></div>
 
-<h3>5.2 The whole run</h3>
+<h3 id="52-the-whole-run">5.2 The whole run</h3>
 <div class="table-wrap"><table>
   <tr><th>Run (fast Release build)</th><th class="num">Odometry time, master</th><th class="num">Odometry time, with the fix</th></tr>
   <tr><td><code>44_short</code> (70 windows)</td><td class="num">165 s today (155–218 s over earlier runs)</td><td class="num">163 s, 164 s</td></tr>
@@ -388,7 +388,7 @@ but only about 7 s of that come from the fix; the rest is run-to-run variation.<
   explicitly instead of by accident.</li>
 </ul></div>
 
-<h2>6. Effect on the results</h2>
+<h2 id="6-effect-on-the-results">6. Effect on the results</h2>
 <p>The results change only in their last digits, because window <code>j</code> now goes through one rebuild instead of
 <code>j</code>, and the optimizer starts from minutely different poses:</p>
 
@@ -401,7 +401,7 @@ but only about 7 s of that come from the fix; the rest is run-to-run variation.<
 <p>All are far inside the 1e-6 tolerance the refactors use (1e-6 m is a thousandth of a millimetre). Because the numbers do
 change, the change writes new baselines for <code>44_short</code> and <code>44</code> in a commit of its own.</p>
 
-<h2>7. Where to find it</h2>
+<h2 id="7-where-to-find-it">7. Where to find it</h2>
 <ul>
   <li>OpenSpec change: <code>openspec/changes/chain-next-window-only/</code> (proposal, design, tasks; archived under
   <code>openspec/changes/archive/</code> once done).</li>
@@ -412,7 +412,7 @@ change, the change writes new baselines for <code>44_short</code> and <code>44</
   <li>The other performance fixes: <code>docs/PERFORMANCE.md</code>.</li>
 </ul>
 
-<h2>See also</h2>
+<h2 id="see-also">See also</h2>
 <ul class="docs-nav"><li><a href="PIPELINE.md">How a run works: windows</a></li><li><a href="degeneracy-information.html">Degeneracy information</a></li><li><a href="window-terms.html">The per-term table: Livox 3</a></li><li><a href="performance.html">Performance</a></li><li><a href="index.html#documents">All documents</a></li></ul>
 </main>
 </body>

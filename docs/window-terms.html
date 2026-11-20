@@ -68,7 +68,7 @@
 </head>
 <body>
 <main>
-<p class="docs-nav" style="font-size:13px;margin:0 0 8px;color:var(--muted)"><a href="index.html">dMapper docs</a> › How the odometry works · <a href="index.html#documents">All documents</a></p>
+<p class="docs-nav" style="font-size:13px;margin:0 0 8px;color:var(--muted)"><a href="index.html">dMapper docs</a> › How the odometry works · <a href="index.html#documents">All documents</a> · <a href="contents.html">Contents</a> · <a href="search.html">Search</a></p>
 
 <h1>The per-term table: what it is and how to read it</h1>
 <p class="lead">A window's result is where about ten terms (the LiDAR against the map, the gyro, the accelerometer, the
@@ -85,7 +85,7 @@ map and proposes no fix.</p>
   <div class="card"><div class="big">2.9 σ</div><div class="lbl">median distance (rms) of the start velocity from its prior, after the solve</div></div>
 </div>
 
-<h2>What the table is</h2>
+<h2 id="what-the-table-is">What the table is</h2>
 <p>Each term of a window's optimization adds its equations to one least-squares problem (its part of the normal matrix
 <i>H</i> and the right-hand side <i>b</i>). The table builds each term's equations <b>on their own</b>, with the same term
 functions the solver calls, and asks of each one: if this term were alone, how firmly would it hold the window, and
@@ -112,7 +112,7 @@ summary of a range, and with <code>--window N</code> one window's table. The tab
 <p><b>Its limit.</b> A pull is one linear step with everything else held still. It shows where a term pulls, not where the
 window would end if that term were changed (see "How far the table can be trusted" below).</p>
 
-<h2>How to read the table</h2>
+<h2 id="how-to-read-the-table">How to read the table</h2>
 <p>For every window the optimizer adds up about ten terms (LiDAR against the map, gyro, accelerometer, priors) and solves
 for the window's poses. The table takes each term on its own and asks two questions about four motions of the window.</p>
 <div class="table-wrap"><table>
@@ -134,7 +134,7 @@ about 1 only where that weight is a noise model.</li>
 </ul>
 <p>Each row exists at the <b>guess</b> (before the first iteration) and at the <b>result</b> (after the last).</p>
 
-<h2>An example reading: 30 seconds of an indoor walk</h2>
+<h2 id="an-example-reading-30-seconds-of-an-indoor-walk">An example reading: 30 seconds of an indoor walk</h2>
 <p>The rest of this page reads the table on one stretch.</p>
 <div class="table-wrap"><table>
 <tr><td>Recording, settings</td><td>a handheld indoor walk with a Livox Mid-360S, its settings file (<code>settings/livox-vertical.toml</code>) as it was on 2026-11-17 (gyro noise 0.028 / 0.042 / 0.057 °/√s with the inflation factor 7.09; the file now carries the sensor's measured noise with factor 1, which makes the gyro rows' hold about 40 times tighter than in this reading) with <code>log_window_terms = true</code></td></tr>
@@ -146,9 +146,9 @@ about 1 only where that weight is a noise model.</li>
 <tr><td>Geometry</td><td>information ratio median 0.30, lowest 0.117 (in the middle of the stretch)</td></tr>
 </table></div>
 
-<h2>What the example shows</h2>
+<h2 id="what-the-example-shows">What the example shows</h2>
 
-<h3>1. Along the twelve motions, every window ended in balance</h3>
+<h3 id="1-along-the-twelve-motions-every-window-ended-in-balance">1. Along the twelve motions, every window ended in balance</h3>
 <p>At the result the remaining step is 0.0000 m for shift, stretch and curve in all three directions in every window
 (largest 0.009 mm), and at most 0.0002° for turn. So along these twelve motions no window was stopped by the damping
 before its terms balanced: there the result is the point where the terms agree, and the weights decide it. The table
@@ -156,7 +156,7 @@ measures only these twelve motions, not every unknown of a window.</p>
 <p>No window ended because it had converged: all 84 ran the full 100 iterations, and by then the damping holds every
 motion to about 0.002 mm, so the late iterations hardly move a window. The balance was reached before that.</p>
 
-<h3>2. The LiDAR decides how far a window travels</h3>
+<h3 id="2-the-lidar-decides-how-far-a-window-travels">2. The LiDAR decides how far a window travels</h3>
 <div class="table-wrap"><table>
 <tr><th>Stretch along travel, at the result</th><th class="num">Hold (median)</th><th class="num">Share of the weight (median)</th><th class="num">Share, range</th><th class="num">Heaviest term in</th></tr>
 <tr><td>NDT indoor grid (0.15 m cells)</td><td class="num">0.65 mm</td><td class="num">56 %</td><td class="num">25–79 %</td><td class="num">82 windows</td></tr>
@@ -169,7 +169,7 @@ motion to about 0.002 mm, so the late iterations hardly move a window. The balan
 its weight there is zero. It appears in <b>curve</b> along travel, where it holds 1.12 mm (1.10–1.14 mm) and carries a
 median 24.5 % of the weight (5–84 %; heaviest term in 28 windows). In curve vertical it carries 4.5 %.</p>
 
-<h3>3. The gyro has almost no say in a window's heading bend</h3>
+<h3 id="3-the-gyro-has-almost-no-say-in-a-windows-heading-bend">3. The gyro has almost no say in a window's heading bend</h3>
 <div class="table-wrap"><table>
 <tr><th>Turn about vertical, at the result</th><th class="num">Hold (median)</th><th class="num">Share of the weight (median)</th></tr>
 <tr><td>NDT indoor grid</td><td class="num">0.0115°</td><td class="num">56 %</td></tr>
@@ -185,7 +185,7 @@ below 0.30°, largest 0.43°). Over 0.358 s that is 0.33 °/s, 0.83 °/s and 1.1
 per residual at the result is median 0.29, at most 1.02. For roll and pitch the picture is the same (gyro share 0.29 %
 and 0.24 %; the windows' tilt changed by a median 0.06° and 0.11°, at most 0.31° and 0.58°).</p>
 
-<h3>4. The start velocity ends a median 2.9 sigmas from its prior</h3>
+<h3 id="4-the-start-velocity-ends-a-median-29-sigmas-from-its-prior">4. The start velocity ends a median 2.9 sigmas from its prior</h3>
 <p>The velocity prior says: this window starts with the velocity the previous one ended with. Its sigma along travel is
 4.6 mm/s (median). After the solve its cost per residual is median 8.65, for 90 % of the windows below 30.8, at most
 65.4. As distances (rms over its three residuals) that is 2.9, 5.5 and 8.1 sigmas. It is above 1 in 81 of 84 windows.</p>
@@ -193,12 +193,12 @@ and 0.24 %; the windows' tilt changed by a median 0.06° and 0.11°, at most 0.3
 tied to the weak geometry of point 6. The table shows the distance, not its cause: the prior may be too tight, or the
 solved velocity may be off.</p>
 
-<h3>5. The result lies to one side of the guess</h3>
+<h3 id="5-the-result-lies-to-one-side-of-the-guess">5. The result lies to one side of the guess</h3>
 <p>From guess to result the window's sideways stretch is negative in 65 of 84 windows (median −2.7 mm, mean −3.4 mm
 over 0.358 s), and the sideways curve in 63 of 84. At the result the edge positions and the velocity prior pull the
 other way (median +4.2 mm and +2.7 mm). Along travel there is no such preference (47 of 84 positive).</p>
 
-<h3>6. The eight windows with weak geometry (110.9–113.8 s)</h3>
+<h3 id="6-the-eight-windows-with-weak-geometry-11091138-s">6. The eight windows with weak geometry (110.9–113.8 s)</h3>
 <p>In windows 309 to 317 the information ratio falls to 0.117–0.170, and the degeneracy projection takes away part of
 the LiDAR's weight along travel. Over the whole stretch it does so in 12 windows, in 5 of them more than half (311 to 315). Three more short
 dips in the information ratio (window 301 and 328 to 330, 0.17–0.20) lose little or nothing.</p>
@@ -230,13 +230,13 @@ together hold 59–66 % of the weight. The LiDAR no longer decides alone.</li>
 from its guess in one step, 6.6 sigmas from its velocity prior, and the next window moves 12.7 mm back.</li>
 </ul>
 
-<h3>7. The two grids disagree by centimetres in a few windows</h3>
+<h3 id="7-the-two-grids-disagree-by-centimetres-in-a-few-windows">7. The two grids disagree by centimetres in a few windows</h3>
 <p>The indoor and the outdoor grid's pulls for the travel distance differ by a median 1.6 mm (90 % of the windows below
 5.4 mm). The largest differences are in windows 312 (25 mm: outdoor +27.0, indoor +1.8), 350 (16 mm: outdoor −14.2, indoor
 +1.8), 313 (15 mm) and 351 (9 mm). Windows 312 and 313 have weak geometry; 350 and 351 have not (information ratio
 0.38 and 0.32).</p>
 
-<h3>8. At the guess, the accelerometer row is very large</h3>
+<h3 id="8-at-the-guess-the-accelerometer-row-is-very-large">8. At the guess, the accelerometer row is very large</h3>
 <p>At the guess the accelerometer's cost per residual is median 359 (at most 3980); at the result it is 0.114. The
 guess path itself is integrated from the accelerometer, so the path alone should not cost that much.</p>
 <p>One start value fits the size: <code>prepare_velocity_state</code> sets the window's end velocity to the start
@@ -248,7 +248,7 @@ so the table can't separate them.</p>
 <p>Consequence for reading the table: at the guess the accelerometer's pulls (for example 16° of tilt in a tenth of the
 windows) should not be read as a statement about the path.</p>
 
-<h3>9. Cost per residual</h3>
+<h3 id="9-cost-per-residual">9. Cost per residual</h3>
 <div class="table-wrap"><table>
 <tr><th>Term</th><th class="num">Residuals (median)</th><th class="num">At the guess (median)</th><th class="num">At the result: median</th><th class="num">90 % below</th><th class="num">Largest</th></tr>
 <tr><td>NDT indoor</td><td class="num">103,600</td><td class="num">0.135</td><td class="num">0.117</td><td class="num">0.130</td><td class="num">0.139</td></tr>
@@ -264,7 +264,7 @@ windows) should not be read as a statement about the path.</p>
 what they show is that no window stands out. The edges, the accelerometer and the bias and offset priors end below 1.
 The velocity prior is the only term far above it.</p>
 
-<h2>How far the table can be trusted</h2>
+<h2 id="how-far-the-table-can-be-trusted">How far the table can be trusted</h2>
 <p>A pull is one linear step with everything else held. To see what that costs, the table at the guess can be compared
 with what each window then actually did (84 windows):</p>
 <div class="table-wrap"><table>
@@ -279,7 +279,7 @@ accelerometer row there (point 8). The result rows are the ones to read. Two cau
 independent, so 84 windows are less evidence than the count suggests; and shift can't be tested this way, because the
 first node never moves.</p>
 
-<h2>What the table can't say</h2>
+<h2 id="what-the-table-cant-say">What the table can't say</h2>
 <ul>
 <li><b>Which side is right.</b> Where the LiDAR and the IMU terms disagree (points 3, 5 and 6) the table shows the size
 of the disagreement and who wins it. It has no reference to say who should.</li>
@@ -290,7 +290,7 @@ path came out short needs a reference, such as the plan or a second pass.</li>
 that goes wrong needs its own capture and its own reading.</li>
 </ul>
 
-<h2>How to make such a reading</h2>
+<h2 id="how-to-make-such-a-reading">How to make such a reading</h2>
 <p>Capture a stretch of a run (<code>capture_windows_from_s</code> / <code>capture_windows_to_s</code>), then replay it with
 the table on:</p>
 <pre>python tools/run_replay.py &lt;window_capture_&lt;from&gt;-&lt;to&gt;s.bin&gt; &lt;settings with log_window_terms = true&gt;
@@ -299,7 +299,7 @@ python tools/window_terms.py &lt;params name&gt;_window_terms.csv --window 313  
 <p class="meta">The example was read on 2026-11-17 (code at commit 28952e4); its numbers were recomputed independently by a
 reviewer before the page was written.</p>
 
-<h2>See also</h2>
+<h2 id="see-also">See also</h2>
 <ul class="docs-nav"><li><a href="degeneracy-information.html">Degeneracy information</a></li><li><a href="window-chaining.html">Poses, windows and window chaining</a></li><li><a href="code-split-and-region-agents-plan.md">The code-split plan (stage 3)</a></li><li><a href="../tools/README.md">tools/README.md: window_terms.py</a></li><li><a href="index.html#documents">All documents</a></li></ul>
 </main>
 </body>
