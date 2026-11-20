@@ -115,6 +115,8 @@
 <nav>
   <div class="brand">dMapper guide</div>
   <div class="sub">LiDAR + IMU odometry</div>
+  <form action="search.html" method="get" style="margin:8px 0"><input type="search" name="q" placeholder="Search the docs" aria-label="Search the docs" style="width:100%;font:inherit;font-size:14px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--text)"></form>
+  <a href="contents.html">Contents of all pages</a>
   <a href="hu/index.html" hreflang="hu" lang="hu">Magyar nyelven</a>
   <a href="#overview">Overview</a>
   <a href="#fundamentals">Fundamentals: basic terms</a>
@@ -472,7 +474,7 @@ by file. <span class="more">→ <a href="../tools/README.md">tools/README.md</a>
 
 <ol class="steps">
 <li class="step" id="s-load">
-<h3>Loading and filtering the points</h3>
+<h3 id="loading-and-filtering-the-points">Loading and filtering the points</h3>
 <div class="where">load_data / load_point_cloud · src/application/lidar_odometry.cpp, src/infrastructure/recording_folder_source.cpp</div>
 <p>Each point is read with its position in the <b>sensor frame</b>, its intensity and its timestamp. Then:</p>
 <ul>
@@ -486,7 +488,7 @@ by file. <span class="more">→ <a href="../tools/README.md">tools/README.md</a>
 </li>
 
 <li class="step" id="s-imu">
-<h3>An orientation for every IMU sample</h3>
+<h3 id="an-orientation-for-every-imu-sample">An orientation for every IMU sample</h3>
 <div class="where">calculate_trajectory · src/application/lidar_odometry.cpp</div>
 <p>A Madgwick-type filter (<a class="term" href="#t-ahrs">Fusion AHRS</a>, 6-axis, no magnetometer) integrates the gyro, and uses the accelerometer's gravity direction to correct roll and pitch. Heading (yaw) has no absolute reference, so it drifts with the gyro bias. That is what the LiDAR optimization and the bias estimation fix later. The accelerometer's pull has the constant strength <code>ahrs_gain</code> for the whole recording. (Until 2026-11-16 the code tried to switch it off while |a| was outside 0.9–1.1 g; Fusion ramps its gain down from 10 over the first 3 s and then keeps its own copy, so that switch never took effect and was removed.)</p>
 <p>If <code>use_remove_imu_bias_from_first_stationary_scan</code> is on, the median gyro value of the first <code>startup_gyro_bias_nr_samples</code> samples (1000) is subtracted as bias, but only if the total gyro variance there is below <code>startup_gyro_bias_max_variance_deg2_s2</code> (5 (°/s)²). Handheld recordings usually fail that check ("Excessive movement detected") and continue with zero bias.</p>
@@ -495,7 +497,7 @@ by file. <span class="more">→ <a href="../tools/README.md">tools/README.md</a>
 </li>
 
 <li class="step" id="s-windows">
-<h3>Windows and a pose for every point</h3>
+<h3 id="windows-and-a-pose-for-every-point">Windows and a pose for every point</h3>
 <div class="where">compute_step_1 · src/application/lidar_odometry.cpp</div>
 <ul>
 <li>The first <code>threshold_initial_points</code> points are set aside to build the initial map (step 4). Nodes before the time of the last of these points are skipped.</li>
@@ -509,7 +511,7 @@ by file. <span class="more">→ <a href="../tools/README.md">tools/README.md</a>
 </li>
 
 <li class="step" id="s-map">
-<h3>The initial map</h3>
+<h3 id="the-initial-map">The initial map</h3>
 <div class="where">optimize_windows (start) · src/application/run_odometry.cpp</div>
 <p>The set-aside initial points are transformed with the <b>first pose only</b> (no per-point motion compensation) and inserted into two <b><a class="term" href="#t-ndt">NDT grids</a></b>. Space is divided into cubes (0.15 m "indoor" and 0.4 m "outdoor" grid), and each cube stores the mean and covariance of the points in it, i.e. a small Gaussian that describes the local surface. A cube with 3 or more points also gets a normal vector facing the sensor.</p>
 <p>Because this map is not motion-compensated, stand still for the first second or two if you can. The first window is registered against this map, so its misfit is not allowed to affect the gyro bias estimate.</p>
@@ -517,7 +519,7 @@ by file. <span class="more">→ <a href="../tools/README.md">tools/README.md</a>
 </li>
 
 <li class="step" id="s-guess">
-<h3>Initial guess for the next window</h3>
+<h3 id="initial-guess-for-the-next-window">Initial guess for the next window</h3>
 <div class="where">optimize_windows · src/application/run_odometry.cpp</div>
 <ul>
 <li>The window's first node is placed exactly on the previous window's last node.</li>
@@ -530,7 +532,7 @@ by file. <span class="more">→ <a href="../tools/README.md">tools/README.md</a>
 </li>
 
 <li class="step" id="s-opt">
-<h3>Window optimization</h3>
+<h3 id="window-optimization">Window optimization</h3>
 <div class="where">optimize_lidar_odometry · src/domain/scan_to_map.cpp</div>
 <p>The <a class="term" href="#t-unknowns">unknowns</a> are the 6 pose parameters (x, y, z, ω, φ, κ) of every node of the window, plus 3 gyro-bias values: 6 × 360 + 3 = 2163 numbers. With <code>imu_always_on</code> there are 9 more: the acceleration offset and the velocity at the window's start and end. Each <a class="term" href="#t-lm">Levenberg–Marquardt iteration</a> builds one least-squares system from these <a class="term" href="#t-term">terms</a>:</p>
 <ul>
@@ -548,7 +550,7 @@ by file. <span class="more">→ <a href="../tools/README.md">tools/README.md</a>
 </li>
 
 <li class="step" id="s-handoff">
-<h3>Hand-off and gyro bias</h3>
+<h3 id="hand-off-and-gyro-bias">Hand-off and gyro bias</h3>
 <div class="where">optimize_windows · src/application/run_odometry.cpp</div>
 <p>The last node of a window has no points, and the ones just before it have very few. Left free, they can spin by several degrees, and the next window would inherit that error permanently, which shows up as rotated "ghost" copies of walls. So after the optimization, the last <code>handoff_tail_nodes</code> nodes are <b>recomputed from the last well-constrained node</b> using the bias-corrected IMU rotation and the optimized velocity. The next window starts from that recomputed end.</p>
 <p>The window's bias estimate and its uncertainty become the prior for the next window, and they are printed and written to the results JSON.</p>
@@ -557,14 +559,14 @@ by file. <span class="more">→ <a href="../tools/README.md">tools/README.md</a>
 </li>
 
 <li class="step" id="s-update">
-<h3>Map update</h3>
+<h3 id="map-update">Map update</h3>
 <div class="where">optimize_windows · src/application/run_odometry.cpp</div>
 <p>The window's decimated points, now transformed with their optimized poses, are added to both NDT grids (the Gaussians are updated incrementally). The map therefore grows with the whole recording. Once the travelled distance exceeds <code>sliding_window_trajectory_length_threshold</code>, the map is rebuilt from the most recent half of the points, voxel-decimated with <code>decimation</code>, which bounds memory on long runs. With the default 200 m this happens rarely on handheld recordings.</p>
 <div class="params"><span>sliding_window_trajectory_length_threshold</span></div>
 </li>
 
 <li class="step" id="s-export">
-<h3>Export</h3>
+<h3 id="export">Export</h3>
 <div class="where">save_result · src/application/lidar_odometry.cpp</div>
 <p>All <b>original</b> points (not the decimated ones) are transformed with their own optimized node pose. Points whose sensor-frame distance is below <code>threshould_output_filter</code> are removed from the export. Windows are grouped into chunks of 51, and each chunk becomes one <code>scan_lio_N.laz</code>, expressed relative to the chunk's first pose, with that pose stored in the session files. The remaining windows form a final, shorter chunk, which is written if it has more than <code>min_counter_concatenated_trajectory_nodes</code> windows (default 0, so it is always written).</p>
 <p>With <code>export_merged_laz = true</code> all chunks are additionally written into one <code>scan_lio_merged.laz</code> in world coordinates.</p>
@@ -776,7 +778,7 @@ See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 
 <h2 id="practice">Best practices</h2>
 <p>Most of the map quality is decided while recording. The odometry can only correct what it can observe twice, so plan the walk so that every part of the building is seen again later.</p>
-<h3>Recording</h3>
+<h3 id="recording">Recording</h3>
 <ul>
 <li><b>Walk a loop on every floor.</b> Come back to a place you have already scanned on the same floor (a room, a corridor junction, the stair landing) at least 30 s after the first visit, and pass within a few metres of where you walked before. Each such revisit lets <a href="#p-loop">loop closure</a> pull that floor into line. A floor walked only once cannot be corrected: the heading errors on the way down and back up the stairs can cancel out and leave that floor rotated by a few degrees, with no loop to expose it.</li>
 <li><b>Close the loop on the floor, not only through the stairs.</b> A revisit on another floor is not matched (<code>loop_closure_max_vertical_offset_m</code> = 1.5 m), so each floor needs its own revisit.</li>
@@ -784,7 +786,7 @@ See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 <li><b>Hold still for 3–5 s at the start</b>. The initial map is not motion-compensated (see <a href="#limits">Known limitations</a>). With <code>imu_always_on</code>, a window at rest also pins the velocity and the accelerometer offset. Keep yourself out of the scanner's near field in the first second. Short stops later on help in the same way.</li>
 <li><b>Take stairs steadily</b> and look around at each landing; stairwells are where the odometry is weakest.</li>
 </ul>
-<h3>Processing</h3>
+<h3 id="processing">Processing</h3>
 <ul>
 <li>Use the Release build with the settings file of the sensor, from the command line or loaded in the GUI (Start → Load parameters); both run the same stages, including loop closure and the consistency pass, and give the same result.</li>
 <li>The IMU and LiDAR timestamps must agree within a few milliseconds. If the IMU lags the LiDAR, measure the offset with <code>tools/imu_time_offset.py</code> and correct it with <code>tools/restamp_imu.py</code> before processing (see <code>tools/README.md</code>).</li>
@@ -825,7 +827,7 @@ See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 <tr><td style="font-family:inherit;white-space:normal"><b><code>tools/trajectory_seams.py</code> ignored the chunk poses</b></td><td>It now includes them.</td><td>None on the map. It compared chunk-relative trajectories and so missed what loop closure moves (0.49 m reported where 1.16 m is true).</td></tr>
 </table></div>
 
-<h3>Consistency pass</h3>
+<h3 id="consistency-pass">Consistency pass</h3>
 <p><code>use_consistency</code> (on in the shipped settings) pulls every window towards one map of the whole recording after the odometry, which removes the small offsets left between windows and thins the walls, at the cost of one more pass. Its weak smoothness prior (0.1°) lets the trajectory roughen, which does not blur the map, because each node is re-fitted to the points. Set <code>use_consistency</code> to false when runtime matters more than map quality.</p>
 
 <h2 id="limits">Known limitations</h2>
@@ -962,13 +964,17 @@ branches merged one after the other were never tested together.</li>
 
 <h2 id="documents">All documents</h2>
 <p>Every page of <code>docs/</code>, by what it is for. The same map is in <code>docs/README.md</code>; the Hungarian pages are under <code>docs/hu/</code>. Also outside <code>docs/</code>: <code>CLAUDE.md</code> (how the code is built, tested and laid out), <code>tools/README.md</code> (the analysis tools) and <code>openspec/specs/</code> (the requirements).</p>
-<h3>Using dMapper</h3>
+<p>The same map with the main sections of every page is the <a href="contents.html">contents page</a>, and every page can be searched on the <a href="search.html">search page</a> (the Hungarian pages are not included yet). Both are rebuilt by <code>python tools/build_docs_index.py</code>.</p>
+<h3 id="using-dmapper">Using dMapper</h3>
 <p class="meta">Start here: what a run does and what every setting means.</p>
 <div class="table-wrap"><table>
 <tr><td>this guide</td><td><code>index.html</code></td><td>The basic terms (<a href="#fundamentals">Fundamentals</a>: pose, node, window, term, bend …, defined once and linked from every page), the pipeline step by step, every parameter, best practices, the tuning cheat sheet, known limitations.</td></tr>
+<tr><td><a href="contents.html">Contents</a></td><td><code>contents.html</code></td><td>Every page with its main sections, grouped as here.</td></tr>
+<tr><td><a href="search.html">Search</a></td><td><code>search.html</code></td><td>Search the text of every page and section from the browser.</td></tr>
+<tr><td><a href="README.md">Documentation map</a></td><td><code>README.md</code></td><td>This map as a Markdown file.</td></tr>
 <tr><td><a href="PIPELINE.md">How a run works: windows</a></td><td><code>PIPELINE.md</code></td><td>How a run cuts the recording into windows and processes one window (short, technical). <i>From pipeline step 3.</i></td></tr>
 </table></div>
-<h3>How the odometry works</h3>
+<h3 id="how-the-odometry-works">How the odometry works</h3>
 <p class="meta">Explanations with measurements: one mechanism per page.</p>
 <div class="table-wrap"><table>
 <tr><td><a href="window-chaining.html">Poses, windows and window chaining</a></td><td><code>window-chaining.html</code></td><td>What a pose is, how a window&#x27;s trajectory and its points&#x27; positions are computed, and the window-chaining fix. <i>From pipeline steps 3, 5 and 7.</i></td></tr>
@@ -978,14 +984,14 @@ branches merged one after the other were never tested together.</li>
 <tr><td><a href="performance.html">Performance</a></td><td><code>performance.html</code></td><td>How the full recording got 2.2 times faster: the overview. <i>From the parameters ([performance]).</i></td></tr>
 <tr><td><a href="PERFORMANCE.md">Performance fixes</a></td><td><code>PERFORMANCE.md</code></td><td>Every performance fix with its method and numbers. <i>From the parameters ([performance]).</i></td></tr>
 </table></div>
-<h3>Code and architecture</h3>
+<h3 id="code-and-architecture">Code and architecture</h3>
 <p class="meta">Where the code is going, the current plan, and the review findings.</p>
 <div class="table-wrap"><table>
 <tr><td><a href="ARCHITECTURE.md">Architecture</a></td><td><code>ARCHITECTURE.md</code></td><td>The target architecture (layers, ports, SOLID) and the migration roadmap (steps 0-11, done). <i>In the menu under Reference.</i></td></tr>
 <tr><td><a href="code-split-and-region-agents-plan.md">Code split and region agents</a></td><td><code>code-split-and-region-agents-plan.md</code></td><td>The current plan, stages 0-8, with its progress. <i>In the menu under Reference.</i></td></tr>
 <tr><td><a href="code-review-tracker.md">Code-review tracker</a></td><td><code>code-review-tracker.md</code></td><td>The findings of the code review of 2026-10-13 and their status. <i>In the menu under Reference.</i></td></tr>
 </table></div>
-<h3>Plans and research</h3>
+<h3 id="plans-and-research">Plans and research</h3>
 <p class="meta">Drafts, research notes and task texts; each says how current it is.</p>
 <div class="table-wrap"><table>
 <tr><td><a href="sensor-neutral-retune-plan.md">Sensor-neutral retune (draft)</a></td><td><code>sensor-neutral-retune-plan.md</code></td><td>Draft of 2026-11-10: findings and direction for settings grounded in the sensor; its current status is in agents/roadmap.md.</td></tr>
@@ -993,7 +999,7 @@ branches merged one after the other were never tested together.</li>
 <tr><td><a href="ml-research-roadmap.html">Machine-learning learning guide</a></td><td><code>ml-research-roadmap.html</code></td><td>Modules M1-M9 to work through before any machine-learning work on dMapper.</td></tr>
 <tr><td><a href="dlidar-timestamp-fix-prompt.md">dLidar time alignment (task text)</a></td><td><code>dlidar-timestamp-fix-prompt.md</code></td><td>Historical task text for the recorder (dLidar): the LiDAR-IMU time alignment of L2 recordings. The recorder is outside dMapper&#x27;s scope.</td></tr>
 </table></div>
-<h3>Region knowledge files</h3>
+<h3 id="region-knowledge-files">Region knowledge files</h3>
 <p class="meta">One knowledge file per code region: what an agent that starts cold reads to own its part of the code (stage 7 of the code-split plan). Kept by the orchestrator from the agents' entries; English only.</p>
 <div class="table-wrap"><table>
 <tr><td><a href="regions/README.md">Regions: who owns what</a></td><td><code>regions/README.md</code></td><td>The eight regions, who owns which file and function (<code>owners.toml</code>), the rules for a region agent, worktrees and the replay gate, the protocol from a question to a merged change, the hand-back form.</td></tr>
@@ -1006,7 +1012,7 @@ branches merged one after the other were never tested together.</li>
 <tr><td><a href="regions/noise-budget.md">Region: noise-budget</a></td><td><code>regions/noise-budget.md</code></td><td>Every weight of a window (the noise model), the per-term table, the weak-axis and heading diagnostics.</td></tr>
 <tr><td><a href="regions/verification.md">Region: verification</a></td><td><code>regions/verification.md</code></td><td>The verification kit and its gate, the verify skills, the baselines, the analysis tools.</td></tr>
 </table></div>
-<h3>Agent working notes</h3>
+<h3 id="agent-working-notes">Agent working notes</h3>
 <p class="meta">Working notes of the Codex agent setup (read through AGENTS.md); kept by the agents, not edited as documentation.</p>
 <div class="table-wrap"><table>
 <tr><td><a href="agents/roadmap.md">Roadmap</a></td><td><code>agents/roadmap.md</code></td><td>Current status of the retune and Livox work as the agents keep it.</td></tr>

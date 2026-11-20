@@ -68,7 +68,7 @@
 </head>
 <body>
 <main>
-<p class="docs-nav" style="font-size:13px;margin:0 0 8px;color:var(--muted)"><a href="index.html">dMapper docs</a> › How the odometry works · <a href="index.html#documents">All documents</a> · <a href="hu/degeneracy-information.html" hreflang="hu" lang="hu">Magyar nyelven</a></p>
+<p class="docs-nav" style="font-size:13px;margin:0 0 8px;color:var(--muted)"><a href="index.html">dMapper docs</a> › How the odometry works · <a href="index.html#documents">All documents</a> · <a href="contents.html">Contents</a> · <a href="search.html">Search</a> · <a href="hu/degeneracy-information.html" hreflang="hu" lang="hu">Magyar nyelven</a></p>
 
 <h1>Degeneracy information: when the LiDAR can't see where you moved</h1>
 <p class="lead">What the "LiDAR translation information" is, how dMapper uses it to decide when to trust the accelerometer,
@@ -81,7 +81,7 @@ Every surface a window's points are matched to pins the motion only <em>across</
 up <code>n·nᵀ</code> over all matched normals gives a 3 × 3 matrix whose weakest direction is the one in which the LiDAR
 can't see the motion. When that direction is much weaker than the strongest one, the window is <strong>degenerate</strong>.</div>
 
-<h2>1. The idea: a surface only fixes motion along its normal</h2>
+<h2 id="1-the-idea-a-surface-only-fixes-motion-along-its-normal">1. The idea: a surface only fixes motion along its normal</h2>
 <p>The scan-to-map optimization moves each node until its points lie on the map's surfaces. A point on a wall tells the
 optimizer how far the sensor is <em>from</em> the wall, but nothing about where <em>along</em> the wall it is: sliding the
 sensor parallel to the wall leaves the point on the wall. So each matched point constrains the translation only along the
@@ -113,7 +113,7 @@ surface normal <code>n</code> of the map cell it hits.</p>
 node can slide along the corridor without moving any point off its surface.</figcaption>
 </figure>
 
-<h2>2. The matrix</h2>
+<h2 id="2-the-matrix">2. The matrix</h2>
 <p>For one window, <code>optimize_lidar_odometry</code> adds up, over every point matched to a fine-grid (0.15 m) cell with a
 valid normal:</p>
 <pre>I = Σ n · nᵀ        (3 × 3, world frame; n = the cell's unit surface normal)</pre>
@@ -130,14 +130,14 @@ eigen-decomposition gives the answer directly:</p>
 itself (the inverse covariances) looks strong even in a corridor, because the small Gaussians also hold points in place
 <em>along</em> a flat wall, so its ratio doesn't reveal the blindness.</p>
 
-<h2>3. How dMapper uses it</h2>
+<h2 id="3-how-dmapper-uses-it">3. How dMapper uses it</h2>
 <p>The accelerometer term (<code>imu_always_on</code>, <a href="index.html#p-imu"><code>[imu_translation]</code></a>)
 works in every window, weighted by the sensor's noise and a vibration floor, so the ratio does not switch it. The ratio
 drives the degeneracy-aware NDT terms (section 5b). An older variant used the accelerometer only in the window after a
 degenerate one, for at most 15 s, with a loosened translation prior; its on/off switch tipped on rounding and drew a ghost
 wall, and it was removed in 2026-11.</p>
 
-<h3>Measured values</h3>
+<h3 id="measured-values">Measured values</h3>
 <div class="table-wrap"><table>
   <tr><th>Where</th><th class="num">Ratio</th></tr>
   <tr><td>Rooms (real recording)</td><td class="num">0.36–0.86</td></tr>
@@ -145,7 +145,7 @@ wall, and it was removed in 2026-11.</p>
   <tr><td>Synthetic closed room (unit test)</td><td class="num">0.48 (eigenvalues 677, 740, 1419)</td></tr>
 </table></div>
 
-<h2>4. Reading the log</h2>
+<h2 id="4-reading-the-log">4. Reading the log</h2>
 <p>With the gating on, every window prints one line:</p>
 <pre>lidar translation information window 123: ratio 0.2140 weakest direction 0.98 0.17 0.02 | accelerometer term active</pre>
 <ul>
@@ -157,7 +157,7 @@ wall, and it was removed in 2026-11.</p>
 </ul>
 <p>At the end the console prints how many windows used the term: <code>accelerometer term: active in N of M windows</code>.</p>
 
-<h2>5. Known weakness: the cell normals (found 2026-10-04)</h2>
+<h2 id="5-known-weakness-the-cell-normals-found-2026-10-04">5. Known weakness: the cell normals (found 2026-10-04)</h2>
 <div class="warn"><b>The information is only as good as the map's normals, and many of them are wrong</b>
 The synthetic scan-to-map test (<code>tests/scan_to_map_test.cpp</code>, change <code>scan-to-map-test</code>) put a window
 in a 30 m corridor. The information came out <em>strongest</em> along the corridor (925 along x against 155 across), the
@@ -197,11 +197,11 @@ marks most windows of a real recording as degenerate and switches the accelerome
 but that mixes the new statistics with the much more frequent accelerometer term. The switch stays off for now. (That gate has since been removed; the accelerometer term now works in every window.) The test suite already runs on the exact statistics, so the corridor
 test is a normal passing test.</p>
 
-<h2>5b. Ghost walls in blind passages and the degeneracy-aware NDT terms</h2>
+<h2 id="5b-ghost-walls-in-blind-passages-and-the-degeneracy-aware-ndt-terms">5b. Ghost walls in blind passages and the degeneracy-aware NDT terms</h2>
 <p>In a passage blind along its axis, a fragile decision can leave a doubled wall (change <code>odometry-stall-fix</code>): the accelerometer gate decides by the previous window's ratio below 0.3, and the same stretch could give 0.19 in a <code>/fp:precise</code> build and 0.38 in a <code>/fp:fast</code> one. Without the term the window fell behind along the passage by tens of centimetres, because the NDT map holds the points where earlier scans put them (the small Gaussians constrain sliding along a flat wall, the false stiffness described above), and the offset snapped back when the path re-entered a room mapped before, leaving a ghost wall.</p>
 <p>The fix is the established one for this (solution remapping, Zhang, Kaess, Singh 2016, with a soft ramp): along a direction whose share of Σ n·nᵀ is below <code>degenerate_projection_ratio</code> (0.1) the NDT terms carry no translation information, so the motion model alone places the window there; up to <code>degenerate_projection_ratio_full</code> (0.2) the information is scaled linearly. The fast and precise builds then stay much closer to each other, and the ghost wall is gone in both. Tried and rejected: the exact cell statistics with the threshold lowered to 0.10–0.15 (loop closure corrections of metres), a continuous accelerometer weight up to 0.5 (the term ran in a third of the windows and drifted by metres), and planar cells regularized to 0.3 m in the plane (less stable). The literature survey behind this is in <code>openspec/changes/archive/*odometry-stall-fix/research.md</code>.</p>
 
-<h2>6. Where to find it</h2>
+<h2 id="6-where-to-find-it">6. Where to find it</h2>
 <ul>
   <li>Computed: <code>optimize_lidar_odometry</code> in <code>src/domain/scan_to_map.cpp</code> (<code>lidar_translation_information</code>).</li>
   <li>Used: <code>prepare_acc_term</code> and <code>update_acc_term_after_window</code> in <code>src/application/run_odometry.cpp</code>.</li>
@@ -209,7 +209,7 @@ test is a normal passing test.</p>
   <li>Tests: <code>tests/scan_to_map_test.cpp</code> (room and corridor) and <code>tests/ndt_map_test.cpp</code> (the cell statistics).</li>
 </ul>
 
-<h2>See also</h2>
+<h2 id="see-also">See also</h2>
 <ul class="docs-nav"><li><a href="window-chaining.html">Poses, windows and window chaining</a></li><li><a href="window-terms.html">The per-term table: Livox 3</a></li><li><a href="index.html#s-opt">User guide: the optimization</a></li><li><a href="index.html#documents">All documents</a></li></ul>
 </main>
 </body>

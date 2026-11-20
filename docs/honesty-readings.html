@@ -47,7 +47,7 @@
 </head>
 <body>
 <main>
-<p class="docs-nav" style="font-size:13px;margin:0 0 8px;color:var(--muted)"><a href="index.html">dMapper docs</a> › How the odometry works · <a href="index.html#documents">All documents</a></p>
+<p class="docs-nav" style="font-size:13px;margin:0 0 8px;color:var(--muted)"><a href="index.html">dMapper docs</a> › How the odometry works · <a href="index.html#documents">All documents</a> · <a href="contents.html">Contents</a> · <a href="search.html">Search</a></p>
 
 <h1>Honesty readings and truth tests: is the estimator as sure as it says?</h1>
 <p class="lead">Every window hands its velocity, acceleration offset and gyro bias to the next one together with a
@@ -62,7 +62,7 @@ Done: the readings, the record of the hand-off, the exact control, the synthetic
 cases. Still being built: the window and loop fixtures, the report tool <code>tools/honesty_report.py</code> and the
 replays. The change's <code>design.md</code> holds the reasons for every choice made here.</div>
 
-<h2>The instruments at a glance</h2>
+<h2 id="the-instruments-at-a-glance">The instruments at a glance</h2>
 <div class="table-wrap"><table>
 <tr><th>Instrument</th><th>Answers</th><th>Where</th><th>Status</th></tr>
 <tr><td>Normalised moves (honesty readings)</td><td>In a real run: did each window move a carried state by about as much as its claimed uncertainty allows?</td><td>the run's log (verdict summary), <code>window_features.csv</code></td><td>in every run</td></tr>
@@ -74,7 +74,7 @@ replays. The change's <code>design.md</code> holds the reasons for every choice 
 <tr><td>Report tool</td><td>The same table from a real run and from a synthetic one</td><td><code>tools/honesty_report.py</code></td><td>planned</td></tr>
 </table></div>
 
-<h2>The normalised move</h2>
+<h2 id="the-normalised-move">The normalised move</h2>
 <p>For a carried state with prior mean <i>m</i> and prior covariance <i>P</i>, a window finds the result <i>x</i> and
 the posterior covariance <i>P</i><sub>post</sub>. Under the window's own model the move <i>d</i> = <i>x</i> − <i>m</i>
 has the covariance <i>P</i> − <i>P</i><sub>post</sub>, so</p>
@@ -98,7 +98,7 @@ the normalised move is reported beside it.</div>
 <tr><td><code>reduction below 0.5</code></td><td>the window adds so little to the state that the ratio is noise (common for the gyro bias, whose prior is tight)</td></tr>
 </table></div>
 
-<h3>How to get and read them</h3>
+<h3 id="how-to-get-and-read-them">How to get and read them</h3>
 <p>Every run and replay writes three summary lines, with their coverage even when nothing was measured:</p>
 <pre>window verdict summary: normalised move, start velocity (descriptive, 1 expected under the window's own model): coverage 84/84, median 13.060, p95 61.320, largest 96.570
 window verdict summary: normalised move, start velocity and offset (descriptive, ...): coverage 0/84; not measured: absent 84
@@ -113,7 +113,7 @@ window's first pose being exact, the weights are re-weighted (Huber) and the pro
 expectation, not a guarantee. A reading far above 1 shows a claim that the window's own data contradicts; it does not
 say which term is wrong, and it says nothing about the map. There are no limits and no triggers on these readings.</div>
 
-<h2>The prepared and handed-on state</h2>
+<h2 id="the-prepared-and-handed-on-state">The prepared and handed-on state</h2>
 <p>With <code>log_window_terms</code>, each window's row of <code>window_features.csv</code> also holds:</p>
 <ul>
 <li><code>prepared_*</code>: the first pose as the window was placed, and the priors it was prepared with (velocity,
@@ -129,12 +129,12 @@ world-frame acceleration over the window's first 30 ms).</li>
 <code>handed_last_*</code> against <code>handed_last_solved_*</code> shows what the tail re-propagation moved. The
 earlier columns of the file are unchanged.</p>
 
-<h2>The truth tests</h2>
+<h2 id="the-truth-tests">The truth tests</h2>
 <p>The readings show <i>that</i> a claim does not fit. To find <i>why</i>, the unit tests run the production code on
 synthetic data whose truth is known, in a "model world" where every sensor error is drawn as the estimator's weights
 assume. A failure is called an error of the code only where a test isolates one quantity and states the honest outcome;
 everything measured on the whole loop is reported as a measurement.</p>
-<h3>Running them</h3>
+<h3 id="running-them">Running them</h3>
 <pre>out\build\x64-Release\bin\lidar_odometry_tests.exe -tc="exact control*"
 out\build\x64-Release\bin\lidar_odometry_tests.exe -tc="synthetic*"
 out\build\x64-Release\bin\lidar_odometry_tests.exe -tc="unit case*" -s</pre>
@@ -146,7 +146,7 @@ together in Release).</p>
 <tr><td>synthetic motion / IMU / routes / source</td><td>the generator itself: an independent integration reproduces its truth; its noise is what its parameters say; its samples follow the estimator's time conventions (gyro sample k covers the interval ending at node k, accelerometer sample k the interval starting at node k); every point lands at the node it was generated for</td></tr>
 <tr><td>unit case K3, K4, A2, K6, K7, K9, K10</td><td>one discrepancy each, with a paired control: the velocity prior over the gap between windows, the re-propagated tail, a constant-velocity window taken as at rest, the rest test with a tilted filter, the fractional degeneracy projection, the cell test's rotation dependence, the origin fix's units</td></tr>
 </table></div>
-<h3>Writing a new case</h3>
+<h3 id="writing-a-new-case">Writing a new case</h3>
 <ul>
 <li>Make a recording: <code>generate_recording(route_r2(), SensorProfile{...}, ImuNoise{})</code>
 (<code>ImuNoise::none()</code> for noise-free), and cut it with <code>cut_into_windows</code> through the real front
@@ -162,7 +162,7 @@ the windows of one run as independent draws.</li>
 statement says what the honest outcome is; otherwise report it.</li>
 </ul>
 
-<h2>What they have shown so far</h2>
+<h2 id="what-they-have-shown-so-far">What they have shown so far</h2>
 <p class="meta">Measurements of 2026-11-20, no verdicts.</p>
 <ul>
 <li>Start-velocity normalised move on replays: median 13 (an indoor Livox stretch) and 41 (an L2 stretch). The
@@ -172,7 +172,7 @@ velocity's moves are several times larger than its claimed sigma; the gyro bias'
 solved as at rest (end velocity 0.01 m/s for a true 2 m/s).</li>
 </ul>
 
-<h2>See also</h2>
+<h2 id="see-also">See also</h2>
 <ul class="docs-nav"><li><a href="window-terms.html">The per-term table</a></li><li><a href="degeneracy-information.html">Degeneracy information</a></li><li><a href="regions/verification.md">Region: verification</a></li><li><a href="../openspec/changes/consistency-harness/design.md">The change's design</a></li><li><a href="index.html#documents">All documents</a></li></ul>
 </main>
 </body>

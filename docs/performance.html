@@ -68,7 +68,7 @@
 </head>
 <body>
 <main>
-<p class="docs-nav" style="font-size:13px;margin:0 0 8px;color:var(--muted)"><a href="index.html">dMapper docs</a> › How the odometry works · <a href="index.html#documents">All documents</a> · <a href="hu/performance.html" hreflang="hu" lang="hu">Magyar nyelven</a></p>
+<p class="docs-nav" style="font-size:13px;margin:0 0 8px;color:var(--muted)"><a href="index.html">dMapper docs</a> › How the odometry works · <a href="index.html#documents">All documents</a> · <a href="contents.html">Contents</a> · <a href="search.html">Search</a> · <a href="hu/performance.html" hreflang="hu" lang="hu">Magyar nyelven</a></p>
 
 <h1>Performance: how the full recording got 2.2 times faster</h1>
 <p class="lead">Between 2026-10-05 and 2026-10-08 the processing of a full reference recording (about 5 minutes of data, 690 windows, 16.5 million points) went from 33 to 10 minutes, and its odometry from 26 to 8 minutes. This page shows what was measured, what each step changed, and what is left.</p>
@@ -80,7 +80,7 @@
   <div class="card"><div class="big">1969 → 601 s</div><div class="lbl">processing time reported by the program (−69 %)</div></div>
 </div>
 
-<h2>The six steps</h2>
+<h2 id="the-six-steps">The six steps</h2>
 <figure>
 <svg viewBox="0 0 880 302" role="img" aria-label="stacked bars: odometry and the rest of the run for the six steps">
   <text x="196" y="35" text-anchor="end" font-size="14">Before</text>
@@ -124,7 +124,7 @@
 <tr><td>Reprocessing from an odometry snapshot</td><td>2026-10-11</td><td>for loop-closure experiments: 178 s on the full reference recording instead of 1338 s for a full run (18 s instead of 179 s on a 30-second cut of it); bit-identical</td></tr>
 </table></div>
 
-<h2>What was slow</h2>
+<h2 id="what-was-slow">What was slow</h2>
 <p>The profile of the odometry before the three steps (<code>log_stage_timing</code>, 69,000 Levenberg–Marquardt iterations):</p>
 <div class="table-wrap"><table>
 <tr><th>Phase of an iteration</th><th class="num">Time</th><th class="num">Share</th></tr>
@@ -138,7 +138,7 @@
 </table></div>
 <p>Disk input and output is not a bottleneck inside the odometry: reading a window's points takes about 1 ms.</p>
 
-<h2>What each fix did</h2>
+<h2 id="what-each-fix-did">What each fix did</h2>
 <div class="table-wrap"><table>
 <tr><th>Fix</th><th>Date</th><th>Result</th></tr>
 <tr><td>Sparse band of the normal matrix</td><td>2026-09-30</td><td>about 35 % less time per window, bit-identical</td></tr>
@@ -153,12 +153,12 @@
 <tr><td>Stored NDT cell inverses</td><td>2026-10-08</td><td>odometry −5 %, bit-identical; the NDT loops −11 % / −13 %</td></tr>
 </table></div>
 
-<h2>Did the results change?</h2>
+<h2 id="did-the-results-change">Did the results change?</h2>
 <p>Multithreading and the banded matrix did not change a single bit on the 30-second test recording, and the fixed pattern moved it by at most 1e-10 m. The floating-point mode did change the numbers, by more than expected:</p>
 <div class="warn"><b>/fp:fast → /fp:precise</b>
 On the 30-second test recording the two baselines differ by up to 2 cm in position. On the full recording the calculated route is 215.46 m long instead of 216.06 m, and some per-window gyro-bias estimates differ by up to 0.19 °/s. The quality metrics of <code>tools/eval_odometry.py</code> are equal or slightly better with precise (window yaw difference 1.37 → 1.33 °, spikes above 3 °: 6 → 4, final yaw −126.4 → −126.0 ° against the gyro's −136.9 → −136.8 °). Without ground truth neither mode can be called closer to the truth. The switch was made because <code>/fp:fast</code> bought only 0–2 % speed while making the result depend on how the compiler ordered sums, which needed a second build and a tolerance rule for every check. The old baselines are kept as dated folders.</div>
 
-<h2>What is left</h2>
+<h2 id="what-is-left">What is left</h2>
 <p>The whole run of 622 s now consists of (approximately):</p>
 <div class="table-wrap"><table>
 <tr><th>Stage</th><th class="num">Time</th><th class="num">Share</th></tr>
@@ -172,7 +172,7 @@ On the 30-second test recording the two baselines differ by up to 2 cm in positi
 
 <p class="meta">Details, the method and every number: <a href="../docs/PERFORMANCE.md">PERFORMANCE.md</a> in the repository. Times are for the reference recordings with the Release build; the machine has 16 logical cores.</p>
 
-<h2>See also</h2>
+<h2 id="see-also">See also</h2>
 <ul class="docs-nav"><li><a href="PERFORMANCE.md">PERFORMANCE.md: every fix with method and numbers</a></li><li><a href="window-chaining.html">Window chaining</a></li><li><a href="index.html#documents">All documents</a></li></ul>
 </main>
 </body>
