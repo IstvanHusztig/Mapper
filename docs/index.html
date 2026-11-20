@@ -92,8 +92,10 @@
   th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
   th { font-size: 12.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: var(--code-bg); }
   tr:last-child td { border-bottom: none; }
-  td:first-child { font-family: ui-monospace, Consolas, monospace; font-size: 13px; white-space: nowrap; }
-  td.val { font-family: ui-monospace, Consolas, monospace; font-size: 13px; white-space: nowrap; }
+  /* names and values may wrap (long setting names break at their underscores) so that the text column keeps its width */
+  td:first-child { font-family: ui-monospace, Consolas, monospace; font-size: 13px; max-width: 30ch; overflow-wrap: anywhere; }
+  td.val { font-family: ui-monospace, Consolas, monospace; font-size: 13px; max-width: 18ch; overflow-wrap: anywhere; }
+  td:last-child { min-width: 34ch; }
   .badge { display: inline-block; font: 11px/1.6 system-ui, sans-serif; padding: 0 6px; border-radius: 9px; margin-left: 6px; vertical-align: 1px; white-space: nowrap; }
   .b-gui { background: var(--warn-soft); color: var(--warn); }
   .b-off { background: var(--tag); color: var(--muted); }
