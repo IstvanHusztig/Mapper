@@ -7,7 +7,6 @@ Start with the dMapper guide, [index.html](index.html) (open it in a browser). T
 Start here: what a run does and what every setting means.
 
 - [User guide](index.html): The basic terms ([Fundamentals](index.html#fundamentals): pose, node, window, term, bend …, defined once and linked from every page), the pipeline step by step, every parameter, best practices, the tuning cheat sheet, known limitations.
-- [Contents](contents.html): The indexed table of contents of every page with its main sections (built from this map and the pages' headings by `tools/build_docs_index.py`).
 - [Documentation map](README.md): This file: the map of every page, by purpose.
 - [How a run works: windows](PIPELINE.md): How a run cuts the recording into windows and processes one window (short, technical). *From pipeline step 3.*
 
@@ -64,4 +63,4 @@ Working notes of the Codex agent setup (read through AGENTS.md); kept by the age
 - [Removal validation](agents/removal-validation.md): Validation record of the accelerometer-mode removal.
 - [Turn calibration measurements](agents/turn-calibration-measurements.md): Measurements of the turn recording, 2026-11-12.
 
-After adding or changing a page, run `python tools/build_docs_index.py` (rebuilds `search-index.js` and `contents.html`). A new page goes into this map and into the guide's [All documents](index.html#documents), and gets the top line and the "See also" block the other pages have.
+After adding or changing a page, run `python tools/build_docs_index.py` (rebuilds `search-index.js` and the contents at the front of `index.html`). A new page goes into this map and into the guide's [All documents](index.html#documents), and gets the top line and the "See also" block the other pages have.
