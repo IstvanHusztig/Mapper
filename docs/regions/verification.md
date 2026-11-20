@@ -131,6 +131,16 @@ Not applicable to the Python tools. The region's C++ (`tools/cut_recording/cut_r
 
 ## Experiments
 
+- **2026-11-20, unit-level cases** (54c04db; `consistency-harness` 5.4; `tests/unit_cases_{inertial,ndt}_test.cpp`):
+  all seven reproduce the audit's numbers and are isolated by a paired control: K3 the prior mean over the gap is the
+  carried end velocity, -2 mm/s per m/s^2 over 2 ms; K4 the tail -0.75 mm at 1 m/s^2, the next first pose -1.664 mm at
+  2 m/s^2 (shipped tail 30 / span 20: -6.0 / -6.3 mm); K6 rest lost from 1.7528 deg of filter tilt (= 2 asin(0.3 / 2g));
+  K7 2 g/k at s = 0.5 (g / (s k) in general); K9 thinnest usable normal sigma 3.162 mm axis-aligned, 2.238 mm at 45 deg;
+  K10 1e12 against 3.283e15. **A2 (new):** a constant-velocity window (2 m/s, no acceleration) passes the rest test;
+  with `imu_always_on` it is solved as at rest: start 0.646, end 0.010 m/s, move 0.035 m against 0.716 m (the paired
+  control without rest keeps 2 m/s). Characterisation only; markers are task 5.8. Hand-built analytic windows (not the
+  generator), empty map.
+
 - **2026-11-20, the model-world recording** (f758517, merged e9856e8; `consistency-harness` 4.1-4.2):
   `tests/synthetic_inertial.*`, `tests/synthetic_routes.*`. Gyro sample k = the interval ending at node k (sample 0 the
   5 ms step), accelerometer sample k = the interval starting at node k; a hit of node k is stamped `nextafter(node k)`.

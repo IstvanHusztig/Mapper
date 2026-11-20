@@ -97,7 +97,7 @@ files they name;** the orchestrator adds them when it integrates a hand-back.
   with its kind; the error vectors of D5 with their three controls. Verify: the controls pass; where only claims
   that were made true are active, the summed normalised error per state and axis with its interval and the
   detectable deviation, sized by 2.1; elsewhere the scatter beside the claim, descriptively.
-- [ ] 5.4 F-d and the unit-level cases: K3 (prepared prior mean over the gap), K4 (the tail alone, and the next first
+- [x] 5.4 F-d and the unit-level cases: K3 (prepared prior mean over the gap), K4 (the tail alone, and the next first
   pose as actually predicted), A2 (noise-free constant velocity through the loop steps: is it taken as rest, and
   what follows), K6 (rest test with a tilted filter pitch), K7 (fractional projection's own step), K9 (cell test
   and rotation), K10 (origin fix weight in radians). Verify: each reports its measurement beside the audit's
