@@ -1,5 +1,8 @@
 #include "window_term_csv.h"
 
+#include <angle_units.h>
+#include <transformations.h>
+
 #include <cmath>
 #include <iomanip>
 #include <sstream>
@@ -49,7 +52,106 @@ namespace
              "noise_velocity_prior_1_mps,noise_velocity_prior_2_mps,noise_velocity_prior_3_mps,noise_bias_prior_1_deg_s,noise_bias_prior_2_deg_s,"
              "noise_bias_prior_3_deg_s,noise_offset_prior_1_mps2,noise_offset_prior_2_mps2,noise_offset_prior_3_mps2,noise_zero_velocity_mps,"
              "noise_ndt_information_scale,noise_ndt_huber_cutoff";
+        // consistency-harness D9: the state the window was prepared with, what it handed on, and two features (empty where
+        // absent). Poses as position and Tait-Bryan angles om, fi, ka; covariances as sigmas (square roots of the
+        // diagonal), the velocity-offset cross block as its diagonal
+        const auto xyz = [&h](const std::string &name, const std::string &unit)
+        {
+            for (const char *axis : {"x", "y", "z"})
+                h += "," + name + "_" + axis + "_" + unit;
+        };
+        const auto pose = [&h, &xyz](const std::string &name)
+        {
+            xyz(name, "m");
+            for (const char *angle : {"om", "fi", "ka"})
+                h += "," + name + "_" + angle + "_deg";
+        };
+        pose("prepared_first");
+        xyz("prepared_velocity_prior", "mps");
+        xyz("prepared_velocity_prior_sigma", "mps");
+        xyz("prepared_offset_prior", "mps2");
+        xyz("prepared_offset_prior_sigma", "mps2");
+        h += ",prepared_velocity_offset_cov_xx,prepared_velocity_offset_cov_yy,prepared_velocity_offset_cov_zz";
+        xyz("prepared_gravity", "g");
+        xyz("prepared_bias_prior", "deg_s");
+        xyz("prepared_bias_prior_sigma", "deg_s");
+        h += ",handoff";
+        xyz("handed_velocity_end", "mps");
+        xyz("handed_velocity_end_sigma", "mps");
+        xyz("handed_gravity", "g");
+        h += ",handed_to_mps2_before_fold";
+        xyz("handed_offset_sigma", "mps2");
+        h += ",handed_velocity_offset_cov_xx,handed_velocity_offset_cov_yy,handed_velocity_offset_cov_zz";
+        xyz("handed_bias", "deg_s");
+        xyz("handed_bias_sigma", "deg_s");
+        h += ",handed_last_solved_time_s";
+        pose("handed_last_solved");
+        h += ",handed_last_time_s";
+        pose("handed_last");
+        h += ",rotation_rate_mean_deg_s";
+        xyz("start_acceleration", "mps2");
         return h;
+    }
+
+    // the columns of an absent value: empty fields
+    std::string empty_fields(int n) { return std::string(n, ','); }
+
+    std::string vector3_or_empty(const std::optional<Eigen::Vector3d> &v, double scale = 1.0)
+    {
+        return v ? "," + vector3(*v * scale) : empty_fields(3);
+    }
+
+    std::string sigmas_or_empty(const std::optional<Eigen::Matrix3d> &cov, double scale = 1.0)
+    {
+        return cov ? "," + vector3(cov->diagonal().cwiseMax(0.0).cwiseSqrt() * scale) : empty_fields(3);
+    }
+
+    std::string diagonal_or_empty(const std::optional<Eigen::Matrix3d> &m) { return m ? "," + vector3(m->diagonal()) : empty_fields(3); }
+
+    std::string pose_or_empty(const std::optional<Eigen::Affine3d> &pose)
+    {
+        if (!pose)
+            return empty_fields(6);
+        const TaitBryanPose p = pose_tait_bryan_from_affine_matrix(*pose);
+        return "," + vector3(Eigen::Vector3d(p.px, p.py, p.pz)) + "," + vector3(Eigen::Vector3d(p.om, p.fi, p.ka) * RAD_TO_DEG);
+    }
+
+    std::string node_or_empty(const std::optional<WindowNode> &node)
+    {
+        return node ? "," + number(node->time_s) + pose_or_empty(node->pose) : empty_fields(7);
+    }
+
+    const char *handoff_name(WindowHandOff h)
+    {
+        switch (h)
+        {
+        case WindowHandOff::done:
+            return "done";
+        case WindowHandOff::cancelled:
+            return "cancelled";
+        default:
+            return "";
+        }
+    }
+
+    // the columns of consistency-harness D9, in the header's order
+    std::string handed_on_fields(const WindowTermRecord &r)
+    {
+        const WindowPreparedState &p = r.prepared;
+        std::string s = pose_or_empty(p.first_pose) + vector3_or_empty(p.velocity_prior_mean) + sigmas_or_empty(p.velocity_prior_cov) +
+                        vector3_or_empty(p.offset_prior_mean) + sigmas_or_empty(p.offset_prior_cov) +
+                        diagonal_or_empty(p.velocity_offset_prior_cov) + vector3_or_empty(p.gravity) +
+                        vector3_or_empty(p.bias_prior_mean_rad_s, RAD_TO_DEG) + sigmas_or_empty(p.bias_prior_cov, RAD_TO_DEG);
+        s += std::string(",") + handoff_name(r.handoff);
+        const WindowHandedOnState none{};
+        const WindowHandedOnState &h = r.handoff == WindowHandOff::done ? r.handed_on : none;
+        s += vector3_or_empty(h.velocity_end) + sigmas_or_empty(h.velocity_end_cov) + vector3_or_empty(h.gravity) + "," +
+             (h.to_mps2_before_fold ? number(*h.to_mps2_before_fold) : std::string()) + sigmas_or_empty(h.offset_cov) +
+             diagonal_or_empty(h.velocity_offset_cov) + vector3_or_empty(h.bias_mean_rad_s, RAD_TO_DEG) +
+             sigmas_or_empty(h.bias_cov, RAD_TO_DEG) + node_or_empty(h.last_node_solved) + node_or_empty(h.last_node_handed_on);
+        s += "," + (r.rotation_rate_rad_s ? number(*r.rotation_rate_rad_s * RAD_TO_DEG) : std::string()) +
+             vector3_or_empty(r.start_acceleration_mps2);
+        return s;
     }
 
     void write_rows(std::ofstream &out, const WindowTermRecord &r, const char *state, const WindowTermTable &t)
@@ -120,6 +222,7 @@ void FolderWindowTermSink::write(const WindowTermRecord &r)
     for (const Eigen::Vector3d *v : {&n.velocity_prior_mps, &n.bias_prior_deg_s, &n.offset_prior_mps2})
         features_ << "," << sigma(v->x()) << "," << sigma(v->y()) << "," << sigma(v->z());
     features_ << "," << sigma(n.zero_velocity_mps) << "," << sigma(n.ndt_information_scale) << "," << sigma(n.ndt_huber_cutoff);
+    features_ << handed_on_fields(r);
     features_ << "\n";
     terms_.flush();
     features_.flush();

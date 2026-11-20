@@ -23,7 +23,9 @@
 
 #include <Eigen/Dense>
 #include <array>
+#include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 constexpr int kTermMotions = 4;    // shift, stretch, curve, turn
@@ -90,3 +92,20 @@ WindowTermTable window_term_table(const WindowTermInputs &inputs);
 // per direction; turn = the rotation change at the last node minus the first node's, about each direction [deg]
 std::array<std::array<double, kTermDirections>, kTermMotions> window_motion_change(const Window &from, const Window &to,
                                                                                  const std::array<Eigen::Vector3d, kTermDirections> &directions);
+
+// The window's mean rotation rate [rad/s] from its attitude increments: the sum over consecutive nodes of the angle of
+// R_k^T R_(k+1), divided by the time from the first node to the last. Attitudes, not raw gyro values (a replay has none).
+// nullopt: fewer than two nodes, poses and timestamps of different lengths, or no time passing.
+std::optional<double> mean_rotation_rate(const std::vector<Eigen::Affine3d> &poses, const std::vector<std::pair<double, double>> &timestamps);
+
+// the span of start_world_acceleration [s]
+constexpr double kStartAccelerationSpanS = 0.030;
+
+// The window's world-frame acceleration at its start [m/s^2], gravity removed: the mean of (R_k a_k - g) * 9.80665 / |g|
+// over the nodes k with t_k - t_0 <= span_s (node 0 always), a_k the raw accelerometer [accelerometer units, g] and g the
+// gravity vector in the same units (the accelerometer term's own conversion). nullopt: no nodes, imu_acc, poses and
+// timestamps of different lengths, or g zero / not finite.
+std::optional<Eigen::Vector3d> start_world_acceleration(const std::vector<Eigen::Affine3d> &poses,
+                                                        const std::vector<std::pair<double, double>> &timestamps,
+                                                        const std::vector<Eigen::Vector3d> &imu_acc, const Eigen::Vector3d &gravity,
+                                                        double span_s = kStartAccelerationSpanS);
