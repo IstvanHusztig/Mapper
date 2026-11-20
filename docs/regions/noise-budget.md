@@ -127,6 +127,12 @@ None: no function of this region is above 80 lines (`python tools/function_sizes
 
 ## Experiments
 
+- 2026-11-20 consistency-harness 3.1 (9a7d414, merged 527f18d): `WindowPreparedState` / `WindowHandedOnState` /
+  `WindowHandOff` in the per-window record; `mean_rotation_rate` (from the prepared poses' attitude increments) and
+  `start_world_acceleration` (first 30 ms) in `window_term_table`; 71 columns appended to `window_features.csv` (164 in
+  all). Step checks: all identical except the features table; its old prefix on 44_short 20-40 s: 2046 tokens, 0
+  different; `window_terms.csv` identical. The loop fills the values in task 3.3.
+
 - 2026-11-19 Joint (start velocity, offset) prior for layer 2 of `honest-inertial-carry` (job J4a, ef95898): fields
   `joint_prior*` in `WindowNoiseModel`, helpers `joint_prior_cov` and `joint_prior_cov_over_gap` (transition
   F = [[I, -gap I], [0, I]], then today's growth). An offset-only chain of 15 gaps gives the coherent velocity sigma

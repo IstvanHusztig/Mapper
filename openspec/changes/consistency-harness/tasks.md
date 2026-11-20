@@ -32,7 +32,7 @@ files they name;** the orchestrator adds them when it integrates a hand-back.
 
 ## 3. The record and the readings (noise-budget, solver, orchestrator; results unchanged)
 
-- [ ] 3.1 Noise-budget: the record's new parts and their CSV columns after the existing ones. On the window's own
+- [x] 3.1 Noise-budget: the record's new parts and their CSV columns after the existing ones. On the window's own
   row, taken right after it was prepared: its first pose and the prior means and covariances it was prepared with.
   Taken after the hand-off: the carry handed on (velocity, gravity vector and the unit factor before the fold,
   offset covariance, cross covariance, gyro bias, each with validity), the last node's pose and time as solved and
