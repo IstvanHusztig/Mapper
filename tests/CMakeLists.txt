@@ -33,6 +33,7 @@ add_executable(lidar_odometry_tests
   unit_cases_ndt_test.cpp
   terms_at_truth_test.cpp
   accelerometer_noise_test.cpp
+  loop_chains_test.cpp
   odometry_snapshot_test.cpp
   folder_result_sink_test.cpp
   loop_closure_test.cpp

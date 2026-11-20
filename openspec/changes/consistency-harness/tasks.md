@@ -102,7 +102,7 @@ files they name;** the orchestrator adds them when it integrates a hand-back.
   what follows), K6 (rest test with a tilted filter pitch), K7 (fractional projection's own step), K9 (cell test
   and rotation), K10 (origin fix weight in radians). Verify: each reports its measurement beside the audit's
   hypothesis and names its oracle, if it has one.
-- [ ] 5.5 F-e, chains through `process_windows`: the loop's setup from a valid stationary window, a start index
+- [x] 5.5 F-e, chains through `process_windows`: the loop's setup from a valid stationary window, a start index
   above zero with window 0 and the predecessor history, indexed intermediate points, a consistent carried state, the
   grids seeded from true points. The blind stretch with both switches off and on; K2 (exit with a boundary error
   injected in the predecessor's frame); K1 (the map displaced along travel, paired with the zero-shift control);

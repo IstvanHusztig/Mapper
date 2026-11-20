@@ -131,6 +131,20 @@ Not applicable to the Python tools. The region's C++ (`tools/cut_recording/cut_r
 
 ## Experiments
 
+- **2026-11-20, chains through the loop** (128e827; `consistency-harness` 5.5; `tests/loop_chains_test.cpp`; logs in
+  `experiments/consistency/fixtures/`): hand-built analytic windows through `process_windows` from a hand-set carry,
+  stage 8 candidate settings. **Blind stretch** (9 blind windows): with both switches off the end velocity's error stays
+  under its claimed 11.5-12.6 mm/s (ratio -0.6 to -1.4); with both on the claimed sigma grows 31 -> 95 mm/s with the
+  error 29 -> 106 mm/s (ratio 0.9-1.1). Over 20 seeds at window 15: off 19.5 per run, on 1.85 per run against an
+  interval [0.34, 2.12] per run (a smoke check; 215 runs would detect 1.5x). **K2** (exit): only switches off with 0 and
+  0.10 m injected passed its preconditions; e = 0.10 adds -11 to -60 mm/s over windows 17-21 (ratio -0.7 to -1.7); the
+  switches-on runs and e = 0.24 failed the exit-match precondition and were excluded. **K1** (map displaced): response
+  0.6-0.7 per T (off), 0.7-1.7 per T (on), against the audit's 1-4 per T. **K11** (boundary attitude 0.05 deg): the
+  bias leaves zero by at most 1.34 claimed sigmas (audit: 3-5). **F2 tail**: start move +15.1 (tail 15) vs +11.2 mm/s
+  (tail 0) in the first moving window (audit: +17-19). Map samples on a regular lattice fake a map-shift step (28.5 mm/s
+  at 1 um); random sampling removes it. Smoke case 9.8 s in `ctest`; the chains on demand (`-tc="loop chain:*"
+  --no-skip`), about 12 min.
+
 - **2026-11-20, terms at the truth** (a5b422a; `consistency-harness` 5.1-5.2; `tests/terms_at_truth.{h,_test.cpp}`,
   `tests/accelerometer_noise_test.cpp`): accelerometer terms at the true state lie within their derived bounds in every
   motion (largest ratio 0.58; exactly 0 quadrature at rest and constant acceleration). The rotation edges' float floor
