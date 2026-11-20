@@ -150,6 +150,9 @@ files = [
     "tests/synthetic_recording.cpp",
     "tests/synthetic_recording_test.cpp",
     "tests/serial_executor.h",
+    "tests/truth_statistics.h",
+    "tests/truth_statistics.cpp",
+    "tests/truth_statistics_test.cpp",
     "tests/test_verification_tools.py",
 ]
 
