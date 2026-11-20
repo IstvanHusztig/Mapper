@@ -23,6 +23,10 @@ add_executable(lidar_odometry_tests
   ndt_map_test.cpp
   synthetic_recording.cpp
   synthetic_recording_test.cpp
+  synthetic_inertial.cpp
+  synthetic_inertial_test.cpp
+  synthetic_routes.cpp
+  synthetic_routes_test.cpp
   truth_statistics.cpp
   truth_statistics_test.cpp
   odometry_snapshot_test.cpp
