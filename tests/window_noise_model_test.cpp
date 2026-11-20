@@ -5,6 +5,7 @@
 #include "motion_model_terms.h"
 #include "window_noise_model.h"
 #include "window_solver.h"
+#include "window_term_table.h"
 
 #include <cmath>
 #include <vector>
@@ -420,4 +421,67 @@ TEST_CASE("window noise model: the joint velocity-offset prior, only with imu_ca
         CHECK_FALSE(first.joint_prior);
         CHECK(first.joint_prior_information.isZero(0.0));
     }
+}
+
+// consistency-harness D9: the two features of the per-window record (window_term_table.h)
+TEST_CASE("window term table: mean rotation rate from the attitude increments")
+{
+    // 11 nodes, 0.1 s apart, turning about z by 2 deg per step, then back by 1 deg per step: angles add, signs don't cancel
+    std::vector<Eigen::Affine3d> poses;
+    std::vector<std::pair<double, double>> timestamps;
+    double heading = 0.0;
+    for (int k = 0; k <= 10; k++)
+    {
+        Eigen::Affine3d p = Eigen::Affine3d::Identity();
+        p.linear() = (Eigen::AngleAxisd(heading * DEG_TO_RAD, Eigen::Vector3d::UnitZ()) * Eigen::AngleAxisd(0.3, Eigen::Vector3d::UnitX())).toRotationMatrix();
+        poses.push_back(p);
+        timestamps.push_back({100.0 + 0.1 * k, 0.0});
+        heading += k < 5 ? 2.0 : -1.0;
+    }
+    // 5 steps of 2 deg and 5 of 1 deg over 1 s; the increments are in each node's frame, so the tilt doesn't change the angle
+    const std::optional<double> rate = mean_rotation_rate(poses, timestamps);
+    REQUIRE(rate);
+    CHECK(*rate * RAD_TO_DEG == doctest::Approx(15.0).epsilon(1e-9));
+
+    CHECK_FALSE(mean_rotation_rate({poses[0]}, {timestamps[0]}));
+    CHECK_FALSE(mean_rotation_rate(poses, std::vector<std::pair<double, double>>(timestamps.begin(), timestamps.end() - 1)));
+    CHECK_FALSE(mean_rotation_rate(poses, std::vector<std::pair<double, double>>(poses.size(), {5.0, 0.0})));
+}
+
+TEST_CASE("window term table: world-frame acceleration at the window's start")
+{
+    // the body is turned 90 deg about z; the accelerometer reads gravity (1.02 units) plus 0.1 units along body x, i.e. world y,
+    // for the first 30 ms, then something else; nodes every 10 ms
+    const Eigen::Vector3d gravity(0.0, 0.0, 1.02);
+    const double to_mps2 = 9.80665 / 1.02;
+    Eigen::Affine3d turned = Eigen::Affine3d::Identity();
+    turned.linear() = Eigen::AngleAxisd(0.5 * M_PI, Eigen::Vector3d::UnitZ()).toRotationMatrix();
+    std::vector<Eigen::Affine3d> poses(8, turned);
+    std::vector<std::pair<double, double>> timestamps;
+    std::vector<Eigen::Vector3d> acc;
+    for (int k = 0; k < 8; k++)
+    {
+        timestamps.push_back({50.0 + 0.01 * k, 0.0});
+        acc.push_back(k <= 2 ? Eigen::Vector3d(0.1, 0.0, 1.02) : Eigen::Vector3d(-5.0, 3.0, 0.0));
+    }
+    // the span holds the nodes at 0, 10, 20 ms (30 ms lies at the edge in floating point: take a span that is clearly inside)
+    const std::optional<Eigen::Vector3d> a = start_world_acceleration(poses, timestamps, acc, gravity, 0.025);
+    REQUIRE(a);
+    CHECK(a->x() == doctest::Approx(0.0).epsilon(1e-12));
+    CHECK(a->y() == doctest::Approx(0.1 * to_mps2).epsilon(1e-12));
+    CHECK(a->z() == doctest::Approx(0.0).epsilon(1e-12));
+    // a span shorter than one step: node 0 alone
+    const std::optional<Eigen::Vector3d> first = start_world_acceleration(poses, timestamps, acc, gravity, 0.0);
+    REQUIRE(first);
+    CHECK(first->y() == doctest::Approx(0.1 * to_mps2).epsilon(1e-12));
+    // the default span, 30 ms, also takes the node at 30 ms when it falls inside
+    std::vector<std::pair<double, double>> exact = timestamps;
+    exact[3].first = exact[0].first + 0.029;
+    const std::optional<Eigen::Vector3d> wider = start_world_acceleration(poses, exact, acc, gravity);
+    REQUIRE(wider);
+    CHECK(wider->y() != doctest::Approx(0.1 * to_mps2));
+
+    CHECK_FALSE(start_world_acceleration(poses, timestamps, {}, gravity));
+    CHECK_FALSE(start_world_acceleration(poses, timestamps, acc, Eigen::Vector3d::Zero()));
+    CHECK_FALSE(start_world_acceleration({}, {}, {}, gravity));
 }

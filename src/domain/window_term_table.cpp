@@ -383,3 +383,34 @@ std::array<std::array<double, kTermDirections>, kTermMotions> window_motion_chan
     }
     return change;
 }
+
+std::optional<double> mean_rotation_rate(const std::vector<Eigen::Affine3d> &poses, const std::vector<std::pair<double, double>> &timestamps)
+{
+    if (poses.size() < 2 || poses.size() != timestamps.size())
+        return std::nullopt;
+    const double duration = timestamps.back().first - timestamps.front().first;
+    if (!(duration > 0.0))
+        return std::nullopt;
+    double angle = 0.0;
+    for (size_t k = 0; k + 1 < poses.size(); k++)
+        angle += Eigen::AngleAxisd(poses[k].linear().transpose() * poses[k + 1].linear()).angle();
+    return angle / duration;
+}
+
+std::optional<Eigen::Vector3d> start_world_acceleration(const std::vector<Eigen::Affine3d> &poses,
+                                                        const std::vector<std::pair<double, double>> &timestamps,
+                                                        const std::vector<Eigen::Vector3d> &imu_acc, const Eigen::Vector3d &gravity,
+                                                        double span_s)
+{
+    if (poses.empty() || poses.size() != timestamps.size() || poses.size() != imu_acc.size())
+        return std::nullopt;
+    const double g = gravity.norm();
+    if (!(g > 0.0) || !std::isfinite(g))
+        return std::nullopt;
+    const double to_mps2 = 9.80665 / g;
+    Eigen::Vector3d sum = Eigen::Vector3d::Zero();
+    int n = 0;
+    for (size_t k = 0; k < poses.size() && (k == 0 || timestamps[k].first - timestamps.front().first <= span_s); k++, n++)
+        sum += (poses[k].linear() * imu_acc[k] - gravity) * to_mps2;
+    return Eigen::Vector3d(sum / double(n));
+}
