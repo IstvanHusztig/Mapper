@@ -30,6 +30,135 @@ namespace
     }
 }
 
+const char *move_not_measured_name(MoveNotMeasured reason)
+{
+    switch (reason)
+    {
+    case MoveNotMeasured::measured:
+        return "measured";
+    case MoveNotMeasured::absent:
+        return "absent";
+    case MoveNotMeasured::not_finite:
+        return "not finite";
+    case MoveNotMeasured::factorisation:
+        return "failed factorisation";
+    case MoveNotMeasured::ill_conditioned:
+        return "ill-conditioned";
+    case MoveNotMeasured::non_physical:
+        return "non-physical reduction";
+    case MoveNotMeasured::small_reduction:
+        return "reduction below 0.5";
+    case MoveNotMeasured::last_step:
+        return "last step above 1 % of prior sigma";
+    case MoveNotMeasured::clamped:
+        return "clamped bias";
+    }
+    return "?";
+}
+
+NormalisedMove normalised_move(const Eigen::VectorXd &prior_mean, const Eigen::MatrixXd &prior_cov, const Eigen::VectorXd &result,
+                               const Eigen::MatrixXd &posterior_cov, const Eigen::VectorXd &last_step, const NormalisedMoveLimits &limits)
+{
+    NormalisedMove r;
+    const Eigen::Index n = prior_mean.size();
+    if (n == 0 || result.size() != n || last_step.size() != n || prior_cov.rows() != n || prior_cov.cols() != n || posterior_cov.rows() != n ||
+        posterior_cov.cols() != n)
+        return r; // absent
+    if (!prior_mean.allFinite() || !prior_cov.allFinite() || !result.allFinite() || !posterior_cov.allFinite() || !last_step.allFinite())
+    {
+        r.reason = MoveNotMeasured::not_finite;
+        return r;
+    }
+    const Eigen::VectorXd variances = prior_cov.diagonal();
+    if ((variances.array() <= 0.0).any())
+    {
+        r.reason = MoveNotMeasured::ill_conditioned;
+        return r;
+    }
+    // the prior in correlation form, S^-1 P S^-1 = L L^T; then P^-1 = W^T W with W = L^-1 S^-1
+    const Eigen::VectorXd inv_sigma = variances.cwiseSqrt().cwiseInverse();
+    const Eigen::MatrixXd correlation = inv_sigma.asDiagonal() * prior_cov * inv_sigma.asDiagonal();
+    const Eigen::LLT<Eigen::MatrixXd> llt(correlation);
+    if (llt.info() != Eigen::Success)
+    {
+        r.reason = MoveNotMeasured::factorisation;
+        return r;
+    }
+    if (!(llt.rcond() >= limits.min_rcond))
+    {
+        r.reason = MoveNotMeasured::ill_conditioned;
+        return r;
+    }
+    const Eigen::VectorXd whitened_move = llt.matrixL().solve(inv_sigma.asDiagonal() * (result - prior_mean));
+    const Eigen::MatrixXd scaled_posterior = inv_sigma.asDiagonal() * (0.5 * (posterior_cov + posterior_cov.transpose())) * inv_sigma.asDiagonal();
+    const Eigen::MatrixXd half = llt.matrixL().solve(scaled_posterior);            // L^-1 M
+    const Eigen::MatrixXd whitened = llt.matrixL().solve(half.transpose().eval()); // L^-1 M L^-T (M symmetric)
+    const Eigen::MatrixXd whitened_sym = 0.5 * (whitened + whitened.transpose());
+    const Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eig(whitened_sym, Eigen::EigenvaluesOnly);
+    if (eig.info() != Eigen::Success || eig.eigenvalues().minCoeff() < -limits.eigen_tolerance ||
+        eig.eigenvalues().maxCoeff() > 1.0 + limits.eigen_tolerance)
+    {
+        r.reason = MoveNotMeasured::non_physical;
+        return r;
+    }
+    const double reduction = static_cast<double>(n) - whitened_sym.trace();
+    r.reduction = reduction;
+    if (reduction < limits.min_reduction)
+    {
+        r.reason = MoveNotMeasured::small_reduction;
+        return r;
+    }
+    if ((last_step.cwiseAbs().array() > limits.step_share * variances.cwiseSqrt().array()).any())
+    {
+        r.reason = MoveNotMeasured::last_step;
+        return r;
+    }
+    r.value = whitened_move.squaredNorm() / reduction;
+    r.reason = MoveNotMeasured::measured;
+    return r;
+}
+
+namespace
+{
+    NormalisedMove not_measured(MoveNotMeasured reason)
+    {
+        NormalisedMove r;
+        r.reason = reason;
+        return r;
+    }
+}
+
+HonestyReadings honesty_readings(const HonestyInputs &in, const NormalisedMoveLimits &limits)
+{
+    HonestyReadings r;
+    if (in.velocity)
+    {
+        if (!in.covariance_valid)
+            r.start_velocity = not_measured(MoveNotMeasured::absent);
+        else
+            r.start_velocity = normalised_move(in.velocity_prior_mean, in.velocity_prior_cov, in.start_velocity,
+                                               in.start_posterior.topLeftCorner<3, 3>(), in.start_velocity_step, limits);
+        if (in.joint_prior && in.covariance_valid)
+        {
+            Eigen::Matrix<double, 6, 1> mean, result, step;
+            mean << in.velocity_prior_mean, in.offset_prior_mean;
+            result << in.start_velocity, in.acc_offset;
+            step << in.start_velocity_step, in.acc_offset_step;
+            r.joint = normalised_move(mean, in.joint_prior_cov, result, in.start_posterior, step, limits);
+        }
+    }
+    if (in.bias)
+    {
+        if (!in.covariance_valid)
+            r.gyro_bias = not_measured(MoveNotMeasured::absent);
+        else if (in.bias_clamped)
+            r.gyro_bias = not_measured(MoveNotMeasured::clamped);
+        else
+            r.gyro_bias = normalised_move(in.bias_prior_mean, in.bias_prior_cov, in.bias_mean, in.bias_posterior, in.bias_step, limits);
+    }
+    return r;
+}
+
 WindowVerdict judge_window(const WindowEvidence &e, const VerdictLimits &limits)
 {
     WindowVerdict v;
@@ -145,6 +274,18 @@ RunVerdict summarize_run(const std::vector<WindowVerdict> &windows, bool complet
     r.readings.push_back(reading("iterations", values_of(windows, [](const WindowEvidence &e) { return std::optional<double>(e.iterations); })));
     r.readings.push_back(reading("remaining step [m]", values_of(windows, [](const WindowEvidence &e) { return e.remaining_step_m; })));
     r.readings.push_back(reading("LiDAR weight share along travel", values_of(windows, [](const WindowEvidence &e) { return e.lidar_share_along; })));
+    const auto move = [&](const char *name, NormalisedMove HonestyReadings::*m)
+    {
+        MoveSummary s;
+        s.reading = reading(name, values_of(windows, [&](const WindowEvidence &e) { return (e.moves.*m).value; }));
+        for (const WindowVerdict &w : windows)
+            if (!(w.evidence.moves.*m).value)
+                s.not_measured[static_cast<int>((w.evidence.moves.*m).reason)]++;
+        return s;
+    };
+    r.moves.push_back(move("start velocity", &HonestyReadings::start_velocity));
+    r.moves.push_back(move("start velocity and offset", &HonestyReadings::joint));
+    r.moves.push_back(move("gyro bias", &HonestyReadings::gyro_bias));
     for (const WindowVerdict &w : windows)
     {
         r.stopped[static_cast<int>(w.evidence.stop)]++;
@@ -178,6 +319,23 @@ void log_run_verdict(const RunVerdict &r, const VerdictLimits &limits, Logger &l
         if (x.measured)
             log_info(logger) << "window verdict summary: " << x.name << ": " << x.measured << " windows, median " << std::setprecision(4) << x.median
                              << ", p95 " << x.p95 << ", largest " << x.largest;
+    for (const MoveSummary &m : r.moves)
+    {
+        auto line = log_info(logger);
+        line << "window verdict summary: normalised move, " << m.reading.name << " (descriptive, 1 expected under the window's own model): coverage "
+             << m.reading.measured << "/" << r.windows;
+        if (m.reading.measured)
+            line << ", median " << std::fixed << std::setprecision(3) << m.reading.median << ", p95 " << m.reading.p95 << ", largest "
+                 << m.reading.largest;
+        bool first = true;
+        for (int k = 0; k < kMoveNotMeasuredReasons; k++)
+            if (m.not_measured[size_t(k)])
+            {
+                line << (first ? "; not measured: " : ", ") << move_not_measured_name(static_cast<MoveNotMeasured>(k)) << " "
+                     << m.not_measured[size_t(k)];
+                first = false;
+            }
+    }
     log_info(logger) << "window verdict summary: iterations stopped: converged " << r.stopped[0] << ", iteration limit " << r.stopped[1]
                      << ", time limit " << r.stopped[2] << ", forced " << r.stopped[3] << "; rejected steps " << r.rejected_steps
                      << ", steps not applied " << r.steps_not_applied << ", big-jump nodes " << r.big_jump_nodes;
@@ -201,5 +359,16 @@ void log_window_verdict(const WindowVerdict &v, Logger &logger)
                      << " deg/s, chi2 " << opt(e.velocity_chi2, 1) << ", information ratio " << opt(e.information_ratio, 3) << ", stopped "
                      << lm_stop_name(e.stop) << " after " << e.iterations << " iterations, damping " << std::scientific << std::setprecision(1)
                      << e.lm_factor << std::fixed << ", rejected " << e.rejected_steps << ", not applied " << e.steps_not_applied << ", big jump nodes "
-                     << e.big_jump_nodes << ", remaining step " << opt(e.remaining_step_m, 4) << " m, LiDAR share " << opt(e.lidar_share_along, 3);
+                     << e.big_jump_nodes << ", remaining step " << opt(e.remaining_step_m, 4) << " m, LiDAR share " << opt(e.lidar_share_along, 3)
+                     << "; normalised move start velocity " << move_text(e.moves.start_velocity) << ", start velocity and offset "
+                     << move_text(e.moves.joint) << ", gyro bias " << move_text(e.moves.gyro_bias);
+}
+
+std::string move_text(const NormalisedMove &m)
+{
+    if (!m.value)
+        return std::string("NOT MEASURED (") + move_not_measured_name(m.reason) + ")";
+    std::ostringstream o;
+    o << std::fixed << std::setprecision(3) << *m.value;
+    return o.str();
 }

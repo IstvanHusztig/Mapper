@@ -9,6 +9,9 @@
 #include "lm_solver.h"
 #include "run_reporting.h"
 
+#include <Eigen/Dense>
+
+#include <array>
 #include <optional>
 #include <string>
 #include <vector>
@@ -34,6 +37,88 @@ struct VerdictLimits
     double weak_ratio = 0.45;       // weak windows: information ratio below it (as log_window_diagnostics selects them)
 };
 
+// The normalised move of a carried state (openspec change consistency-harness, design D10): with the prior N(m, P) the
+// window was prepared with, its result x and the covariance P_post the window hands on for it, d = x - m and
+//     q = d^T P^-1 d / (n - tr(P^-1 P_post)),
+// whose expected value is 1 in a linear-Gaussian update with a fixed observation model. Descriptive: P_post is conditional
+// on the fixed first node, the NDT weights are re-weighted and the problem is linearised. No limit, flag or trigger.
+enum class MoveNotMeasured
+{
+    measured,
+    absent,          // the window has no such term, or no covariance was taken for its present state
+    not_finite,      // an input is NaN or infinite
+    factorisation,   // the prior covariance's Cholesky factorisation failed
+    ill_conditioned, // a prior variance not positive, or the scaled prior's reciprocal condition below the limit
+    non_physical,    // an eigenvalue of the whitened posterior outside [0, 1]: not a reduction of uncertainty
+    small_reduction, // n - tr(P^-1 P_post) below the limit: the window adds almost nothing to the state
+    last_step,       // the last accepted step moved a component by more than its share of the prior sigma
+    clamped          // the gyro bias ended at its clamp
+};
+constexpr int kMoveNotMeasuredReasons = 9;
+const char *move_not_measured_name(MoveNotMeasured reason);
+
+struct NormalisedMove
+{
+    std::optional<double> value;
+    MoveNotMeasured reason = MoveNotMeasured::absent; // measured exactly when value is set
+    std::optional<double> reduction;                  // n - tr(P^-1 P_post), where it was computed
+};
+
+struct NormalisedMoveLimits
+{
+    double step_share = 0.01;      // the last step's largest share of the prior sigma, per component
+    double eigen_tolerance = 1e-6; // around [0, 1] for the whitened posterior's eigenvalues
+    double min_reduction = 0.5;
+    double min_rcond = 1e-12; // of the prior scaled to unit variances
+};
+
+// the normalised move of one state. The prior is whitened through the Cholesky factor of its correlation form
+// (S^-1 P S^-1 = L L^T, S the prior sigmas), so the units of the components don't matter; last_step: the change of the
+// state by the step taken after P_post was computed (zero if none).
+NormalisedMove normalised_move(const Eigen::VectorXd &prior_mean, const Eigen::MatrixXd &prior_cov, const Eigen::VectorXd &result,
+                               const Eigen::MatrixXd &posterior_cov, const Eigen::VectorXd &last_step, const NormalisedMoveLimits &limits = {});
+
+// what the readings need from a window's problem, taken out of it before it goes out of scope
+// (WindowProblem::honesty_inputs, called in run_odometry.cpp's run_lm_iterations)
+struct HonestyInputs
+{
+    // a covariance was taken during the iterations, and the state still holds it (a step taken back restores both)
+    bool covariance_valid = false;
+    bool velocity = false;    // the accelerometer term: start velocity and acceleration offset
+    bool joint_prior = false; // imu_carry_joint_covariance: the prior on (start velocity, offset) is one joint Gaussian
+    bool bias = false;        // gyro-bias estimation
+    bool bias_clamped = false;
+
+    Eigen::Vector3d velocity_prior_mean = Eigen::Vector3d::Zero();
+    Eigen::Matrix3d velocity_prior_cov = Eigen::Matrix3d::Zero();
+    Eigen::Vector3d offset_prior_mean = Eigen::Vector3d::Zero();
+    Eigen::Matrix<double, 6, 6> joint_prior_cov = Eigen::Matrix<double, 6, 6>::Zero(); // (start velocity, offset); joint mode
+    Eigen::Vector3d start_velocity = Eigen::Vector3d::Zero();
+    Eigen::Vector3d acc_offset = Eigen::Vector3d::Zero();
+    Eigen::Matrix<double, 6, 6> start_posterior = Eigen::Matrix<double, 6, 6>::Zero(); // (start velocity, offset)
+    Eigen::Vector3d start_velocity_step = Eigen::Vector3d::Zero();                    // since the covariance was taken
+    Eigen::Vector3d acc_offset_step = Eigen::Vector3d::Zero();
+
+    Eigen::Vector3d bias_prior_mean = Eigen::Vector3d::Zero();
+    Eigen::Matrix3d bias_prior_cov = Eigen::Matrix3d::Zero();
+    Eigen::Vector3d bias_mean = Eigen::Vector3d::Zero();
+    Eigen::Matrix3d bias_posterior = Eigen::Matrix3d::Zero();
+    Eigen::Vector3d bias_step = Eigen::Vector3d::Zero();
+};
+
+// a window's normalised moves: the start velocity (with the accelerometer term), start velocity and offset jointly (with
+// the joint prior), the gyro bias (with its estimation); NOT MEASURED otherwise, or for a reason of normalised_move
+struct HonestyReadings
+{
+    NormalisedMove start_velocity;
+    NormalisedMove joint;
+    NormalisedMove gyro_bias;
+};
+HonestyReadings honesty_readings(const HonestyInputs &inputs, const NormalisedMoveLimits &limits = {});
+
+// a normalised move as text: the value with 3 decimals, or "NOT MEASURED (<reason>)"
+std::string move_text(const NormalisedMove &move);
+
 // what the loop knows about a window; an empty optional is a reading the window does not have
 struct WindowEvidence
 {
@@ -54,6 +139,7 @@ struct WindowEvidence
     int big_jump_nodes = 0;
     std::optional<double> remaining_step_m;  // log_window_terms: the largest |pull| of all terms together (shift, stretch, curve)
     std::optional<double> lidar_share_along; // log_window_terms: the NDT grids' share of the weight on stretch along travel
+    HonestyReadings moves;                   // the normalised moves (every run)
 };
 
 struct WindowVerdict
@@ -90,6 +176,13 @@ struct ReadingSummary
     double median = 0.0, p95 = 0.0, largest = 0.0;
 };
 
+// one normalised move over a run: its values over the windows that have it, and why the others don't
+struct MoveSummary
+{
+    ReadingSummary reading;
+    std::array<int, kMoveNotMeasuredReasons> not_measured{}; // windows per reason (index measured stays 0)
+};
+
 struct RunVerdict
 {
     int windows = 0;
@@ -99,6 +192,7 @@ struct RunVerdict
     ReadingSummary chi2_all;
     Check chi2_run = Check::not_measured; // the run's trigger on chi2_weak
     std::vector<ReadingSummary> readings;
+    std::vector<MoveSummary> moves; // start velocity, start velocity and offset, gyro bias; listed also when none was measured
     int stopped[4] = {0, 0, 0, 0}; // per LmStop
     int rejected_steps = 0, steps_not_applied = 0, big_jump_nodes = 0;
 };

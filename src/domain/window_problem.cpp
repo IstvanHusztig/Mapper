@@ -84,7 +84,12 @@ void WindowProblem::take_covariance(const Eigen::MatrixXd &cols)
         acc_offset_cov_ = cols.block<3, 3>(unknowns_.io, unknowns_.io - n_pose_params);
         window_.velocity.end_covariance = cols.block<3, 3>(unknowns_.ie, unknowns_.ie - n_pose_params);
         window_.velocity.end_offset_covariance = cols.block<3, 3>(unknowns_.ie, unknowns_.io - n_pose_params);
+        start_velocity_cov_ = cols.block<3, 3>(unknowns_.iv, unknowns_.iv - n_pose_params);
+        start_offset_cov_ = cols.block<3, 3>(unknowns_.iv, unknowns_.io - n_pose_params);
     }
+    // the covariance now belongs to the present state
+    covariance_taken_ = true;
+    step_since_covariance_.setZero();
 }
 
 bool WindowProblem::apply(const std::vector<double> &h_x, bool solved, double &delta)
@@ -92,13 +97,64 @@ bool WindowProblem::apply(const std::vector<double> &h_x, bool solved, double &d
     WindowStep step;
     step.solved = solved;
     step.h_x = h_x;
-    return apply_window_step(window_, step, unknowns_, rotation_options_, acc_offset_, delta, workspace_, logger_);
+    const Eigen::Vector3d start_before = window_.velocity.start, offset_before = acc_offset_, bias_before = window_.gyro_bias.mean;
+    const bool applied = apply_window_step(window_, step, unknowns_, rotation_options_, acc_offset_, delta, workspace_, logger_);
+    // the change the step made (after the bias clamp), not the solution's entries
+    step_since_covariance_.segment<3>(0) += window_.velocity.start - start_before;
+    step_since_covariance_.segment<3>(3) += acc_offset_ - offset_before;
+    step_since_covariance_.segment<3>(6) += window_.gyro_bias.mean - bias_before;
+    return applied;
+}
+
+HonestyInputs WindowProblem::honesty_inputs() const
+{
+    HonestyInputs in;
+    in.covariance_valid = covariance_taken_;
+    if (unknowns_.acc_term)
+    {
+        in.velocity = true;
+        in.joint_prior = noise_.joint_prior;
+        in.velocity_prior_mean = noise_.velocity_prior_mean;
+        in.velocity_prior_cov = noise_.velocity_prior_cov;
+        in.offset_prior_mean = noise_.offset_prior_mean;
+        if (noise_.joint_prior)
+            in.joint_prior_cov = noise_.joint_prior_cov;
+        in.start_velocity = window_.velocity.start;
+        in.acc_offset = acc_offset_;
+        in.start_posterior.topLeftCorner<3, 3>() = start_velocity_cov_;
+        in.start_posterior.topRightCorner<3, 3>() = start_offset_cov_;
+        in.start_posterior.bottomLeftCorner<3, 3>() = start_offset_cov_.transpose();
+        in.start_posterior.bottomRightCorner<3, 3>() = acc_offset_cov_;
+        in.start_velocity_step = step_since_covariance_.segment<3>(0);
+        in.acc_offset_step = step_since_covariance_.segment<3>(3);
+    }
+    if (unknowns_.estimate_bias)
+    {
+        in.bias = true;
+        in.bias_prior_mean = noise_.bias_prior_mean;
+        in.bias_prior_cov = noise_.bias_prior_cov;
+        in.bias_mean = window_.gyro_bias.mean;
+        in.bias_posterior = window_.gyro_bias.covariance;
+        in.bias_step = step_since_covariance_.segment<3>(6);
+        const double limit = rotation_options_.bias_max_rad_s;
+        in.bias_clamped = limit > 0.0 && (window_.gyro_bias.mean.cwiseAbs().array() >= limit).any();
+    }
+    return in;
 }
 
 WindowProblem::State WindowProblem::state() const
 {
-    return State{window_.poses, window_.velocity, window_.gyro_bias, acc_offset_, acc_offset_cov_,
-                 translation_information_ ? *translation_information_ : Eigen::Matrix3d::Zero(), cost_};
+    return State{window_.poses,
+                 window_.velocity,
+                 window_.gyro_bias,
+                 acc_offset_,
+                 acc_offset_cov_,
+                 translation_information_ ? *translation_information_ : Eigen::Matrix3d::Zero(),
+                 cost_,
+                 start_velocity_cov_,
+                 start_offset_cov_,
+                 covariance_taken_,
+                 step_since_covariance_};
 }
 
 void WindowProblem::set_state(const State &s)
@@ -111,6 +167,10 @@ void WindowProblem::set_state(const State &s)
     if (translation_information_)
         *translation_information_ = s.translation_information;
     cost_ = s.cost;
+    start_velocity_cov_ = s.start_velocity_cov;
+    start_offset_cov_ = s.start_offset_cov;
+    covariance_taken_ = s.covariance_taken;
+    step_since_covariance_ = s.step_since_covariance;
 }
 
 void WindowProblem::snapshot() { candidate_ = state(); }
