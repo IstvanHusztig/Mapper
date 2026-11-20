@@ -165,6 +165,7 @@ files = [
     "tests/terms_at_truth_test.cpp",
     "tests/accelerometer_noise_test.cpp",
     "tests/loop_chains_test.cpp",
+    "tests/lidar_claim_test.cpp",
     "tests/test_verification_tools.py",
 ]
 
