@@ -114,7 +114,7 @@ files they name;** the orchestrator adds them when it integrates a hand-back.
   an earlier noisy map redrawn per trial, fine grid alone and both grids, a flat wall along travel. Verify: scatter
   over claimed sigma per variant, with duplication, map noise and plane pull separated, and the noise assumptions
   stated; reported descriptively.
-- [ ] 5.7 Orchestrator: the hand-backs checked (ownership, step checks, the conclusion reviewer on "measured against
+- [x] 5.7 Orchestrator: the hand-backs checked (ownership, step checks, the conclusion reviewer on "measured against
   hypothesis" and on which discrepancies are reproduced, isolated and have an oracle); identifiers assigned to new
   findings; the table of D4 completed with the checks' results; `experiments/consistency/fixtures.md`; the table to
   the user without a verdict. Verify: the user has seen the table; every discrepancy to be marked has an identifier.
