@@ -90,6 +90,10 @@ namespace
         pose("handed_last");
         h += ",rotation_rate_mean_deg_s";
         xyz("start_acceleration", "mps2");
+        // the normalised moves of the verdict (consistency-harness D10): value (empty when NOT MEASURED), the reason, and
+        // the trace reduction n - tr(P^-1 P_post) where it was computed
+        for (const char *move : {"move_start_velocity", "move_joint", "move_gyro_bias"})
+            h += std::string(",") + move + "," + move + "_reason," + move + "_reduction";
         return h;
     }
 
@@ -223,6 +227,8 @@ void FolderWindowTermSink::write(const WindowTermRecord &r)
         features_ << "," << sigma(v->x()) << "," << sigma(v->y()) << "," << sigma(v->z());
     features_ << "," << sigma(n.zero_velocity_mps) << "," << sigma(n.ndt_information_scale) << "," << sigma(n.ndt_huber_cutoff);
     features_ << handed_on_fields(r);
+    for (const NormalisedMove *m : {&e.moves.start_velocity, &e.moves.joint, &e.moves.gyro_bias})
+        features_ << "," << opt(m->value) << "," << move_not_measured_name(m->reason) << "," << opt(m->reduction);
     features_ << "\n";
     terms_.flush();
     features_.flush();

@@ -199,6 +199,31 @@ TEST_CASE("window term table: the run is the same with log_window_terms on, ever
         rows += record.guess.rows.size() + record.result.rows.size();
     }
 
+    // consistency-harness D9 (task 3.3): each window's record is written once, after its hand-off, with the state it was
+    // prepared with on its own row and the last node as solved and as handed on; its first pose is where the loop put it
+    for (size_t i = 0; i < sink.records.size(); i++)
+    {
+        const WindowTermRecord &record = sink.records[i];
+        CAPTURE(record.window);
+        CHECK(record.window == static_cast<int>(i) + 1);
+        CHECK(record.handoff == WindowHandOff::done);
+        REQUIRE(record.prepared.first_pose.has_value());
+        REQUIRE(record.handed_on.last_node_solved.has_value());
+        REQUIRE(record.handed_on.last_node_handed_on.has_value());
+        CHECK(record.handed_on.last_node_handed_on->time_s == record.handed_on.last_node_solved->time_s);
+        CHECK(record.handed_on.last_node_handed_on->pose.matrix() == logged[i].poses.back().matrix());
+        CHECK(record.rotation_rate_rad_s.has_value());
+        // no accelerometer in this recording: no velocity, offset or gravity is prepared or handed on
+        CHECK_FALSE(record.prepared.velocity_prior_mean.has_value());
+        CHECK_FALSE(record.handed_on.velocity_end.has_value());
+        if (i > 0)
+        {
+            // the next window starts from the previous one's handed-on end (one IMU increment after it)
+            const Eigen::Affine3d expected = sink.records[i - 1].handed_on.last_node_handed_on->pose * r.windows[i].imu_motion_from_previous;
+            CHECK((record.prepared.first_pose->translation() - expected.translation()).norm() < 1.0); // a prediction may move it further
+        }
+    }
+
     // the CSV files: a header and a row per window, state and term; a row per window
     // into a folder that doesn't exist yet, as a CLI run's output folder during the odometry
     const fs::path root = fs::temp_directory_path() / "lidar_odometry_tests_window_terms";
@@ -444,8 +469,9 @@ namespace
         return out;
     }
 
-    // the columns of consistency-harness D9: prepared 30, handoff 1, handed on 36, features 4
-    constexpr size_t kNewColumns = 71;
+    // the columns of consistency-harness D9: prepared 30, handoff 1, handed on 36, features 4; and of D10: the normalised
+    // moves 9 (value, reason, reduction for start velocity, joint, gyro bias)
+    constexpr size_t kNewColumns = 80;
 
     Eigen::Affine3d pose_at(const Eigen::Vector3d &position, double heading_deg)
     {
@@ -484,6 +510,10 @@ namespace
         h.last_node_handed_on = WindowNode{pose_at(Eigen::Vector3d(1.31, 2.1, 3.0), 31.5), 12.875};
         r.rotation_rate_rad_s = 4.0 * d;
         r.start_acceleration_mps2 = Eigen::Vector3d(0.1, -0.25, 0.05);
+        HonestyReadings &m = r.verdict.evidence.moves;
+        m.start_velocity = NormalisedMove{1.25, MoveNotMeasured::measured, 2.5};
+        m.joint = NormalisedMove{0.875, MoveNotMeasured::measured, 5.0};
+        m.gyro_bias = NormalisedMove{2.0, MoveNotMeasured::measured, 1.0};
         return r;
     }
 }
@@ -533,13 +563,14 @@ TEST_CASE("window term csv: the features file's old columns keep their names, or
             CHECK(values[k] == old_values[k]);
         }
         CHECK(names[old_names.size()] == "prepared_first_x_m");
-        CHECK(names.back() == "start_acceleration_z_mps2");
-        // absent: every new field empty
+        CHECK(names.back() == "move_gyro_bias_reduction");
+        // absent: every new field empty, except the moves' reasons, which say "absent"
         if (!filled)
             for (size_t k = old_names.size(); k < names.size(); k++)
             {
                 CAPTURE(names[k]);
-                CHECK(values[k].empty());
+                const bool reason = names[k].size() > 7 && names[k].compare(names[k].size() - 7, 7, "_reason") == 0;
+                CHECK(values[k] == (reason ? "absent" : ""));
             }
     }
 }
@@ -602,6 +633,10 @@ TEST_CASE("window term csv: the prepared and handed-on state, every field writte
     near("handed_last_ka_deg", 31.5);
     near("rotation_rate_mean_deg_s", 4.0);
     near("start_acceleration_y_mps2", -0.25);
+    near("move_start_velocity", 1.25);
+    CHECK(at("move_start_velocity_reason") == "measured");
+    near("move_joint_reduction", 5.0);
+    near("move_gyro_bias", 2.0);
 
     // a cancelled hand-off: the handed-on columns are empty, the rest stays
     WindowTermRecord cancelled = record;

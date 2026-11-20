@@ -962,7 +962,39 @@ namespace
         WindowOptimization optimization;
         int steps_not_applied = 0; // failed solves of this window
         int big_jump_nodes = 0;    // nodes whose step was refused (big jump)
+        // log_window_terms: the state the window was prepared with and the two features (consistency-harness D9); the
+        // record is completed after the hand-off and written once, at the end of finish_window
+        WindowPreparedState prepared;
+        std::optional<double> rotation_rate_rad_s;
+        std::optional<Eigen::Vector3d> start_acceleration_mps2;
+        std::optional<WindowTermRecord> record;
     };
+
+    // log_window_terms: what the window was prepared with (taken at the end of prepare_window, on its own row)
+    void record_prepared_state(const Window &window, const WindowLoopCarry &carry, WindowWork &w)
+    {
+        WindowPreparedState &p = w.prepared;
+        if (!window.poses.empty())
+            p.first_pose = window.poses.front();
+        const MotionModelTranslationImuOptions &o = w.acc_term.options;
+        if (o.enabled)
+        {
+            p.velocity_prior_mean = o.velocity_prior_mean;
+            p.velocity_prior_cov = o.velocity_prior_cov;
+            p.offset_prior_mean = Eigen::Vector3d::Zero(); // the offset is folded into gravity after every window
+            p.offset_prior_cov = o.offset_prior_cov;
+            p.velocity_offset_prior_cov = o.velocity_offset_prior_cov;
+            p.gravity = o.gravity;
+        }
+        if (w.rotation_options.estimate_bias)
+        {
+            p.bias_prior_mean_rad_s = w.rotation_options.bias_prior_mean;
+            p.bias_prior_cov = w.rotation_options.bias_prior_cov;
+        }
+        w.rotation_rate_rad_s = mean_rotation_rate(window.poses, window.timestamps);
+        if (carry.acc_gravity.norm() > 0.0)
+            w.start_acceleration_mps2 = start_world_acceleration(window.poses, window.timestamps, window.imu_acc, carry.acc_gravity);
+    }
 
     // the window's points, the previous window's velocity and the guess continued from the previous window's end
     void load_and_predict(LoopContext &c, WindowWork &w)
@@ -1065,6 +1097,8 @@ namespace
         if (params.log_window_terms)
             w.guess = window;
         w.noise = build_window_noise_model(window, setup.scan_to_map, setup.motion_model, w.rotation_options, w.acc_term.options, w.velocity_prior);
+        if (params.log_window_terms)
+            record_prepared_state(window, carry, w);
         return w;
     }
 
@@ -1188,8 +1222,26 @@ namespace
         {
             record->verdict = verdict;
             record->noise = window_noise_sigmas(w.noise);
-            c.range.terms->write(*record);
+            record->prepared = w.prepared;
+            record->rotation_rate_rad_s = w.rotation_rate_rad_s;
+            record->start_acceleration_mps2 = w.start_acceleration_mps2;
+            w.record = std::move(record); // completed and written at the end of finish_window
         }
+    }
+
+    // the record's handed-on part, and the record written (consistency-harness D9); nothing here changes the odometry
+    void write_window_record(LoopContext &c, WindowWork &w, WindowHandOff handoff)
+    {
+        if (!w.record || !c.range.terms)
+            return;
+        w.record->handoff = handoff;
+        c.range.terms->write(*w.record);
+        w.record.reset();
+    }
+
+    WindowNode node_of(const Window &window, const std::vector<Window> &windows)
+    {
+        return WindowNode{window.poses.back(), window.timestamps.back().first - windows[0].timestamps.front().first};
     }
 
     // step 4: the hand-off (bias and offset carried, the tail re-propagated), the distance check, the next window placed
@@ -1204,11 +1256,36 @@ namespace
         update_gyro_bias_after_window(windows[i], i, setup, carry, params, c.logger);
         update_acc_term_after_window(windows[i], i, w.acc_term, w.acc_offset, carry, c.logger);
 
+        // log_window_terms: what is handed on (the offset is folded into gravity by now; the tail is re-propagated below)
+        WindowHandedOnState *handed = w.record ? &w.record->handed_on : nullptr;
+        if (handed)
+        {
+            if (setup.rotation_options.estimate_bias)
+            {
+                handed->bias_mean_rad_s = carry.bias.mean;
+                handed->bias_cov = carry.bias.covariance;
+            }
+            if (w.acc_term.options.enabled)
+            {
+                handed->velocity_end = carry.velocity_mean;
+                handed->velocity_end_cov = carry.velocity_cov;
+                handed->gravity = carry.acc_gravity;
+                handed->to_mps2_before_fold = w.acc_term.options.to_mps2;
+                handed->offset_cov = carry.acc_offset_cov;
+                if (w.acc_term.options.joint_covariance)
+                    handed->velocity_offset_cov = carry.velocity_offset_cov;
+            }
+            if (!windows[i].poses.empty() && !windows[i].timestamps.empty())
+                handed->last_node_solved = node_of(windows[i], windows);
+        }
+
         // window hand-off; the initial guess was corrected with the prior bias, so the tail gets the update estimated in this window
         const Eigen::Vector3d bias_update = setup.rotation_options.estimate_bias
                                                 ? Eigen::Vector3d(windows[i].gyro_bias.mean - setup.rotation_options.bias_prior_mean)
                                                 : Eigen::Vector3d::Zero();
         repropagate_window_tail(windows[i], params.handoff_tail_nodes, params.handoff_tail_velocity_span_nr_samples, bias_update);
+        if (handed && !windows[i].poses.empty() && !windows[i].timestamps.empty())
+            handed->last_node_handed_on = node_of(windows[i], windows);
 
         if (i % 100 == 0)
         {
@@ -1220,6 +1297,7 @@ namespace
         {
             // the run stops here but is still saved: the remaining windows continue from this one's restored end
             place_windows_after(windows, i + 1);
+            write_window_record(c, w, WindowHandOff::cancelled);
             return false;
         }
 
@@ -1247,6 +1325,7 @@ namespace
                                      .norm();
             c.state.consecutive_distance += translation;
         }
+        write_window_record(c, w, WindowHandOff::done);
         return true;
     }
 }
