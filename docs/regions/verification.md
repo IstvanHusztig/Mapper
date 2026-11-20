@@ -151,9 +151,9 @@ Not applicable to the Python tools. The region's C++ (`tools/cut_recording/cut_r
   1.00-1.03. Both grids, exact map, room: R 1.40-1.54; the second grid adds 1.67-1.84x claimed information while the
   scatter does not shrink (both/fine 0.93-1.0): duplication, the size the audit gave for the information increase
   (F4/C18). One-window map: fine 1.66-2.85, both 2.0-2.56, larger than the audit's 1.4 / 1.8. For a pure NDT solve
-  the shipped scale 0.1 divides R by 3.162 (room 0.4-0.9, below 1 in every constrained direction); in a real window
+  the shipped scale 0.1 divides R by 3.162 (room 0.32-0.90, below 1 in every constrained direction); in a real window
   the motion and IMU terms share the solve, so this is not exact. Blind directions (corridor along, wall in plane): R
-  4-12 but not converged (last step 1.8-6.1 claimed sigmas; a 5 mm offset first-step response 0.01-0.04): the term does
+  4-12 but not converged (last step 2.2-6.5 claimed sigmas; a 5 mm offset first-step response 0.01-0.04): the term does
   not hold there, not an honesty number. The fine grid at grid_offset has a 0.16 mm normal bias from the 2.5-sigma
   truncation (fixture artefact). Smoke in `ctest`; the trials on demand (`-tc="lidar claim*" --no-skip`), about 12 min.
 
@@ -163,7 +163,7 @@ Not applicable to the Python tools. The region's C++ (`tools/cut_recording/cut_r
   under its claimed 11.5-12.6 mm/s (ratio -0.6 to -1.4); with both on the claimed sigma grows 31 -> 95 mm/s with the
   error 29 -> 106 mm/s (ratio 0.9-1.1). Over 20 seeds at window 15: off 19.5 per run, on 1.85 per run against an
   interval [0.34, 2.12] per run (a smoke check; 215 runs would detect 1.5x). **K2** (exit): only switches off with 0 and
-  0.10 m injected passed its preconditions; e = 0.10 adds -11 to -60 mm/s over windows 17-21 (ratio -0.7 to -1.7); the
+  0.10 m injected passed its preconditions; e = 0.10 adds -11 to -64 mm/s over windows 17-21 (ratio -0.7 to -1.7); the
   switches-on runs and e = 0.24 failed the exit-match precondition and were excluded. **K1** (map displaced): response
   0.6-0.7 per T (off), 0.7-1.7 per T (on), against the audit's 1-4 per T. **K11** (boundary attitude 0.05 deg): the
   bias leaves zero by at most 1.34 claimed sigmas (audit: 3-5). **F2 tail**: start move +15.1 (tail 15) vs +11.2 mm/s
