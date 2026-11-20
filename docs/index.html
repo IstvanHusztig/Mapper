@@ -139,6 +139,7 @@
   <a class="indent" href="#s-opt">6 · Optimization</a>
   <a class="page" href="degeneracy-information.html">↗ Degeneracy information</a>
   <a class="page" href="window-terms.html">↗ The per-term table</a>
+  <a class="page" href="honesty-readings.html">↗ Honesty readings and truth tests</a>
   <a class="indent" href="#s-handoff">7 · Hand-off and bias</a>
   <a class="indent" href="#s-update">8 · Map update</a>
   <a class="indent" href="#s-export">9 · Export</a>
@@ -373,6 +374,11 @@ gyro.</dd>
 <dt id="t-chi2">Velocity chi²</dt>
 <dd>The squared distance of a window's start velocity from its prior, measured with the prior's covariance (three
 residuals). Around 3 or below when the velocity agrees with the previous window within its noise.</dd>
+<dt id="t-normalised-move">Normalised move (honesty reading)</dt>
+<dd>How far a window moved a carried state (start velocity, acceleration offset, gyro bias) from its
+<a class="term" href="#t-prior">prior</a>, measured against how far its own claimed uncertainty allows. About 1 when the
+claim fits; well above 1 when the moves are larger than claimed. NOT MEASURED where it would mean nothing. Descriptive, no
+limits. <span class="more">→ <a href="honesty-readings.html">Honesty readings and truth tests</a></span></dd>
 <dt id="t-verdict">Window verdict, flags</dt>
 <dd>After each window four flags are judged: <b>bent</b> (any bend above 3°), <b>bent severely</b> (above 10°), <b>fast</b>
 (above 2.5 m/s) and <b>bias high</b> (gyro bias above 0.5 °/s). Each is CLEAR, TRIGGER or NOT MEASURED (the window doesn't
@@ -968,6 +974,7 @@ branches merged one after the other were never tested together.</li>
 <tr><td><a href="window-chaining.html">Poses, windows and window chaining</a></td><td><code>window-chaining.html</code></td><td>What a pose is, how a window&#x27;s trajectory and its points&#x27; positions are computed, and the window-chaining fix. <i>From pipeline steps 3, 5 and 7.</i></td></tr>
 <tr><td><a href="degeneracy-information.html">Degeneracy information</a></td><td><code>degeneracy-information.html</code></td><td>When the LiDAR can&#x27;t see where the sensor moved, how dMapper measures it, and how to read its log line. <i>From pipeline step 6.</i></td></tr>
 <tr><td><a href="window-terms.html">The per-term table</a></td><td><code>window-terms.html</code></td><td>What the per-term table is (which term of the optimization holds a window and where it pulls it), how to get it and read it, with an example reading on a real stretch. <i>From pipeline step 6.</i></td></tr>
+<tr><td><a href="honesty-readings.html">Honesty readings and truth tests</a></td><td><code>honesty-readings.html</code></td><td>Whether a window's claimed uncertainty fits what it does: the normalised moves in every run, the prepared and handed-on state, and the truth tests on synthetic data; how to get, run and read them. <i>From pipeline steps 6 and 7.</i></td></tr>
 <tr><td><a href="performance.html">Performance</a></td><td><code>performance.html</code></td><td>How the full recording got 2.2 times faster: the overview. <i>From the parameters ([performance]).</i></td></tr>
 <tr><td><a href="PERFORMANCE.md">Performance fixes</a></td><td><code>PERFORMANCE.md</code></td><td>Every performance fix with its method and numbers. <i>From the parameters ([performance]).</i></td></tr>
 </table></div>

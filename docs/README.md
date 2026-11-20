@@ -16,6 +16,7 @@ Explanations with measurements: one mechanism per page.
 - [Poses, windows and window chaining](window-chaining.html): What a pose is, how a window's trajectory and its points' positions are computed, and the window-chaining fix. *From pipeline steps 3, 5 and 7.*
 - [Degeneracy information](degeneracy-information.html): When the LiDAR can't see where the sensor moved, how dMapper measures it, and how to read its log line. *From pipeline step 6.*
 - [The per-term table](window-terms.html): What the per-term table is (which term of the optimization holds a window and where it pulls it), how to get it and read it, with an example reading on a real stretch. *From pipeline step 6.*
+- [Honesty readings and truth tests](honesty-readings.html): Whether a window's claimed uncertainty fits what it does: the normalised moves in every run, the prepared and handed-on state, and the truth tests on synthetic data; how to get, run and read them. *From pipeline steps 6 and 7.*
 - [Performance](performance.html): How the full recording got 2.2 times faster: the overview. *From the parameters ([performance]).*
 - [Performance fixes](PERFORMANCE.md): Every performance fix with its method and numbers. *From the parameters ([performance]).*
 
