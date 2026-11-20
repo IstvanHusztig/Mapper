@@ -62,10 +62,10 @@ private:
         // the honesty readings' part: the start velocity's covariance and its cross block with the offset (rows start
         // velocity, columns offset), whether a covariance was taken, and the change of (start velocity, offset, bias) by
         // the steps since it was taken
-        Eigen::Matrix3d start_velocity_cov;
-        Eigen::Matrix3d start_offset_cov;
-        bool covariance_taken;
-        Eigen::Matrix<double, 9, 1> step_since_covariance;
+        Eigen::Matrix3d start_velocity_cov = Eigen::Matrix3d::Zero();
+        Eigen::Matrix3d start_offset_cov = Eigen::Matrix3d::Zero();
+        bool covariance_taken = false;
+        Eigen::Matrix<double, 9, 1> step_since_covariance = Eigen::Matrix<double, 9, 1>::Zero();
     };
     State state() const;
     void set_state(const State &s);
