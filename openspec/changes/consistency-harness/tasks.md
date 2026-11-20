@@ -40,7 +40,7 @@ files they name;** the orchestrator adds them when it integrates a hand-back.
   definitions. Full covariance matrices in memory, means and sigmas in the CSV. Verify: a unit test of the new parts
   on made-up loop values (every field, the absent markers); the CSV writer's test shows the old columns unchanged
   in name, order and value.
-- [ ] 3.2 Solver: the window problem keeps the start velocity's covariance block and its blocks with the offset,
+- [x] 3.2 Solver: the window problem keeps the start velocity's covariance block and its blocks with the offset,
   with a validity that follows a step taken back, and the size of the last accepted step for the tested states; a
   pure function for the normalised move (Cholesky whitening, the eigenvalue check, every `NOT MEASURED` condition of
   D10, including the last-step tolerance); the verdict's readings (start velocity always, joint in joint mode, gyro
@@ -49,7 +49,7 @@ files they name;** the orchestrator adds them when it integrates a hand-back.
   problem with a non-zero last step and the step check off, a finite reading on an informative window, with the
   separate and with the joint prior; a failed factorisation, a step taken back and a clamped bias each give `NOT
   MEASURED`; the new blocks against a dense inverse.
-- [ ] 3.3 Orchestrator: the loop's prepare, report and finish steps fill the record's new parts (3.1) and write it
+- [x] 3.3 Orchestrator: the loop's prepare, report and finish steps fill the record's new parts (3.1) and write it
   once per window at the end of the hand-off (a cancelled hand-off writes it with the handed-on part absent); the
   snapshot of 3.2 is taken before the window problem goes out of scope. Then the gate of D12: both step-check
   tables' old-column prefixes compared token by token with their references and every other reference checked
@@ -61,13 +61,13 @@ files they name;** the orchestrator adds them when it integrates a hand-back.
 
 ## 4. The synthetic recording (verification)
 
-- [ ] 4.1 Motion, truth and IMU samples: the segments of D3; gyro values as means over the interval ending at a
+- [x] 4.1 Motion, truth and IMU samples: the segments of D3; gyro values as means over the interval ending at a
   node, with the first update's 5 ms step; accelerometer values for the interval starting at a node; noise, a bias
   and an offset that are constant inside a window and step between windows; seeds. Verify: the independent
   strap-down test and the noise-statistics test pass; the bounds of the discretisation terms (the body force
   rotated at the left end, the position quadrature, a mean body rate integrated as one rotation) are derived in the
   test file and hold.
-- [ ] 4.2 Scenes, routes, points and the source: R1, R2 and R3 of D8 with an explicit emitted range; points
+- [x] 4.2 Scenes, routes, points and the source: R1, R2 and R3 of D8 with an explicit emitted range; points
   generated at their node's pose and stamped strictly inside its interval; a stationary seed prefix and one IMU
   sample beyond the last tested window; a recording source that applies the production source's gyro calibration,
   zero-time rejection, raw XY filter and lever-arm translation; windows cut by the real `calculate_trajectory` and

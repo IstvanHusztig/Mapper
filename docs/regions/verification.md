@@ -131,6 +131,17 @@ Not applicable to the Python tools. The region's C++ (`tools/cut_recording/cut_r
 
 ## Experiments
 
+- **2026-11-20, the model-world recording** (f758517, merged e9856e8; `consistency-harness` 4.1-4.2):
+  `tests/synthetic_inertial.*`, `tests/synthetic_routes.*`. Gyro sample k = the interval ending at node k (sample 0 the
+  5 ms step), accelerometer sample k = the interval starting at node k; a hit of node k is stamped `nextafter(node k)`.
+  Window 0 starts after the 60 001st accepted point (stationary prefix of about 40 points per node, rests of 4 s; one
+  IMU sample beyond the last window). Discretisation per 2 ms step: Magnus 2.3e-9 rad (bound 1.2e-8), left-end body
+  force 4.4e-3 m/s^2 (1.55e-2), position quadrature 1.7e-8 m (5.5e-8); over 14 s of walking and turning a strap-down
+  integration differs by 1.5e-6 rad, 2.5 mm/s, 1.7 cm (a property of the estimator's convention, mostly in the
+  turn). Walking: force rms 0.52 / 0.49 / 0.89 m/s^2, rate rms 11.3 / 11.5 / 31.8 deg/s. Cut: R1 79, R2 124, R3 35
+  windows; every eligible hit at its node (0 missing, 0 misplaced); R2's blind stretch 8 m with no structure hit.
+  Decimation coverage of every node is a measurement on these densities, not a guarantee. New tests 4.1 s.
+
 - **2026-11-20, the exact control** (c345927, merged d763f7f; `consistency-harness` task 2.1):
   `tests/truth_statistics.{h,cpp}` (`normalised_error`, chi-square cdf / quantile / interval,
   `power_of_variance_ratio`, `runs_for_power`, a platform-stable `Rng`) and `tests/truth_statistics_test.cpp` (a

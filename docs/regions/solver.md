@@ -133,6 +133,14 @@ None (`python tools/function_sizes.py src --min 80`, 2026-11-18: no function of 
 
 ## Experiments
 
+- 2026-11-20 Honesty readings (consistency-harness 3.2, D10; 7abe5b3 + bcb649a, merged 8feb766). The window problem
+  keeps the start velocity's covariance, its cross block with the offset, whether a covariance was taken and the steps
+  since it (restored with a step taken back); `normalised_move` and the readings live in the verdict; the snapshot is
+  taken in `run_lm_iterations`. K5: q mean 1.007, old form 0.503. Step checks ALL HOLD on bcb649a. Start velocity q,
+  median / p95 (forced replays): 44_short 20-40 s 40.8 / 436 (21/21); Livox 3 100-130 s 13.1 / 61.3 (84/84); full
+  44_short 46.4 / 379 (69/70). Gyro bias: trace reduction below 0.5 in every replay window, 4/70 measured on the full
+  44_short. Open: is a bias reading that almost never qualifies worth its line, or does it need its own threshold?
+
 - **2026-11-19** Joint covariance of end velocity and offset (change `honest-inertial-carry`, job J3, design D2):
   `take_covariance` also keeps cov(end velocity, offset) in `VelocityState::end_offset_covariance` (rows `ie`, columns
   `io`); the saved State restores it with `window_.velocity`. It matches a dense inverse within 1e-6 of the block's largest

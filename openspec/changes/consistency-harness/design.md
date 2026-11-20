@@ -110,6 +110,9 @@ windows, so no test keeps its own copy of what a window looks like.
   last tested full window. The slice gate (more than 1 000 assigned points) acts on the original points, before the
   3 cm decimation. So: every **eligible** tagged hit is checked in the windows' original point sets for the node it
   was generated for; the retained representatives and their coverage are checked separately in the decimated sets.
+  (Built 2026-11-20: decimation keeps one point per 3 cm cell, so node coverage is a measurement on the fixture's
+  densities, not a guarantee; rests are 4 s so that window 0 is at rest; the gyro bias steps from window 0 on; the
+  range limit applies to the latent hit.)
 - **What else the front end needs** (verified by the generator's tests): a complete recording, point store and
   preview, an orientation estimator and an executor; IMU timestamps increasing, in seconds, gyro in rad/s,
   acceleration in the sensor's g; the first window at rest; the tested motion after the filter's 3 s ramp; the
