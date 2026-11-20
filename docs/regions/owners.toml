@@ -159,6 +159,9 @@ files = [
     "tests/truth_statistics.h",
     "tests/truth_statistics.cpp",
     "tests/truth_statistics_test.cpp",
+    "tests/terms_at_truth.h",
+    "tests/terms_at_truth_test.cpp",
+    "tests/accelerometer_noise_test.cpp",
     "tests/test_verification_tools.py",
 ]
 
