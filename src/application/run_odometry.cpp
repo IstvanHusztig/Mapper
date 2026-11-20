@@ -211,6 +211,7 @@ namespace
     {
         ScanToMapCost cost;               // lm_step_check: the cost of the final state
         IterationConvergence convergence; // only with log_iteration_convergence
+        HonestyInputs honesty;            // the window problem's part of the honesty readings, taken before it goes out of scope
     };
 
     // limits of log_iteration_convergence: poses count as settled within these of the last result; the fast-mode threshold
@@ -267,6 +268,7 @@ namespace
                      LmTiming{phase(&ScanToMapTiming::covariance_solve), phase(&ScanToMapTiming::solve), phase(&ScanToMapTiming::update)});
         if (params.lm_step_check)
             result.cost = problem.cost();
+        result.honesty = problem.honesty_inputs();
         if (params.log_iteration_convergence)
             result.convergence = convergence_of(poses_after, deltas, convergence_settle_position_m,
                                                 convergence_settle_rotation_deg * DEG_TO_RAD, convergence_fast_delta);
@@ -1124,6 +1126,7 @@ namespace
         e.rejected_steps = w.optimization.rejected_steps;
         e.steps_not_applied = w.steps_not_applied;
         e.big_jump_nodes = w.big_jump_nodes;
+        e.moves = honesty_readings(w.optimization.honesty);
         if (record && record->result.failure.empty())
             for (const WindowTermRow &row : record->result.rows)
             {

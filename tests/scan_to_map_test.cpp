@@ -1562,6 +1562,123 @@ TEST_CASE("scan-to-map: the joint covariance of end velocity and offset is the d
     CHECK((f.w.velocity.end_offset_covariance - cross).cwiseAbs().maxCoeff() <= 1e-6 * scale);
     // and the offset's with the end velocity is its transpose
     CHECK((inverse.block<3, 3>(u.io, u.ie).transpose() - cross).cwiseAbs().maxCoeff() <= 1e-6 * scale);
+
+    // the honesty readings' blocks: the start velocity's, its cross block with the offset, and the bias's
+    const HonestyInputs h = problem.honesty_inputs();
+    REQUIRE(h.covariance_valid);
+    const Eigen::Matrix3d v_start = inverse.block<3, 3>(u.iv, u.iv);
+    const Eigen::Matrix3d start_cross = inverse.block<3, 3>(u.iv, u.io);
+    const Eigen::Matrix3d bias = inverse.block<3, 3>(u.ib, u.ib);
+    const double start_scale = std::max({v_start.cwiseAbs().maxCoeff(), offset.cwiseAbs().maxCoeff(), start_cross.cwiseAbs().maxCoeff()});
+    MESSAGE("start block: v_start ", v_start.diagonal().transpose(), ", cross ", start_cross.row(0));
+    REQUIRE(start_cross.cwiseAbs().maxCoeff() > 1e-6 * start_scale);
+    CHECK((h.start_posterior.topLeftCorner<3, 3>() - v_start).cwiseAbs().maxCoeff() <= 1e-6 * start_scale);
+    CHECK((h.start_posterior.topRightCorner<3, 3>() - start_cross).cwiseAbs().maxCoeff() <= 1e-6 * start_scale);
+    CHECK((h.start_posterior.bottomLeftCorner<3, 3>() - start_cross.transpose()).cwiseAbs().maxCoeff() <= 1e-6 * start_scale);
+    CHECK((h.start_posterior.bottomRightCorner<3, 3>() - offset).cwiseAbs().maxCoeff() <= 1e-6 * start_scale);
+    CHECK((h.bias_posterior - bias).cwiseAbs().maxCoeff() <= 1e-6 * bias.cwiseAbs().maxCoeff());
+    // no step since the covariance was taken
+    CHECK(h.start_velocity_step == Eigen::Vector3d::Zero());
+    CHECK(h.bias_step == Eigen::Vector3d::Zero());
+}
+
+// The honesty readings (consistency-harness, design D10) on the window problem: the iterations as the run does them with
+// the step check off (the covariance of each iteration is taken before its step, so the last step is not zero), with the
+// separate and with the joint prior; a step taken back to a state without a covariance, and a clamped bias.
+namespace
+{
+    HonestyInputs honesty_after_iterations(JointCovarianceFixture &f, int iterations, const WindowNoiseModel &noise)
+    {
+        WindowProblem problem(f.points, f.w, f.maps.indoor, f.maps.outdoor, f.o.scan_to_map, f.o.motion_model, f.o.rotation, f.o.translation_imu,
+                              noise, f.acc_offset, f.acc_offset_cov, f.logger, nullptr, nullptr, f.workspace);
+        LmOptions options;
+        options.last_iteration = iterations - 1;
+        options.initial_factor = 5.0;
+        options.convergence_delta_threshold = -1.0;
+        options.step_check = false;
+        lm_solve(problem, options, LmWorkspace{f.workspace.covariance, f.workspace.damped});
+        return problem.honesty_inputs();
+    }
+}
+
+TEST_CASE("scan-to-map, honesty readings: an informative window with a non-zero last step has a finite reading, separate and joint prior")
+{
+    for (const bool joint : {false, true})
+    {
+        CAPTURE(joint);
+        JointCovarianceFixture f;
+        if (joint)
+        {
+            f.o.translation_imu.joint_covariance = true;
+            f.o.translation_imu.velocity_offset_prior_cov = Eigen::Matrix3d::Identity() * 2e-3;
+        }
+        const WindowNoiseModel noise = build_window_noise_model(f.w, f.o.scan_to_map, f.o.motion_model, f.o.rotation, f.o.translation_imu, f.o.velocity_prior);
+        REQUIRE(noise.joint_prior == joint);
+        const HonestyInputs h = honesty_after_iterations(f, 30, noise);
+        REQUIRE(h.covariance_valid);
+        CHECK(h.start_velocity_step.norm() > 0.0); // the step after the last covariance
+        const HonestyReadings r = honesty_readings(h);
+        MESSAGE("start velocity ", move_text(r.start_velocity), " (reduction ", r.start_velocity.reduction.value_or(-1.0), ", last step ",
+                h.start_velocity_step.cwiseAbs().maxCoeff(), " m/s), joint ", move_text(r.joint), ", gyro bias ", move_text(r.gyro_bias));
+        REQUIRE(r.start_velocity.value);
+        CHECK(std::isfinite(*r.start_velocity.value));
+        if (joint)
+        {
+            REQUIRE(r.joint.value);
+            CHECK(std::isfinite(*r.joint.value));
+        }
+        else
+            CHECK(r.joint.reason == MoveNotMeasured::absent);
+    }
+}
+
+TEST_CASE("scan-to-map, honesty readings: a step taken back restores the covariance's validity, its blocks and the step since it")
+{
+    JointCovarianceFixture f;
+    const WindowNoiseModel noise = build_window_noise_model(f.w, f.o.scan_to_map, f.o.motion_model, f.o.rotation, f.o.translation_imu, f.o.velocity_prior);
+    WindowProblem problem(f.points, f.w, f.maps.indoor, f.maps.outdoor, f.o.scan_to_map, f.o.motion_model, f.o.rotation, f.o.translation_imu,
+                          noise, f.acc_offset, f.acc_offset_cov, f.logger, nullptr, nullptr, f.workspace);
+    const LmWorkspace ws{f.workspace.covariance, f.workspace.damped};
+    double delta = 0.0;
+    // the accepted state is the guess before any covariance was taken
+    problem.snapshot();
+    problem.accept_snapshot();
+    REQUIRE(lm_iteration(problem, 5.0, true, false, false, delta, ws).applied);
+    lm_iteration(problem, 5.0, false, false, false, delta, ws);
+    REQUIRE(problem.honesty_inputs().covariance_valid);
+    problem.restore_accepted();
+    const HonestyReadings back = honesty_readings(problem.honesty_inputs());
+    CHECK_FALSE(problem.honesty_inputs().covariance_valid);
+    CHECK(back.start_velocity.reason == MoveNotMeasured::absent);
+    CHECK(back.gyro_bias.reason == MoveNotMeasured::absent);
+
+    // an accepted state with its covariance; a step and a covariance after it; back: the accepted blocks, bit for bit, and
+    // no step since the covariance
+    lm_iteration(problem, 5.0, false, false, true, delta, ws);
+    problem.accept_snapshot();
+    const HonestyInputs accepted = problem.honesty_inputs();
+    REQUIRE(lm_iteration(problem, 5.0, true, false, false, delta, ws).applied);
+    const HonestyInputs stepped = problem.honesty_inputs();
+    CHECK(stepped.start_velocity_step.norm() > 0.0);
+    lm_iteration(problem, 5.0, false, false, false, delta, ws);
+    REQUIRE(problem.honesty_inputs().start_posterior != accepted.start_posterior);
+    problem.restore_accepted();
+    const HonestyInputs restored = problem.honesty_inputs();
+    CHECK(restored.covariance_valid);
+    CHECK(restored.start_posterior == accepted.start_posterior);
+    CHECK(restored.start_velocity == accepted.start_velocity);
+    CHECK(restored.start_velocity_step == Eigen::Vector3d::Zero());
+    CHECK(restored.bias_step == Eigen::Vector3d::Zero());
+}
+
+TEST_CASE("scan-to-map, honesty readings: a bias at its clamp is NOT MEASURED")
+{
+    JointCovarianceFixture f;
+    f.o.rotation.bias_max_rad_s = 1e-12; // any estimate that is not exactly zero ends at the clamp
+    const WindowNoiseModel noise = build_window_noise_model(f.w, f.o.scan_to_map, f.o.motion_model, f.o.rotation, f.o.translation_imu, f.o.velocity_prior);
+    const HonestyInputs h = honesty_after_iterations(f, 5, noise);
+    CHECK(h.bias_clamped);
+    CHECK(honesty_readings(h).gyro_bias.reason == MoveNotMeasured::clamped);
 }
 
 TEST_CASE("scan-to-map: a step taken back restores the joint covariance of end velocity and offset")
