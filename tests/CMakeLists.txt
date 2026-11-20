@@ -35,6 +35,7 @@ add_executable(lidar_odometry_tests
   accelerometer_noise_test.cpp
   loop_chains_test.cpp
   window_covariance_test.cpp
+  lidar_claim_test.cpp
   odometry_snapshot_test.cpp
   folder_result_sink_test.cpp
   loop_closure_test.cpp
