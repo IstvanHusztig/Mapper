@@ -1103,6 +1103,27 @@ branches merged one after the other were never tested together.</li>
 <h2 id="documents">All documents</h2>
 <p>Every page of <code>docs/</code>, by what it is for. The same map is in <code>docs/README.md</code>; the Hungarian pages are under <code>docs/hu/</code>. Also outside <code>docs/</code>: <code>CLAUDE.md</code> (how the code is built, tested and laid out), <code>tools/README.md</code> (the analysis tools) and <code>openspec/specs/</code> (the requirements).</p>
 <p>The same map with the main sections of every page is the <a href="#contents">Contents</a> at the front of this guide; every page can be searched with the box at the top of the menu (the Hungarian pages are not included yet). Both are rebuilt by <code>python tools/build_docs_index.py</code>.</p>
+<h3 id="docs-search">How the contents and the search work</h3>
+<p>Both run in the browser and work when this guide is opened straight from disk, without a server.</p>
+<ol>
+<li><b>The index.</b> <code>python tools/build_docs_index.py</code> reads every page of <code>docs/</code> (not the Hungarian
+ones yet) plus <code>CLAUDE.md</code> and <code>tools/README.md</code>, splits each page into sections at its headings,
+strips the markup and writes <code>docs/search-index.js</code>: one entry per section with its page, title, link and
+text.</li>
+<li><b>The contents.</b> The same run writes the <a href="#contents">Contents</a> chapter of this guide, between two
+markers, from the groups and descriptions of <code>docs/README.md</code> and each page's main headings. Edit the groups and
+descriptions in <code>docs/README.md</code>, never between the markers.</li>
+<li><b>Searching.</b> This guide loads the index with a plain <code>&lt;script&gt;</code> tag. As you type in the menu's
+box, a section counts only if every word you typed appears in it. Hits rank by where the words are: section title first,
+then page title, then the body text (more occurrences rank higher); an exact title match ranks highest, agent notes
+lower.</li>
+<li><b>Results.</b> At most 60, at the top of this guide, each with a highlighted snippet and a link straight to the
+section. Clearing the box hides them. <code>index.html?q=words</code> opens the guide with a search already filled in.</li>
+<li><b>Keeping it current.</b> After adding or changing a page, run <code>python tools/build_docs_index.py</code>;
+<code>--check</code> exits with an error when the index or the contents are out of date, when a link or anchor is
+missing, or when a page is not in <code>docs/README.md</code>. A new page also goes into <code>docs/README.md</code> first,
+so that it appears in the contents.</li>
+</ol>
 <h3 id="using-dmapper">Using dMapper</h3>
 <p class="meta">Start here: what a run does and what every setting means.</p>
 <div class="table-wrap"><table>
