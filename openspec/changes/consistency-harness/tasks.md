@@ -80,13 +80,13 @@ files they name;** the orchestrator adds them when it integrates a hand-back.
 
 ## 5. Fixtures on the production code: measure, report, then pin (verification)
 
-- [ ] 5.1 F-a, the terms whose claim can be made true, at the truth, noise-free: one production span or block at a
+- [x] 5.1 F-a, the terms whose claim can be made true, at the truth, noise-free: one production span or block at a
   time, the signed residual recovered as D5 says, the measured motion-model poses kept; rest (A1, active states
   only), constant acceleration (A3), turning in place and a turn with centripetal acceleration (A4a, A4b), walking
   (A5: the terms' quadrature error, the map error and the total, nothing attributed); the checks behind D4 (the
   rotation edges' variance behind the filter's ramp and angle conversion; the gap covariance's algebra apart from
   its mean). Verify: residuals within their derived bounds, or the excess reported per term and motion.
-- [ ] 5.2 F-b, the accelerometer terms' noise: signed whitened residuals at the truth with the true rotations,
+- [x] 5.2 F-b, the accelerometer terms' noise: signed whitened residuals at the truth with the true rotations,
   gravity, offset and unit factor, over model-world recordings, in the sample-aligned fixture and for the Livox
   timing. Verify: the sample supports' disjointness is asserted; unit variance and no covariance between terms
   with disjoint supports; for the Livox timing the measured variance and covariance per term kind (triple, start,

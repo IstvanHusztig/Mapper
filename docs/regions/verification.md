@@ -131,6 +131,17 @@ Not applicable to the Python tools. The region's C++ (`tools/cut_recording/cut_r
 
 ## Experiments
 
+- **2026-11-20, terms at the truth** (a5b422a; `consistency-harness` 5.1-5.2; `tests/terms_at_truth.{h,_test.cpp}`,
+  `tests/accelerometer_noise_test.cpp`): accelerometer terms at the true state lie within their derived bounds in every
+  motion (largest ratio 0.58; exactly 0 quadrature at rest and constant acceleration). The rotation edges' float floor
+  in motion is 4.6e-7 rad, 1.6-1.9x the float32-storage bound (probably Fusion's float arithmetic; asserted below 0.1 of
+  the edge sigma). The velocity prior at the truth leaves exactly |a| dt (F2a). D4: edge variance at ARW/sqrt(dt)
+  measured 1.009 / 1.021 / 1.009 of assumed; joint F P F^T + Q exact to 1e-16; gap noise 0.998 of D^2 gap. F-b: in the
+  sample-aligned fixture whitened triples have variance 0.997 and no correlation; with the Livox timing the triples sit
+  about 5 % under 1 and the start term about 1.9, as the supports predict. Measured on the way: the anchor rule
+  (`window_equations.cpp:27`, `>= span_s`) puts anchors 12 ms apart in 89 % of steps for a 10 ms span at 500 Hz
+  (rounding of timestamps); the filter's start-up ramp levels on the accelerometer for 3 s even with `ahrs_gain = 0`.
+
 - **2026-11-20, unit-level cases** (54c04db; `consistency-harness` 5.4; `tests/unit_cases_{inertial,ndt}_test.cpp`):
   all seven reproduce the audit's numbers and are isolated by a paired control: K3 the prior mean over the gap is the
   carried end velocity, -2 mm/s per m/s^2 over 2 ms; K4 the tail -0.75 mm at 1 m/s^2, the next first pose -1.664 mm at
