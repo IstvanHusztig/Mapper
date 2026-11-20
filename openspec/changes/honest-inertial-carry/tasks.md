@@ -66,7 +66,10 @@ and the two guards.
   off: bit-identical.
 - [ ] 4.3 Replays with layers 1 + 2 and one full Livox 3 run as 3.2. Hand-back; orchestrator's checks and merge as
   3.3; the numbers to the user. (2026-11-20: replays done, merged 164e9c8; `experiments/regions/inertial/
-  2026-11-19-joint-carry/summary.md`; the full Livox 3 run is still owed.)
+  2026-11-19-joint-carry/summary.md`. Full Livox 3 run `experiments/stage8/carry/livox3_efs_jc/` (164e9c8): max 0.161 m
+  from today at 216.7 s (layer 1: 0.130), first > 5 cm at 165.9 s, never > 20 cm; no flags; chi2 median / p95 28 / 141
+  (layer 1 26 / 159); 84 loops, largest correction 0.16 m; run_health INCOMPLETE: 68 windows' uncertainty eligibility
+  unresolved (not seen with layer 1, not yet looked at). Paused 2026-11-20 for `consistency-harness`.)
 
 ## 5. Layer 3: measured first (noise-budget and inertial, J6)
 
