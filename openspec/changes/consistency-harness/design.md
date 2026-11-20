@@ -1,5 +1,8 @@
 # Design: consistency-harness
 
+Revised 2026-11-20 after the independent review (`review-codex.md`, verdict "not ready"); the last section says what
+changed and why.
+
 ## Context
 
 See `proposal.md` for the motivation and `research.md` for the evidence (findings F1-F8, their limits, the lineage
@@ -7,329 +10,375 @@ table). This file says how the question "is what the estimator claims as good as
 readings.
 
 What exists and is reused:
-- `OdometryPipeline` takes its recording through the `RecordingSource` port and its services through `RunServices`, and
-  hands each window's record to a `WindowTermSink` (`set_window_terms`). A synthetic recording can therefore go through
-  the real `load` (reading, orientation filter, window cutting) and the real window loop without touching them.
-- `tests/synthetic_recording.{h,cpp}`: scenes of plane faces, their sampling, `loop_recording` (no IMU data, truth as
-  the guess). `tests/scan_to_map_test.cpp`: one window against a map built from true points, including a corridor and
-  the blind-chain cases of `honest-inertial-carry`. `tests/memory_point_store.h`, `tests/serial_executor.h`.
-- The convention of this repository for a known shortcoming: a doctest case marked `should_fail` with the cause in a
+- `OdometryPipeline` takes its recording through the `RecordingSource` port and hands each window's record to a
+  `WindowTermSink`. The front-end functions (`load_data`, `calculate_trajectory`, `compute_step_1`) and the loop
+  (`start_window_loop`, `process_windows`, `optimize_windows`) are public, so a test can cut real windows from
+  synthetic samples and run the real loop steps from a state it sets itself, as a replay does from a capture.
+- `tests/synthetic_recording.{h,cpp}`: scenes of plane faces, their sampling, `loop_recording` (no IMU data).
+  `tests/scan_to_map_test.cpp`: one window against a map of true points, a corridor, the blind-chain cases of
+  `honest-inertial-carry`, and the measured cost of a plane in its cell (a perfect guess moves 0.34 mm at best,
+  2.26 mm with faces on cell boundaries). `src/application/memory_point_store.h`, `tests/serial_executor.h`.
+- The repository's convention for a known shortcoming: a doctest case marked `should_fail` with the cause in a
   comment; when it starts to pass, doctest reports it and the marker goes.
 
-Constraints: no result changes (step checks identical, 44_short bit-identical); tests need no recorded data; the
-verification region never edits `src/`; nothing goes into a settings file; the agreed limits of the velocity chi2
-(contract of 2026-11-12) are not touched.
+Constraints: no result changes; tests need no recorded data; the verification region never edits `src/`; nothing
+goes into a settings file; the velocity chi2, its limits and its reporting (contract of 2026-11-12) are not touched.
 
-**Words.** The Consistency pass (`use_consistency`) already owns the word "consistency" here, so the tests are called
-*truth tests* and the statistics as follows:
+**Words.** The Consistency pass (`use_consistency`) already owns the word "consistency" here, so:
 - *honest:* a claimed covariance matches the scatter of the actual error.
-- *model world:* a synthetic recording in which every sensor error is drawn exactly as the estimator's weights assume.
-- *normalised error* of a carried state x with claimed covariance P: (x_est - x_true)^T P^-1 (x_est - x_true); its
-  expected value under an honest claim is the state's dimension n (NEES in the literature).
-- *normalised move:* the same for the move from a prior to the window's result, against the covariance the move has
-  under the model, scaled to an expected value of 1 (D9).
-- *seen / blind / exit window:* the LiDAR holds the direction of travel / it does not (information ratio below the
-  projection's lower threshold) / the first windows after a blind stretch in which it does again.
+- *model world:* synthetic data in which every sensor error is drawn as the estimator's weights assume, in the
+  estimator's own time conventions.
+- *normalised error* of a state with claimed covariance P: e^T P^-1 e for the error e (estimate minus truth).
+- *normalised move:* the same for the move from a prior to the window's result, scaled to an expected value of 1.
+- *fixture:* a test set-up on the production code in which the inputs, the boundary state and what the LiDAR can
+  observe are set by the test and checked.
 
 ## Goals / Non-Goals
 
 **Goals:**
-- A method that sorts every failure into one of two bins by construction: the code or the scheme fails on data that
-  obeys its own model (tiers A and B), or the model is too simple for reality (tier C), with a size for each.
-- Every finding of `research.md` that was checked in code is pinned by a test that a fix must turn green.
-- The predictions of the audits ("expected today") are tested, not trusted.
-- The same statistics on a real run and on a synthetic run, so that tier C's worlds can be compared with the
-  recordings like with like.
+- A failure is attributed to the code or the scheme only where that attribution is valid (D1), and every finding of
+  `research.md` that was checked in code gets a fixture that measures it and, once reproduced, pins it.
+- The audit's predictions are tested, not trusted.
+- The instruments are tested before they are used (D2).
+- The same definitions on a real run and on a synthetic run.
 
 **Non-Goals:**
 - Fixing any finding; changing a limit, a setting file or a baseline.
-- Truth tests of loop closure and the consistency pass.
-- A realistic LiDAR simulator (occlusion, beam pattern, incidence effects): the synthetic LiDAR stays simple, and its
-  limits are stated (Risks).
-- A verdict on the map: none of this replaces the user's look at a cloud.
+- Runs with real-world deviations, the lever arm on a recording, regressions on raw data (see Follow-ups).
+- Truth tests of loop closure and the consistency pass; a realistic LiDAR simulator.
+- A verdict on the map.
 
 ## Decisions
 
-### D1. Three tiers, one question each
+### D1. Attribution only where the observation model is known
 
-| Tier | World | Question | Kind | A failure means |
-|---|---|---|---|---|
-| A | noise-free model world | truth in, truth out: are the parts of the code consistent with each other? | deterministic, one run per case | two parts of the code disagree about the same quantity (time, frame, state) |
-| B | model world with noise | is each claimed covariance as large as the actual error? | Monte Carlo over seeds | the scheme double counts, drops or misweights something under its own model |
-| C | model world plus one deviation | how large is each real-world effect, and does it look like what the recordings show? | experiment, report | a limit of the model or a missing calibration, with its size |
+The first draft promised that every failure is sorted "by construction". The review showed why that cannot hold on
+the full loop: a noise-free point on a wall still has a residual to its cell's mean (0.34-2.26 mm of motion for a
+perfect guess, `scan_to_map_test.cpp:272-292`); a window's LiDAR measurement and its prior share the errors of the
+windows before it; removing the LiDAR's translation information along an axis leaves the attitude coupling and the
+errors the stretch was entered with; and a pass can hide errors that cancel.
 
-Tier A comes first because it needs no statistics: in a noise-free model world the truth makes every residual zero, so
-the truth is the solution, and any estimate off the truth, or any carried state moved away from its prior, is an
-inconsistency. `research.md`'s F2 predicts exactly such a deviation (a start-velocity move of 17-19 mm/s under a
-constant 2 m/s2). Tier B needs the model world's noise and is where "information counted twice" and "a covariance
-dropped" show. Tier C is the route to the unexplained 75-80 % of symptom 1.
+So there are four objects, and what each may conclude is fixed in advance:
 
-*Alternative considered:* one large Monte Carlo over realistic data with a single pass/fail number. Rejected: it fails
-today for many reasons at once and attributes nothing.
-
-### D2. The synthetic world is a recording
-
-The generator produces what a recorder produces: IMU samples (timestamp, gyro, accelerometer) and LiDAR points with
-timestamps, plus the truth (pose, velocity, gyro bias, acceleration offset at any instant). It is served by an
-in-memory `RecordingSource`, so the tests run `OdometryPipeline::load` and `run_odometry` unchanged: the start-up gyro
-bias, the orientation filter with its ramp, the window cutting, the map seed from the first points, the rest test and
-the hand-off are all the real code. A window-level fixture built by hand would not exercise the front end, and F3 and
-the start-up findings of [gyro] live there.
-
-- **Motion:** an analytic trajectory, twice differentiable, from segments joined smoothly: rest (the recording starts
-  with at least 2 s of it, as the pipeline expects), speeding up, walking, a turn, slowing down. "Walking" has the
-  measured dynamics of Livox 3: acceleration about 0.5 / 0.5 / 0.9 m/s2 rms per body axis and rotation rates about
-  11 / 11 / 32 deg/s rms, at a 2 Hz step rate, so that effects which scale with acceleration and rotation rate appear
-  at their real size.
-- **Scenes and routes** (from `box_scene` / `loop_scene`): (R1) the existing loop with pillars, seen everywhere;
-  (R2) *out and back through a plain corridor*: a room with structure, a corridor longer than twice the points' range
-  so that its middle is blind along travel, a small end room, a turn, and the way back. A first pass through unmapped
-  space has nothing to be corrected against; the exit correction of F1 needs structure that was mapped before, which
-  the way back gives. It is also what a dead-end cave passage is. (R3) rest, walk, rest.
-- **Sensor profile:** the Livox one by default (500 Hz IMU, the settings of `settings/livox-vertical.toml`), because
-  several settings count samples (`handoff_tail_nodes`, the velocity spans). Fewer points per node than the real
-  sensor, to keep the runs short. An L2 profile is a parameter set, not new code.
-- **Named deviations, one switch each** (tier C): lever arm of the accelerometer; time offset between LiDAR and IMU
-  stamps; a rotation between the IMU's and the LiDAR's axes; a body-fixed accelerometer bias; a gyro scale error;
-  gyro values quantised at 0.061 deg/s; LiDAR points stamped where they were taken, between nodes; a band-limited
-  accelerometer error (vibration); a range offset per surface; IMU samples taken at an instant, not as the mean of
-  their interval.
-- **The generator is tested itself:** an independent strap-down integration of its noise-free IMU samples reproduces
-  its true trajectory; the sample statistics of its noise match its parameters; its points lie on the scene's faces.
-  Without this a generator error would be read as an estimator error.
-
-*Alternative considered:* extend `loop_recording` with per-node `imu_acc` / `imu_angles` (windows built by the test).
-Kept only for single-window cases (D7); as the main route it would skip the front end and need its own copy of what
-`compute_step_1` produces.
-
-### D3. The model world: claims made true, and what cannot be
-
-In the model world the data is generated from the same numbers the weights are built from, so that "honest" is
-decidable. The run uses the shipped settings with these substitutions, each written next to its reason in the test:
-
-| Claim of the estimator | Model world |
-|---|---|
-| Accelerometer error per term: (density^2 / tau + floor^2), independent between terms | white noise only, at the density that gives the shipped per-term sigma at the typical term length (0.1 m/s2 at 11 ms -> about 0.0105 m/s2/sqrt(Hz)); settings: that density, floor 0. The claimed information is the shipped one, and the data obeys it |
-| Acceleration offset: a random walk in the world frame at `imu_acceleration_offset_rw_mps2_sqrt_s` | exactly that (the world frame is the model's choice, C17; a body-fixed bias is a deviation of tier C) |
-| Rotation edges: max(k x ARW x sqrt(dt), floor) per edge, independent | gyro white noise at the ARW, k = 1, floor 0, `ahrs_gain = 0` so the filter is a pure integration after its ramp |
-| Gyro bias: a random walk at `gyro_bias_rw_deg_s_sqrt_s` | exactly that |
-| Samples held over their interval | each sample is the mean of the true signal over its interval |
-| Points placed with the node before them | points stamped at node times |
-| Accelerometer at the pose origin; sensors on one clock and one set of axes | so |
-
-Two claims cannot be made true by construction, and the harness measures them instead of assuming them:
-- **The NDT term on a plane.** It treats a point as a draw from its cell's Gaussian in all three directions; on a flat
-  surface larger than the cell the in-plane part claims a hold it does not have (F4).
-- **The map as exact.** The loop builds the map from its own earlier windows.
-
-So a state that the LiDAR dominates cannot be expected to be honest even in the model world, and tier B is laid out by
-what dominates a state (D6): the blind stretch isolates the inertial terms and the carry, where the model world is
-exactly true; a single-window Monte Carlo against a map of true points measures the NDT term's own claim (D7, K8);
-the seen windows of a run measure the total.
-
-### D4. What the loop reports about a window
-
-The truth tests need, per window, the state that is handed to the next window, with its covariances. Today the
-velocity and the gyro bias are in `Window`, but the gravity vector, the offset's covariance and the pose the next
-window starts from are inside the loop.
-
-- `WindowTermRecord` gains the **handed-on state**: end velocity and covariance; the carried gravity vector and its
-  unit factor; the offset covariance; the velocity-offset cross covariance (zero unless carried); gyro bias and
-  covariance; the last node's pose as solved and as handed on (after the tail is re-propagated), and its time. Full
-  matrices in memory; means and sigmas as columns of `window_features.csv`.
-- The window problem keeps two more blocks of the covariance columns it already receives (start velocity, and start
-  velocity with offset) for the reading of D9. They are not stored in `Window`.
-- Also as features, because the signature table of D8 needs them and the audits had to rebuild them from raw files:
-  the window's mean rotation rate and its world-frame acceleration over the first 30 ms.
-
-Nothing here feeds back into the odometry; `Window`, the capture file and the settings hash do not change. The
-record is produced where a sink is set, as today.
-
-*Alternatives considered:* (a) stepping `process_windows` from the test and reading `WindowLoop::carry`: the map seed
-and the run's first steps are file-local, and the front end would be bypassed. (b) a field of `WindowOutcome`: that
-type is what a replay compares; a diagnostic record is the right home, and real runs get the columns for free.
-
-### D5. Tier A: truth in, truth out
-
-Noise-free model world, fixed seeds for the LiDAR's small jitter (plane cells need a thickness). One run per case:
-
-| Case | Motion (route R1 or R3) | Expected of today's code |
+| Object | What it is | May conclude |
 |---|---|---|
-| A1 | rest | passes; sets the floor |
-| A2 | constant velocity | passes; sets the floor |
-| A3 | constant acceleration, 2 m/s2 | fails: F2a and F2b (predicted: first node of each window 1.66 mm behind, prior mean 4 mm/s low, start-velocity move 17-19 mm/s) |
-| A4 | constant yaw rate at constant speed | to be seen |
-| A5 | walking | fails by F2; the rest is unknown and is the point |
-| A6 | A3 and A5 with `handoff_tail_nodes = 0` | separates F2b from F2a |
+| Exact control (D2) | a linear-Gaussian problem, honest by construction, no production code | that the instruments work: test direction, power, the reading |
+| Fixtures (D5) | production terms, window problem and loop steps with inputs, boundary state and observable directions set and verified by the test | "the code or the scheme is wrong under its own model", for the quantity the fixture isolates |
+| The loop on synthetic recordings (D8) | the real front end and loop on a model-world recording | measurements with their preconditions; a comparison between settings from the same seeds; no attribution |
+| Real recordings (D10, D11) | readings and the report tool | measurements; no attribution |
 
-Checked per window: the handed-on velocity, gravity vector and gyro bias against the truth; the handed-on pose
-against the truth; and each carried state's move from its prior. Tolerances come from the floor that A1 and A2
-measure (the LiDAR jitter's effect and the discretisation), times a stated factor, and are written in the test.
-The truth is brought into the estimate's frame by aligning the first node.
+*Alternatives considered:* one Monte Carlo over the full loop with a pass/fail number (attributes nothing); tolerances
+taken from "gentle" loop cases (they contain the LiDAR floor and the rest term, so they cannot set a tolerance).
 
-**The hand-off against one long window.** On a noise-free recording, two consecutive windows solved in sequence must
-give the same end state and nearly the same end covariance as the same nodes solved as one window (offset and bias
-random walks set to zero for this case, so that both forms have the same model). The difference is what the hand-off
-loses or distorts, with no statistics needed; under acceleration it shows F2, and the covariances show what
-conditioning on the first pose costs. It runs through the real loop (two recordings cut with different window
-lengths), not through a re-implemented hand-off.
+### D2. The exact control: testing the instruments
 
-Each failing case is entered as "expected to fail" with the finding it shows. For A3 the predicted sizes are also
-asserted in a second, passing case (a characterisation): if today's code does not show what the audit predicted, the
-mechanism is not understood, and that is a result. A fix removes both.
+A small chain of linear-Gaussian factors written in the test (increments with known noise, absolute measurements with
+known covariance, a prior), solved as one batch and by exact sequential elimination.
 
-### D6. Tier B: claimed uncertainty against actual error
+- Batch and sequential elimination of the **same** factors agree to rounding in mean and covariance. (Two different
+  cuts of a production window are not the same factors: anchors, end terms, origin fix, tail, rest decision, the
+  layout of bias and offset and the time the first half enters the map all change. That comparison is a sensitivity,
+  not a test, and is a follow-up.)
+- The normalised-error test accepts the honest chain and rejects the same chain with the reported covariance scaled
+  down and up, on a problem where the scaled quantity dominates the tested state. A control that cannot fail proves
+  nothing; tripling one noise source does not guarantee rejection for every state, so the control is built where it
+  does.
+- The normalised move of D10 averages 1 there, and the old velocity statistic's form averages 0.5, with the truth
+  drawn from the prior and an independent measurement error of equal variance.
 
-Model world with noise, route R2 (out and back through the corridor) plus R1, M runs with different seeds, both
-layer switches on unless said otherwise.
+### D3. The synthetic recording, in the estimator's conventions
 
-- **Statistic.** For window k of the route (the same instant in every run) and state x (handed-on velocity, n = 3;
-  gravity vector against true gravity plus the true offset, n = 3; both jointly with the cross block, n = 6; gyro
-  bias, n = 3): the sum over the M runs of the normalised error is chi-square with M n degrees of freedom if the
-  claim is honest. The band is the two-sided 99 % interval.
-- **By class.** Each window of the route has a class fixed by the route: rest, seen, blind (by position in the
-  stretch), exit (first, second, third window after a stretch), turn. Reported per class: the mean normalised error
-  per degree of freedom (1 if honest) and the share of windows inside their band.
-- **What is asserted.**
-  - *Blind windows, the component along the corridor, of velocity, offset and both jointly:* inside the band. This
-    is where the model world is exactly true (D3), so a failure here is an error of the inertial terms or the carry
-    under their own model. Expected to pass with both layers on; if it does not, that is a new finding.
-  - *The same with both switches off:* outside the band, far below honest (the 11 mm/s ceiling against a growing
-    error). This is **positive control 1**: the harness reproduces the defect that started `honest-inertial-carry`.
-  - *Exit windows:* expected to fail (F1), entered as such, with the mean and the size of the velocity error
-    recorded.
-  - *Seen windows, and the gyro bias everywhere:* expected to fail (F4, F5, F2), entered as such with their factors.
-- **Positive control 2:** the same recordings with the accelerometer noise generated three times stronger than
-  claimed must leave the band on the high side in the blind windows, and three times weaker on the low side.
-  A test that cannot fail proves nothing.
-- **The statistic itself** is tested on a linear chain with a textbook Kalman filter: honest by construction, inside
-  the band; with a doubled measurement weight, outside.
-- **Size and time.** Full set on demand: M = 40 (band for n = 3: mean within about +-0.3 of 1 per degree of freedom).
-  In every `ctest` run: M = 6 on a shortened R2, asserting only positive control 1 and the blind-window check with
-  its wider band. Budget for all truth cases in `ctest`: one minute in Release; in Debug the loop-level cases are
-  skipped, as the loop-closure cases are. Seeds are fixed, so a result is reproducible.
+The generator produces what a recorder produces (IMU samples, timed LiDAR points) plus the truth (pose, velocity,
+gyro bias, acceleration offset at any instant). The real `calculate_trajectory` and `compute_step_1` cut it into
+windows, so no test keeps its own copy of what a window looks like.
 
-### D7. Known-answer cases for the audit's findings
+- **Motion:** analytic and twice differentiable, from segments joined smoothly: rest, speeding up, constant
+  velocity, constant acceleration, turning in place, a turn with centripetal acceleration, walking (the measured
+  Livox 3 dynamics: about 0.5 / 0.5 / 0.9 m/s2 rms per body axis, 11 / 11 / 32 deg/s rms, 2 Hz steps).
+- **The estimator's time conventions, generated as they are used** (checked in code):
+  - the orientation filter uses gyro sample k for the interval *ending* at node k; the model-world gyro value is the
+    mean body rate over that interval;
+  - the accelerometer term holds sample k over the interval *starting* at node k, rotated with node k's attitude; the
+    model-world value is defined for that use, and where the body rotates, the difference between "interval mean of
+    the body force rotated at the left end" and "mean world force" is a discretisation term with a derived bound,
+    not a zero;
+  - a point is assigned to the last node *before* its timestamp (`lidar_odometry.cpp:381-385`): a point stamped
+    exactly at node k goes to node k-1, and at a window's first node it is dropped. Model-world points for node k
+    are generated at pose k and stamped strictly inside node k's interval (the next representable time after it).
+- **What the front end needs** (verified by the generator's own tests, not assumed): a complete recording, point
+  store and preview, an orientation estimator and an executor; IMU timestamps increasing, in seconds, gyro in rad/s,
+  acceleration in the sensor's g; all 60 001 seed points and the first window at rest; the tested motion after the
+  filter's 3 s ramp; more than 1 000 assigned points per window slice after the 3 cm decimation; the expected
+  window count and timestamps.
+- **Sensor profile:** Livox timing by default (500 Hz, 180-node windows), because several settings count samples.
+  Fewer points than the real sensor, with the emitted range limited explicitly. Where a fixture needs the terms'
+  boundaries on sample boundaries (D4), it uses a node interval chosen for that and says so.
+- **The generator is tested itself:** an independent strap-down integration of its noise-free samples reproduces its
+  truth; its noise statistics match its parameters; its points are the latent hits on the scene plus the specified
+  jitter; every generated point is retained with the node index it was generated for, including at window
+  boundaries.
 
-One small case per finding that was checked in code. Each states the honest outcome and is marked expected to fail
-with the finding's id while the defect exists; K5 tests new code and must pass. Single-window cases use the fixtures
-of `scan_to_map_test.cpp` (a window against a map of true points); the others the generator.
+Switches for real-world deviations (lever arm, time offset, points stamped where they were taken, ...) are designed
+as single parameters but built in the follow-up (Follow-ups).
 
-| Case | Finding | Set-up | Honest outcome | Predicted today |
+### D4. The model world: what is generated, what is conditioned on, what stays approximate
+
+A claim is "made true" only if the fixture verifies it. Each row is checked by a test before any honesty test uses it.
+
+| Claim of the estimator | In the model world | Status |
+|---|---|---|
+| Accelerometer term: variance (density^2 / tau + floor^2) tau^2, independent between terms | white sample noise at D = sqrt(density^2 + floor^2 tau0) (0.01057 m/s2/sqrt(Hz) at tau0 = 11 ms), settings: that density, floor 0. This matches the shipped weight at tau0 only. With samples of variance D^2 / dt_i a term's mean has variance D^2 sum(l_i^2 / dt_i) / tau^2 (l_i its overlap with sample i); a split sample feeds both neighbours; half spans, clipped end spans and the gap weigh differently | **generated**, exact only where term boundaries fall on sample boundaries (the exact fixture chooses its node interval so); for the Livox timing the variance and cross-covariance of the actual weighted residuals are measured and reported |
+| Velocity prior over the gap: D^2 gap + floor^2 gap^2; joint prior F P F^T; random walks over the window's duration | the same formulas; the offset and the gyro bias are constant inside a window and step between windows by their walk | **generated** |
+| Rotation edges: max(k ARW sqrt(dt), floor), independent | gyro white noise at ARW / sqrt(dt) in body rate, k = 1, floor 0, `ahrs_gain = 0`; that this gives the assumed edge variance after the filter's ramp and the conversion to the edges' angles is checked | **generated**, after the check |
+| Edge position rows (sigma 1e-4 m, scale beta = 0.1): the integrated guess restated; with layer 1 its shape | no data error corresponds to it | **stays approximate**; its effect is a measured quantity (C34) |
+| Zero velocity at rest (sigma 0.01 m/s at both ends) | true at rest. A noise-free constant-velocity window also passes the rest test, with `imu_always_on` even when `use_zero_velocity_detection` is off (`run_odometry.cpp:1040-1047`, `imu_kinematics.cpp:86-108`) | **generated** at rest; uniform motion is a characterised case (A2), and the constant-velocity reference lives in a window fixture with rest set false |
+| Origin fix (1e12 on node 0, a curvature on the current step) | the boundary pose is exact in the fixtures that say so | **conditioned on** |
+| First window: gravity vector from its mean reading, start-up gyro bias, initial priors | drawn noise makes these estimates | **conditioned on**, or their noise accounted for; a comparison that depends on them is reported as conditional |
+| NDT term: a point is an independent Gaussian draw from an exact cell, in two grids, Huber 3, scale 0.1 | cannot be made true on a plane (in-plane part), nor for a map built from the run's own windows | **stays approximate**; measured by K8 and in D8 |
+| Sensors on one clock, one position, one set of axes | so | **generated** |
+
+### D5. Fixtures on the production code
+
+Each fixture names the quantity it isolates and asserts its own validity separately from its result.
+
+- **F-a, a term at the truth (noise-free).** For each production term (accelerometer terms with start and end,
+  rotation edges, position rows, the priors), on windows cut by the real front end: the residual at the true state is
+  zero within a bound derived for that term and motion (zero for constant acceleration; the stated discretisation
+  term under rotation). A time, frame or unit convention that two parts of the code read differently shows here,
+  per term.
+- **F-b, a term's noise (Monte Carlo at term level).** Whitened residuals at the truth have unit variance and no
+  cross-covariance between terms, in the sample-aligned fixture; for the Livox timing the measured variance and
+  cross-covariance are the size of the approximation.
+- **F-c, a window's claimed covariance.** The window problem with a prior whose error is drawn from its claimed
+  covariance, model-true inertial data, and the LiDAR's information controlled: none (the existing no-point set-up),
+  or a corridor with exact cell statistics in which the test verifies that the projected translation information
+  along the true axis is near zero and the transverse information is kept. The scatter of the handed-out end state
+  against `take_covariance`'s blocks.
+- **F-d, the hand-off from a known boundary state.** The prior mean and covariance the next window is actually
+  prepared with, after growth and fall-backs; the re-propagated tail; the next window's first pose.
+- **F-e, short chains through the real loop steps.** `process_windows` from a carried state and a map of true points
+  that the test sets, as a replay continues from a capture: the blind stretch (growth of error against growth of
+  claimed sigma, both switches off and on), and the exit with an entry error of known size.
+
+**Error vectors** (they decide the degrees of freedom, so they are fixed here):
+- The truth is aligned once, at the first retained node; world positions, velocities, gravity plus offset and the
+  corridor direction are transformed consistently.
+- *Velocity:* handed-on velocity minus the true velocity at the last node's time.
+- *Gravity and offset:* in the raw accelerometer units and the estimator's frame. The carried vector starts as the
+  first window's mean rotated reading and gains (offset estimate) / s per window, with s = 9.80665 / |g| recomputed
+  from the vector before the fold. The error is s_before (g_after - g_true,raw), with the truth (gravity plus the
+  true offset) expressed in the same raw units and frame, against the offset covariance (SI). Multiplying the vector
+  by its own recomputed factor would normalise the magnitude error away.
+- *Gyro bias:* in sensor axes, the generated bias minus the start-up estimate actually subtracted.
+- *Joint:* estimate minus truth for both parts, with the cross block.
+- Controls for the definitions: a sensor scale other than 1 g, a rotated start, and a case whose cross covariance
+  has a known sign.
+
+### D6. Statistics
+
+- **Law.** At one preselected instant, over M independent runs in which every modelled random quantity is redrawn
+  (the prior's error included), the sum of the normalised errors is chi-square with M r degrees of freedom if the
+  claim is honest and the errors Gaussian. For a fixed truth axis u the error is projected first (A = u^T, r = 1; for
+  velocity and offset together r = 2) and so is the covariance (A P A^T).
+- **Direction.** A claimed sigma that is too small (a ceiling against a growing error) drives the value **up**.
+- **Size.** The on-demand sets are sized to detect a variance ratio of 1.5 (a sigma 22 % off) with 90 % power at the
+  1 % level: about 200 degrees of freedom. With 6 runs the scalar interval per degree of freedom is [0.11, 3.09]
+  (with 40 runs [0.52, 1.67]); 6 runs are a smoke check that things run, not an honesty test.
+- **Rules.** The instant, the axis, the primary comparisons and the decision rule over them (a family-wise level) are
+  written down before the run. Successive windows of one run are not pooled as independent draws, and no window is
+  chosen by its measured error. Missing windows and the coverage of each class are reported.
+- **No prospective markers.** The effect of the switches, the exit windows and the gyro bias are measured; an
+  "expected to fail" marker is set only by the rule of D7.
+
+### D7. Cases, and "measure, then pin"
+
+A discrepancy becomes a case marked as expected to fail only when it was **reproduced and isolated in a fixture**.
+The marker sits on a case that asserts the one honest outcome; the fixture's validity assertions are in passing
+cases beside it. Until then the case reports its measurement. The audit's numbers are hypotheses to compare with.
+
+| Case | Finding | Set-up (fixture) | What is measured / the honest outcome | Audit's hypothesis |
 |---|---|---|---|---|
-| K1 | F1 | a seen room, true motion 1 m/s, velocity prior at the truth (sigma 5 mm/s); the first node alone displaced 10 mm along travel | the end velocity's normalised error below the 99 % bound (11.3) | both velocities change by 28-42 mm/s, the covariance unchanged: 6 or more sigmas |
-| K2 | F1 | tier B's route R2, the exit windows | as K1, over runs | a velocity jump near (position error) / T, the opposite sign in the next window, sigma below 10 mm/s |
-| K3 | F2a | two windows at constant 2 m/s2 | the second window's prior mean equals the true start velocity | 4 mm/s low |
-| K4 | F2b | `repropagate_window_tail` on p = a t^2 / 2, a = 1 m/s2, tail 15, span 10 | the last node on the truth | 0.75 mm behind |
-| K5 | F6 | scalar: prior N(0, P), one measurement with variance P, many draws | the normalised move of D9 averages 1 | (the old statistic averages 0.5: asserted as a fact about it) |
-| K6 | F3 | a window at perfect rest whose filter angles are tilted by 2 deg | recognised as rest | not recognised; at 1.5 deg both agree |
-| K7 | C16 | one node, block diag(k), gradient g along the weak axis, s = 0.5 | the projected block's own step at most g / k | 2 g / k |
-| K8 | F4 | Monte Carlo of one window against a map of true points and against a map made of one earlier noisy window, fine grid alone and both grids | scatter of the solved shift / claimed sigma = 1 | about 1.4 and about 1.8; a flat wall's in-plane part claims a hold and pulls nothing |
-| K9 | cell test | a planar cell with a normal sigma of 3 mm, axis-aligned and turned 45 deg | both usable or both not | usable only when turned |
+| A1 | - | rest (F-a, F-e) | states that are active after initialisation stay at the truth | passes |
+| A2 | rest test | noise-free constant velocity through the loop steps | whether the window is taken as at rest and what the zero-velocity term then does; the constant-velocity reference itself in the window fixture with rest false | taken as rest |
+| A3 | F2a, F2b | constant acceleration (F-a, F-d) | term residuals zero; see K3 and K4 for the boundary | |
+| A4a / A4b | - | turning in place / a turn with centripetal acceleration (F-a) | term residuals within the derived discretisation bound | unknown |
+| A5 | - | walking (F-a, then F-e) | the terms' quadrature error and the map error first; only what remains is attributed | unknown |
+| K1 | F1 | F-c in a seen room with the **map** displaced along travel by a known amount, so that the window's inertial data and relative motions stay exactly consistent; map, convergence, duration, prior and cross block specified; paired with the zero-shift control | the signed response of start and end velocity per mm, and the claimed covariance beside it; honest: the response stays within the claimed uncertainty, or the claim grows with it | [acc] 1.5-4 per T, [lidar] 1-1.5 per T, covariance unchanged |
+| K2 | F1 | F-e: the exit of a blind stretch with an entry error of known, injected size | the velocity after the exit against its claimed sigma, window by window | a jump near error / T, then ringing (from one excitation) |
+| K3 | F2a | F-d: a known exact preceding end state, a 2 ms gap, 2 m/s2 | the prepared prior mean against the true start velocity | 4 mm/s short |
+| K4 | F2b | the tail re-propagation alone on p = a t^2 / 2 at 500 Hz, tail 15, span 10 | the last node, and the next first node, against the truth | -0.75 mm at 1 m/s2; -1.66 mm at the next node at 2 m/s2 |
+| - | F2 | F-e under constant acceleration, tail 15 and tail 0 | the start-velocity move (tail 0 also changes the map) | +17-19 mm/s is a fitted hypothesis |
+| K5 | F6 | the exact control (D2) | the normalised move averages 1 | must pass |
+| K6 | F3 | level true poses, a constant tilted filter pitch, the true force, threshold 0.3 m/s2 | recognised as rest | not recognised from about 1.75 deg |
+| K7 | C16 | the isolated weak-axis block, s = 0.5 | the block's own step at most g / k | 2 g / k |
+| K8 | F4 | a scalar rigid shift with the other modes held (or the marginal variance of the shift actually solved); independent scan draws against a fixed true map, then with an earlier noisy map redrawn per trial; fine grid alone and both grids; a flat wall along travel | scatter / claimed sigma, with grid duplication, map noise and the plane's pull separated | 1.4 and 1.8 under independent 1 cm noise; the in-plane response was measured non-zero |
+| K9 | cell test | a vertical plane with stated tangent variances, its normal turned 45 deg in XY, the inverse refreshed | usable in both orientations or in neither | usable only when turned |
+| K10 | C37 | the origin fix's rotation weight | 1 / sigma^2 with sigma in radians | 1e12 where 3.3e15 was meant; harmless |
+| K11 | F5 | F-e with a perfect gyro and the boundary attitude turned by 0.05 deg about a horizontal axis, paired with the unturned control | the bias estimate's response against its claimed sigma (the boundary-tilt mechanism, as distinct from a general bias statistic) | leaves zero by 3-5 claimed sigmas |
 
-The cases of the audits that are about reality, not about the code under its own model (a body-fixed bias after a
-turn, a lever arm, an axis rotation, a carried bias error in a blind stretch, the start-up bias median), are tier C
-experiments (D8), not pass/fail cases.
+### D8. The loop on synthetic recordings: an integration measurement
 
-### D8. Tier C: one deviation at a time, against the recordings
+The real front end and `optimize_windows` on model-world recordings. Nothing here attributes; it shows what the whole
+scheme does to an honest world, with the same definitions as on a real run.
 
-For the model world and for each deviation of D2 at the size the audits fitted (lever arm 44 mm, time offset 6 ms,
-axis rotation 0.2 deg, body-fixed bias 0.05 m/s2, gyro scale 0.4 %, ...), one run of R1 with walking, and the
-**signature table** that `tools/honesty_report.py` also makes from a real run:
+- **Routes:** R1, the loop with pillars (seen everywhere); R2, out and back through a plain corridor (a first pass
+  through unmapped space has nothing to be corrected against; the way back gives the re-observation, and it is what
+  a dead-end cave passage is); R3, rest, walk, rest. The emitted range is limited so that R2's blind middle fits a
+  short route (with the shipped 40 m range it would need more than 80 m of corridor).
+- **Settings:** the stage 8 candidate set with exact cell statistics. The shipped Livox file uses the previous
+  statistics, for which a plain corridor's information was 925 along against 155 across
+  (`scan_to_map_test.cpp:522-525`): there even the weakest direction can point the wrong way, so a run with the
+  shipped file is a second, separately reported measurement.
+- **Preconditions, verified and reported per run:** in the blind windows, enough matched side and floor normals, a
+  projected translation information along the true corridor axis near zero, and the transverse information kept; at
+  the nominated exit, full support along the axis and matches to structure that was mapped before and retained; no
+  map rebuild; the time spent in each regime. A run whose precondition fails is reported as such and not used.
+- **Reported:** per class of window (rest, seen, blind by position, exit by position, turn) the errors, the
+  normalised errors of D5 and the readings of D10; with both layer switches off and on from the same seeds.
+- **In every `ctest`:** a short smoke run: it completes, its preconditions hold, values are finite and repeat.
 
-- the start-velocity move: median of the norm, median per axis, by quarter of the rotation rate, by quarter of the
-  acceleration at the window start, lag-1 autocorrelation, the value at rest;
-- the normalised moves of D9 (median, 95th percentile);
-- the regressions of the audits: move against boundary acceleration (ms), the lever-arm fit, the time-offset fit.
+### D9. The record, completed after the hand-off
 
-The real rows (Livox 3: 23-24 mm/s, growing 16.8 -> 28.6 with rotation rate and 19.8 -> 29.0 with boundary
-acceleration, autocorrelation -0.12 to -0.35, isotropic, 3.6 mm/s at rest) are the target. A deviation whose row has
-that shape is a candidate for the unexplained part; one that does not is ruled out at that size. Combinations are run
-only for candidates. Run on demand, written to a folder outside the repository given by an environment variable; the
-numbers go to the user without a verdict.
+Today the per-window record is built and written in the report step, before the offset is folded into gravity,
+before the tail is re-propagated and before the cancellation check (`run_odometry.cpp:1172-1189`, then `:1201-1235`).
 
-Also here, as readings with their predicted sizes: a carried gyro-bias error of 0.3 deg/s through a 4 s blind stretch
-(0.41 m/s if the tilt is not held, 0.08-0.2 if the LiDAR holds it); a body-fixed bias through a 180 deg turn and a
-blind stretch (F7); the start-up bias from quantised samples.
+- The table and all existing columns stay as they are, taken at the same moment as today.
+- Appended after the hand-off: the carry actually handed on (velocity, gravity vector with the unit factor before
+  the fold, offset covariance, cross covariance, gyro bias, validity of each); the last node's pose and time as
+  solved and as handed on; the prior means and covariances this window was actually prepared with (after growth and
+  fall-backs); the next window's prepared first pose where there is one; the window's mean rotation rate and its
+  world-frame acceleration at its start (their definitions stated with the columns).
+- Written once per window, at the end of the hand-off; a window whose hand-off is cancelled writes its record with
+  the handed-on part marked absent.
+- A record exists only with `log_window_terms`; the fixtures switch it on with their keeping sink.
+- The window problem's diagnostic snapshot for D10 (start-velocity blocks, their validity) is taken out of the local
+  problem before it goes out of scope.
 
-### D9. Honesty readings on real runs
+Nothing feeds back into the odometry; `Window`, the capture file and the settings hash do not change.
 
-For a carried state x with prior N(m, P) and the window's posterior covariance P_post, the move d = x_result - m has
-covariance P - P_post under a correct linear-Gaussian model, so E[d^T P^-1 d] = n - tr(P^-1 P_post). The reading is
+### D10. Honesty readings on real runs
 
-    q = d^T P^-1 d / (n - tr(P^-1 P_post)),   expected value 1.
+For a carried state with prior N(m, P), the window's result x and posterior covariance P_post, the move d = x - m
+has covariance P - P_post in a linear-Gaussian update with a fixed observation model, so
+E[d^T P^-1 d] = n - tr(P^-1 P_post), and
 
-- **States:** the start velocity (n = 3); with `imu_carry_joint_covariance` the start velocity and offset jointly
-  (n = 6, the joint prior); the gyro bias (n = 3).
-- **NOT MEASURED** where the term is absent, and where the denominator is below 0.5: the window then adds so little
-  to the state that the ratio is noise.
-- **Where:** computed in every run with the verdict's other readings; median and 95th percentile in the verdict
-  summary; columns of `window_features.csv`. No limit, no flag, no trigger.
-- **The existing velocity chi2 is not changed**, nor its limits 5 / 20: they are part of the contract agreed on
-  2026-11-12. With both statistics side by side on real runs, the user can decide later whether to re-base it.
-- **What the reading does not say:** P_post is conditional on the exact first node (F1) and the problem is robust and
-  nonlinear, so 1 is a model expectation. A reading near 1 does not prove honesty; a reading far above 1 shows a
-  claim that the window's own data contradicts.
+    q = d^T P^-1 d / (n - tr(P^-1 P_post))      has expected value 1.
 
-### D10. The tool
+Its distribution is a weighted sum of squares, not chi-square, and it is descriptive: P_post is conditional on the
+fixed first node, the bias can be clamped, the weights are re-weighted (Huber) and the problem is linearised.
 
-`tools/honesty_report.py` (pure Python, with tests in `tests/test_verification_tools.py`): reads one or more
-`window_features.csv`, prints the signature table of D8 per run and side by side, and writes it as CSV. The audits'
-throw-away scripts (`experiments/consistency/scripts/`) are its starting point; the regressions state their
-regressors and standard errors. It gives no verdict.
+- **States:** the start velocity (n = 3), always; the gyro bias (n = 3); and, when the joint prior is used, start
+  velocity and offset together (n = 6, d = [v_start - m_v, e - m_e], the full joint start prior and posterior with
+  both cross blocks). The marginal velocity reading stays in joint mode too, so runs with and without the switch
+  compare.
+- **Computation:** whitened through a scale-aware Cholesky solve of P; the eigenvalues of the whitened posterior must
+  lie in [0, 1] to numerical tolerance.
+- **`NOT MEASURED`:** the term absent; the covariance absent, stale (not from the accepted final state), non-finite
+  or ill-conditioned; a covariance "reduction" that is not physical; a clamped bias; a trace reduction
+  n - tr(P^-1 P_post) below 0.5. The validity follows a step that is taken back.
+- **Reporting:** largest, median, 95th percentile and coverage (also when it is zero) in the verdict summary; all
+  readings on a flagged window's line; columns of `window_features.csv`. No limit, flag or trigger.
+- **Unchanged:** the velocity chi2, its limits 5 / 20 on the weak windows (information ratio below 0.45) and its
+  all-window statistics.
 
-### D11. Evidence on recordings with existing settings
+### D11. The tool, and evidence by replay
 
-No code; each is a number for the user, none a verdict:
-- the tool on the existing runs with tables (Livox 3: base, layer 1, layers 1+2, the gyro-noise run; Livox 4
-  candidates; the 44_short table of the step checks);
-- replays of the Livox 3 and Livox 4 captures with `handoff_tail_nodes = 0`: does the part of the move that follows
-  the boundary acceleration go away (F2b), and what else moves;
-- one full Livox 3 run with the lever arm set. The Mid-360S mount's axis map is read from the recorder's source
-  (read only); the L2's vertical remap would give (-0.044, 0.023, -0.011) m, which agrees with the fitted x in sign
-  and roughly in size.
+`tools/honesty_report.py` (pure Python, tests in `tests/test_verification_tools.py`): one table per
+`window_features.csv`, side by side for several: the start-velocity move (median of the norm, per axis, by quarter of
+the rotation rate and of the start acceleration, lag-1 autocorrelation, at rest) and the readings of D10, each under
+one stated mask and definition, from the new columns. Where an input is missing it prints "unavailable"; it does not
+rebuild a quantity another way. It gives no verdict.
 
-Full runs are sequential (`real_time_threshold_seconds` makes parallel runs timing-dependent).
+The existing runs' tables do not have the new columns, and the audit's figures used other masks, raw gyro over two
+windows and trajectories. So the evidence of this change is **replays of the existing captures with the new build**
+(Livox 3, the stage 8 Livox 4 captures, 44_short), each labelled as conditional on its captured map and carried
+state, with windows that stopped at the time limit flagged. Comparing the tool's new figures with the audit's is
+done figure by figure with the differences in definition named; the regressions (lever arm, time offset) need
+time-resolved data and are a follow-up.
 
-### D12. Who builds what
+### D12. Who builds what, and the order of the gates
 
 | Part | Region | Model / effort |
 |---|---|---|
-| Generator, in-memory source, truth statistics, tiers A-C, known-answer cases, the tool | verification (never edits `src/`) | Opus / medium |
+| Exact control, generator, fixtures, loop measurement, the tool | verification (never edits `src/`) | Opus / medium |
 | Handed-on state in the record and the CSV | noise-budget | Opus / medium |
 | Covariance blocks kept, readings in the verdict | solver | Opus / medium |
-| `owners.toml`, merges, step checks, references, runs, summaries | orchestrator | Opus / medium; reading the results Fable / high |
+| `owners.toml`, `tests/CMakeLists.txt`, the shared loop steps (report, finish), documentation from the hand-backs, merges, references, replays, summaries | orchestrator | Opus / medium; reading the results Fable / high |
 
-At most two editing agents at once: the record and readings (noise-budget, then solver) run beside the generator
-(verification); the truth cases need both.
+- Ownership entries land in the same commit as the new tracked files (the ownership check reads tracked files).
+- The step checks compare whole CSV files. At the commit that adds columns: the old columns' raw tokens are compared
+  with the reference and every other reference is checked unchanged; only then is the changed table reference
+  refreshed, and from there on "ALL HOLD" is required.
+- "Results unchanged" means: the existing normalised manifest comparison and the exact deterministic outputs
+  (replays with forced iteration counts, the term table); a comparison that depends on the time limit is flagged.
+- Fixture checks that depend on the record run after the record is integrated.
 
 ## Risks / Trade-offs
 
-- [The synthetic LiDAR is kinder than a real one: no occlusion, perfect planes, even sampling] -> its results are
-  lower bounds for F4; the conclusions about the LiDAR term rest on K8, on the readings of real runs and on tier C's
-  comparison with the recordings, and are worded as such.
-- [A generator error is read as an estimator error] -> the generator's own tests (D2); A1 and A2 as the floor; every
-  tier A failure is cross-checked by switching one ingredient of the motion.
-- [The model world's settings differ from the shipped ones (floor 0, k = 1)] -> same code paths, the same claimed
-  information where it matters (D3); tier C and the real readings use the shipped settings.
-- [Cases expected to fail can hide a second defect inside the first] -> each asserts one quantity; the main ones have
-  a characterisation of today's size beside them (D5), so a change of size is reported.
-- [Monte Carlo time] -> a small set in `ctest` within a one-minute budget, the full set on demand with its time
-  reported.
-- [The readings invite a verdict] -> they have no limits; the summary says what they do not say (D9).
-- [`window_features.csv` gains columns] -> existing columns keep their names, order and bits; the step checks' table
-  references are re-recorded in their own commit, after the old columns were shown identical.
-- [The harness finds more than can be fixed soon] -> that is its job; the expected-to-fail cases are the list, and
-  the user decides the order.
+- [The synthetic LiDAR is kinder than a real one] -> the LiDAR term's conclusions rest on K8 (with its assumptions
+  stated) and on the readings of real replays; nothing is called a lower bound.
+- [A generator error is read as an estimator error] -> the generator's own tests and F-a: a term's residual at the
+  truth is checked before any honesty test uses that term.
+- [The model world's settings differ from the shipped ones] -> D4 says per claim what is generated, conditioned on
+  or approximate; the loop is measured with the candidate set and, separately, the shipped file.
+- [Evidence is thin: one recording, one blind stretch, candidate settings] -> the design asserts no outcome from it;
+  the audit's numbers are hypotheses (D7), and a result is worded "did not reproduce at this size, route, seed and
+  settings", never "ruled out".
+- [Markers hide a second defect] -> one assertion per marked case; validity in separate passing cases.
+- [Monte Carlo time] -> the large sets are at term and window level, where a trial is one or two windows; the loop
+  runs are few.
+- [The readings invite a verdict] -> no limits; the summary states what they do not say.
+- [The harness grows] -> the gates of D12 and the measure-then-pin rule; the follow-ups are named and left out.
 
 ## Migration Plan
 
-No migration: defaults and results are unchanged. Order of landing: the record and readings (results identical,
-references re-recorded), the generator with its own tests, tier A and the known-answer cases, tier B, the tool,
-tier C and the evidence runs, the summary for the user. Rolling back is removing tests, columns and the tool.
+No migration: defaults and results are unchanged. Order: the exact control; the record and readings (table reference
+refreshed once); the generator with its tests; the fixtures, measured then pinned; the loop measurement; the tool
+and the replays; the summary for the user. Rolling back is removing tests, columns and the tool.
+
+## Follow-ups (named, not in this change)
+
+- One real-world deviation at a time in the generator (lever arm, LiDAR-IMU time offset, a rotation between the
+  axes, a body-fixed accelerometer bias, a gyro scale error, quantised gyro values, points stamped where they were
+  taken, vibration, a range offset per surface), each compared from paired seeds with the same baseline settings.
+- The Mid-360S lever arm: the mount's axis map from the recorder's source, and a run with it set.
+- The regressions of the audit (hand-off, lever arm, time offset) with raw IMU data and trajectories.
+- Sensitivity to the window length (two real cuts of the same recording).
+- A reference marginal of the boundary state over the production terms of two windows, to size what the hand-off
+  loses.
+- What happens to the layers of `honest-inertial-carry`.
 
 ## Open Questions
 
-- Whether the on-demand Monte Carlo and tier C become part of `tools/end_runs.py`: after their first timings.
+- Whether the on-demand sets become part of `tools/end_runs.py`: after their first timings.
 - The final names of the new columns and summary lines: with the implementation, in the knowledge files.
-- Whether the L2 profile gets its own tier B run in this change or with the first fix that touches the L2 settings.
+- Whether the loop steps accept a window without points (for a LiDAR-free chain through `process_windows`) or
+  that chain stays at window level, where it exists today.
+
+## The review of 2026-11-20 and what changed
+
+`review-codex.md` (an independent reviewer, read-only). Its claims about the code were checked by the orchestrator
+before this revision: the point assignment, the rest test and the zero-velocity term under `imu_always_on`, the
+moment the record is written, the cost of a plane in its cell, the previous cell statistics in a corridor, and the
+shipped Livox thresholds all read as the review says.
+
+| Review item | Resolution |
+|---|---|
+| Blocking 1: attribution on the loop is not valid | D1: four objects with fixed rights to conclude; the loop is a measurement; A4 split, A5 measures quadrature and map error first; tolerances from derived bounds |
+| Blocking 2: the proposed timestamps create a systematic error | D3: the three time conventions generated as the code uses them; points stamped strictly inside their node's interval; F-a checks each term at the truth |
+| Blocking 3: one density does not make term noise independent | D4 row 1 (0.01057, exact only sample-aligned, otherwise measured); F-b |
+| Blocking 4: other information sources, false rest | D4 rows for position rows, zero velocity, origin fix, first window, NDT; A2 is a characterisation; A1 only for active states |
+| Blocking 5: the error vector | D5 "Error vectors", with the three controls |
+| Blocking 6: direction, dimension, power | D6; no prospective markers; controls in D2 |
+| Blocking 7: blindness and re-observation must be verified | D8 preconditions, candidate statistics, explicit range, rebuilds recorded |
+| Blocking 8: a different cut is a different likelihood | D2 (same factors only); the two-cut comparison is a follow-up |
+| Blocking 9: the record precedes the hand-off | D9 |
+| Reading (should change) | D10 as proposed by the review |
+| Cases (should change) | D7 table; K10 for C37; K11 for F5's boundary-tilt mechanism |
+| Tool and historical tables (should change) | D11: new columns, one definition, "unavailable", replays with the new build |
+| Order of gates (should change) | D12 |
+| Scope and wording (should change) | proposal and Follow-ups; specs reduced to behaviours |
+| Notes on the pipeline's inputs | D3 "What the front end needs"; the memory point store's path |
+
+Not taken over as written: the review's suggestion of a "production-term fixture" is implemented as five fixtures
+(F-a to F-e) because term, window and hand-off isolate different quantities.
