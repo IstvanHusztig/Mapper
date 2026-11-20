@@ -115,7 +115,7 @@
 <nav>
   <div class="brand">dMapper guide</div>
   <div class="sub">LiDAR + IMU odometry</div>
-  <form action="search.html" method="get" style="margin:8px 0"><input type="search" name="q" placeholder="Search the docs" aria-label="Search the docs" style="width:100%;font:inherit;font-size:14px;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--text)"></form>
+  <input id="docs-q" type="search" placeholder="Search all pages" aria-label="Search all pages" style="width:100%;font:inherit;font-size:14px;margin:8px 0;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--text)">
   <a href="contents.html">Contents of all pages</a>
   <a href="hu/index.html" hreflang="hu" lang="hu">Magyar nyelven</a>
   <a href="#overview">Overview</a>
@@ -185,6 +185,14 @@
 
 <main>
 <button class="theme-btn" id="themeBtn" type="button">Theme</button>
+<section id="search" hidden>
+<h2 style="margin-top:8px">Search</h2>
+<p class="meta" id="docs-count"></p>
+<ul id="docs-results" style="list-style:none;padding:0;margin:8px 0 24px"></ul>
+<p class="meta">Every word must appear in a section; titles and headings rank above body text. Covers every page of
+<code>docs/</code> (the agent notes marked as such), <code>CLAUDE.md</code> and <code>tools/README.md</code>; the Hungarian
+pages are not included yet. Clear the box to hide the results.</p>
+</section>
 <h1>dMapper guide</h1>
 <p class="lead"><code>dMapper</code> turns a LiDAR + IMU recording into a trajectory and a point cloud. Five ways into this guide:
 <a href="#fundamentals">the basic terms</a> (pose, node, window, term …), explained once and linked from every page;
@@ -964,13 +972,12 @@ branches merged one after the other were never tested together.</li>
 
 <h2 id="documents">All documents</h2>
 <p>Every page of <code>docs/</code>, by what it is for. The same map is in <code>docs/README.md</code>; the Hungarian pages are under <code>docs/hu/</code>. Also outside <code>docs/</code>: <code>CLAUDE.md</code> (how the code is built, tested and laid out), <code>tools/README.md</code> (the analysis tools) and <code>openspec/specs/</code> (the requirements).</p>
-<p>The same map with the main sections of every page is the <a href="contents.html">contents page</a>, and every page can be searched on the <a href="search.html">search page</a> (the Hungarian pages are not included yet). Both are rebuilt by <code>python tools/build_docs_index.py</code>.</p>
+<p>The same map with the main sections of every page is the <a href="contents.html">contents page</a>; every page can be searched with the box at the top of the menu (the Hungarian pages are not included yet). Both are rebuilt by <code>python tools/build_docs_index.py</code>.</p>
 <h3 id="using-dmapper">Using dMapper</h3>
 <p class="meta">Start here: what a run does and what every setting means.</p>
 <div class="table-wrap"><table>
 <tr><td>this guide</td><td><code>index.html</code></td><td>The basic terms (<a href="#fundamentals">Fundamentals</a>: pose, node, window, term, bend …, defined once and linked from every page), the pipeline step by step, every parameter, best practices, the tuning cheat sheet, known limitations.</td></tr>
 <tr><td><a href="contents.html">Contents</a></td><td><code>contents.html</code></td><td>Every page with its main sections, grouped as here.</td></tr>
-<tr><td><a href="search.html">Search</a></td><td><code>search.html</code></td><td>Search the text of every page and section from the browser.</td></tr>
 <tr><td><a href="README.md">Documentation map</a></td><td><code>README.md</code></td><td>This map as a Markdown file.</td></tr>
 <tr><td><a href="PIPELINE.md">How a run works: windows</a></td><td><code>PIPELINE.md</code></td><td>How a run cuts the recording into windows and processes one window (short, technical). <i>From pipeline step 3.</i></td></tr>
 </table></div>
@@ -1038,6 +1045,66 @@ branches merged one after the other were never tested together.</li>
       root.setAttribute('data-theme', next);
       try { localStorage.setItem('mapper-docs-theme', next); } catch (e) {}
     });
+  })();
+</script>
+<script src="search-index.js"></script>
+<script>
+  // search over every page (the index is docs/search-index.js, rebuilt by tools/build_docs_index.py)
+  (function () {
+    var data = window.DOCS_INDEX || [];
+    var box = document.getElementById("docs-q"), sec = document.getElementById("search");
+    var out = document.getElementById("docs-results"), cnt = document.getElementById("docs-count");
+    if (!box || !sec) return;
+    var lower = data.map(function (e) { return { s: e.s.toLowerCase(), pt: e.pt.toLowerCase(), x: e.x.toLowerCase() }; });
+    function esc(t) { return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+    function words(q) { return q.toLowerCase().match(/[\p{L}\p{N}_.\-]+/gu) || []; }
+    function count(h, w) { var n = 0, i = h.indexOf(w); while (i >= 0 && n < 20) { n++; i = h.indexOf(w, i + w.length); } return n; }
+    function mark(text, ws) {
+      var re = new RegExp("(" + ws.map(function (w) { return w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }).join("|") + ")", "gi");
+      return esc(text).replace(re, '<mark style="background:var(--warn-soft);color:inherit">$1</mark>');
+    }
+    function snippet(x, ws) {
+      var lx = x.toLowerCase(), pos = -1;
+      for (var i = 0; i < ws.length; i++) { var p = lx.indexOf(ws[i]); if (p >= 0 && (pos < 0 || p < pos)) pos = p; }
+      if (pos < 0) return x.slice(0, 160);
+      var a = Math.max(0, pos - 60), b = Math.min(x.length, pos + 120);
+      return (a > 0 ? "… " : "") + x.slice(a, b) + (b < x.length ? " …" : "");
+    }
+    function run() {
+      var ws = words(box.value);
+      if (!ws.length) { sec.hidden = true; out.innerHTML = ""; cnt.textContent = ""; return; }
+      sec.hidden = false;
+      var hits = [];
+      for (var i = 0; i < data.length; i++) {
+        var L = lower[i], score = 0, ok = true;
+        for (var k = 0; k < ws.length; k++) {
+          var w = ws[k], t = L.s.indexOf(w) >= 0, p = L.pt.indexOf(w) >= 0, c = count(L.x, w);
+          if (!t && !p && !c) { ok = false; break; }
+          score += (t ? 30 : 0) + (p ? 6 : 0) + Math.min(c, 10) + (c ? 2 : 0);
+        }
+        if (!ok) continue;
+        if (L.s === ws.join(" ")) score += 40;
+        if (data[i].l === 1) score += 4; else if (data[i].l === 2) score += 2;
+        if (data[i].p.indexOf("agents/") === 0) score -= 8;
+        hits.push({ i: i, score: score });
+      }
+      hits.sort(function (a, b) { return b.score - a.score || a.i - b.i; });
+      cnt.textContent = hits.length + (hits.length === 1 ? " section" : " sections") + (hits.length > 60 ? " (first 60 shown)" : "");
+      var html = "";
+      hits.slice(0, 60).forEach(function (h) {
+        var e = data[h.i], href = (e.p === "index.html" ? "" : e.p) + (e.a ? "#" + e.a : "");
+        var agent = e.p.indexOf("agents/") === 0 ? ' <span class="meta">(agent notes)</span>' : "";
+        html += '<li style="padding:8px 0;border-bottom:1px solid var(--line)"><a ' + 'href="' + esc(href || "#") + '"><b>' +
+          mark(e.s || e.pt, ws) + "</b></a>" + agent + '<div class="meta">' + esc(e.pt) + " · <code>" + esc(e.p) +
+          "</code></div><div class=\"meta\">" + mark(snippet(e.x, ws), ws) + "</div></li>";
+      });
+      out.innerHTML = html;
+    }
+    var m = /[?&]q=([^&]*)/.exec(location.search);
+    if (m) { try { box.value = decodeURIComponent(m[1].replace(/\+/g, " ")); } catch (e) { box.value = m[1]; } }
+    box.addEventListener("input", function () { run(); if (box.value) sec.scrollIntoView({ block: "start" }); });
+    if (location.hash === "#search") box.focus();
+    run();
   })();
 </script>
 </body>

@@ -8,7 +8,6 @@ Start here: what a run does and what every setting means.
 
 - [User guide](index.html): The basic terms ([Fundamentals](index.html#fundamentals): pose, node, window, term, bend …, defined once and linked from every page), the pipeline step by step, every parameter, best practices, the tuning cheat sheet, known limitations.
 - [Contents](contents.html): The indexed table of contents of every page with its main sections (built from this map and the pages' headings by `tools/build_docs_index.py`).
-- [Search](search.html): Search the text of every page and section from the browser (works from disk; the Hungarian pages are not included yet).
 - [Documentation map](README.md): This file: the map of every page, by purpose.
 - [How a run works: windows](PIPELINE.md): How a run cuts the recording into windows and processes one window (short, technical). *From pipeline step 3.*
 

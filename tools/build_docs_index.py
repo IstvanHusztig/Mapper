@@ -3,7 +3,7 @@
 
 Reads every HTML and Markdown page of docs/ (not hu/; agents/ read-only), plus CLAUDE.md and
 tools/README.md, splits them into sections by heading, and writes
-  docs/search-index.js   window.DOCS_INDEX = [...]   (loaded by docs/search.html, works from file://)
+  docs/search-index.js   window.DOCS_INDEX = [...]   (loaded by the search box of docs/index.html, works from file://)
   docs/contents.html     the indexed table of contents, grouped as in docs/README.md
 
     python tools/build_docs_index.py              rebuild both files
@@ -335,16 +335,16 @@ HEAD = """<!doctype html>
 </head>
 <body>
 <main>
-<p class="docs-nav" style="font-size:13px;margin:0 0 8px;color:var(--muted)"><a href="index.html">dMapper docs</a> › Using dMapper · <a href="index.html#documents">All documents</a> · <a href="search.html">Search</a></p>
+<p class="docs-nav" style="font-size:13px;margin:0 0 8px;color:var(--muted)"><a href="index.html">dMapper docs</a> â€º Using dMapper Â· <a href="index.html#documents">All documents</a> Â· <a href="index.html#search">Search</a></p>
 <h1>Contents of the documentation</h1>
 <p class="lead">All @@COUNT@@ pages of <code>docs/</code>, grouped by purpose, with the main sections of each. The Hungarian pages (<code>hu/</code>) are not included yet.</p>
 <p class="meta">Terms used here: none; the basic terms are in the guide's <a href="index.html#fundamentals">Fundamentals</a>.</p>
-<form class="search" action="search.html" method="get"><input type="search" name="q" placeholder="Search all pages" aria-label="Search all pages"><button type="submit">Search</button></form>
+<form class="search" action="index.html" method="get"><input type="search" name="q" placeholder="Search all pages" aria-label="Search all pages"><button type="submit">Search</button></form>
 """
 
 TAIL = """
 <h2 id="see-also">See also</h2>
-<ul class="docs-nav"><li><a href="index.html#documents">All documents</a> (the guide's map)</li><li><a href="search.html">Search the documentation</a></li><li><a href="README.md">docs/README.md</a></li></ul>
+<ul class="docs-nav"><li><a href="index.html#documents">All documents</a> (the guide's map)</li><li><a href="index.html#search">Search the documentation</a></li><li><a href="README.md">docs/README.md</a></li></ul>
 </main>
 </body>
 </html>
@@ -358,7 +358,7 @@ def check_links(parsed, pages):
     for rel, p in pages:
         if p.suffix != ".html":
             continue
-        src = read(p)
+        src = re.sub(r"<script\b[^>]*>.*?</script>", "", read(p), flags=re.S | re.I)  # links built in scripts are not links
         for href in re.findall(r'href="([^"]+)"', src):
             if re.match(r"[a-z]+:", href) or href.startswith("//"):
                 continue

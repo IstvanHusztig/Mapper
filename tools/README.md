@@ -483,7 +483,7 @@ python tools/window_terms.py <window_terms.csv> [--from S] [--to S] [--state res
 
 ## build_docs_index.py
 
-Builds the documentation's search index (`docs/search-index.js`, read by `docs/search.html`) and the indexed contents page (`docs/contents.html`, grouped as in `docs/README.md`, with each page's main sections). Standard library only; output is deterministic.
+Builds the documentation's search index (`docs/search-index.js`, read by the search box of `docs/index.html`) and the indexed contents page (`docs/contents.html`, grouped as in `docs/README.md`, with each page's main sections). Standard library only; output is deterministic.
 
     python tools/build_docs_index.py            rebuild both files
     python tools/build_docs_index.py --fix-ids  also add ids to h2/h3 headings that have none
