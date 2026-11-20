@@ -43,6 +43,19 @@
   nav .group { margin-top: 14px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); opacity: .8; }
   nav .indent { padding-left: 12px; }
   nav .page { padding-left: 24px; font-size: 13.5px; }
+  nav details.menu-group > summary { cursor: pointer; padding: 3px 0; color: var(--muted); list-style-position: outside; }
+  nav details.menu-group > summary a { display: inline; padding: 0; }
+  nav details.menu-group[open] > summary { color: var(--text); }
+  nav .menu-item a { padding: 3px 0 3px 14px; }
+  nav details.menu-group { margin-left: 0; }
+  nav .lang { margin-bottom: 8px; font-size: 13.5px; }
+  .menu-btn { font: inherit; font-size: 13px; padding: 3px 9px; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--panel); color: var(--muted); cursor: pointer; }
+  nav .menu-btn { float: right; }
+  .menu-show { display: none; position: fixed; top: 12px; left: 12px; z-index: 5; }
+  .layout.menu-hidden { grid-template-columns: minmax(0, 1fr); }
+  .layout.menu-hidden nav { display: none; }
+  .layout.menu-hidden .menu-show { display: inline-block; }
   main { padding: 36px 44px 80px; min-width: 0; }
   h1 { font-size: 30px; line-height: 1.25; margin: 0 0 8px; }
   h2 { font-size: 23px; margin: 52px 0 12px; padding-top: 8px; border-top: 1px solid var(--line); }
@@ -113,77 +126,85 @@
 <body>
 <div class="layout">
 <nav>
+  <button class="menu-btn" id="menuHide" type="button" title="Hide the menu">&#x2039; Hide</button>
   <div class="brand">dMapper guide</div>
   <div class="sub">LiDAR + IMU odometry</div>
   <input id="docs-q" type="search" placeholder="Search all pages" aria-label="Search all pages" style="width:100%;font:inherit;font-size:14px;margin:8px 0;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--text)">
-  <a href="#contents">Contents</a>
-  <a href="hu/index.html" hreflang="hu" lang="hu">Magyar nyelven</a>
-  <a href="#overview">Overview</a>
-  <a href="#fundamentals">Fundamentals: basic terms</a>
-  <a class="indent" href="#f-frames">Frames and samples</a>
-  <a class="indent" href="#f-poses">Poses and trajectory</a>
-  <a class="indent" href="#f-windows">Windows</a>
-  <a class="indent" href="#f-map">The map</a>
-  <a class="indent" href="#f-opt">The optimization</a>
-  <a class="indent" href="#f-imu">IMU states</a>
-  <a class="indent" href="#f-readings">Readings of a run</a>
-  <a class="indent" href="#f-after">After the odometry</a>
-  <a class="indent" href="#f-tools">Runs and checks</a>
-  <a href="#inputs">Inputs and outputs</a>
-  <div class="group">Pipeline</div>
-  <a href="#pipeline">The diagram</a>
-  <a class="indent" href="#s-load">1 · Loading points</a>
-  <a class="indent" href="#s-imu">2 · IMU orientation</a>
-  <a class="indent" href="#s-windows">3 · Windows and point poses</a>
-  <a class="page" href="window-chaining.html">↗ Poses and window chaining</a>
-  <a class="indent" href="#s-map">4 · Initial map</a>
-  <a class="indent" href="#s-guess">5 · Initial guess per window</a>
-  <a class="indent" href="#s-opt">6 · Optimization</a>
-  <a class="page" href="degeneracy-information.html">↗ Degeneracy information</a>
-  <a class="page" href="window-terms.html">↗ The per-term table</a>
-  <a class="page" href="honesty-readings.html">↗ Honesty readings and truth tests</a>
-  <a class="indent" href="#s-handoff">7 · Hand-off and bias</a>
-  <a class="indent" href="#s-update">8 · Map update</a>
-  <a class="indent" href="#s-export">9 · Export</a>
-  <div class="group">Parameters</div>
-  <a href="#params">How to read the tables</a>
-  <a class="indent" href="#p-filter">filter_points</a>
-  <a class="indent" href="#p-control">lidar_odometry_control</a>
-  <a class="indent" href="#p-ndt">in_out_params_*</a>
-  <a class="indent" href="#p-mm">motion_model_uncertainty</a>
-  <a class="indent" href="#p-bias">gyro_bias_estimation</a>
-  <a class="indent" href="#p-origin">first_node_prior</a>
-  <a class="indent" href="#p-mmc">motion_model_correction</a>
-  <a class="indent" href="#p-ahrs">madgwick_filter</a>
-  <a class="indent" href="#p-calibration">sensor_calibration</a>
-  <a class="indent" href="#p-ext">lidar_imu_extrinsics</a>
-  <a class="indent" href="#p-imu">imu_translation</a>
-  <a class="indent" href="#p-loop">loop_closure</a>
-  <a class="page" href="loop-closure-research.html">↗ Loop closure research</a>
-  <a class="indent" href="#p-cons">consistency</a>
-  <a class="indent" href="#p-perf">performance</a>
-  <a class="page" href="performance.html">↗ Performance</a>
-  <a class="indent" href="#p-misc">debug, paths, misc, version</a>
-  <div class="group">More</div>
-  <a href="#practice">Best practices</a>
-  <a href="#tuning">Tuning cheat sheet</a>
-  <a href="#fixes">Fixes and map sharpness</a>
-  <a href="#limits">Known limitations</a>
-  <div class="group">Internals</div>
-  <a href="#internals">Code and work</a>
-  <a class="indent" href="#i-window">One window, in the code</a>
-  <a class="indent" href="#i-checks">How a change is checked</a>
-  <a class="indent" href="#i-regions">Regions and agents</a>
-  <a class="indent" href="#i-flow">Question to merge</a>
-  <a class="page" href="regions/README.md">↗ Regions</a>
-  <div class="group">Reference</div>
-  <a href="ARCHITECTURE.md">↗ Architecture</a>
-  <a href="code-split-and-region-agents-plan.md">↗ Code-split plan</a>
-  <a href="code-review-tracker.md">↗ Code-review tracker</a>
-  <a href="#documents">All documents</a>
+  <a class="lang" href="hu/index.html" hreflang="hu" lang="hu">Magyar nyelven</a>
+<!-- menu: begin (generated by tools/build_docs_index.py from the guide's headings; do not edit by hand) -->
+<div class="menu-item"><a href="#contents">Contents</a></div>
+<div class="menu-item"><a href="#overview">What the odometry does with the points it reads</a></div>
+<details class="menu-group"><summary><a href="#fundamentals">Fundamentals: the basic terms</a></summary>
+<a class="indent" href="#f-frames">Frames and samples</a>
+<a class="indent" href="#f-poses">Poses and trajectory</a>
+<a class="indent" href="#f-windows">Windows</a>
+<a class="indent" href="#f-map">The map</a>
+<a class="indent" href="#f-opt">The optimization</a>
+<a class="indent" href="#f-imu">IMU states</a>
+<a class="indent" href="#f-readings">Readings of a run</a>
+<a class="indent" href="#f-after">After the odometry</a>
+<a class="indent" href="#f-tools">Runs and checks</a>
+</details>
+<div class="menu-item"><a href="#inputs">Inputs and outputs</a></div>
+<details class="menu-group"><summary><a href="#pipeline">The pipeline</a></summary>
+<a class="indent" href="#loading-and-filtering-the-points">Loading and filtering the points</a>
+<a class="indent" href="#an-orientation-for-every-imu-sample">An orientation for every IMU sample</a>
+<a class="indent" href="#windows-and-a-pose-for-every-point">Windows and a pose for every point</a>
+<a class="indent" href="#the-initial-map">The initial map</a>
+<a class="indent" href="#initial-guess-for-the-next-window">Initial guess for the next window</a>
+<a class="indent" href="#window-optimization">Window optimization</a>
+<a class="indent" href="#hand-off-and-gyro-bias">Hand-off and gyro bias</a>
+<a class="indent" href="#map-update">Map update</a>
+<a class="indent" href="#export">Export</a>
+</details>
+<details class="menu-group"><summary><a href="#params">Parameter reference</a></summary>
+<a class="indent" href="#p-filter">[filter_points]</a>
+<a class="indent" href="#p-control">[lidar_odometry_control]</a>
+<a class="indent" href="#p-ndt">[in_out_params_indoor] and [in_out_params_outdoor]</a>
+<a class="indent" href="#p-mm">[motion_model_uncertainty]</a>
+<a class="indent" href="#p-bias">[gyro_bias_estimation]</a>
+<a class="indent" href="#p-origin">[motion_model_first_node_prior_uncertainty]</a>
+<a class="indent" href="#p-mmc">[motion_model_correction]</a>
+<a class="indent" href="#p-ahrs">[madgwick_filter]</a>
+<a class="indent" href="#p-calibration">[sensor_calibration]</a>
+<a class="indent" href="#p-ext">[lidar_imu_extrinsics]</a>
+<a class="indent" href="#p-imu">[imu_translation]</a>
+<a class="indent" href="#p-loop">[loop_closure]</a>
+<a class="indent" href="#p-cons">[consistency]</a>
+<a class="indent" href="#p-perf">[performance]</a>
+<a class="indent" href="#p-robust">[robust_lidar_odometry] (removed)</a>
+<a class="indent" href="#p-misc">[lidar_odometry_debug_info], [paths], [misc], [version_info]</a>
+</details>
+<details class="menu-group"><summary><a href="#practice">Best practices</a></summary>
+<a class="indent" href="#recording">Recording</a>
+<a class="indent" href="#processing">Processing</a>
+</details>
+<div class="menu-item"><a href="#tuning">Tuning cheat sheet</a></div>
+<details class="menu-group"><summary><a href="#fixes">Fixes and map sharpness</a></summary>
+<a class="indent" href="#consistency-pass">Consistency pass</a>
+</details>
+<div class="menu-item"><a href="#limits">Known limitations</a></div>
+<details class="menu-group"><summary><a href="#internals">Internals: how the code is laid out and how the work is organised</a></summary>
+<a class="indent" href="#i-layers">Layers</a>
+<a class="indent" href="#i-window">One window, in the code</a>
+<a class="indent" href="#i-checks">How a change is checked</a>
+<a class="indent" href="#i-regions">Regions and agents</a>
+<a class="indent" href="#i-flow">From a question to a merged change</a>
+</details>
+<details class="menu-group"><summary><a href="#documents">All documents</a></summary>
+<a class="indent" href="#docs-search">How the contents and the search work</a>
+<a class="indent" href="#using-dmapper">Using dMapper</a>
+<a class="indent" href="#how-the-odometry-works">How the odometry works</a>
+<a class="indent" href="#code-and-architecture">Code and architecture</a>
+<a class="indent" href="#plans-and-research">Plans and research</a>
+<a class="indent" href="#region-knowledge-files">Region knowledge files</a>
+<a class="indent" href="#agent-working-notes">Agent working notes</a>
+</details>
+<!-- menu: end -->
 </nav>
 
 <main>
+<button class="menu-btn menu-show" id="menuShow" type="button" title="Show the menu">&#9776; Menu</button>
 <button class="theme-btn" id="themeBtn" type="button">Theme</button>
 <section id="search" hidden>
 <h2 style="margin-top:8px">Search</h2>
@@ -1112,7 +1133,9 @@ strips the markup and writes <code>docs/search-index.js</code>: one entry per se
 text.</li>
 <li><b>The contents.</b> The same run writes the <a href="#contents">Contents</a> chapter of this guide, between two
 markers, from the groups and descriptions of <code>docs/README.md</code> and each page's main headings. Edit the groups and
-descriptions in <code>docs/README.md</code>, never between the markers.</li>
+descriptions in <code>docs/README.md</code>, never between the markers. The side menu is generated the same way from
+this guide's own headings (each chapter a collapsible group with its sections), so the menu and the Contents always
+list the same chapters; the menu can be hidden with its <i>Hide</i> button and brought back with <i>Menu</i>.</li>
 <li><b>Searching.</b> This guide loads the index with a plain <code>&lt;script&gt;</code> tag. As you type in the menu's
 box, a section counts only if every word you typed appears in it. Hits rank by where the words are: section title first,
 then page title, then the body text (more occurrences rank higher); an exact title match ranks highest, agent notes
@@ -1195,6 +1218,29 @@ so that it appears in the contents.</li>
       root.setAttribute('data-theme', next);
       try { localStorage.setItem('mapper-docs-theme', next); } catch (e) {}
     });
+  })();
+</script>
+<script>
+  // the side menu can be hidden; the choice is kept in this browser
+  (function () {
+    var layout = document.querySelector(".layout");
+    var hide = document.getElementById("menuHide"), show = document.getElementById("menuShow");
+    if (!layout || !hide || !show) return;
+    function set(hidden) {
+      layout.classList.toggle("menu-hidden", hidden);
+      try { localStorage.setItem("dmapper-docs-menu-hidden", hidden ? "1" : "0"); } catch (e) {}
+    }
+    try { if (localStorage.getItem("dmapper-docs-menu-hidden") === "1") layout.classList.add("menu-hidden"); } catch (e) {}
+    hide.addEventListener("click", function () { set(true); });
+    show.addEventListener("click", function () { set(false); });
+    // a link into a section opens its group in the menu
+    function openFor(hash) {
+      var a = hash && document.querySelector('nav a[href="' + hash + '"]');
+      var d = a && a.closest("details");
+      if (d) d.open = true;
+    }
+    openFor(location.hash);
+    window.addEventListener("hashchange", function () { openFor(location.hash); });
   })();
 </script>
 <script src="search-index.js"></script>
