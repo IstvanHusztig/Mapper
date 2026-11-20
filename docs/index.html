@@ -31,7 +31,7 @@
     margin: 0; background: var(--bg); color: var(--text);
     font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
-  .layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); max-width: 1280px; margin: 0 auto; }
+  .layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); max-width: 1360px; margin: 0 auto; }
   nav {
     position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto;
     padding: 28px 18px 28px 24px; border-right: 1px solid var(--line); font-size: 14px;
@@ -86,7 +86,7 @@
   .step .where { color: var(--muted); font-size: 13px; margin-top: -4px; }
   .params { margin: 10px 0 8px; }
   .params span { display: inline-block; background: var(--tag); border-radius: 4px; padding: 0 6px; margin: 2px 4px 2px 0; font: 12.5px ui-monospace, Consolas, monospace; }
-  .table-wrap { overflow-x: auto; margin: 10px 0 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+  .table-wrap { overflow-x: auto; margin: 10px -30px 18px 0; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
   .meta { color: var(--muted); font-size: 14px; margin: 4px 0 6px; }
   table { border-collapse: collapse; width: 100%; font-size: 14px; }
   th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--line); }
@@ -94,7 +94,7 @@
   tr:last-child td { border-bottom: none; }
   /* names and values may wrap (long setting names break at their underscores) so that the text column keeps its width */
   td:first-child { font-family: ui-monospace, Consolas, monospace; font-size: 13px; max-width: 30ch; overflow-wrap: anywhere; }
-  td.val { font-family: ui-monospace, Consolas, monospace; font-size: 13px; max-width: 18ch; overflow-wrap: anywhere; }
+  td.val { font-family: ui-monospace, Consolas, monospace; font-size: 13px; min-width: 12ch; max-width: 30ch; overflow-wrap: anywhere; }
   td:last-child { min-width: 34ch; }
   .badge { display: inline-block; font: 11px/1.6 system-ui, sans-serif; padding: 0 6px; border-radius: 9px; margin-left: 6px; vertical-align: 1px; white-space: nowrap; }
   .b-gui { background: var(--warn-soft); color: var(--warn); }
