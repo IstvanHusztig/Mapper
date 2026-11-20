@@ -29,6 +29,8 @@ add_executable(lidar_odometry_tests
   synthetic_routes_test.cpp
   truth_statistics.cpp
   truth_statistics_test.cpp
+  unit_cases_inertial_test.cpp
+  unit_cases_ndt_test.cpp
   odometry_snapshot_test.cpp
   folder_result_sink_test.cpp
   loop_closure_test.cpp
