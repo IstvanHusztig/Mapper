@@ -91,7 +91,7 @@ files they name;** the orchestrator adds them when it integrates a hand-back.
   timing. Verify: the sample supports' disjointness is asserted; unit variance and no covariance between terms
   with disjoint supports; for the Livox timing the measured variance and covariance per term kind (triple, start,
   end) reported.
-- [ ] 5.3 F-c, a window's claimed covariance against its scatter: priors drawn from their claimed covariance,
+- [x] 5.3 F-c, a window's claimed covariance against its scatter: priors drawn from their claimed covariance,
   model-world inertial data, the LiDAR absent (an explicitly empty point set) or a corridor with exact cell
   statistics whose along-axis translation information the test verifies to be near zero; every active factor listed
   with its kind; the error vectors of D5 with their three controls. Verify: the controls pass; where only claims
@@ -110,7 +110,7 @@ files they name;** the orchestrator adds them when it integrates a hand-back.
   Verify: each fixture's validity cases pass (the injected error is present after the window was prepared;
   blindness verified; matches to the designated structure; no rebuild); the paired measurements are in the
   hand-back.
-- [ ] 5.6 K8, the LiDAR term's claim: a scalar rigid shift, independent scan draws against a fixed true map and with
+- [x] 5.6 K8, the LiDAR term's claim: a scalar rigid shift, independent scan draws against a fixed true map and with
   an earlier noisy map redrawn per trial, fine grid alone and both grids, a flat wall along travel. Verify: scatter
   over claimed sigma per variant, with duplication, map noise and plane pull separated, and the noise assumptions
   stated; reported descriptively.

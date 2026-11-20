@@ -131,6 +131,32 @@ Not applicable to the Python tools. The region's C++ (`tools/cut_recording/cut_r
 
 ## Experiments
 
+- **2026-11-20, a window's claimed covariance (F-c)** (cc36363; `consistency-harness` 5.3;
+  `tests/window_covariance_test.cpp`; log `experiments/consistency/fixtures/window_covariance.log`): window 2 through
+  `process_windows` from a hand-built predecessor with an exact boundary, constant acceleration, disjoint accelerometer
+  supports, priors drawn from their claim, edge position rows made inactive (scale 1e-6). Primary rows (velocity, offset
+  and joint along travel; gyro bias without LiDAR), 277 runs, detectable variance ratio 1.5: all inside their 1 %
+  intervals, per dof 0.88-1.06, in case (a) no LiDAR and case (b) blind corridor, switches off and on. The window's
+  solve, marginal and carry are honest when their inputs are. Descriptive: in the corridor the off-axis velocity
+  scatter is 0.64-0.85 of its claim (claim pessimistic where NDT acts; cause not isolated, may be the fixture's noise
+  model). With the shipped position-row scale 0.1 (C34) and no LiDAR, 100 runs: switches off, velocity along travel 4.0
+  per dof (claimed sigma about half the scatter), offset 1.45; switches on 1.07-1.12. Those solves ran at or near the
+  100-iteration cap, so non-convergence is not ruled out as part of it. Controls pass (invariance to 1.4e-9, carried
+  correlation -0.928 claimed vs -0.926 measured). 26 and 23 of 277 corridor runs excluded as not blind. Smoke 1.8 s in
+  `ctest`; the sets on demand (`-tc="window covariance:*" --no-skip`), about 9 min.
+
+- **2026-11-20, the LiDAR term's claim (K8)** (003103c; `consistency-harness` 5.6; `tests/lidar_claim_test.cpp`; log
+  `experiments/consistency/fixtures/lidar_claim.log`): NDT term alone, information scale 1, scatter over claimed sigma R
+  (500 room, 150 corridor, 60 wall trials). Exact map, one grid, room: fine 1.03-1.28 (x 1.28 excludes 1), coarse
+  1.00-1.03. Both grids, exact map, room: R 1.40-1.54; the second grid adds 1.67-1.84x claimed information while the
+  scatter does not shrink (both/fine 0.93-1.0): duplication, the size the audit gave for the information increase
+  (F4/C18). One-window map: fine 1.66-2.85, both 2.0-2.56, larger than the audit's 1.4 / 1.8. For a pure NDT solve
+  the shipped scale 0.1 divides R by 3.162 (room 0.4-0.9, below 1 in every constrained direction); in a real window
+  the motion and IMU terms share the solve, so this is not exact. Blind directions (corridor along, wall in plane): R
+  4-12 but not converged (last step 1.8-6.1 claimed sigmas; a 5 mm offset first-step response 0.01-0.04): the term does
+  not hold there, not an honesty number. The fine grid at grid_offset has a 0.16 mm normal bias from the 2.5-sigma
+  truncation (fixture artefact). Smoke in `ctest`; the trials on demand (`-tc="lidar claim*" --no-skip`), about 12 min.
+
 - **2026-11-20, chains through the loop** (128e827; `consistency-harness` 5.5; `tests/loop_chains_test.cpp`; logs in
   `experiments/consistency/fixtures/`): hand-built analytic windows through `process_windows` from a hand-set carry,
   stage 8 candidate settings. **Blind stretch** (9 blind windows): with both switches off the end velocity's error stays
