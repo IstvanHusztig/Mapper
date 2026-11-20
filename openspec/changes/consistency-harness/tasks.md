@@ -150,6 +150,15 @@ files they name;** the orchestrator adds them when it integrates a hand-back.
   the tables, each labelled as a forced replay conditional on its captured map and carried state, with the windows
   that stopped at the time limit taken from the original run's log.
 
+- [ ] 7.3 Orchestrator (added 2026-11-20 at the user's request: Livox 4 is the recording that matters most): one full
+  Livox 4 run from this branch with the stage 8 candidate settings and `log_window_terms`, `log_window_diagnostics`,
+  `log_window_verdict` on, run alone (no step checks or replays beside it); `verify-run` on its log; the tool on its
+  `window_features.csv`: the readings per class of window and per stretch (the corridors at 126-183 s, the exits, the
+  turns), and how often the rest test fires while moving (A2). Results are identical to the same settings without the
+  logs (this change changes no result); the run is the "before" against which the fixes of 8.2 are measured on
+  Livox 4 (base and repeats). Verify: the run folder (settings, log, result, health table, readings table) under
+  `experiments/consistency/livox4/`, and the user has seen the table.
+
 ## 8. Summary, decision and close
 
 - [ ] 8.1 Orchestrator: `experiments/consistency/summary.md`: the instruments, the fixtures (measured against
@@ -157,7 +166,8 @@ files they name;** the orchestrator adds them when it integrates a hand-back.
   the numbers to the user without a verdict. Verify: the reviewer's corrections are applied and the user has seen
   the summary.
 - [ ] 8.2 The user's decision: which findings become changes and in what order, which follow-ups of the design are
-  taken up, and what happens to the layers of `honest-inertial-carry`. Verify: the decision is written into this
+  taken up, and what happens to the layers of `honest-inertial-carry`. Every fix that follows is judged first on Livox 4
+  (full runs, base and repeats, against the "before" of 7.3), then Livox 3 and 44. Verify: the decision is written into this
   file.
 - [ ] 8.3 Knowledge files (verification, inertial, noise-budget, solver, lidar-matching) with the findings and
   experiments; `docs/code-review-tracker.md` entries completed for the identifiers of 5.7, with their status; the
