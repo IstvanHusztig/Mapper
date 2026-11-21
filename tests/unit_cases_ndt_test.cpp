@@ -15,9 +15,10 @@
 
 // Unit-level cases of the consistency harness (openspec change consistency-harness, task 5.4; design D7): K7 (C16, the
 // fractional projection's own step), K9 (the cell test's rotation dependence) and K10 (C37, the origin fix's rotation
-// weight). Each MEASURES and reports its number beside the audit's hypothesis and names its oracle. Nothing is marked
-// doctest::should_fail (task 5.8): the honest outcome is stated in a MESSAGE, the CHECKs pin the MEASURED
-// characterisation.
+// weight). Each MEASURES and reports its number beside the audit's hypothesis and names its oracle. The measuring cases
+// are not marked: the honest outcome is stated in a MESSAGE, their CHECKs pin the MEASURED characterisation. Task 5.8 adds
+// one case each for K7 and K9, marked doctest::should_fail, that asserts the oracle (K7: an argued bound; K9: rotation
+// invariance). K10 (C37, harmless) is not marked.
 
 // K7 (C16): the degeneracy projection scales a weak translation direction by s in (0, 1) (M = diag(P, I), P = s w w^T + the
 // rest): the node's block becomes M B M and its right-hand side M g, so along w the information is s^2 k and the force
@@ -73,6 +74,38 @@ TEST_CASE("unit case K7: the fractional projection's own step along the weak axi
     MESSAGE("K7 (block B = k on the weak axis, force g, step in units of g/k): ", table.str());
     MESSAGE("K7 s = 0.5: the block's own step is ", step_at_half / (g / k), " g/k (hypothesis 2 g/k; oracle: at most 1 g/k)");
     CHECK(step_at_half / (g / k) == doctest::Approx(2.0).epsilon(1e-9));
+}
+
+// K7 / C16 marker: asserts the oracle. The oracle is an ARGUED BOUND (a projection that removes information must not
+// lengthen the step), not a verified outcome. Cause: add_ndt_blocks (src/domain/ndt_term.cpp:331) forms M B M and M g, so
+// along a fractionally kept axis the information is s^2 k and the force s g and the block's own step g / (s k): 2 g/k at
+// s = 0.5. When this starts to pass, doctest reports it: remove should_fail.
+TEST_CASE("unit case K7 marker: the fractional projection's own step at s = 0.5 is at most g / k" * doctest::should_fail())
+{
+    Window w;
+    w.poses.push_back(Eigen::Affine3d::Identity());
+    w.timestamps.push_back({0.0, 0.0});
+    MotionModelRotationOptions rotation;
+    rotation.estimate_bias = false;
+    const WindowUnknowns u = layout_window_unknowns(w, rotation, {});
+    const double k = 50.0, g = 0.2, s = 0.5;
+    NdtNoise noise;
+    noise.projection_ratio = 0.1;
+    noise.projection_ratio_full = 0.2;
+    NdtSums sums;
+    Eigen::Matrix<double, 6, 6, Eigen::RowMajor> block = Eigen::Matrix<double, 6, 6>::Zero();
+    block.diagonal() << 100.0 * k, 100.0 * k, k, 10.0 * k, 10.0 * k, 10.0 * k;
+    Eigen::Matrix<double, 6, 1> force = Eigen::Matrix<double, 6, 1>::Zero();
+    force(2) = g;
+    sums.blocks.push_back(block);
+    sums.rhs.push_back(force);
+    sums.normal_information.push_back(
+        Eigen::Vector3d(1.0, 1.0, noise.projection_ratio + s * (noise.projection_ratio_full - noise.projection_ratio)).asDiagonal());
+    WindowEquations e(u);
+    add_projected_ndt_blocks(e, sums, noise);
+    const double step_in_g_over_k = (e.rhs(2, 0) / e.matrix(2, 2)) / (g / k);
+    CAPTURE(step_in_g_over_k);
+    CHECK(step_in_g_over_k <= 1.0 + 1e-9);
 }
 
 // K9 (the cell test, ndt_map.h ndt_inverse_usable): a cell is skipped when an entry of its inverse covariance exceeds
@@ -172,4 +205,17 @@ TEST_CASE("unit case K10: the origin fix's rotation weight against 1 / sigma^2 i
     CHECK(e.matrix(3, 3) == doctest::Approx(noise.origin[3]).epsilon(1e-9));
     CHECK(oracle == doctest::Approx(3.283e15).epsilon(1e-3));
     CHECK(oracle / noise.origin[3] == doctest::Approx(3283.0).epsilon(1e-3));
+}
+
+// K9 / F9 marker: asserts the oracle, rotation invariance: the same 3 mm plane is usable axis-aligned and turned 45 deg, or
+// in neither. Cause: ndt_inverse_usable (src/domain/ndt_map.h:22) tests each ENTRY of the inverse covariance against 1e5,
+// not an eigenvalue; the entries depend on the orientation (3 mm: 1.1e5 in one entry axis-aligned, 5.6e4 in each of two
+// turned). When this starts to pass, doctest reports it: remove should_fail.
+TEST_CASE("unit case K9 marker: the cell test gives the same usability for the plane axis-aligned and turned 45 degrees" * doctest::should_fail())
+{
+    const NdtBucket aligned = plane_cell(0.003, 0.0);
+    const NdtBucket turned = plane_cell(0.003, 45.0);
+    CAPTURE(aligned.cov_inverse.cwiseAbs().maxCoeff());
+    CAPTURE(turned.cov_inverse.cwiseAbs().maxCoeff());
+    CHECK(aligned.inverse_usable == turned.inverse_usable);
 }

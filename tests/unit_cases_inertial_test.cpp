@@ -14,9 +14,11 @@
 
 // Unit-level cases of the consistency harness (openspec change consistency-harness, task 5.4; design D7): K3 (F2a), K4
 // (F2b), A2 (the rest test on a noise-free constant-velocity window) and K6 (F3). Each MEASURES and reports its number
-// beside the audit's hypothesis and names its oracle. Nothing here is marked doctest::should_fail (task 5.8, after the
-// orchestrator's review): where an oracle exists the honest outcome is stated in a MESSAGE, and the CHECKs pin the
-// MEASURED characterisation (the discrepancy as it is today), so that a change to it is seen.
+// beside the audit's hypothesis and names its oracle. The measuring cases are not marked: where an oracle exists the honest
+// outcome is stated in a MESSAGE, and their CHECKs pin the MEASURED characterisation (the discrepancy as it is today), so
+// that a change to it is seen. Task 5.8 adds, beside K3, K4 and K6, one case each marked doctest::should_fail that asserts
+// the oracle (the true start velocity, the truth on p = a t^2 / 2, rest at every tilt): these are the isolated, reproduced
+// discrepancies with an oracle. A2 (handheld use) stays a characterisation and is not marked.
 //
 // The windows are exact analytic ones: p(t) = x0 + v0 t + a t^2 / 2 along x at 500 Hz, level, the accelerometer sample of
 // node k the exact specific force (a / g0, 0, 1) [g] over [t_k, t_k + 2 ms) (the convention of synthetic_inertial.h), no
@@ -180,6 +182,25 @@ TEST_CASE("unit case K3: the start velocity prior's mean over a 2 ms gap, at con
     }
 }
 
+// K3 / F2a marker: asserts the oracle. Cause: prepare_velocity_state (src/application/run_odometry.cpp:172) sets the start
+// velocity prior's mean to the carried end velocity (or the previous window's estimate) and never advances it by a * gap
+// over the 2 ms between the last node and the next first node (-a * gap = -2 mm/s at 1 m/s2, -4 mm/s at 2 m/s2). When
+// this starts to pass, doctest reports it: remove should_fail.
+TEST_CASE("unit case K3 marker: the start velocity prior's mean equals the true start velocity" * doctest::should_fail())
+{
+    for (double a : {1.0, 2.0})
+    {
+        CAPTURE(a);
+        const Chain chain = make_chain(a, 0.5);
+        const LoopRun run = run_third_window(chain, loop_config());
+        REQUIRE(run.ok);
+        REQUIRE(run.record.prepared.velocity_prior_mean.has_value());
+        const double error = run.record.prepared.velocity_prior_mean->x() - chain.v_start_true;
+        CAPTURE(error);
+        CHECK(std::abs(error) < 1e-4); // 0.1 mm/s, against the 2 mm/s discrepancy
+    }
+}
+
 // K4 (F2b): the tail re-propagation alone, and the next window's first pose as actually predicted.
 // repropagate_window_tail, place_window_after / predict_window_poses and estimate_previous_velocity are public
 // (window_steps.h). p = a t^2 / 2, so the finite-difference velocity over `span` nodes is the velocity at the middle of
@@ -241,6 +262,23 @@ TEST_CASE("unit case K4: the tail re-propagation's last node and the next window
     const TailMeasurement shipped = measure_tail(2.0, 30, 20);
     MESSAGE("K4 for context, tail 30, span 20, a = 2 m/s2: last node ", mm(shipped.last_node_error), "; next first pose ",
             mm(shipped.next_first_error));
+}
+
+// K4 / F2b marker: asserts the oracle. Cause: repropagate_window_tail (src/domain/window_steps.cpp:220) advances the tail
+// at the constant velocity measured over the span before the kept node (the velocity at the middle of the span), so under
+// acceleration the last node lags the truth by 0.75 / 1.50 mm and the next first pose by 0.83 / 1.66 mm (1 / 2 m/s2; tail 15,
+// span 10). When this starts to pass, doctest reports it: remove should_fail.
+TEST_CASE("unit case K4 marker: the tail re-propagation's last node and the next first pose equal the truth" * doctest::should_fail())
+{
+    for (double a : {1.0, 2.0})
+    {
+        CAPTURE(a);
+        const TailMeasurement m = measure_tail(a, 15, 10);
+        CAPTURE(m.last_node_error);
+        CAPTURE(m.next_first_error);
+        CHECK(std::abs(m.last_node_error) < 5e-5);  // 0.05 mm
+        CHECK(std::abs(m.next_first_error) < 5e-5);
+    }
 }
 
 // A2: a noise-free constant-velocity window through the rest test. window_rests (public) reads the world acceleration and
@@ -346,4 +384,18 @@ TEST_CASE("unit case K6: the rest test with a tilted open-loop filter attitude")
     // a looser threshold moves it, as the sensitivity: 0.5 m/s2 holds up to 2.92 deg
     CHECK(rests_at_tilt(2.8, 1, 0.5));
     CHECK_FALSE(rests_at_tilt(3.0, 1, 0.5));
+}
+
+// K6 / F3 marker: asserts the oracle: the device rests, whatever the open-loop filter tilt. Cause: window_rests
+// (src/domain/window_steps.cpp:61, is_window_stationary at src/domain/imu_kinematics.cpp:87) removes gravity with the
+// filter's attitude, so a tilt beyond 2 asin(0.3 / 2 g) = 1.7528 deg leaves a residual above the 0.3 m/s2 threshold and
+// the rest is lost. When this starts to pass, doctest reports it: remove should_fail.
+TEST_CASE("unit case K6 marker: the rest test recognises rest at a filter tilt of 2 and 3 degrees" * doctest::should_fail())
+{
+    for (double tilt : {2.0, 3.0})
+    {
+        CAPTURE(tilt);
+        CHECK(rests_at_tilt(tilt, 1));
+        CHECK(rests_at_tilt(tilt, 0));
+    }
 }
