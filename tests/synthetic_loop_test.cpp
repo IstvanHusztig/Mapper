@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
+#include <optional>
 #include <iomanip>
 #include <sstream>
 #include <string>
@@ -27,6 +29,11 @@
 // along/sideways weight fail in most blind windows, the exit has 1 accepted landmark match (>= 50) and along share 0.016
 // (>= 0.04); last node 16.2 m off. R3 35 windows, 19.2 s, its solved last node 3.8 m from the start against the true 9.6 m.
 // In all three the solved position falls behind the truth from about window 10 on and later runs backwards.
+// Those runs drew the world from ImuNoise{}'s defaults, not from the run's settings (5 to 10 times the settings' walks;
+// experiments/consistency/loop/analysis-claude.md). Task 6.1a: every loop recording is drawn from a declared LoopWorld (the
+// main set: matched to the run's settings, a precondition per value), R1 and R3 run in loop_scene_along_structure(), R2 with
+// 40 points per node (r2_sensor); the controls (noise-free world, filter gain 0) and the labelled mismatch case are on
+// demand below ("synthetic loop controls*"). Their measurements are in the task's hand-back, not asserted here.
 
 using namespace synthetic;
 
@@ -67,27 +74,77 @@ namespace
         return s;
     }
 
+    // R2's sensor: 6 m range (the corridor's middle has no face within range), and 40 points per node while moving. With the
+    // routes' 10 the blind stretch is not blind along travel by the truth (task 6.1a, measured 2026-11-21 with observe_loop:
+    // freshly mapped cells hold few points, their normals tilt with the 1 cm jitter, and the along-travel share of the
+    // truth-placed information is 0.021 to 0.032 outbound, partly kept by the projection; 14 of 28 blind windows removed);
+    // with 20 points 25 of 28, with 40 all 28 (share 0.012 to 0.016 outbound, 0.003 to 0.006 on the return)
+    SensorProfile r2_sensor()
+    {
+        SensorProfile s = loop_sensor();
+        s.max_range_m = 6.0;
+        s.points_per_node = 40;
+        return s;
+    }
+
+    // the loop's recordings (task 6.1a): R1 and R3 in the scene with along-travel structure, R2 as designed; the world
+    // declared with the run and drawn from its settings (LoopWorld)
+    InertialRecording loop_route(int route, LoopWorld world, std::uint64_t seed = 1, bool along_structure = true)
+    {
+        SensorProfile s = route == 2 ? r2_sensor() : loop_sensor();
+        s.seed = seed;
+        const Route r = route == 1 ? route_r1(along_structure) : route == 2 ? route_r2() : route_r3(along_structure);
+        return generate_loop_recording(r, s, loop_candidate_config(s), world);
+    }
+
     const InertialRecording &r1_recording()
     {
-        static const InertialRecording rec = generate_recording(route_r1(), loop_sensor());
+        static const InertialRecording rec = loop_route(1, LoopWorld::matched);
         return rec;
     }
 
     const InertialRecording &r2_recording()
     {
-        static const InertialRecording rec = []
-        {
-            SensorProfile s = loop_sensor();
-            s.max_range_m = 6.0;
-            return generate_recording(route_r2(), s);
-        }();
+        static const InertialRecording rec = loop_route(2, LoopWorld::matched);
         return rec;
     }
 
     const InertialRecording &r3_recording()
     {
-        static const InertialRecording rec = generate_recording(route_r3(), loop_sensor());
+        static const InertialRecording rec = loop_route(3, LoopWorld::matched);
         return rec;
+    }
+
+    // one probe line: the end and largest error, the preconditions, the classes, the largest normalised end-velocity error
+    std::string probe_line(const LoopRun &run)
+    {
+        int holds = 0;
+        for (const Precondition &p : run.preconditions)
+            holds += p.holds;
+        std::ostringstream s;
+        s << "PROBE " << run.route << " | " << loop_world_name(run.world) << " | gain " << run.ahrs_gain << " | end " << f(run.end_error_m(), 3)
+          << " m | largest " << f(run.largest_error_m(), 3) << " m | preconditions " << holds << "/" << run.preconditions.size()
+          << (run.valid() ? " (valid)" : " (NOT valid)") << " | truth";
+        for (int c = 0; c < kWindowClasses; c++)
+            s << " " << window_class_name(WindowClass(c)) << " " << run.class_windows[c];
+        s << " | observability";
+        for (int o = 0; o < kObservabilityClasses; o++)
+            s << " " << observability_class_name(ObservabilityClass(o)) << " " << run.observability_windows[o];
+        const std::optional<double> nv = run.largest_velocity_end_normalised();
+        s << " | largest normalised end-velocity error " << (nv ? f(*nv, 1) : std::string("NOT MEASURED")) << " | " << f(run.seconds, 1)
+          << " s, time limit " << run.time_limit_windows;
+        return s.str();
+    }
+
+    // a run's per-window observability: share along travel, the smallest eigenvalue ratio, the class, beside the truth class
+    std::string observability_table(const LoopRun &run, int every)
+    {
+        std::ostringstream t;
+        for (const LoopWindow &w : run.windows)
+            if (w.window % every == 0 || w.window == run.windows_run)
+                t << "\n  w" << w.window << " " << window_class_name(w.cls) << " share along " << f(w.observability.along_share, 3) << " smallest ratio "
+                  << f(w.observability.smallest_ratio, 3) << " -> " << observability_class_name(w.observability.cls);
+        return t.str();
     }
 }
 
@@ -102,11 +159,11 @@ TEST_CASE("synthetic loop smoke: a short run completes, its preconditions hold, 
     const InertialRecording &r3 = r3_recording();
     const OdometryConfig c3 = loop_candidate_config(r3.sensor);
     constexpr int r3_windows = 14;
-    const LoopRun a = run_loop(r3, c3, r3_windows);
-    const LoopRun b = run_loop(r3, c3, r3_windows);
+    const LoopRun a = run_loop(r3, c3, LoopWorld::matched, r3_windows);
+    const LoopRun b = run_loop(r3, c3, LoopWorld::matched, r3_windows);
     const InertialRecording &r2 = r2_recording();
     constexpr int r2_windows = 10;
-    const LoopRun c = run_loop(r2, loop_candidate_config(r2.sensor), r2_windows);
+    const LoopRun c = run_loop(r2, loop_candidate_config(r2.sensor), LoopWorld::matched, r2_windows);
     const double total_s = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
 
     for (const LoopRun *run : {&a, &b, &c})
@@ -124,6 +181,11 @@ TEST_CASE("synthetic loop smoke: a short run completes, its preconditions hold, 
         // the unavailable readings are counted: switches off, so the joint move is absent in every window
         CHECK(run->unavailable.move_joint == run->windows_run);
         CHECK(run->unavailable.total() > 0);
+        // every window has its observability class (by the truth)
+        int classified = 0;
+        for (int o = 0; o < kObservabilityClasses; o++)
+            classified += run->observability_windows[o];
+        CHECK(classified == run->windows_run);
     }
     REQUIRE(a.windows_run == r3_windows);
     CHECK(a.windows_cut == r3.n_windows);
@@ -158,7 +220,7 @@ TEST_CASE("synthetic loop: whole routes R1, R2, R3, preconditions listed" * doct
 {
     for (const InertialRecording *rec : {&r1_recording(), &r2_recording(), &r3_recording()})
     {
-        const LoopRun run = run_loop(*rec, loop_candidate_config(rec->sensor));
+        const LoopRun run = run_loop(*rec, loop_candidate_config(rec->sensor), LoopWorld::matched);
         MESSAGE(run.summary(), preconditions_text(run, false));
         MESSAGE("unavailable: ", run.unavailable.text());
         std::ostringstream rest;
@@ -190,4 +252,80 @@ TEST_CASE("synthetic loop: whole routes R1, R2, R3, preconditions listed" * doct
         MESSAGE(t.str());
         CHECK(run.completed);
     }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// On demand (task 6.1a (3)): the controls beside the production setting, per route: the matched world with the shipped
+// filter gain 0.05 (production), the noise-free world with gain 0.05, the noise-free world with gain 0. One PROBE line per
+// run, then the failed preconditions and the observability every 5 windows.
+//   lidar_odometry_tests -tc="synthetic loop controls*" --no-skip -s
+// ---------------------------------------------------------------------------------------------------------------------
+namespace
+{
+    void control_runs(int route)
+    {
+        struct Setting
+        {
+            LoopWorld world;
+            double gain;
+        };
+        for (const Setting &set : {Setting{LoopWorld::matched, 0.05}, Setting{LoopWorld::noise_free, 0.05}, Setting{LoopWorld::noise_free, 0.0}})
+        {
+            const InertialRecording rec = loop_route(route, set.world);
+            OdometryConfig config = loop_candidate_config(rec.sensor);
+            config.ahrs_gain = set.gain;
+            const LoopRun run = run_loop(rec, config, set.world);
+            MESSAGE(probe_line(run), "\n", run.summary(), preconditions_text(run, false), observability_table(run, 5));
+            if (run.r2.present)
+                MESSAGE("R2: turn ", run.r2.turn_window, ", exit ", run.r2.exit_window, " (end-wall hits ", run.r2.exit_end_wall_hits, "), landmark cells ",
+                        run.r2.landmark_cells.size(), ", in the map before the exit ", run.r2.landmark_cells_mapped, ", accepted landmark matches ",
+                        run.r2.exit_landmark_matches);
+            CHECK(run.completed);
+        }
+    }
+}
+
+TEST_CASE("synthetic loop controls: R1" * doctest::skip()) { control_runs(1); }
+TEST_CASE("synthetic loop controls: R2" * doctest::skip()) { control_runs(2); }
+TEST_CASE("synthetic loop controls: R3" * doctest::skip()) { control_runs(3); }
+
+// the matched world of R3 over independent seeds (the sensor's seed draws the points and every IMU error)
+TEST_CASE("synthetic loop controls: R3 matched, seeds 1 to 3" * doctest::skip())
+{
+    for (std::uint64_t seed = 1; seed <= 3; seed++)
+    {
+        const InertialRecording rec = loop_route(3, LoopWorld::matched, seed);
+        const LoopRun run = run_loop(rec, loop_candidate_config(rec.sensor), LoopWorld::matched);
+        MESSAGE("seed ", seed, ": ", probe_line(run), preconditions_text(run, true));
+        CHECK(run.completed);
+    }
+}
+
+// the labelled model-mismatch case: the code's default world (ImuNoise{}), the world of task 6.1's first runs; its
+// "world matches settings" preconditions fail by design (the run is never valid)
+TEST_CASE("synthetic loop controls: the default world (model mismatch), R1 R2 R3" * doctest::skip())
+{
+    for (int route : {1, 2, 3})
+    {
+        const InertialRecording rec = loop_route(route, LoopWorld::default_mismatch);
+        const LoopRun run = run_loop(rec, loop_candidate_config(rec.sensor), LoopWorld::default_mismatch);
+        MESSAGE(probe_line(run), preconditions_text(run, true));
+        CHECK_FALSE(run.valid());
+    }
+}
+
+// The observability classes without a run (seconds): R1 and R3 in loop_scene (before task 6.1a) and with the along-travel
+// structure, R2 in its own scene, in the matched world.
+TEST_CASE("synthetic loop controls: observability by scene, no run" * doctest::skip())
+{
+    for (int route : {1, 3})
+        for (const bool along : {false, true})
+        {
+            const InertialRecording rec = loop_route(route, LoopWorld::matched, 1, along);
+            const LoopRun run = observe_loop(rec, loop_candidate_config(rec.sensor), LoopWorld::matched);
+            MESSAGE(run.route, std::string(along ? " with along-travel structure: " : " in loop_scene: "), run.observability_text(), observability_table(run, 3));
+        }
+    const InertialRecording rec = loop_route(2, LoopWorld::matched);
+    const LoopRun run = observe_loop(rec, loop_candidate_config(rec.sensor), LoopWorld::matched);
+    MESSAGE("R2: ", run.observability_text(), observability_table(run, 3));
 }

@@ -58,15 +58,22 @@ struct Route
 // carries the gait of Motion (Gait{}, the same for all routes) on top of the route's path and speed profile; the speeds
 // below are the path's speeds, about which the gait oscillates. Motion's turns carry no gait (it fades out over the last
 // ramp of the leg before and back in over the first of the leg after); the turns keep their turn-rate ramps.
+// The loop scene with along-travel structure (task 6.1a (2)): loop_scene() plus door frames across each corridor's
+// straight part, each two jambs (0.2 m along travel, 0.6 m deep from either wall, full height) and a lintel (0.2 m along
+// travel, from 2.4 m to the ceiling), so that the LiDAR sees faces normal to the travel direction (in loop_scene only the
+// 0.3 m pillars are). A walked route keeps 1.6 m clear between the jambs; the paths are those of loop_scene's routes.
+// A separate scene: loop_scene() itself (scan_to_map_test, loop_closure_test, consistency_test) is unchanged.
+Scene loop_scene_along_structure();
+
 // R1: the loop scene (seen everywhere), one lap walked at 2 m/s through its four corridors, quarter turns at 1 rad/s with
-// 0.5 s ramps, with a 4 s rest before and 1.5 s after
-Route route_r1();
+// 0.5 s ramps, with a 4 s rest before and 1.5 s after. along_structure: in loop_scene_along_structure() (the same path)
+Route route_r1(bool along_structure = false);
 // R2: out and back through a plain corridor (20 m, 2 m wide) between two structured rooms, walked at 1.5 m/s, a 180
 // degree turn in place (between two rests) in the far room; max_range 6 m makes its middle blind. Use
 // SensorProfile::max_range_m = 6.
 Route route_r2();
-// R3: rest, walk at 1.2 m/s, rest, in the loop scene's south corridor
-Route route_r3();
+// R3: rest, walk at 1.2 m/s, rest, in the loop scene's south corridor. along_structure: in loop_scene_along_structure()
+Route route_r3(bool along_structure = false);
 
 struct Hit
 {
