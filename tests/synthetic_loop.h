@@ -145,7 +145,12 @@ struct LoopTolerances
     // R2, the nominated exit (the return leg's first window with this many generator hits on room A's x-facing faces)
     int exit_min_end_wall_hits = 100;
     // full support along the axis: u^T I u / lambda_max(I) at least the configuration's degenerate_projection_ratio_full
-    // (the projection keeps the axis whole); the value is read from the run's settings
+    // (the projection keeps the axis whole); the value is read from the run's settings. I is the exit window's translation
+    // information from its TRUTH-placed points against the truth-built map (WindowObservability::information, as observe
+    // computes it): a property of the route, not of the run. Changed by the user's decision of 2026-11-21 (it was read from
+    // the run's own result table at the solved poses): an outcome-based precondition biases the paired comparison, because
+    // which runs count as valid would then depend on how each setting solved them. The run's own reading stays as a RESULT
+    // (R2Design::exit_share_run), never a precondition.
     int min_landmark_cells = 20;         // designated outbound landmark cells
     double min_landmark_cells_mapped = 0.5; // share of them that the map before the exit window holds
     int exit_min_landmark_matches = 50;  // accepted matches of the exit window's points to the landmark cells
@@ -269,6 +274,13 @@ struct R2Design
     int exit_points = 0;                    // the exit window's points in range
     int exit_points_in_landmark_keys = 0;   // of them, placed into a landmark cell's key (whether the map accepts it or not)
     int exit_points_accepted = 0;           // of them, accepted by any cell of the map before the exit
+    // the exit window's along-axis information share u^T I u / lambda_max(I), u the true corridor axis:
+    // - exit_share_truth: the PRECONDITION's value, from the truth-placed points against the truth-built map (a property of
+    //   the route; user's decision of 2026-11-21); empty where the exit is not evaluated
+    // - exit_share_run: a RESULT, from the run's own result table (solved poses, the run's map); empty where the run gave no
+    //   table for the exit window. Never a precondition.
+    std::optional<double> exit_share_truth;
+    std::optional<double> exit_share_run;
 };
 
 struct LoopRun
@@ -318,6 +330,10 @@ LoopRun run_loop(const InertialRecording &recording, const OdometryConfig &confi
 // the same up to the run: the cut, the truth, the classes, the observability, the R2 design and the run-independent
 // preconditions (seconds; for scene design). LoopRun::estimated is false.
 LoopRun observe_loop(const InertialRecording &recording, const OdometryConfig &config, LoopWorld world, int max_windows = 0, const LoopTolerances &tol = {});
+
+// R2's exit along-axis share, both readings side by side: "exit along-axis share: truth-placed (precondition) <v>, run's
+// own (RESULT) <v>" (NOT MEASURED where a reading is empty)
+std::string exit_share_text(const R2Design &d);
 
 // The declared deterministic fields (D8 "declared deterministic fields repeat"): per window the iterations, the last
 // update, the damping, the solved poses, start and end velocity, gyro bias, acceleration offset, the stop reason, the

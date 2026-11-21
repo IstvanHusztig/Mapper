@@ -37,7 +37,8 @@
 // separately reported measurement (D8), never paired with off or on.
 //
 // The one command (Release, from the worktree's root, Git Bash; the output folder is created; existing files in it are
-// overwritten; with no environment set it runs 20 seeds of R1, R2, R3 under off, on, shipped into run-<today>):
+// overwritten; with no environment set it runs 20 seeds of R1, R2, R3 under off and on and of R1, R3 under shipped into
+// run-<today>; R2 is never run under shipped, see kShippedR2Why):
 //   LOOP_TABLES_SEEDS=20 out/build/x64-Release/bin/lidar_odometry_tests.exe -tc="synthetic loop: class tables" --no-skip -s
 //       > /c/Users/User/Downloads/dLidar/experiments/consistency/loop/loop_tables.log 2>&1
 // (cmd: set LOOP_TABLES_SEEDS=20 then the same exe line.) One line per run goes to the log ("seed <s> R<r> <setting>: ...").
@@ -49,7 +50,8 @@
 //   LOOP_TABLES_SETTINGS    settings, e.g. "off,on" (default "off,on,shipped")
 // Outputs (rewritten after every seed, so an interrupted run leaves what it measured):
 //   windows.csv   one row per window of every run (empty cell = NOT MEASURED; the *_why columns say why)
-//   runs.csv      one row per run: validity, failed preconditions, errors, windows, time
+//   runs.csv      one row per run: validity, failed preconditions, errors, windows, time; for R2 the exit's along-axis
+//                 share truth-placed (the precondition's value) and the run's own reading (exit_share_run_RESULT, a result)
 //   tables.md     the class tables, the exclusions per setting and the paired comparison off vs on
 //   settings.txt  the seeds, routes, settings and the shipped set's overrides
 // Time measured 2026-11-21 (Release): see the task's hand-back; about 0.55 s per window (R1 79, R2 124, R3 35 windows).
@@ -145,6 +147,14 @@ namespace
     };
     const char *setting_name(Setting s) { return s == Setting::off ? "off" : s == Setting::on ? "on" : "shipped"; }
 
+    // R2 is not run under `shipped` (the user's decision of 2026-11-21): its blind-corridor preconditions fail by design
+    // there, because the shipped file uses the previous NDT cell statistics (use_exact_ndt_bucket_statistics false), so
+    // every shipped R2 run would be excluded.
+    const char *kShippedR2Why = "R2 is not run under `shipped` (user's decision of 2026-11-21): its blind-corridor preconditions fail by design there, "
+                                "because the shipped file uses the previous NDT cell statistics (use_exact_ndt_bucket_statistics false), so every "
+                                "shipped R2 run would be excluded.";
+    bool route_runs_under(int route, Setting s) { return !(route == 2 && s == Setting::shipped); }
+
     OdometryConfig setting_config(Setting s, const SensorProfile &sensor, std::vector<std::string> *changed = nullptr)
     {
         if (s == Setting::shipped)
@@ -188,6 +198,9 @@ namespace
         double run_seconds = 0.0;   // run_loop (cut, truth, observability, loop, preconditions)
         double generate_seconds = 0.0;
         int time_limit_windows = 0, map_rebuilds = -1, moving_judged_at_rest = 0, unavailable_total = 0;
+        // R2 only: the exit's along-axis share, truth-placed (the precondition's value) and the run's own reading (a RESULT,
+        // never a precondition; user's decision of 2026-11-21)
+        std::optional<double> exit_share_truth, exit_share_run;
     };
 
     std::string velocity_nees_why(const LoopWindow &w)
@@ -302,6 +315,8 @@ namespace
         r.map_rebuilds = run.map_rebuilds;
         r.moving_judged_at_rest = run.moving_judged_at_rest;
         r.unavailable_total = run.unavailable.total();
+        r.exit_share_truth = run.r2.exit_share_truth;
+        r.exit_share_run = run.r2.exit_share_run;
         return r;
     }
 
@@ -309,7 +324,8 @@ namespace
     {
         std::ofstream o(file);
         o << "route,setting,seed,valid,completed,failed_count,failed_preconditions,windows_cut,windows_run,end_error_m,largest_error_m,"
-             "largest_vel_nees_3dof,loop_seconds,run_seconds,generate_seconds,time_limit_windows,map_rebuilds,moving_judged_at_rest,unavailable_total\n";
+             "largest_vel_nees_3dof,loop_seconds,run_seconds,generate_seconds,time_limit_windows,map_rebuilds,moving_judged_at_rest,unavailable_total,"
+             "exit_share_truth_precondition,exit_share_run_RESULT\n";
         for (const RunRow &r : runs)
         {
             std::string failed;
@@ -319,7 +335,8 @@ namespace
             o << "R" << r.route << "," << setting_name(r.setting) << "," << r.seed << "," << int(r.valid) << "," << int(r.completed) << "," << r.failed.size()
               << ",\"" << failed << "\"," << r.windows_cut << "," << r.windows_run << "," << cell(r.end_error_m) << "," << cell(r.largest_error_m) << ","
               << cell(r.largest_velocity_nees) << "," << cell(r.loop_seconds) << "," << cell(r.run_seconds) << "," << cell(r.generate_seconds) << ","
-              << r.time_limit_windows << "," << r.map_rebuilds << "," << r.moving_judged_at_rest << "," << r.unavailable_total << "\n";
+              << r.time_limit_windows << "," << r.map_rebuilds << "," << r.moving_judged_at_rest << "," << r.unavailable_total << ","
+              << cell(r.exit_share_truth) << "," << cell(r.exit_share_run) << "\n";
         }
     }
 
@@ -417,6 +434,12 @@ namespace
           << "Routes R1 (loop, seen), R2 (out and back through a blind corridor), R3 (rest, walk, rest). Settings: `off` / `on` = the stage 8 "
           << "candidate set with both layer switches off / on (one recording per route and seed, paired); `shipped` = settings/livox-vertical.toml "
           << "(its own world, another recording with the same seed; a separate measurement, never paired with off or on).\n\n"
+          << kShippedR2Why << "\n\n"
+          << "R2's exit precondition \"along-axis information share (full support), truth-placed\" is computed from the exit window's "
+          << "truth-placed points against the truth-built map (a property of the route; user's decision of 2026-11-21). The run's own "
+          << "reading of the same share is a RESULT (runs.csv `exit_share_run_RESULT`), not a precondition. The two landmark "
+          << "preconditions at the exit (landmark cells in the map before the exit, accepted matches) still read the run's own map "
+          << "and solved poses.\n\n"
           << "**Independence:** the windows of one walk are NOT independent draws (D5, D6). The number of independent draws behind a row is its "
           << "`seeds` column. The 1 % interval is the chi-square interval of the mean of `NEES n` normalised errors per degree of freedom IF they "
           << "were independent 3-dof draws (truth_statistics::chi2_interval(3n, 0.01) / 3n); it is a reference scale, not a test. "
@@ -434,7 +457,13 @@ namespace
         {
             o << "## R" << route << "\n\n### Runs and exclusions per setting\n\n";
             std::map<int, std::set<std::uint64_t>> valid_seeds;
+            std::vector<Setting> route_settings;
             for (Setting s : plan.settings)
+                if (route_runs_under(route, s))
+                    route_settings.push_back(s);
+                else
+                    o << "- `" << setting_name(s) << "`: not run. " << kShippedR2Why << "\n";
+            for (Setting s : route_settings)
             {
                 int n = 0, valid = 0;
                 std::ostringstream excl;
@@ -458,7 +487,7 @@ namespace
                 o << "- `" << setting_name(s) << "`: " << n << " runs, " << valid << " valid, " << n - valid << " excluded\n" << excl.str();
             }
             o << "\n";
-            for (Setting s : plan.settings)
+            for (Setting s : route_settings)
             {
                 std::vector<Group> by_class(kWindowClasses), by_obs(kObservabilityClasses);
                 Group all;
@@ -650,6 +679,7 @@ TEST_CASE("synthetic loop: class tables" * doctest::skip())
         s << "\nsettings:";
         for (Setting x : plan.settings)
             s << " " << setting_name(x);
+        s << "\n" << kShippedR2Why;
         s << "\nworld: matched (imu_noise_from_config of each setting's own config)\nshipped set overrides (file -> test):\n";
         for (const std::string &o : shipped_overrides)
             s << "  " << o << "\n";
@@ -673,6 +703,8 @@ TEST_CASE("synthetic loop: class tables" * doctest::skip())
             double candidate_generate_s = 0.0;
             for (Setting setting : plan.settings)
             {
+                if (!route_runs_under(route, setting))
+                    continue; // kShippedR2Why
                 const OdometryConfig config = setting_config(setting, sensor);
                 const InertialRecording *rec = nullptr;
                 std::optional<InertialRecording> own;
@@ -704,7 +736,8 @@ TEST_CASE("synthetic loop: class tables" * doctest::skip())
                 windows_csv.flush();
                 MESSAGE("seed ", seed, " R", route, " ", std::string(setting_name(setting)), ": ", std::string(run.valid() ? "valid" : "NOT valid"), ", ", run.windows_run,
                         " windows, loop ", num(run.seconds, 1), " s, run ", num(row.run_seconds, 1), " s, generate ", num(generate_s, 1), " s, end error ",
-                        num(row.end_error_m, 3), " m, failed ", row.failed.size(), ", time limit ", run.time_limit_windows);
+                        num(row.end_error_m, 3), " m, failed ", row.failed.size(), ", time limit ", run.time_limit_windows,
+                        route == 2 ? "; " + exit_share_text(run.r2) : std::string());
                 CHECK(run.completed);
                 runs.push_back(std::move(row));
             }
@@ -714,5 +747,9 @@ TEST_CASE("synthetic loop: class tables" * doctest::skip())
     }
     const double total_s = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
     MESSAGE("class tables done: ", runs.size(), " runs, ", rows.size(), " windows, ", num(total_s, 1), " s -> ", plan.out.string());
-    CHECK(runs.size() == plan.seeds.size() * plan.routes.size() * plan.settings.size());
+    std::size_t planned = 0;
+    for (int route : plan.routes)
+        for (Setting s : plan.settings)
+            planned += route_runs_under(route, s) ? plan.seeds.size() : 0;
+    CHECK(runs.size() == planned);
 }

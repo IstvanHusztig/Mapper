@@ -391,6 +391,24 @@ namespace
         const int e = d.exit_window;
         const std::string at = " (exit)";
         add(run, "designated landmark cells", e, double(d.landmark_cells.size()), double(tol.min_landmark_cells), true);
+        // Full support along the axis at the exit, from the exit window's TRUTH-placed points against the truth-built map
+        // (observe: WindowObservability::information, the same window_translation_information of the indoor grid's sums as
+        // the result table's): whether the ROUTE offers it. Changed by the user's decision of 2026-11-21: it was read from
+        // the run's own result table (solved poses, the run's map), and an outcome-based precondition biases the paired
+        // comparison (which seeds are valid would depend on how each setting solved them). Tolerance unchanged.
+        const Eigen::Vector3d axis = align.linear() * Eigen::Vector3d::UnitX();
+        const auto along_share = [&](const Eigen::Matrix3d &I)
+        {
+            const double lmax = Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d>(I, Eigen::EigenvaluesOnly).eigenvalues().maxCoeff();
+            return lmax > 0.0 ? axis.dot(I * axis) / lmax : nan;
+        };
+        d.exit_share_truth = along_share(run.windows[e - 1].observability.information);
+        add(run, "along-axis information share (full support), truth-placed" + at, e, *d.exit_share_truth, cut.config.degenerate_projection_ratio_full, true);
+        // the run's own reading of the same quantity: a RESULT, not a precondition (NOT MEASURED without the exit's table)
+        if (run.windows[e - 1].record && run.windows[e - 1].record->result.failure.empty())
+            d.exit_share_run = along_share(run.windows[e - 1].record->result.translation_information);
+        // NOTE (not changed, reported 2026-11-21): the two landmark preconditions below read the run's own state: the map
+        // before the exit is the loop's (built at the solved poses), and the exit's points are placed with its solved poses.
         if (!map_before.kept || map_before.first != std::size_t(e - 1))
         {
             add(run, "map before the exit window kept", e, 0.0, 1.0, true);
@@ -424,16 +442,6 @@ namespace
             d.exit_landmark_matches += accepted && landmark;
         }
         add(run, "accepted matches to the landmark cells" + at, e, double(d.exit_landmark_matches), double(tol.exit_min_landmark_matches), true);
-        if (!w.record || !w.record->result.failure.empty())
-        {
-            add(run, "exit window has its result table" + at, e, 0.0, 1.0, true);
-            return;
-        }
-        const Eigen::Matrix3d &I = w.record->result.translation_information;
-        const double lmax = Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d>(I, Eigen::EigenvaluesOnly).eigenvalues().maxCoeff();
-        const Eigen::Vector3d axis = align.linear() * Eigen::Vector3d::UnitX();
-        add(run, "along-axis information share (full support)" + at, e, lmax > 0.0 ? axis.dot(I * axis) / lmax : nan,
-            cut.config.degenerate_projection_ratio_full, true);
     }
 
     // the world as declared: each IMU error value against the declared world's
@@ -1062,6 +1070,19 @@ LoopRun run_loop(const InertialRecording &rec, const OdometryConfig &config, Loo
 LoopRun observe_loop(const InertialRecording &rec, const OdometryConfig &config, LoopWorld world, int max_windows, const LoopTolerances &tol)
 {
     return loop_run(rec, config, world, max_windows, tol, false);
+}
+
+std::string exit_share_text(const R2Design &d)
+{
+    const auto v = [](const std::optional<double> &x)
+    {
+        if (!x || !std::isfinite(*x))
+            return std::string("NOT MEASURED");
+        std::ostringstream s;
+        s << std::setprecision(4) << *x;
+        return s.str();
+    };
+    return "exit along-axis share: truth-placed (precondition) " + v(d.exit_share_truth) + ", run's own (RESULT) " + v(d.exit_share_run);
 }
 
 bool same_deterministic_fields(const LoopRun &a, const LoopRun &b, std::string &difference)

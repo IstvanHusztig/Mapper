@@ -276,7 +276,7 @@ TEST_CASE("synthetic loop: whole routes R1, R2, R3, preconditions listed" * doct
             MESSAGE("R2: turn ", run.r2.turn_window, ", exit ", run.r2.exit_window, " (end-wall hits ", run.r2.exit_end_wall_hits, "), landmark cells ",
                     run.r2.landmark_cells.size(), ", in the map before the exit ", run.r2.landmark_cells_mapped, ", exit points ", run.r2.exit_points,
                     ", in landmark keys ", run.r2.exit_points_in_landmark_keys, ", accepted anywhere ", run.r2.exit_points_accepted, ", accepted landmark matches ",
-                    run.r2.exit_landmark_matches);
+                    run.r2.exit_landmark_matches, "; ", exit_share_text(run.r2));
         std::ostringstream t;
         for (const LoopWindow &w : run.windows)
             if (w.window % 5 == 0 || w.window == run.windows_run)
@@ -317,7 +317,7 @@ namespace
             if (run.r2.present)
                 MESSAGE("R2: turn ", run.r2.turn_window, ", exit ", run.r2.exit_window, " (end-wall hits ", run.r2.exit_end_wall_hits, "), landmark cells ",
                         run.r2.landmark_cells.size(), ", in the map before the exit ", run.r2.landmark_cells_mapped, ", accepted landmark matches ",
-                        run.r2.exit_landmark_matches);
+                        run.r2.exit_landmark_matches, "; ", exit_share_text(run.r2));
             CHECK(run.completed);
         }
     }
