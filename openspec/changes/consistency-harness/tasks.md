@@ -140,12 +140,12 @@ files they name;** the orchestrator adds them when it integrates a hand-back.
   with `ahrs_gain` 0, beside the production setting (gain stays 0.05 in the main set). (4) R2's blind stretch and exit
   reworked until its preconditions hold in the noise-free control. Verify: in the matched world R3 ends within its
   seeds' spread; R1, R2, R3 preconditions hold in the noise-free control; smoke case still at most one minute.
-- [ ] 6.2 On demand: R1, R2 and R3 with the candidate settings, both switches off and on, and a second set with the
+- [x] 6.2 On demand: R1, R2 and R3 with the candidate settings, both switches off and on, and a second set with the
   shipped Livox file; per class of window the errors, normalised errors and readings; comparisons from the seeds
   valid under both settings, with the exclusions per setting; outputs outside the repository. Verify: one
   documented command; runs with a failed precondition are listed and left out; the class tables are in
   `experiments/consistency/loop/`.
-- [ ] 6.3 Orchestrator: the tables checked with the conclusion reviewer and shown to the user without a verdict,
+- [x] 6.3 Orchestrator: the tables checked with the conclusion reviewer and shown to the user without a verdict,
   worded as measurements. Verify: `experiments/consistency/loop.md`; the user has seen it.
 
 ## 7. The tool and the replays

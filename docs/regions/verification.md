@@ -163,6 +163,32 @@ Not applicable to the Python tools. The region's C++ (`tools/cut_recording/cut_r
 
 ## Experiments
 
+- **2026-11-21, the loop on synthetic recordings** (`consistency-harness` 6.1 to 6.3; `tests/synthetic_loop.{h,cpp}`,
+  `tests/synthetic_loop_test.cpp`, `tests/synthetic_loop_tables_test.cpp`; `experiments/consistency/loop.md`, tables in
+  `experiments/consistency/loop/run-2026-11-21/`): R1 (loop), R2 (blind corridor out and back), R3 (rest, walk, rest),
+  walked, through the real front end and `optimize_windows`; 20 seeds; the candidate settings with both switches off and
+  on (paired), and the shipped Livox file (its own world; R2 not run). Measurements, no verdict.
+  *The fixture first:* the first runs ended 6 to 16 m off because the world's IMU errors were `ImuNoise`'s defaults (the
+  code's built-in values), not the run's settings (offset walk 5x, gyro bias walk 10x, gyro white noise 2 to 4x):
+  `imu_noise_from_config` and a precondition "world matches settings" now; two independent analyses agree to the
+  millimetre (`loop/analysis-claude.md`, `analysis-codex.md`). No precondition reads the run's own outcome (user's
+  decision): R2's exit and blind preconditions come from truth-placed points against a truth-built map, the run's
+  readings are RESULT columns; the projected weight is taken along the true corridor axis (the gait wobbles the travel
+  direction by up to 3 deg). Controls: noise-free IMU, and `ahrs_gain` 0.
+  *Measured:* R1 off, 13 of 20 runs more than 1 m off (8 over 15 m), NEES per dof median 59; on, every run within
+  0.35 m, end 1.3 cm, median 4.5; shipped, 20 of 20 runs 15.7 to 36.9 m off. R3, centimetres in every setting, NEES
+  1.5 / 1.2 / 2.0. R2, 10 of 20 seeds valid (truth-placed exit share 0.024 to 0.029 in the others, which also have the
+  larger errors); blind windows NEES 200 (off) and 1.67 (on), RMS position 1.55 and 1.80 m, end error median 2.97 and
+  0.59 m. The readings without the truth: no window bent in 11,800; the velocity chi-square and the normalised move read
+  lower in the runs tens of metres off (2.0 to 2.7) than in the runs within centimetres (4.0 to 5.9) while moving; the
+  fast flag fires in 20 of 20 shipped R1 runs and 8 of the 13 bad off runs.
+  *With a noise-free IMU* the orientation filter's accelerometer feedback (`ahrs_gain` 0.05) alone tilts the attitude by
+  0.3 to 1.2 deg under acceleration and R1 ends 1.5 m off (0.014 m with gain 0); gain 0 with noise is worse (R2 48 m).
+  *Not explained:* R1's attitude error of 1.3 to 1.8 deg in every setting; why the shipped file loses R1; a moving
+  window taken for rest in every R2 run. Every window ran all 100 iterations (last step at most 0.22 mm on R1, 12 mm
+  on R2). Limits: the world is the settings' own claims; 1,800 points per window; windows of one walk are not
+  independent.
+
 - **2026-11-21, the markers (5.8)** (907dc5b; `consistency-harness` 5.8; `tests/unit_cases_inertial_test.cpp`,
   `tests/unit_cases_ndt_test.cpp`; log `experiments/consistency/fixtures/markers.log`): five `doctest::should_fail`
   cases beside their measuring cases, each asserting the oracle that 5.7 named, each failing as measured: K3 / F2a the
