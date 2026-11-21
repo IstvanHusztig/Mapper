@@ -124,7 +124,7 @@ files they name;** the orchestrator adds them when it integrates a hand-back.
 
 ## 6. The loop on synthetic recordings: an integration measurement (verification, orchestrator)
 
-- [ ] 6.1 The runner through the front end and `optimize_windows` with a keeping sink and `log_window_terms` on; the
+- [x] 6.1 The runner through the front end and `optimize_windows` with a keeping sink and `log_window_terms` on; the
   preconditions of D8 computed per run with their predeclared tolerances, the outbound landmark cells designated by
   key and the return matches computed by the test; the short smoke run in `ctest`. Verify: the smoke run completes,
   its preconditions hold, its declared deterministic fields repeat and its unavailable readings are counted; all
