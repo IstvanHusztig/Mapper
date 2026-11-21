@@ -74,7 +74,7 @@ files they name;** the orchestrator adds them when it integrates a hand-back.
   `compute_step_1`. Verify: every eligible tagged hit is in its window's original point set at its node, also at
   window boundaries; the decimated sets cover every node; more than 1 000 assigned original points per slice; the
   first window at rest; the tested motion after the filter's ramp; the expected window count and timestamps.
-- [ ] 4.3 Documentation: the Testing section of `CLAUDE.md` and the hand-back for `docs/regions/verification.md`:
+- [x] 4.3 Documentation: the Testing section of `CLAUDE.md` and the hand-back for `docs/regions/verification.md`:
   how to make a recording, and the table of D4 with, per claim, its kind and the check that is planned for it in
   group 5. Verify: every row of D4 names a planned check; the table is completed with the checks' results in 5.7.
 

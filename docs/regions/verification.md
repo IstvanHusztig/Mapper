@@ -100,6 +100,38 @@ All of `tools/**`, the verify skills and the test helpers (`docs/regions/owners.
   `python tools/region_owners.py` must exit 0 on the list.
 - **C++ helpers:** `lidar_odometry_tests -tc="loop recording*"` (the synthetic recording); the back-end's and the
   scan-to-map tests use it too, so run the whole `lidar_odometry_tests` after a change to it.
+- **Truth tests** (`consistency-harness`; synthetic data with the truth known, results unchanged):
+  - *Making a recording:* `synthetic::generate_recording(route, sensor, noise)` (`tests/synthetic_routes.h`) with
+    `route_r1()` (loop), `route_r2()` (out and back through a corridor, blind middle; set `SensorProfile::max_range_m = 6`)
+    or `route_r3()` (rest, walk, rest); `ImuNoise{}` is the model world's noise, `ImuNoise::none()` noise-free. The IMU
+    samples follow the estimator's own conventions (`tests/synthetic_inertial.h`: gyro sample k = the interval ending at
+    node k, accelerometer sample k = the interval starting at it); points are stamped just after their node.
+    `cut_into_windows(cut, recording)` runs the real `load_data`, `calculate_trajectory` and `compute_step_1` through a
+    `RecordingSource` that filters like the production one; `front_end_config(sensor)` gives the matching settings. A
+    hand-built boundary state for one window goes through `process_windows` (the F-c and F-e fixtures show how).
+  - *Statistics:* `tests/truth_statistics.h` (normalised error, chi-square intervals, `runs_for_power`: about 200 dof
+    detect a variance ratio of 1.5; 6 runs are a smoke test only). A claim too small shows as a value ABOVE its interval.
+  - *Which file checks what:* `truth_statistics_test.cpp` (the exact control, the instruments themselves),
+    `terms_at_truth_test.cpp` (F-a), `accelerometer_noise_test.cpp` (F-b), `window_covariance_test.cpp` (F-c),
+    `unit_cases_{inertial,ndt}_test.cpp` (F-d, the unit cases and the 5.8 markers), `loop_chains_test.cpp` (F-e),
+    `lidar_claim_test.cpp` (K8). Each has a smoke case in `ctest`; the measured sets are `doctest::skip` (minutes each):
+    `lidar_odometry_tests -tc="window covariance*" --no-skip -s` (likewise `lidar claim*`, `loop chain*`), MESSAGE lines
+    carry the numbers.
+  - *The model world's claims (design D4), each with its kind and its check* (results: `experiments/consistency/fixtures.md`
+    section 2; the experiments below):
+
+    | Claim of the estimator | Kind | Check |
+    |---|---|---|
+    | Accelerometer terms: variance (density² / τ + floor²) τ², independent | generated raw noise | F-b (5.2) |
+    | Accelerometer terms at the true state | - | F-a (5.1) |
+    | Velocity prior over the gap, joint prior F P Fᵀ, random walks | propagated claim | D4 check (5.1), F-c (5.3); the mean: K3 |
+    | Rotation edges: max(k ARW √dt, floor) | generated raw noise | D4 check (5.1) |
+    | Zero velocity at rest | conditional observation | A2 (5.4) |
+    | Edge position rows (C34) | approximate factor | F-c descriptive set (5.3) |
+    | Origin fix | conditional observation | exact boundary in the fixtures; K10 |
+    | First window | conditioned on | none (taken as given) |
+    | NDT term: independent draws from an exact cell, two grids | approximate factor | K8 (5.6) |
+    | One clock, one position, one set of axes | generated | none (so in every fixture) |
 - **A tool against a known answer:** each `tools/README.md` section records a reference reading (e.g. `stairwell_check.py`
   on `44_lc_s0`: floor −1 30 cm off floor 0; `holdout_sharpness.py` reproduces +1.85 / −0.87 mm within 0.05 mm; the
   snapshot reader matched 1517 logged window starts of a Livox 2 run within 0.5 mm). A changed tool reproduces its
