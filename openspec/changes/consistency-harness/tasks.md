@@ -130,6 +130,16 @@ files they name;** the orchestrator adds them when it integrates a hand-back.
   its preconditions hold, its declared deterministic fields repeat and its unavailable readings are counted; all
   new cases in `ctest` take at most one minute in Release (the time is reported, and a run that reached the
   solver's wall-clock limit does not count); loop-level cases are skipped in Debug.
+- [ ] 6.1a Verification (added 2026-11-21 after the loop-lag diagnosis, `experiments/consistency/loop/analysis-claude.md`
+  and `analysis-codex.md`; tests only): the loop fixture made honest before 6.2. (1) One sensor model: the world's IMU
+  errors (gyro white noise, gyro bias walk, accelerometer offset walk, accelerometer density) built from the run's own
+  `OdometryConfig`, their equality a precondition, the old default world kept only as a labelled mismatch case. (2)
+  Observability classes: each window's along-travel share of the LiDAR information computed from a truth-placed map
+  against the projection's thresholds (removed, partly kept, kept whole), reported beside the truth classes; scenes
+  given along-travel structure where a route is meant to be seen. (3) Controls per route: noise-free IMU, and a pair
+  with `ahrs_gain` 0, beside the production setting (gain stays 0.05 in the main set). (4) R2's blind stretch and exit
+  reworked until its preconditions hold in the noise-free control. Verify: in the matched world R3 ends within its
+  seeds' spread; R1, R2, R3 preconditions hold in the noise-free control; smoke case still at most one minute.
 - [ ] 6.2 On demand: R1, R2 and R3 with the candidate settings, both switches off and on, and a second set with the
   shipped Livox file; per class of window the errors, normalised errors and readings; comparisons from the seeds
   valid under both settings, with the exclusions per setting; outputs outside the repository. Verify: one
