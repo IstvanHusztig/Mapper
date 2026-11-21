@@ -171,14 +171,34 @@ files they name;** the orchestrator adds them when it integrates a hand-back.
 
 ## 8. Summary, decision and close
 
-- [ ] 8.1 Orchestrator: `experiments/consistency/summary.md`: the instruments, the fixtures (measured against
+- [x] 8.1 Orchestrator: `experiments/consistency/summary.md`: the instruments, the fixtures (measured against
   hypothesis, what was pinned), the loop measurement, the replays, what is not concluded; the conclusion reviewer;
   the numbers to the user without a verdict. Verify: the reviewer's corrections are applied and the user has seen
   the summary.
-- [ ] 8.2 The user's decision: which findings become changes and in what order, which follow-ups of the design are
+- [x] 8.2 The user's decision: which findings become changes and in what order, which follow-ups of the design are
   taken up, and what happens to the layers of `honest-inertial-carry`. Every fix that follows is judged first on Livox 4
   (full runs, base and repeats, against the "before" of 7.3), then Livox 3 and 44. Verify: the decision is written into this
   file.
+  **The user's decision (2026-11-21)**, after `experiments/consistency/summary.md` and two independent
+  recommendations (`recommendation-claude.md`, `summary-codex.md`, compared in `comparison-claude-codex.md`). Each
+  step is its own OpenSpec change (or, for a measurement, its own task list), judged first on Livox 4 (full runs,
+  base and repeats, against the reference run of 7.3), then Livox 3 and 44, with the user's look at the maps:
+  1. Look first, no code: windows 372 to 374 of the Livox 4 reference run (a start-velocity move of 1.1 m/s against
+     a prior sigma of 5 mm/s), and the lever-arm replay.
+  2. The two `honest-inertial-carry` switches on Livox 4: each alone and both together against the reference run;
+     then Livox 3 and 44. Both switches stay in the code, off by default, until this is read.
+  3. F2a: the start velocity prior advanced over the gap (marker K3).
+  4. F2b: the tail re-propagation under acceleration, on its own (marker K4).
+  5. The rest test (F3, marker K6): stops and slow walking labelled independently first, then the fix.
+  6. The fixed first pose (the boundary state): design first, then the change.
+  7. F9 (marker K9), then C16 (marker K7), each alone.
+  Alongside, tests and tools only: the check register of test limits and markers, one source for the verdict
+  limits, R2's exit nomination, the blindness check of `loop_chains_test.cpp` along the true axis, a raised
+  iteration cap on selected synthetic cases, the normalised start-velocity move reported beside the velocity
+  chi-square, the four old failing tool tests.
+  Follow-ups of the design: the lever-arm replay now (step 1); the time-offset run and the window-length
+  sensitivity with step 6; the deviation sweep and the raw-data regressions when a fix needs them.
+  Noted, not re-run: the synthetic loop of 6.2 used `ahrs_gain` 0.05, the Livox 4 reference run 0.
 - [ ] 8.3 Knowledge files (verification, inertial, noise-budget, solver, lidar-matching) with the findings and
   experiments; `docs/code-review-tracker.md` entries completed for the identifiers of 5.7, with their status; the
   English guide where it describes the tests and the per-window readings. Verify: `python tools/region_owners.py`
