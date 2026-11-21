@@ -481,6 +481,41 @@ python tools/window_terms.py <window_terms.csv> [--from S] [--to S] [--state res
   accelerometer sigmas, the three priors' sigmas, the zero-velocity sigma, the NDT scale and Huber cutoff; empty where
   the window has no such weight).
 
+## honesty_report.py
+
+Descriptive figures from one or more `window_features.csv` tables, side by side (one column per table): the
+start-velocity move and the honesty readings of openspec change `consistency-harness` (design D10, D11). Pure Python 3,
+standard library only. No verdict, no limits: the figures are for reading, and a table is a forced replay or a run
+conditional on its own map and carried state.
+
+```
+python tools/honesty_report.py <window_features.csv> [<window_features.csv> ...] [--label NAME ...] [--no-definitions]
+```
+
+- **unavailable**: an input column of the figure is missing from that table (tables written before consistency-harness
+  have no `prepared_*`, `handed_*`, `rotation_rate_mean_deg_s`, `start_acceleration_*` or `move_*` columns). The tool never
+  rebuilds a quantity another way (for example a prior from the previous window's end velocity). **n 0**: the columns
+  exist but the mask selects no window. **-**: the figure has no value (fewer than two values, zero variance).
+- Percentiles are linear between the closest ranks (numpy's default, `percentile_linear` in `window_verdict.cpp`);
+  numbers are printed with 4 significant digits. The definitions are also printed under the table.
+
+| Figure | Mask | Definition |
+|---|---|---|
+| windows | all rows | the number of rows |
+| hand-off | all rows | windows per value of `handoff` (`done`, `cancelled`; empty: not recorded) |
+| move coverage | **move mask**: `acc_term = 1` and `velocity_start_{x,y,z}` and `prepared_velocity_prior_{x,y,z}_mps` all finite | windows in the mask / rows. d = velocity_start - prepared_velocity_prior [m/s, world]: the start velocity's move from the prior the window was prepared with |
+| median \|d\| | move mask | median of the Euclidean norm of d (with p95 and largest) |
+| median \|d_x\|, \|d_y\|, \|d_z\| | move mask | median of the absolute component |
+| \|d\| rotation-rate Q1..Q4 | move mask with `rotation_rate_mean_deg_s` finite | median \|d\| per quarter, cut at the rate's 25/50/75 % percentiles over those windows (Q1 <= p25 < Q2 <= p50 < Q3 <= p75 < Q4); with n and the rate range [deg/s]. The rate is the mean rotation rate from the prepared attitude increments |
+| \|d\| start-acc Q1..Q4 | move mask with `start_acceleration_{x,y,z}_mps2` finite | the same by quarter of the norm of the start acceleration [m/s^2, world, gravity removed, first 30 ms] |
+| lag-1 autocorr d_x, d_y, d_z, \|d\| | move mask | r1 = sum over pairs of windows k, k+1 both in the mask of (v_k - mean)(v_k+1 - mean) / sum over the mask of (v - mean)^2, with v the signed component (or the norm) and the mean over the mask; a window outside the mask breaks its pairs. With the number of pairs |
+| median \|d\| at rest / moving | move mask with `at_rest = 1` / `= 0` | median \|d\| and n |
+| start velocity (n=3), start velocity + offset (n=6), gyro bias (n=3) | windows whose `move_*_reason` is `measured` (value finite) | the normalised move q = d^T P^-1 d / (n - tr(P^-1 P_post)) as the run wrote it (`move_start_velocity`, `move_joint`, `move_gyro_bias`): coverage of all rows, median, p95, largest. Expected value 1, descriptive |
+| ...: not measured | the other rows | windows per `move_*_reason` (as the run names them: absent, not finite, failed factorisation, ill-conditioned, non-physical reduction, reduction below 0.5, last step above 1 % of prior sigma, clamped bias) |
+| ...: reduction n - tr | measured windows | median of `move_*_reduction` |
+| velocity chi2, all windows | `velocity_chi2` finite | coverage, median, p95, largest |
+| velocity chi2, weak windows | the same and `information_ratio < 0.45` | the verdict's weak windows; 0.45 selects, it is not a limit |
+
 ## build_docs_index.py
 
 Builds the documentation's search index (`docs/search-index.js`, read by the search box of `docs/index.html`) and the contents at the front of the guide (`docs/index.html`, between generated markers, grouped as in `docs/README.md`, with each page's main sections). Standard library only; output is deterministic.
