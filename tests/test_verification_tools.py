@@ -16,6 +16,7 @@ import trajectory_seams as seams
 import snapshot_trajectory as snapshot
 import run_health as health
 import perturbation_sweep as sweep
+import honesty_report as honesty
 
 
 def log_text(complete=True):
@@ -193,6 +194,143 @@ class VerificationTests(unittest.TestCase):
                 self.assertIn('needs Release', kit_lib.build_type_mismatch('x64-Release'))
                 cache.write_text('CMAKE_BUILD_TYPE:STRING=Release\n')
                 self.assertIsNone(kit_lib.build_type_mismatch('x64-Release'))
+
+
+# window_features.csv columns before consistency-harness (no prepared_*, handed_*, rotation rate, start acceleration, moves)
+OLD_FEATURE_COLUMNS = ("window,time_s,duration_s,iterations,delta,lm_factor,at_rest,turn_window,acc_term,along_x,along_y,"
+                       "velocity_start_x,velocity_start_y,velocity_start_z,velocity_end_x,velocity_end_y,velocity_end_z,"
+                       "information_ratio,velocity_chi2,stop").split(",")
+NEW_FEATURE_COLUMNS = (["window", "at_rest", "acc_term", "information_ratio", "velocity_chi2", "handoff",
+                        "rotation_rate_mean_deg_s"] + [f"velocity_start_{a}" for a in "xyz"] +
+                       [f"prepared_velocity_prior_{a}_mps" for a in "xyz"] + [f"start_acceleration_{a}_mps2" for a in "xyz"] +
+                       [f"{m}{s}" for m in ("move_start_velocity", "move_joint", "move_gyro_bias") for s in ("", "_reason", "_reduction")])
+
+
+def write_features(path, columns, rows):
+    import csv
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=columns)
+        w.writeheader()
+        for r in rows:
+            w.writerow({c: r.get(c, "") for c in columns})
+    return path
+
+
+def synthetic_features():
+    """Nine windows with figures worked out by hand (see test_honesty_report_known_figures).
+    Window 1: no accelerometer term; window 6: no prior (out of the move mask). Prior mean zero, so d = velocity_start,
+    along x only: windows 2,3,4,5,7,8,9 -> d_x = 1,-1,2,-2,3,-3,4."""
+    d_x = {2: 1, 3: -1, 4: 2, 5: -2, 6: 9, 7: 3, 8: -3, 9: 4}
+    rate = {2: 10, 3: 20, 4: 30, 5: 40, 6: 1000, 7: 50, 8: 60, 9: 70}
+    acc_x = {2: -7, 3: 6, 4: 5, 5: 4, 6: 1000, 7: 3, 8: 2, 9: 1}
+    ratio = {2: 0.1, 3: 0.2, 4: 0.44, 5: 0.45, 6: 0.9, 7: 0.9, 8: 0.9, 9: 0.9}
+    move = {2: 1, 3: 2, 4: 3, 5: 4, 7: 5, 8: 6, 9: 7}
+    rows = [{"window": 1, "acc_term": 0, "at_rest": 1, "handoff": "done", "velocity_start_x": 0, "velocity_start_y": 0,
+             "velocity_start_z": 0, "move_start_velocity_reason": "absent", "move_joint_reason": "absent",
+             "move_gyro_bias_reason": "absent", "information_ratio": 0.1, "rotation_rate_mean_deg_s": 5}]
+    for w in range(2, 10):
+        r = {"window": w, "acc_term": 1, "at_rest": 1 if w in (2, 3) else 0, "handoff": "done" if w < 9 else "cancelled",
+             "velocity_start_x": d_x[w], "velocity_start_y": 0, "velocity_start_z": 0,
+             "rotation_rate_mean_deg_s": rate[w], "start_acceleration_x_mps2": acc_x[w], "start_acceleration_y_mps2": 0,
+             "start_acceleration_z_mps2": 0, "information_ratio": ratio[w], "velocity_chi2": w - 1,
+             "move_joint_reason": "absent", "move_gyro_bias_reason": "reduction below 0.5"}
+        if w != 6:
+            r.update({"prepared_velocity_prior_x_mps": 0, "prepared_velocity_prior_y_mps": 0, "prepared_velocity_prior_z_mps": 0,
+                      "move_start_velocity": move[w], "move_start_velocity_reason": "measured",
+                      "move_start_velocity_reduction": 3})
+        else:
+            r.update({"move_start_velocity_reason": "last step above 1 % of prior sigma"})
+        if w == 9:
+            r.update({"move_gyro_bias": 0.5, "move_gyro_bias_reason": "measured", "move_gyro_bias_reduction": 0.75})
+        rows.append(r)
+    return rows
+
+
+class HonestyReportTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.new = write_features(self.root / "new_window_features.csv", NEW_FEATURE_COLUMNS, synthetic_features())
+        old_rows = [{"window": w, "acc_term": 1, "at_rest": 0, "velocity_start_x": 1, "velocity_start_y": 0, "velocity_start_z": 0,
+                     "information_ratio": 0.3, "velocity_chi2": 2.0 * w} for w in (1, 2, 3)]
+        self.old = write_features(self.root / "old_window_features.csv", OLD_FEATURE_COLUMNS, old_rows)
+
+    def test_honesty_report_old_table_is_unavailable(self):
+        cells = honesty.figure_cells(honesty.Table(self.old))
+        available = {"windows", "all windows", "weak windows"}  # the only figures whose columns predate the change
+        for label, cell in cells.items():
+            if label in available:
+                self.assertNotEqual(cell, honesty.UNAVAILABLE, label)
+            else:
+                self.assertEqual(cell, honesty.UNAVAILABLE, label)  # velocity_start alone is never turned into a move
+        self.assertEqual(cells["windows"], "3")
+        self.assertEqual(cells["all windows"], "n 3/3: median 4, p95 5.8, max 6")
+
+    def test_honesty_report_known_figures(self):
+        c = honesty.figure_cells(honesty.Table(self.new))
+        self.assertEqual(c["hand-off"], "cancelled 1, done 8")
+        self.assertEqual(c["coverage"], "n 7/9")
+        # norms 1,1,2,2,3,3,4: median 2; p95 at rank 0.95*6 = 5.7 -> 3 + 0.7 * 1 = 3.7
+        self.assertEqual(c["median |d|"], "2 (p95 3.7, max 4)")
+        self.assertEqual((c["median |d_x|"], c["median |d_y|"], c["median |d_z|"]), ("2", "0", "0"))
+        # rates of the mask 10..70 (window 6's 1000 is out): cuts 25, 40, 55
+        self.assertEqual(c["|d| rotation-rate Q1"], "1 (n 2; 10..20)")
+        self.assertEqual(c["|d| rotation-rate Q2"], "2 (n 2; 30..40)")
+        self.assertEqual(c["|d| rotation-rate Q3"], "3 (n 1; 50..50)")
+        self.assertEqual(c["|d| rotation-rate Q4"], "3.5 (n 2; 60..70)")
+        # |start acceleration| 7,6,5,4,3,2,1 (window 2's -7 is a norm of 7): cuts 2.5, 4, 5.5
+        self.assertEqual(c["|d| start-acc Q1"], "3.5 (n 2; 1..2)")
+        self.assertEqual(c["|d| start-acc Q2"], "2.5 (n 2; 3..4)")
+        self.assertEqual(c["|d| start-acc Q3"], "2 (n 1; 5..5)")
+        self.assertEqual(c["|d| start-acc Q4"], "1 (n 2; 6..7)")
+        # d_x: mean 4/7, deviations *7: 3,-11,10,-18 | 17,-25,24 (window 6 breaks the pairs 5-6, 6-7)
+        # sum dev^2 = 2044/49, pairs 3*-11 + -11*10 + 10*-18 + 17*-25 + -25*24 = -1348 (/49): r1 = -1348/2044
+        series = list(zip((2, 3, 4, 5, 7, 8, 9), (1, -1, 2, -2, 3, -3, 4)))
+        r, pairs = honesty.lag1_autocorrelation(series)
+        self.assertAlmostEqual(r, -1348 / 2044, places=12)
+        self.assertEqual(pairs, 5)
+        self.assertEqual(c["lag-1 autocorr d_x"], "-0.6595 (5 pairs)")
+        self.assertEqual(c["lag-1 autocorr d_y"], "- (5 pairs)")  # zero variance: no value
+        # |d|: mean 16/7, deviations *7: -9,-9,-2,-2 | 5,5,12; sum dev^2 364, pairs 81+18+4+25+60 = 188
+        self.assertEqual(c["lag-1 autocorr |d|"], f"{188 / 364:.4g} (5 pairs)")
+        self.assertEqual(c["median |d| at rest"], "1 (n 2)")
+        self.assertEqual(c["median |d| moving"], "3 (n 5)")
+        # q measured on 7 of 9: 1..7, median 4, p95 at rank 5.7 -> 6.7
+        self.assertEqual(c["start velocity (n=3)"], "n 7/9: median 4, p95 6.7, max 7")
+        self.assertEqual(c["start velocity: not measured"], "absent 1, last step above 1 % of prior sigma 1")
+        self.assertEqual(c["start velocity: reduction n - tr"], "3 (n 7)")
+        self.assertEqual(c["start velocity + offset (n=6)"], "n 0/9")
+        self.assertEqual(c["start velocity + offset: not measured"], "absent 9")
+        self.assertEqual(c["start velocity + offset: reduction n - tr"], "n 0")
+        self.assertEqual(c["gyro bias (n=3)"], "n 1/9: median 0.5, p95 0.5, max 0.5")
+        self.assertEqual(c["gyro bias: not measured"], "absent 1, reduction below 0.5 7")
+        # chi2 1..8 on windows 2..9; weak = information ratio < 0.45: windows 2,3,4 (0.45 is not weak)
+        self.assertEqual(c["all windows"], "n 8/9: median 4.5, p95 7.65, max 8")
+        self.assertEqual(c["weak windows"], "n 3/9: median 2, p95 2.9, max 3")
+
+    def test_honesty_report_side_by_side(self):
+        import contextlib
+        import io
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = honesty.main([str(self.new), str(self.old), "--label", "NEWRUN", "--label", "OLDRUN"])
+        self.assertEqual(code, 0)
+        lines = out.getvalue().splitlines()
+        header = next(l for l in lines if "NEWRUN" in l and "OLDRUN" in l)
+        self.assertLess(header.index("NEWRUN"), header.index("OLDRUN"))
+        coverage = next(l for l in lines if l.strip().startswith("coverage"))
+        self.assertLess(coverage.index("n 7/9"), coverage.index("unavailable"))
+        chi2 = next(l for l in lines if l.strip().startswith("all windows"))
+        self.assertIn("n 8/9", chi2)
+        self.assertIn("n 3/3", chi2)
+        self.assertTrue(any(l.startswith("Definitions") for l in lines))
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            honesty.main([str(self.new), str(self.old), "--label", "only one"])
+        bad = self.root / "bad.csv"
+        bad.write_text("a,b\n1,2\n", encoding="utf-8")
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(honesty.main([str(bad)]), 2)
 
 
 if __name__=='__main__':
