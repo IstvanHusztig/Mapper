@@ -19,7 +19,8 @@
 // minute in Release; a run that reached the solver's wall-clock limit fails the preconditions and its time does not count).
 // The loop-level cases are skipped in Debug (unoptimised, many times slower).
 //
-// The whole routes are task 6.2's (minutes each, about 0.55 s per window in Release: R1 79, R2 124, R3 35 windows); the case
+// The whole routes are task 6.2's (synthetic_loop_tables_test.cpp: the class tables and their one command; minutes each, about
+// 0.55 s per window in Release: R1 79, R2 124, R3 35 windows); the case
 // below only lists what each gives, on demand:
 //   lidar_odometry_tests -tc="synthetic loop: whole routes*" --no-skip -s
 // Measured while building the runner (2026-11-21, switches off, 1 cm jitter), with R1 and R2 then unwalked: R2's window 12
@@ -33,7 +34,7 @@
 // Those runs drew the world from ImuNoise{}'s defaults, not from the run's settings (5 to 10 times the settings' walks;
 // experiments/consistency/loop/analysis-claude.md). Task 6.1a: every loop recording is drawn from a declared LoopWorld (the
 // main set: matched to the run's settings, a precondition per value), R1 and R3 run in loop_scene_along_structure(), R2 with
-// 40 points per node (r2_sensor); the controls (noise-free world, filter gain 0) and the labelled mismatch case are on
+// 40 points per node (loop_sensor); the controls (noise-free world, filter gain 0) and the labelled mismatch case are on
 // demand below ("synthetic loop controls*"). Their measurements are in the task's hand-back, not asserted here.
 
 using namespace synthetic;
@@ -65,54 +66,30 @@ namespace
         return s.str();
     }
 
-    // the loop's sensor: the routes' profile with 1 cm jitter along the face normal. With the routes' 3 mm (below K9's
-    // 3.162 mm) the exact cells of axis-aligned planes are skipped and the LiDAR sees only edges and corners: measured 0
-    // accepted matches at R2's exit. loop_chains_test uses 1 cm for the same reason.
-    SensorProfile loop_sensor()
-    {
-        SensorProfile s;
-        s.jitter_sigma_m = 0.01;
-        return s;
-    }
-
-    // R2's sensor: 6 m range (the corridor's middle has no face within range), and 40 points per node while moving. With the
-    // routes' 10 the blind stretch is not blind along travel by the truth (task 6.1a, measured 2026-11-21 with observe_loop:
-    // freshly mapped cells hold few points, their normals tilt with the 1 cm jitter, and the along-travel share of the
-    // truth-placed information is 0.021 to 0.032 outbound, partly kept by the projection; 14 of 28 blind windows removed);
-    // with 20 points 25 of 28, with 40 all 28 (share 0.012 to 0.016 outbound, 0.003 to 0.006 on the return)
-    SensorProfile r2_sensor()
-    {
-        SensorProfile s = loop_sensor();
-        s.max_range_m = 6.0;
-        s.points_per_node = 40;
-        return s;
-    }
-
-    // the loop's recordings (task 6.1a): R1 and R3 in the scene with along-travel structure, R2 as designed; the world
+    // the loop's recordings (task 6.1a): the sensor and route of synthetic_loop.h (loop_sensor, loop_route); the world
     // declared with the run and drawn from its settings (LoopWorld)
-    InertialRecording loop_route(int route, LoopWorld world, std::uint64_t seed = 1, bool along_structure = true)
+    InertialRecording loop_recording(int route, LoopWorld world, std::uint64_t seed = 1, bool along_structure = true)
     {
-        SensorProfile s = route == 2 ? r2_sensor() : loop_sensor();
+        SensorProfile s = loop_sensor(route);
         s.seed = seed;
-        const Route r = route == 1 ? route_r1(along_structure) : route == 2 ? route_r2() : route_r3(along_structure);
-        return generate_loop_recording(r, s, loop_candidate_config(s), world);
+        return generate_loop_recording(synthetic::loop_route(route, along_structure), s, loop_candidate_config(s), world);
     }
 
     const InertialRecording &r1_recording()
     {
-        static const InertialRecording rec = loop_route(1, LoopWorld::matched);
+        static const InertialRecording rec = loop_recording(1, LoopWorld::matched);
         return rec;
     }
 
     const InertialRecording &r2_recording()
     {
-        static const InertialRecording rec = loop_route(2, LoopWorld::matched);
+        static const InertialRecording rec = loop_recording(2, LoopWorld::matched);
         return rec;
     }
 
     const InertialRecording &r3_recording()
     {
-        static const InertialRecording rec = loop_route(3, LoopWorld::matched);
+        static const InertialRecording rec = loop_recording(3, LoopWorld::matched);
         return rec;
     }
 
@@ -330,7 +307,7 @@ namespace
         };
         for (const Setting &set : {Setting{LoopWorld::matched, 0.05}, Setting{LoopWorld::noise_free, 0.05}, Setting{LoopWorld::noise_free, 0.0}})
         {
-            const InertialRecording rec = loop_route(route, set.world);
+            const InertialRecording rec = loop_recording(route, set.world);
             OdometryConfig config = loop_candidate_config(rec.sensor);
             config.ahrs_gain = set.gain;
             const LoopRun run = run_loop(rec, config, set.world);
@@ -355,7 +332,7 @@ TEST_CASE("synthetic loop controls: R3 matched, seeds 1 to 3" * doctest::skip())
 {
     for (std::uint64_t seed = 1; seed <= 3; seed++)
     {
-        const InertialRecording rec = loop_route(3, LoopWorld::matched, seed);
+        const InertialRecording rec = loop_recording(3, LoopWorld::matched, seed);
         const LoopRun run = run_loop(rec, loop_candidate_config(rec.sensor), LoopWorld::matched);
         MESSAGE("seed ", seed, ": ", probe_line(run), preconditions_text(run, true));
         CHECK(run.completed);
@@ -368,7 +345,7 @@ TEST_CASE("synthetic loop controls: the default world (model mismatch), R1 R2 R3
 {
     for (int route : {1, 2, 3})
     {
-        const InertialRecording rec = loop_route(route, LoopWorld::default_mismatch);
+        const InertialRecording rec = loop_recording(route, LoopWorld::default_mismatch);
         const LoopRun run = run_loop(rec, loop_candidate_config(rec.sensor), LoopWorld::default_mismatch);
         MESSAGE(probe_line(run), preconditions_text(run, true));
         CHECK_FALSE(run.valid());
@@ -382,11 +359,11 @@ TEST_CASE("synthetic loop controls: observability by scene, no run" * doctest::s
     for (int route : {1, 3})
         for (const bool along : {false, true})
         {
-            const InertialRecording rec = loop_route(route, LoopWorld::matched, 1, along);
+            const InertialRecording rec = loop_recording(route, LoopWorld::matched, 1, along);
             const LoopRun run = observe_loop(rec, loop_candidate_config(rec.sensor), LoopWorld::matched);
             MESSAGE(run.route, std::string(along ? " with along-travel structure: " : " in loop_scene: "), run.observability_text(), observability_table(run, 3));
         }
-    const InertialRecording rec = loop_route(2, LoopWorld::matched);
+    const InertialRecording rec = loop_recording(2, LoopWorld::matched);
     const LoopRun run = observe_loop(rec, loop_candidate_config(rec.sensor), LoopWorld::matched);
     MESSAGE("R2: ", run.observability_text(), observability_table(run, 3));
 }

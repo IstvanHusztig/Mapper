@@ -36,6 +36,7 @@ add_executable(lidar_odometry_tests
   loop_chains_test.cpp
   synthetic_loop.cpp
   synthetic_loop_test.cpp
+  synthetic_loop_tables_test.cpp
   window_covariance_test.cpp
   lidar_claim_test.cpp
   odometry_snapshot_test.cpp
