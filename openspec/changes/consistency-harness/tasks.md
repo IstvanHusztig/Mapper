@@ -203,6 +203,12 @@ files they name;** the orchestrator adds them when it integrates a hand-back.
   experiments; `docs/code-review-tracker.md` entries completed for the identifiers of 5.7, with their status; the
   English guide where it describes the tests and the per-window readings. Verify: `python tools/region_owners.py`
   passes; every marked case's identifier has a tracker entry.
-- [ ] 8.4 Final check of "no result changes": `tools/step_checks.py` and `tools/end_runs.py` (full 44, Livox 3,
+- [x] 8.4 Final check of "no result changes": `tools/step_checks.py` and `tools/end_runs.py` (full 44, Livox 3,
   44_short against their manifests). Verify: ALL HOLD; every comparison identical, with any that depends on the
   time limit flagged.
+  Result (2026-11-21, commit 31e60a1): step checks ALL HOLD; end runs 44 IDENTICAL (35 files), 44_short IDENTICAL
+  (11 files), no window at the time limit. Livox 3 differs from its manifest (34 of 35 files) because the manifest
+  (4b48184, 2026-11-18 00:03) predates the Livox settings change fb9e80c (measured gyro noise, 18:25 that day) and was
+  never recorded again; against a Livox 3 run with the same settings on the code before this change's first code
+  commit (85057e4, built in the region-b worktree) the end run is IDENTICAL (35 files). The Livox 3 manifest is to be
+  recorded again in its own commit (the user's decision).
