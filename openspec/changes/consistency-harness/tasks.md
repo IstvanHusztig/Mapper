@@ -118,7 +118,7 @@ files they name;** the orchestrator adds them when it integrates a hand-back.
   hypothesis" and on which discrepancies are reproduced, isolated and have an oracle); identifiers assigned to new
   findings; the table of D4 completed with the checks' results; `experiments/consistency/fixtures.md`; the table to
   the user without a verdict. Verify: the user has seen the table; every discrepancy to be marked has an identifier.
-- [ ] 5.8 Verification: for each discrepancy that 5.7 lists with an oracle, a case asserting the honest outcome
+- [x] 5.8 Verification: for each discrepancy that 5.7 lists with an oracle, a case asserting the honest outcome
   marked as expected to fail with its identifier and cause, beside the passing validity cases. Verify: `ctest`
   passes; every marker carries an identifier from `research.md` or from 5.7.
 

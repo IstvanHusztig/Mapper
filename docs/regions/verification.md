@@ -131,6 +131,16 @@ Not applicable to the Python tools. The region's C++ (`tools/cut_recording/cut_r
 
 ## Experiments
 
+- **2026-11-21, the markers (5.8)** (907dc5b; `consistency-harness` 5.8; `tests/unit_cases_inertial_test.cpp`,
+  `tests/unit_cases_ndt_test.cpp`; log `experiments/consistency/fixtures/markers.log`): five `doctest::should_fail`
+  cases beside their measuring cases, each asserting the oracle that 5.7 named, each failing as measured: K3 / F2a the
+  prepared start velocity prior 2 / 4 mm/s off the true start velocity (a = 1 / 2 m/s2, oracle 0.1 mm/s); K4 / F2b the
+  last node 0.75 / 1.50 mm and the next first pose 0.83 / 1.66 mm behind the truth (oracle 0.05 mm); K6 / F3 rest lost
+  at 2 and 3 deg filter tilt; K7 / C16 the projected step 2 g/k at s = 0.5 (an argued bound, the weakest oracle); K9 / F9
+  a 3 mm plane unusable axis-aligned (entry 1.1e5) and usable turned 45 deg (5.6e4). Not marked: A2 / F10 (handheld use,
+  a characterisation) and K10 / C37 (harmless). A marker that starts to pass is reported by doctest; it then goes.
+  Step checks ALL HOLD in the worktree (Release; a first run there was on a Debug configuration in the Release folder,
+  about 30 times slower, results identical; the kit now refuses that, dda0159).
 - **2026-11-20, a window's claimed covariance (F-c)** (cc36363; `consistency-harness` 5.3;
   `tests/window_covariance_test.cpp`; log `experiments/consistency/fixtures/window_covariance.log`): window 2 through
   `process_windows` from a hand-built predecessor with an exact boundary, constant acceleration, disjoint accelerometer
