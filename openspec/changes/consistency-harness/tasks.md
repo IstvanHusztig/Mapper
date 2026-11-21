@@ -154,13 +154,13 @@ files they name;** the orchestrator adds them when it integrates a hand-back.
   `tools/README.md`: the table of D11 from the new columns, each figure with its mask and definition, "unavailable"
   for a missing input. Verify: the tests pass, including one with an old table (every figure that needs a new
   column is unavailable) and one synthetic table with known figures.
-- [ ] 7.2 Orchestrator: replays of the existing captures with the new build and `log_window_terms` (Livox 3, the
+- [x] 7.2 Orchestrator: replays of the existing captures with the new build and `log_window_terms` (Livox 3, the
   stage 8 Livox 4 captures, 44_short) through `tools/run_replay.py`; the tool on their tables; a comparison with
   the audit's figures that names each difference in definition. Verify: `experiments/consistency/replays.md` holds
   the tables, each labelled as a forced replay conditional on its captured map and carried state, with the windows
   that stopped at the time limit taken from the original run's log.
 
-- [ ] 7.3 Orchestrator (added 2026-11-20 at the user's request: Livox 4 is the recording that matters most): one full
+- [x] 7.3 Orchestrator (added 2026-11-20 at the user's request: Livox 4 is the recording that matters most): one full
   Livox 4 run from this branch with the stage 8 candidate settings and `log_window_terms`, `log_window_diagnostics`,
   `log_window_verdict` on, run alone (no step checks or replays beside it); `verify-run` on its log; the tool on its
   `window_features.csv`: the readings per class of window and per stretch (the corridors at 126-183 s, the exits, the

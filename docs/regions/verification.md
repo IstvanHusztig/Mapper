@@ -163,6 +163,26 @@ Not applicable to the Python tools. The region's C++ (`tools/cut_recording/cut_r
 
 ## Experiments
 
+- **2026-11-21, the honesty readings on the recordings** (`consistency-harness` 7.1 to 7.3; `tools/honesty_report.py`,
+  dcfcc01; `experiments/consistency/replays.md`, `replays/honesty_report.txt`, `livox4/`): the tool reads a
+  `window_features.csv` and prints the start-velocity move (norm, per axis, by quarter of the rotation rate and of the
+  start acceleration, lag-1 autocorrelation, at rest), the three normalised moves with their NOT MEASURED reasons and the
+  velocity chi-square; "unavailable" where a column is missing, no verdict. Forced replays, all identical with their
+  captures, no window at the time limit: Livox 3 100-130 s (84 windows), Livox 4 95-125 s and 195-285 s (84 and 250;
+  two ranges of ONE run of 2026-11-18 with the older gyro noise, k = 7.09, that has 85 bent and 124 fast windows), and
+  the step checks' 44_short table (21). The full Livox 4 run of 2026-11-20 (1,016 windows; the stage 8 set = the
+  candidate plus `ahrs_gain` 0 and gyro scale z 1.004; no source change since) is the "before" of the fixes.
+  Start-velocity move, median of the norm: 23.2 / 122.6 / 184.7 / 36.9 / 26.1 mm/s; its normalised move (1 = an honest
+  claim): 13.1 / 407 / 409 / 40.8 / 15.2; velocity chi-square median 26 / 721 / 705 / 79 / 30. In the passage the
+  move keeps its direction from window to window (lag-1 0.82 and 0.68 in x and y). Full Livox 4 by class: at rest
+  0.73, blind 8.7, first window after a blind one 32, weak 19, seen 19; no moving window taken for rest. The joint move
+  is absent everywhere (switches off) and the gyro-bias move is measured in 7 of 1,016 windows (trace reduction below
+  0.5): on these recordings those two readings do not exist. The audit's figures (four Livox 3 runs, other masks: 23 to
+  24 mm/s, 17 to 29 by rotation-rate quarter, 3.6 at rest, lag-1 -0.12 to -0.35) stand beside the tool's on Livox 4
+  (26; 15 to 34; 4.5; -0.31 to -0.36): another recording and other definitions, not a like-for-like comparison.
+  The synthetic loop of 6.2 ran with `ahrs_gain` 0.05 (the candidate file's value), the Livox 4 run with 0 (the stage 8
+  set): by the user's decision this difference is noted, not removed.
+
 - **2026-11-21, the loop on synthetic recordings** (`consistency-harness` 6.1 to 6.3; `tests/synthetic_loop.{h,cpp}`,
   `tests/synthetic_loop_test.cpp`, `tests/synthetic_loop_tables_test.cpp`; `experiments/consistency/loop.md`, tables in
   `experiments/consistency/loop/run-2026-11-21/`): R1 (loop), R2 (blind corridor out and back), R3 (rest, walk, rest),
