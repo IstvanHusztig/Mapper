@@ -154,4 +154,6 @@ struct Cut
 
 // load_data (a serial executor) -> calculate_trajectory (the Fusion estimator) -> compute_step_1
 void cut_into_windows(Cut &cut, const InertialRecording &recording, int chunks = 1);
+// the same with other settings (their front end fields must be front_end_config's for the cut to be the generator's)
+void cut_into_windows(Cut &cut, const InertialRecording &recording, const OdometryConfig &config, int chunks = 1);
 }
