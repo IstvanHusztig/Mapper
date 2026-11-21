@@ -670,6 +670,68 @@ InertialRecording generate_loop_recording(const Route &route, const SensorProfil
     return generate_recording(route, sensor, loop_world_noise(world, config));
 }
 
+SensorProfile loop_sensor(int route)
+{
+    SensorProfile s;
+    s.jitter_sigma_m = 0.01;
+    if (route == 2)
+    {
+        s.max_range_m = 6.0;
+        s.points_per_node = 40;
+    }
+    return s;
+}
+
+Route loop_route(int route, bool along_structure)
+{
+    switch (route)
+    {
+    case 1: return route_r1(along_structure);
+    case 2: return route_r2();
+    case 3: return route_r3(along_structure);
+    }
+    throw std::invalid_argument("loop_route: route must be 1, 2 or 3");
+}
+
+OdometryConfig loop_shipped_config(const SensorProfile &sensor, std::vector<std::string> *changed)
+{
+    OdometryConfig c;
+    RunPaths paths;
+    GuiPreferences gui;
+    TomlConfigRepository repo;
+    if (!repo.load(std::string(LO_REPO_DIR) + "/settings/livox-vertical.toml", c, paths, gui))
+        throw std::runtime_error("settings/livox-vertical.toml not loadable");
+    std::vector<std::string> lines;
+    auto set = [&](const char *name, auto &field, auto value, bool always = false)
+    {
+        if (always || field != value)
+        {
+            std::ostringstream s;
+            s << std::boolalpha << name << ": file " << field << " -> test " << value;
+            lines.push_back(s.str());
+        }
+        field = value;
+    };
+    set("real_time_threshold_seconds", c.real_time_threshold_seconds, 1000.0, true);
+    set("log_window_terms", c.log_window_terms, true, true);
+    const OdometryConfig f = front_end_config(sensor);
+    set("threshold_initial_points", c.threshold_initial_points, f.threshold_initial_points);
+    set("threshold_nr_poses", c.threshold_nr_poses, f.threshold_nr_poses);
+    set("decimation", c.decimation, f.decimation);
+    set("filter_threshold_xy_inner", c.filter_threshold_xy_inner, f.filter_threshold_xy_inner);
+    set("filter_threshold_xy_outer", c.filter_threshold_xy_outer, f.filter_threshold_xy_outer);
+    set("lidar_imu_lever_arm_x_m", c.lidar_imu_lever_arm_x_m, f.lidar_imu_lever_arm_x_m);
+    set("lidar_imu_lever_arm_y_m", c.lidar_imu_lever_arm_y_m, f.lidar_imu_lever_arm_y_m);
+    set("lidar_imu_lever_arm_z_m", c.lidar_imu_lever_arm_z_m, f.lidar_imu_lever_arm_z_m);
+    set("ahrs_gain", c.ahrs_gain, f.ahrs_gain);
+    set("use_remove_imu_bias_from_first_stationary_scan", c.use_remove_imu_bias_from_first_stationary_scan, f.use_remove_imu_bias_from_first_stationary_scan);
+    set("startup_gyro_bias_nr_samples", c.startup_gyro_bias_nr_samples, f.startup_gyro_bias_nr_samples);
+    set("startup_gyro_bias_max_variance_deg2_s2", c.startup_gyro_bias_max_variance_deg2_s2, f.startup_gyro_bias_max_variance_deg2_s2);
+    if (changed)
+        *changed = lines;
+    return c;
+}
+
 const char *observability_class_name(ObservabilityClass c)
 {
     switch (c)

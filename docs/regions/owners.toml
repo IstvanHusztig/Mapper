@@ -168,6 +168,7 @@ files = [
     "tests/synthetic_loop.h",
     "tests/synthetic_loop.cpp",
     "tests/synthetic_loop_test.cpp",
+    "tests/synthetic_loop_tables_test.cpp",
     "tests/window_covariance_test.cpp",
     "tests/lidar_claim_test.cpp",
     "tests/test_verification_tools.py",

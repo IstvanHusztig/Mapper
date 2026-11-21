@@ -64,6 +64,25 @@ ImuNoise loop_world_noise(LoopWorld w, const OdometryConfig &config);
 // generate_recording with loop_world_noise(world, config)
 InertialRecording generate_loop_recording(const Route &route, const SensorProfile &sensor, const OdometryConfig &config, LoopWorld world);
 
+// The loop's sensor for route 1, 2 or 3 (task 6.1a), seed 1:
+//  - R1 and R3: the routes' profile with 1 cm jitter along the face normal. With the routes' 3 mm (below K9's 3.162 mm) the
+//    exact cells of axis-aligned planes are skipped and the LiDAR sees only edges and corners: measured 0 accepted matches
+//    at R2's exit. loop_chains_test uses 1 cm for the same reason.
+//  - R2: the same, with 6 m range (the corridor's middle has no face within range) and 40 points per node while moving.
+//    With the routes' 10 the blind stretch is not blind along travel by the truth (measured 2026-11-21 with observe_loop:
+//    freshly mapped cells hold few points, their normals tilt with the 1 cm jitter, and the along-travel share of the
+//    truth-placed information is 0.021 to 0.032 outbound, partly kept by the projection; 14 of 28 blind windows removed);
+//    with 20 points 25 of 28, with 40 all 28 (share 0.012 to 0.016 outbound, 0.003 to 0.006 on the return).
+SensorProfile loop_sensor(int route);
+// The loop's route 1, 2 or 3: R1 and R3 with along_structure (loop_scene_along_structure, task 6.1a), R2 as designed.
+Route loop_route(int route, bool along_structure = true);
+
+// The shipped Livox settings for a loop run (task 6.2's second set, design D8): settings/livox-vertical.toml as loaded,
+// with only real_time_threshold_seconds 1000 and log_window_terms true set, and the front end's fields of
+// front_end_config(sensor) copied in (the cut must be the generator's). `changed` receives one line per field whose value
+// the copy actually changed (with the file's and the test's value); the two test fields are always listed.
+OdometryConfig loop_shipped_config(const SensorProfile &sensor, std::vector<std::string> *changed = nullptr);
+
 // a window's class, by the truth (D8 "per class of window"): the first that applies, in this order
 enum class WindowClass
 {
