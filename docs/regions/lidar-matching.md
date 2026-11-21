@@ -97,9 +97,23 @@ that information calls blind.
   block carries `s^2` of the curvature but `s` of the gradient, so along that direction the NDT step is `1/s` times the
   unprojected one. Today: `ndt_term.cpp::ndt_degeneracy_projection` (the ramp of `s` between `projection_ratio` and
   `projection_ratio_full`) and `add_ndt_blocks` (`M B M`, `M g`). Active in both shipped settings (0.1 / 0.2).
+  Verified 2026-11-20 (red unit test; marker K7): on a hand-made one-node weak-axis block the block's own step is
+  g / (s k): 1 g/k at s = 1, 1.33 at 0.75, 2 at 0.5, 4 at 0.25. Pinned by `unit case K7 marker: the fractional
+  projection's own step at s = 0.5 is at most g / k` (`tests/unit_cases_ndt_test.cpp`, `doctest::should_fail`; the
+  oracle is an argued bound, a projection that removes information must not lengthen the step: the weakest of the
+  markers). The audit: active in the Livox 3 blind-exit window 602 (s = 0.8); with the shipped 0.1 / 0.2 thresholds 166
+  of 702 windows would lie in the ramp. Order: step 7 of `openspec/changes/consistency-harness/tasks.md` 8.2, after F9,
+  each alone.
 - **C18** (reported): the coarse 0.4 m grid adds its point terms at full weight on top of the fine grid
   (`ndt_term.cpp::sum_ndt_point_terms`, `outdoor_ndt_grid`; on through `ablation_study_use_hierarchical_rgd`, default
-  true, not a TOML key). Crosses to the map (its cells) and to the noise-budget (its weight).
+  true, not a TOML key). Crosses to the map (its cells) and to the noise-budget (its weight). Measured 2026-11-20 as
+  part of F4 (K8, Experiments): the second grid adds 1.67-1.84× claimed information while the scatter stays.
+- **F9** (from the map's side, read here: the code is `ndt_map.h`, map region; verified: red unit test; marker K9): the
+  ±1e5 test on a cell's stored inverse (`threshold = 100000.0`) is not rotation-invariant. Measured: the thinnest usable
+  normal sigma is 3.162 mm axis-aligned and 2.238 mm turned 45° in XY; a 3 mm plane is unusable axis-aligned (entry
+  1.1e5) and usable turned (5.6e4). Pinned by `unit case K9 marker: the cell test gives the same usability for the plane
+  axis-aligned and turned 45 degrees` (`tests/unit_cases_ndt_test.cpp`; oracle rotation invariance). Effect on a
+  recording not measured. Order: step 7, before C16, each alone.
 - **C31** (reported): the projection `M = diag(P, I)` removes the along-axis pull from the translation rows but keeps
   the rotation rows and their right-hand side, so a persistent along-axis pull can still turn the window in degenerate
   stretches (`ndt_term.cpp::ndt_degeneracy_projection`, `add_ndt_blocks`). Master-reviewer 2026-10-17; turning the
@@ -114,6 +128,24 @@ None (`python tools/function_sizes.py src --min 80`, 2026-11-18: no function of 
 
 ## Experiments
 
+- **2026-11-20, consistency harness: the NDT term's claim (F4, K8) and the cell test** (`consistency-harness` 5.4, 5.6,
+  5.8; 003103c, 54c04db, 907dc5b; tests `tests/lidar_claim_test.cpp`, `tests/unit_cases_ndt_test.cpp`; log
+  `experiments/consistency/fixtures/lidar_claim.log`; `experiments/consistency/fixtures.md` section 4). The term alone
+  (no motion model, no projection), information scale 1, 1 cm noise on every scan and map point, R = scatter / claimed
+  sigma (1 honest, above 1 claims more than it has), 500 room, 150 corridor, 60 wall trials. Room, exact map: fine grid
+  1.28 / 1.14 / 1.03 (x 1.28 [1.21, 1.37] excludes 1, not explained), coarse 1.00-1.03, both grids 1.40-1.54; map from
+  one earlier window: fine 1.66-2.85, coarse 1.46-1.52, both 2.00-2.56 (audit's hypothesis 1.4 / 1.8). Duplication: the
+  second grid adds 1.67-1.84× claimed information (audit 1.57-1.80) while the scatter stays (both / fine 0.93-1.00).
+  Map noise: R(one window) / R(exact) 1.61-2.22 fine, 1.43-1.66 both (hypothesis 1.41). The shipped scale 0.1 divides R
+  by 3.162 for a pure NDT solve (room 0.32-0.90); not exact in a real window. Corridor, constrained directions: exact
+  map 0.90-1.03 one grid, 1.25-1.34 both; one-window map 1.39-1.96 / 1.86-2.05. Blind directions (corridor along, wall
+  in plane): the term claims 0.09 / 0.2 mm, a 5 mm offset is pulled back 0.008-0.04 of it in the first step, 4.0-4.8 mm
+  left after 5 steps, not converged: R = 4-12 is not a scatter ratio. In the fixtures' loop chains the projection cut
+  the NDT weight along travel to at most 1.2e-4 of the sideways weight (the term practically off there, not shown
+  honest); with the shipped cell statistics a plain corridor was 925 along against 155 across (design D8). Fixture
+  artefact: a face 2.5 cm from a cell boundary gives the fine grid a 0.16 mm normal bias. K7 / C16 and K9 / F9: Known
+  flaws. Not concluded: a universal inflation factor (it depends on the geometry); the noise model has uniform density,
+  no ray geometry, no occlusion; nothing on a recording.
 - **2026-11-18** Livox 4 passage stall (stage 8), NDT information split by each cell's normal (new per-term rows
   `ndt_normal` / `ndt_in_plane`, merged 7a9d031): in windows 288–292 the in-plane part has 67–84 % of the NDT's
   stretch-along weight and pulls −33 to −43 mm at the result, the normal part −12 to +3.5 mm; calm windows 270–280:

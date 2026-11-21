@@ -109,11 +109,21 @@ from `raw data/43/static`, also in the Livox file); `rotation_sigma_floor_deg` 0
   `window_noise_model.cpp::motion_edge_weights` (× `imu_position_information_scale`, 0.1 on the Livox, 1 on the L2:
   σ 0.32 mm / 0.1 mm); the guess in `window_steps.cpp::integrate_window_translations` (inertial), called in
   `prepare_window`. The tracker's "loosened on the gated path" no longer applies (gated path removed 2026-11-12).
-  Reported; effect not measured. Crosses to the inertial region.
+  Reported; not measured on a recording. Crosses to the inertial region. Measured on synthetic windows 2026-11-20
+  (`tests/window_covariance_test.cpp`, no LiDAR, scale 0.1, 100 runs): with the `honest-inertial-carry` switches off the
+  handed-on velocity along travel scatters 4.0 per dof against its claim (claimed sigma about half the scatter), the
+  offset 1.45; switches on 1.07-1.12; near the 100-iteration cap, so non-convergence is not ruled out. Not pinned
+  (an approximate factor).
 - **C37** The origin fix's rotation weights are 1/σ_deg² applied to radians (1e12 instead of 3.3e15 for 1e-6°; 3283×
   weaker). Today: `window_noise_model.cpp::build_window_noise_model` (`m.origin`), read by `window_solver.cpp::fix_origin`;
-  the `noise budget` line says "(used as radians, tracker C37)". Reported; kept bit-identical in stage 5; harmless (both
-  hold the first node).
+  the `noise budget` line says "(used as radians, tracker C37)". Verified 2026-11-20 (K10, `tests/unit_cases_ndt_test.cpp`
+  `unit case K10: the origin fix's rotation weight against 1 / sigma^2 in radians`): 1e12 against 3.283e15. Not pinned
+  (the user's decision: harmless in size, both hold the first node; kept bit-identical in stage 5). Not in the order of
+  `consistency-harness` 8.2.
+- **F8** (reported by the audit of 2026-11-20, `experiments/consistency/research.md`; not measured by the harness): the
+  accelerometer noise is modelled white only and the offset (random walk 0.01 in the candidate set) is a fast state; the
+  handed-on 4.5 mm/s velocity sigma is set by the 0.1 m/s² floor; with layer 2, 78 % of the offset estimate's variance
+  mirrors the velocity move and jitters gravity by 0.024 m/s² per window (Livox 3). A model limit.
 - Fixed: **C5** (the rotation prior × Cauchy 1/π, D4 519b3e8, sigmas ×√π: k 4 → 7.0898, floor ×√π); the tracker still
   says "verified".
 
@@ -127,6 +137,34 @@ None: no function of this region is above 80 lines (`python tools/function_sizes
 
 ## Experiments
 
+- **2026-11-21, consistency harness: the claims against the scatter in the loop** (`consistency-harness` 6.1-6.3;
+  `experiments/consistency/loop.md`; candidate settings, `ahrs_gain` 0.05, the world drawn from the settings' own noise
+  claims, 20 seeds). With both `honest-inertial-carry` switches on, where the body moves the end velocity's claim is still
+  smaller than its error: NEES per dof median 4.1 in seen windows and 6.6 in turns on R1 (means 11.7 and 32.7); on R2
+  1.4-2.8; R3 mean 1.20 (off 1.51). Under the shipped Livox file (its own world, four values different, never paired) R1
+  NEES median 3,844. The first loop runs had a world whose IMU errors were not the settings' (offset walk 5×, gyro bias
+  walk 10× the claim): the world is built from the run's own `OdometryConfig` now (verification). Not concluded: a
+  universal inflation factor (K8 depends on the geometry), or anything on a recording.
+- **2026-11-20, consistency harness: the model world's claims** (`consistency-harness` 5.1-5.3, 5.6; tests
+  `tests/terms_at_truth_test.cpp`, `tests/accelerometer_noise_test.cpp`, `tests/window_covariance_test.cpp`,
+  `tests/unit_cases_ndt_test.cpp`, `tests/lidar_claim_test.cpp`; `experiments/consistency/fixtures.md` section 2, design
+  D4; synthetic data, stage 8 candidate settings). *Accelerometer noise (F-b):* in the sample-aligned fixture the
+  whitened terms have variance 0.997 and no correlation between terms with disjoint supports; with the Livox timing the
+  triples sit about 5 % under 1 and the start term about 1.9, both equal to the analytic value for the actual sample
+  supports (the model world's white noise at D = 0.01057 m/s²/√Hz matches the shipped weight at one span length, 11 ms,
+  only). **F11** (new observation): the anchor rule (`window_equations.cpp:27`, solver's `layout_window_unknowns`,
+  `>= span_s` on rounded timestamps) puts the anchors 12 ms apart in 89 % of steps for a 10 ms span at 500 Hz; the
+  weights follow the actual span. *Rotation edges:* variance 1.009 / 1.021 / 1.009 of the assumed max(k ARW √dt, floor)
+  (k 1, floor 0, gain 0, behind the filter's ramp). **F13** (new observation): the edges' float floor in motion is
+  4.6e-7 rad, 1.6-1.9× the float32 storage bound (probably Fusion's float arithmetic), below 0.1 of the edge sigma.
+  *Priors over the gap:* F P F^T + Q exact to 1e-16 and the gap noise 0.998 of D² gap (the mean is F2a, inertial).
+  *A window's covariance (F-c):* 0.88-1.06 per dof in four sets of 277 runs, inside the 1 % intervals, in the fixture's
+  own world (accelerometer floor 0 with a matched density, a = 0.8 m/s², F2a left out; 26 and 23 corridor runs excluded
+  as not blind; the corridor sets at the iteration cap); in the corridor the sideways and vertical velocity reads
+  0.64-0.85, below its interval (the claim larger than the scatter), cause not isolated. C34's set and C37 (K10): Known
+  flaws. *NDT information scale:* for a pure NDT solve the shipped 0.1 divides K8's scatter ratio by 3.162 (room
+  0.32-0.90); in a real window the other terms share the solve, so not exact (lidar-matching). Not concluded: that the
+  candidate settings as they are hold these claims; anything on a recording.
 - 2026-11-20 consistency-harness 3.1 (9a7d414, merged 527f18d): `WindowPreparedState` / `WindowHandedOnState` /
   `WindowHandOff` in the per-window record; `mean_rotation_rate` (from the prepared poses' attitude increments) and
   `start_world_acceleration` (first 30 ms) in `window_term_table`; 71 columns appended to `window_features.csv` (164 in

@@ -119,6 +119,16 @@ a node. It also owns the IMU kinematics helpers that the window loop and consist
 
 ## Known flaws
 
+- **Filter feedback under acceleration** (measured, `consistency-harness` 2026-11-21, synthetic, one seed each). With a
+  noise-free IMU the orientation filter's accelerometer feedback (`ahrs_gain` 0.05) tilts the attitude by 0.3 to
+  1.2 deg while the walked body accelerates (first loop fixture); the loop then lost R1 by 34.2 m (0.048 m with gain
+  0) and, in the reworked fixture, by 1.51 m (0.014 m with gain 0). With gain 0 and noise the errors were larger (R2
+  48 m, first fixture). The Livox 4 reference run (stage 8 set) has gain 0 and still shows the start-velocity move, so
+  the feedback is not its cause there. Not a fix: a measurement (`experiments/consistency/summary.md`, `inertial.md`).
+- **F12** (observation, 2026-11-20): the filter's start-up ramp levels on the accelerometer for 3 s even with
+  `ahrs_gain` 0. **F3** (verified, pinned by "unit case K6 marker"): the rest test loses rest from 1.7528 deg of
+  filter tilt; its stationarity check `is_window_stationary` is front-end code, `window_rests` inertial (step 5 of the
+  harness's order).
 - **C2** (partly fixed). The heading reset during Fusion's start-up is gone
   (D1, 11bdd55, `fusion_orientation_estimator.cpp::update`), measured on the cuts s0–s5 without a verdict
   (`openspec/changes/imu-front-end/tasks.md`, task 2.3 open). Still true: the windows (and `m_g`, so the seed map) start

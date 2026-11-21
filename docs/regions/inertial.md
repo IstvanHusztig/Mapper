@@ -116,14 +116,40 @@ orchestrator).
 
 - **C17** Acceleration offset modelled in the world frame; an accelerometer bias is body-frame. Today:
   `accelerometer_term.cpp::add_acceleration_term` (`mean_acc - acc_offset`) and the fold into `carry.acc_gravity` in
-  `run_odometry.cpp::update_acc_term_after_window`. Reported; possible cause of a ~1° tilt.
+  `run_odometry.cpp::update_acc_term_after_window`. Reported; possible cause of a ~1° tilt. Its size by the audit of
+  2026-11-20 (F7, `experiments/consistency/research.md`, Livox 3 and 4 runs; not measured by the harness): a 0.05 m/s²
+  body-fixed misfit on both Livox recordings is 0.07-0.10 m/s² wrong after a 90-180° turn and 0.3-0.4 m/s after 4 s
+  blind; the accelerometer innovations show about 2 % of it (the two audits sit uneasily together).
+- **F2a** (verified: red unit test; marker K3): `prepare_velocity_state` grows the start-velocity prior's covariance over
+  the gap between windows but takes its mean as the carried end velocity, not advanced by the acceleration. Measured
+  (`tests/unit_cases_inertial_test.cpp`, 2 ms gap): the prior mean is -2.000 / -4.000 mm/s off the true start velocity
+  at 1 / 2 m/s², 0 at rest (the covariance algebra F P F^T + Q is exact to 1e-16). Pinned by `unit case K3 marker: the
+  start velocity prior's mean equals the true start velocity` (`doctest::should_fail`, oracle the true start velocity
+  within 0.1 mm/s). The audit also found the last node's accelerometer sample used by no term (`accelerometer_term.cpp`),
+  not measured on its own. Order: step 3 of the decision in `openspec/changes/consistency-harness/tasks.md` 8.2.
+- **F2b** (verified: red unit test; marker K4): `repropagate_window_tail` replaces the tail by a constant-velocity line
+  from a finite difference, which lags under acceleration; the next window's fixed first pose comes from it (C32 is the
+  rotation half). Measured on p = a t²/2 at 500 Hz, tail 15 / span 10: last node -0.750 mm at 1 m/s², next first pose
+  -1.664 mm at 2 m/s²; with the shipped L2 tail 30 / span 20 at 2 m/s²: -6.000 / -6.324 mm. Pinned by `unit case K4
+  marker: the tail re-propagation's last node and the next first pose equal the truth` (oracle 0.05 mm). Order: step 4,
+  on its own (the tail also moves the points that enter the map).
+- **F3** (verified: red unit test; marker K6): the rest test removes gravity with the orientation filter's absolute tilt,
+  which with `ahrs_gain = 0` is an open-loop gyro integration. Measured with level true poses and a constant tilted
+  filter pitch, threshold 0.3 m/s²: rest is recognised up to 1.75° and lost from 1.7528° = 2 asin(0.3 / 2g). Pinned by
+  `unit case K6 marker: the rest test recognises rest at a filter tilt of 2 and 3 degrees`. Code: `window_steps.cpp::
+  window_rests` (here) on `imu_kinematics.cpp::is_window_stationary` (front-end). The audit: 21 rest windows missed at
+  245-252 s of one Livox 3 run at gain 0; on Livox 4 the test still finds 98 of 100 (research 4b.4); the Livox 4
+  reference run of 2026-11-20 (gain 0) takes 98 windows as at rest, none next to a window faster than 0.3 m/s. Bears on
+  F12 (the filter is open loop only after its start-up ramp). Order: step 5 (stops and slow walking labelled
+  independently first, then the fix).
 - **C26** The gyro bias can absorb a constant LiDAR yaw drift (observability). Bias carry: `apply_gyro_bias_prior`,
   `update_gyro_bias_after_window`; the estimate is solved in the window problem. Reported, by theory; crosses to the
   solver. Linked to C38 (front-end: 44's gyro at 253–259.7 s, bias swings −0.86 → +0.48 °/s).
 - **C32** The tail is re-propagated from the gyro (`window_steps.cpp::repropagate_window_tail`, called in
   `finish_window`) before the window's points enter the map (`add_window_to_map`), and the next window starts from it:
   each hand-off carries (bias error) × ~33 ms of yaw (30 nodes on the L2, 15 at 500 Hz on the Livox). Reported; the
-  test `handoff_tail_nodes = 0` was not run. Crosses to the map.
+  test `handoff_tail_nodes = 0` was not run on a recording (on synthetic chains under constant acceleration, tail 15
+  against 0: see F2b and the 2026-11-20 fixtures entry). Crosses to the map.
 - Fixed in the code (tracker updated 2026-11-18): **C5** (the Cauchy factor 1/π on the rotation prior; removed by D4,
   519b3e8, sigmas ×√π; no Cauchy factor left in the window problem), **C6** (bias subtracted twice; D3, 48734fc: only the update is
   subtracted, test "a gyro bias carried from window to window is removed once"), **C15** (hand-off off-by-one and
@@ -137,6 +163,47 @@ None: no function of this region is above 80 lines (`python tools/function_sizes
 
 ## Experiments
 
+- **2026-11-21, consistency harness: the loop and the recordings, this region's readings** (`consistency-harness` 6.1-7.3;
+  `experiments/consistency/loop.md`, `replays.md`, `summary.md`; reviewed, shown without a verdict). *Synthetic loop*
+  (candidate settings, `ahrs_gain` 0.05, world drawn from the settings' own noise claims, 1,800 points per window, 20
+  seeds; R2 10 valid seeds): with both `honest-inertial-carry` switches off / on, R1 13 of 20 runs more than 1 m off
+  (8 over 15 m) / 0 of 20 (largest 0.35 m), end-velocity NEES per dof median 59 / 4.5; R3 largest error 0.14 / 0.034 m;
+  R2 blind windows NEES 200 / 1.67, RMS position 1.55 / 1.80 m, end error median 2.97 / 0.59 m. With the switches on
+  the NEES while moving on R1 is still 4.1 (seen) and 6.6 (turns). A moving window is taken for rest in every R2 run
+  (37 windows per setting) and in 19-20 of 20 R3 runs (the tail of the deceleration): not explained (F10 below is the
+  noise-free case). *Orientation filter feedback* (noise-free IMU, one seed each; code in the front-end, but the
+  rotation edges measure the filter's output, see the review of 2026-11-19): in the first fixture `ahrs_gain` 0.05
+  tilted the attitude 0.3-1.2° while the body accelerated and R1 ended 34.2 m off (gain 0: 0.048 m; gain 0.05 with
+  bias estimation off: 1.7 m, Codex); in the reworked fixture 1.51 m against 0.014 m. With gain 0 and the matched noise
+  the errors were larger (R2 48 m, first fixture). *Recordings* (`tools/honesty_report.py`; forced replays and the
+  Livox 4 reference run of 2026-11-20 with gain 0): start-velocity move median 23 (Livox 3, 30 s), 123 / 185 (Livox 4
+  passage / flyaway, older settings), 37 (44_short), 26 mm/s (Livox 4 full; at rest 4.5 mm/s); over the 917 moving
+  windows of the full run it grows by quarter of the rotation rate 24.0 / 26.1 / 28.0 / 34.7 mm/s, on the 30 s Livox 3
+  replay and 44_short it does not. The move is there in the gain-0 Livox 4 run, i.e. without the filter's feedback. Window 373 (133.9 s, corridor): start velocity moved 1.114 m/s from a prior sigma of 5.0 mm/s per axis, at an
+  information ratio of 0.051 and a heading bend of 0.15°; which velocity was right is not known (order step 1 looks at
+  windows 372-374). Not concluded: which fix is right or what one does to a map; the switches were not run on the
+  recordings; the loop's gain 0.05 against the reference run's 0 is noted, not re-run.
+- **2026-11-20, consistency harness: the fixtures on this region's code** (`consistency-harness` 5.1-5.8; tests
+  `tests/unit_cases_inertial_test.cpp`, `tests/loop_chains_test.cpp`, `tests/window_covariance_test.cpp`,
+  `tests/terms_at_truth_test.cpp`; `experiments/consistency/fixtures.md`, logs in `fixtures/`; all on synthetic data
+  with the stage 8 candidate settings). Accelerometer terms at the true state within their derived bounds in every
+  motion (largest ratio 0.58; exactly 0 at rest and at constant acceleration). K3 / F2a, K4 / F2b, K6 / F3: reproduced
+  exactly and pinned (Known flaws). F2 chain at 2 m/s² (paired, one seed): the first moving window's start move +15.1
+  mm/s with tail 15, +11.2 with tail 0 (the tail about 4 of 15; audit's fitted +17-19), prior mean error -5.3 mm/s in
+  both. **F10** (A2, new; a characterisation, not pinned): a noise-free window at 2 m/s without acceleration passes the
+  rest test, and with `imu_always_on` the zero-velocity term solves it as at rest (start 0.646, end 0.010 m/s, move
+  0.035 m of 0.716 m; with the rest test forced off it keeps 2 m/s; one window, empty map); not pinned by the user's
+  decision (handheld: a walking person never moves without acceleration; a rest test on inertial data alone cannot tell
+  constant velocity from rest). **F5** (K11, paired): boundary attitude turned 0.05° with a perfect gyro: the bias leaves
+  its control by at most 1.34 claimed sigmas (0.04 °/s; audit 3-5) and stays above 0.8 over windows 5-9; the pitch error
+  0.050 -> -0.019° (overshoots to about 40 % of the turn): mechanism yes, size no. **C34** (no LiDAR, shipped position-row
+  scale 0.1, 100 runs): switches off, velocity along travel 4.0 per dof (claimed sigma about half the scatter), offset
+  1.45; on 1.07-1.12; near the 100-iteration cap. Window algebra (F-c, primary rows, 277 runs per set, this fixture's own
+  world: accelerometer floor 0, a = 0.8 m/s², priors drawn from their claim so F2a is left out): handed-on velocity,
+  offset, their joint and the gyro bias without LiDAR are inside their 1 % intervals, 0.88-1.06 per dof. **F12** (new
+  observation; the filter is the front-end's): the orientation filter's start-up ramp levels on the accelerometer for 3 s
+  even with `ahrs_gain = 0`. Blind stretch (20 seeds, last blind window): end-velocity normalised error 19.5 per run with
+  the switches off, 1.85 on (interval [0.34, 2.12]; 20 runs cannot show honesty). Not concluded: anything on a recording.
 - 2026-11-19 Layer 1 of `honest-inertial-carry` (`imu_edges_follow_state`, fb48605, merged 2b41eaa, off by default): the
   edges' position measurement follows the start velocity and offset. Replays on the five stage 8 Livox 4 captures
   (families of seven on lower, upper, end; `experiments/regions/inertial/2026-11-19-edges-follow-state/summary.md`,

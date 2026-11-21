@@ -202,8 +202,10 @@ Not applicable to the Python tools. The region's C++ (`tools/cut_recording/cut_r
   0.59 m. The readings without the truth: no window bent in 11,800; the velocity chi-square and the normalised move read
   lower in the runs tens of metres off (2.0 to 2.7) than in the runs within centimetres (4.0 to 5.9) while moving; the
   fast flag fires in 20 of 20 shipped R1 runs and 8 of the 13 bad off runs.
-  *With a noise-free IMU* the orientation filter's accelerometer feedback (`ahrs_gain` 0.05) alone tilts the attitude by
-  0.3 to 1.2 deg under acceleration and R1 ends 1.5 m off (0.014 m with gain 0); gain 0 with noise is worse (R2 48 m).
+  *With a noise-free IMU* (one seed each): in the first fixture (before the door frames) the orientation filter's
+  accelerometer feedback (`ahrs_gain` 0.05) alone tilted the attitude by 0.3 to 1.2 deg under acceleration and R1 ended
+  34.2 m off (0.048 m with gain 0); in the reworked fixture (6.1a) R1 ends 1.51 m off with gain 0.05 and 0.014 m with
+  gain 0. Gain 0 with the matched noise was worse in the first fixture (R2 48 m).
   *Not explained:* R1's attitude error of 1.3 to 1.8 deg in every setting; why the shipped file loses R1; a moving
   window taken for rest in every R2 run. Every window ran all 100 iterations (last step at most 0.22 mm on R1, 12 mm
   on R2). Limits: the world is the settings' own claims; 1,800 points per window; windows of one walk are not

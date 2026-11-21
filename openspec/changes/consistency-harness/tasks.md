@@ -199,7 +199,7 @@ files they name;** the orchestrator adds them when it integrates a hand-back.
   Follow-ups of the design: the lever-arm replay now (step 1); the time-offset run and the window-length
   sensitivity with step 6; the deviation sweep and the raw-data regressions when a fix needs them.
   Noted, not re-run: the synthetic loop of 6.2 used `ahrs_gain` 0.05, the Livox 4 reference run 0.
-- [ ] 8.3 Knowledge files (verification, inertial, noise-budget, solver, lidar-matching) with the findings and
+- [x] 8.3 Knowledge files (verification, inertial, noise-budget, solver, lidar-matching) with the findings and
   experiments; `docs/code-review-tracker.md` entries completed for the identifiers of 5.7, with their status; the
   English guide where it describes the tests and the per-window readings. Verify: `python tools/region_owners.py`
   passes; every marked case's identifier has a tracker entry.

@@ -103,6 +103,11 @@ lidar-matching's.
 
 ## Known flaws
 
+- **F9** (verified, `consistency-harness` 2026-11-20). `ndt_map.h::ndt_inverse_usable` skips a cell when an ENTRY of its
+  inverse covariance exceeds 1e5, which is not rotation-invariant: a plane thinner than 3.162 mm along its normal is
+  dropped when axis-aligned, 2.238 mm when turned 45 deg. Pinned by `tests/unit_cases_ndt_test.cpp` "unit case K9 marker"
+  (`doctest::should_fail`). The synthetic loops use 1 cm point jitter for this reason. Planned as step 7 of the
+  harness's order (`openspec/changes/consistency-harness/tasks.md` 8.2). Details: `lidar-matching.md`, `verification.md`.
 - **C4** (verified). `run_odometry.cpp::add_window_to_map`: the rebuild above. On 44 it fires at window 586 (≈ 237 s),
   together with a −100° yaw correction and the gyro-bias estimate collapsing at 240–260 s; one rebuild on each of
   s0/s1/s2. Planned as F1.

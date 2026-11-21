@@ -115,6 +115,25 @@ window verdict. It knows no term's maths; it owns the order in which a window's 
   `next_lm_factor`, `damped_step` (absolute damping on the poses; its comment calls a factor grown to ~1e10 negligible), `window_solver.cpp::apply_window_step`
   (`delta` sums units of m, rad, rad/s, m/s and m/s²), `run_odometry.cpp::run_lm_iterations` (`out_of_time`).
   Low priority in the tracker; the 2026-10-18 twin test traced the λ0 dependence to chain amplification.
+- **F1** (design flaw, measured; not pinned: paired sensitivities, no oracle): the first pose of every window is held
+  exact (`window_solver.cpp::fix_origin`, 1 µm / 1e12 on node 0) and nothing about its uncertainty is carried, so a
+  position disagreement with the map can only become velocity, and the handed-on covariance is conditional on an exact
+  first pose. Audit (research.md, one traced Livox 3 event, three runs): a 0.10-0.24 m correction at a blind exit taken as
+  velocity in one window. Fixtures 2026-11-20 (`tests/loop_chains_test.cpp`): K1, map displaced 1-10 mm along travel in
+  a seen room: end velocity 0.7 d/T (switches off), 1.2-1.7 d/T (on), start velocity 0.6 / 0.7-1.0 d/T, against the
+  audits' 1-4 d/T (the mechanism yes, the size at the lower end; all solves at the 100-iteration cap). K2, exit of a
+  9-window blind stretch with a 0.10 m boundary error retained, switches off: -11 to -64 mm/s building over the 5
+  windows after it (0.04-0.23 e/T, -0.7 to -1.7 claimed sigmas), no jump of e/T = 279 mm/s; the control itself ends
+  45 mm/s (5 claimed sigmas) off with nothing injected, and every switches-on run was excluded (under 20 end-wall
+  matches). Order: step 6 of `openspec/changes/consistency-harness/tasks.md` 8.2 (design first; the time-offset run and
+  the window-length sensitivity with it).
+- **F6** (verified on the exact control; not a `should_fail` marker, by decision): the velocity chi-square divides the
+  posterior-minus-prior move by P_prior where P_prior - P_post is its covariance; on the linear-Gaussian control it
+  averages 0.501 where 1 is honest (K5, `tests/truth_statistics_test.cpp`). Today: `run_odometry.cpp::window_evidence`
+  (`velocity_chi2`, read by the verdict, whose limits 5 / 20 rest on it) and the `window diagnostics` line in
+  `log_weak_axis_diagnostics` (noise-budget). The statistic is kept unchanged (design D10); the normalised move is the
+  honest reading beside it. Alongside the order of 8.2: the normalised start-velocity move reported beside the velocity
+  chi-square.
 - **C26** (reported, crosses from inertial): the gyro bias, estimated in the same solve, can absorb a constant LiDAR yaw
   drift (observability, expected by theory). The bias prior is the inertial region's; the joint solve is this region's.
 - Fixed, for reference: **C7** (a step skipped when an entry of the sparse solution was exactly zero; now
@@ -133,6 +152,29 @@ None (`python tools/function_sizes.py src --min 80`, 2026-11-18: no function of 
 
 ## Experiments
 
+- **2026-11-21, consistency harness: the verdict's readings in the loop and on the recordings** (`consistency-harness`
+  6.2-7.3; `experiments/consistency/loop.md`, `replays.md`, `summary.md`; reviewed, no verdict). *Synthetic loop* (20
+  seeds, `ahrs_gain` 0.05, the settings' own world): no window bent in 11,800; while the body moves the velocity
+  chi-square's median is 2.0-2.7 in the shipped-file runs (tens of metres off), 4.1 and 5.3 in the switches-off runs
+  (13 of 20 over 1 m) and 4.0-5.9 in the switches-on runs (within 0.35 m); the normalised move 1.5-1.9 (shipped) against
+  2.4-3.4 (on): neither reading is higher in the runs that are off (shipped and on are different worlds). The fast flag
+  fires in 20 of 20 shipped R1 runs and 8 of the 13 bad off runs. The joint move is NOT MEASURED with the switches off;
+  the bias move in 60 of 1,580 R1 windows. Every window ran all 100 iterations (last step under 0.22 mm on R1 and R3,
+  up to 12.1 mm on R2; C13). *Recordings* (`tools/honesty_report.py`): start-velocity normalised move median 13 (Livox 3
+  30 s), 407 / 409 (Livox 4 passage / flyaway, older settings), 41 (44_short), 15 (Livox 4 reference run, gain 0);
+  velocity chi-square median 26 / 721 / 705 / 79 / 30. Reference run by class: at rest 0.73, blind 8.7, first window
+  after a blind one 32, weak 19, seen 19; largest single move 30,003 (133.6-134.3 s); the joint move absent (switches
+  off), the gyro-bias move measured in 7 of 1,016 windows (trace reduction below 0.5); every window 100 iterations,
+  largest remaining step 0.07 mm. Not concluded: what a reading says about a map; no alert was calibrated on it.
+- **2026-11-20, consistency harness: the instruments and the boundary** (`consistency-harness` 2.1, 5.5; tests
+  `tests/truth_statistics_test.cpp`, `tests/loop_chains_test.cpp`; `experiments/consistency/fixtures.md`). On the exact
+  linear-Gaussian control the normalised move averages 1.002 (scalar) and 1.001 (3 unknowns), the old velocity
+  chi-square form 0.501 (F6, Known flaws); the honest sum lies inside its 1 % interval (2 of 200 seeds rejected), a claim
+  wrong by 1.5 is detected in 88.5 % / 93 % of runs at 96 runs. (The 3.2 entry below gives K5 as 1.007 / 0.503; the
+  two figures were not reconciled here.) F1 through the loop (K1, K2): Known flaws. F11 (new observation, this region's code): the anchor rule in
+  `layout_window_unknowns` (`window_equations.cpp:27`, `>= span_s` on rounded timestamps) puts the accelerometer anchors
+  12 ms apart in 89 % of steps for a 10 ms span at 500 Hz; the weights follow the actual span (noise-budget). Not
+  concluded: anything on a recording.
 - 2026-11-20 Honesty readings (consistency-harness 3.2, D10; 7abe5b3 + bcb649a, merged 8feb766). The window problem
   keeps the start velocity's covariance, its cross block with the offset, whether a covariance was taken and the steps
   since it (restored with a step taken back); `normalised_move` and the readings live in the verdict; the snapshot is
