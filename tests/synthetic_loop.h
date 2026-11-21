@@ -163,7 +163,7 @@ struct LoopRun
     int time_limit_windows = 0;
     int map_rebuilds = -1;     // -1: the loop's line was not seen
     // a reading, not a precondition: windows in which the body moves (truth) that the loop's rest test took as at rest
-    // (A2 / F10 of task 5.4: a constant-velocity window passes the rest test; R1 and R2 cruise without the gait)
+    // (A2 / F10 of task 5.4: a constant-velocity window passes the rest test; all routes are walked, so it counts what the gait does not prevent)
     int moving_judged_at_rest = 0;
     int first_moving_judged_at_rest = 0; // 1-based, 0: none
     std::vector<LoopWindow> windows;

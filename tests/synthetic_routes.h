@@ -54,12 +54,18 @@ struct Route
     double blind_x_lo = 0.0, blind_x_hi = 0.0; // R2: where no structure should be in range
 };
 
-// R1: the loop scene (seen everywhere), one lap at 2 m/s through its four corridors, with a 4 s rest before and 1.5 s after
+// All three routes are walked: the sensor is always carried by hand, so every straight piece (speed changes and legs)
+// carries the gait of Motion (Gait{}, the same for all routes) on top of the route's path and speed profile; the speeds
+// below are the path's speeds, about which the gait oscillates. Motion's turns carry no gait (it fades out over the last
+// ramp of the leg before and back in over the first of the leg after); the turns keep their turn-rate ramps.
+// R1: the loop scene (seen everywhere), one lap walked at 2 m/s through its four corridors, quarter turns at 1 rad/s with
+// 0.5 s ramps, with a 4 s rest before and 1.5 s after
 Route route_r1();
-// R2: out and back through a plain corridor (20 m, 2 m wide) between two structured rooms, 1.5 m/s, a 180 degree turn in
-// place in the far room; max_range 6 m makes its middle blind. Use SensorProfile::max_range_m = 6.
+// R2: out and back through a plain corridor (20 m, 2 m wide) between two structured rooms, walked at 1.5 m/s, a 180
+// degree turn in place (between two rests) in the far room; max_range 6 m makes its middle blind. Use
+// SensorProfile::max_range_m = 6.
 Route route_r2();
-// R3: rest, walk (the gait of Motion), rest, in the loop scene's south corridor
+// R3: rest, walk at 1.2 m/s, rest, in the loop scene's south corridor
 Route route_r3();
 
 struct Hit
