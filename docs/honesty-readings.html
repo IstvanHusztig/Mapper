@@ -57,10 +57,10 @@ and tests on synthetic data whose truth is known. It says how to get them, how t
 They change no result.</p>
 <p class="terms-line" style="font-size:14px;color:var(--muted)">Terms used here: <a href="index.html#t-window">window</a>, <a href="index.html#t-handoff">hand-off</a>, <a href="index.html#t-prior">prior</a>, <a href="index.html#t-sigma">sigma and information</a>, <a href="index.html#t-velocity">velocity</a>, <a href="index.html#t-acc-offset">acceleration offset</a>, <a href="index.html#t-gyro-bias">gyro bias</a>, <a href="index.html#t-chi2">velocity chi²</a>, <a href="index.html#t-normalised-move">normalised move</a>, <a href="index.html#t-verdict">window verdict</a>, <a href="index.html#t-term-table">per-term table</a>, <a href="index.html#t-replay">capture and replay</a>. All basic terms: the guide's <a href="index.html#fundamentals">Fundamentals</a>.</p>
 
-<div class="note"><b>Status (2026-11-20)</b>Built as the OpenSpec change <code>consistency-harness</code>, on its branch.
-Done: the readings, the record of the hand-off, the exact control, the synthetic recording and the first fixture
-cases. Still being built: the window and loop fixtures, the report tool <code>tools/honesty_report.py</code> and the
-replays. The change's <code>design.md</code> holds the reasons for every choice made here.</div>
+<div class="note"><b>Status (2026-11-21)</b>Built as the OpenSpec change <code>consistency-harness</code>, on its branch.
+Done: the readings, the record of the hand-off, the exact control, the synthetic recordings and routes, and the fixture
+tests F-a to F-e and K8 with the unit cases. Planned, not built: the report tool <code>tools/honesty_report.py</code>.
+The change's <code>design.md</code> holds the reasons for every choice made here.</div>
 
 <h2 id="the-instruments-at-a-glance">The instruments at a glance</h2>
 <div class="table-wrap"><table>
@@ -69,9 +69,9 @@ replays. The change's <code>design.md</code> holds the reasons for every choice 
 <tr><td>Prepared and handed-on state</td><td>What each window started from and what it gave the next one</td><td><code>window_features.csv</code> (<code>prepared_*</code>, <code>handed_*</code>)</td><td>with <code>log_window_terms</code></td></tr>
 <tr><td>Exact control</td><td>Do the statistics themselves work (pass when honest, fail in both directions when not)?</td><td><code>tests/truth_statistics*</code></td><td>in every test run</td></tr>
 <tr><td>Synthetic recording with truth</td><td>Data that obeys the estimator's own model, cut by the real front end</td><td><code>tests/synthetic_inertial*</code>, <code>tests/synthetic_routes*</code></td><td>in every test run</td></tr>
-<tr><td>Fixture cases</td><td>Under its own model, does a part of the code do what it should? Each case isolates one quantity</td><td><code>tests/unit_cases_*</code> and the fixtures to come</td><td>being built</td></tr>
+<tr><td>Fixture cases</td><td>Under its own model, does a part of the code do what it should? Each case isolates one quantity</td><td><code>tests/terms_at_truth_test.cpp</code> (F-a), <code>accelerometer_noise_test.cpp</code> (F-b), <code>window_covariance_test.cpp</code> (F-c), <code>unit_cases_*_test.cpp</code> (F-d), <code>loop_chains_test.cpp</code> (F-e), <code>lidar_claim_test.cpp</code> (K8)</td><td>built</td></tr>
 <tr><td>Loop measurement</td><td>What the whole loop does to a world that obeys its model, per class of window</td><td>on demand</td><td>planned</td></tr>
-<tr><td>Report tool</td><td>The same table from a real run and from a synthetic one</td><td><code>tools/honesty_report.py</code></td><td>planned</td></tr>
+<tr><td>Report tool</td><td>The same table from a real run and from a synthetic one</td><td><code>tools/honesty_report.py</code></td><td>planned, not built</td></tr>
 </table></div>
 
 <h2 id="the-normalised-move">The normalised move</h2>
@@ -146,6 +146,25 @@ together in Release).</p>
 <tr><td>synthetic motion / IMU / routes / source</td><td>the generator itself: an independent integration reproduces its truth; its noise is what its parameters say; its samples follow the estimator's time conventions (gyro sample k covers the interval ending at node k, accelerometer sample k the interval starting at node k); every point lands at the node it was generated for</td></tr>
 <tr><td>unit case K3, K4, A2, K6, K7, K9, K10</td><td>one discrepancy each, with a paired control: the velocity prior over the gap between windows, the re-propagated tail, a constant-velocity window taken as at rest, the rest test with a tilted filter, the fractional degeneracy projection, the cell test's rotation dependence, the origin fix's units</td></tr>
 </table></div>
+<h3 id="routes-and-fixtures">Routes and fixtures</h3>
+<p>A synthetic recording comes from <code>synthetic::generate_recording(route, sensor, noise)</code>
+(<code>tests/synthetic_routes.h</code>) with one of three routes: R1, a loop; R2, out and back through a corridor with a
+blind middle; R3, rest, walk, rest. <code>ImuNoise{}</code> is the model world's noise, <code>ImuNoise::none()</code>
+noise-free. <code>cut_into_windows</code> then runs the real loading, orientation and cutting code on it. The fixtures
+each isolate one claim of the estimator and say what kind of claim it is (generated raw noise, a propagated claim, a
+conditional observation, an approximate factor):</p>
+<div class="table-wrap"><table>
+<tr><th>Fixture</th><th>File</th><th>What it checks</th></tr>
+<tr><td>F-a</td><td><code>terms_at_truth_test.cpp</code></td><td>the accelerometer terms at the true state</td></tr>
+<tr><td>F-b</td><td><code>accelerometer_noise_test.cpp</code></td><td>the accelerometer terms' variance, density&sup2;/&tau; + floor&sup2;, and their independence</td></tr>
+<tr><td>F-c</td><td><code>window_covariance_test.cpp</code></td><td>the velocity prior over the gap and the joint prior, against the window's own covariance (the measured set is skipped by default)</td></tr>
+<tr><td>F-d</td><td><code>unit_cases_inertial_test.cpp</code>, <code>unit_cases_ndt_test.cpp</code></td><td>the unit cases and the markers</td></tr>
+<tr><td>F-e</td><td><code>loop_chains_test.cpp</code></td><td>a chain of windows around the loop route</td></tr>
+<tr><td>K8</td><td><code>lidar_claim_test.cpp</code></td><td>the NDT term's claim, with independent draws from an exact cell</td></tr>
+</table></div>
+<p>Each has a smoke case in <code>ctest</code>; the measured sets are skipped by default (minutes each) and run with
+<code>lidar_odometry_tests -tc="window covariance*" --no-skip -s</code> (likewise <code>lidar claim*</code>,
+<code>loop chain*</code>). A claim that is too small shows as a value above its chi-square interval.</p>
 <h3 id="writing-a-new-case">Writing a new case</h3>
 <ul>
 <li>Make a recording: <code>generate_recording(route_r2(), SensorProfile{...}, ImuNoise{})</code>

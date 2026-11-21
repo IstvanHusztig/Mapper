@@ -213,6 +213,15 @@
 <a class="indent" href="#consistency-pass">Consistency pass</a>
 </details>
 <div class="menu-item"><a href="#limits">Known limitations</a></div>
+<details class="menu-group"><summary><a href="#instruments">Measuring instruments and tools</a></summary>
+<a class="indent" href="#ins-in-a-run">In a run: readings in the log and the CSV files</a>
+<a class="indent" href="#ins-capture-replay">Capture, replay and snapshot</a>
+<a class="indent" href="#ins-verification-kit">The verification kit: is a change safe?</a>
+<a class="indent" href="#ins-analysis-tools">Analysis tools: judging a result</a>
+<a class="indent" href="#ins-truth-tests">Truth tests</a>
+<a class="indent" href="#ins-verify-skills">The verify skills</a>
+<a class="indent" href="#ins-which-to-use">Which one when</a>
+</details>
 <details class="menu-group"><summary><a href="#internals">Internals: how the code is laid out and how the work is organised</a></summary>
 <a class="indent" href="#i-layers">Layers</a>
 <a class="indent" href="#i-window">One window, in the code</a>
@@ -266,7 +275,7 @@ every page of <code>docs/</code> by what it is for.</p>
 <h3 id="c-using-dmapper">Using dMapper</h3>
 <ol class="toc">
 <li><a href="#"><b>User guide</b></a> <span class="toc-desc">The basic terms (<a href="index.html#fundamentals">Fundamentals</a>: pose, node, window, term, bend …, defined once and linked from every page), the pipeline step by step, every parameter, best practices, the tuning cheat sheet, known limitations.</span>
-<ol class="toc-sub"><li><a href="#contents">Contents</a></li><li><a href="#overview">What the odometry does with the points it reads</a></li><li><a href="#fundamentals">Fundamentals: the basic terms</a></li><li><a href="#inputs">Inputs and outputs</a></li><li><a href="#pipeline">The pipeline</a></li><li><a href="#params">Parameter reference</a></li><li><a href="#practice">Best practices</a></li><li><a href="#tuning">Tuning cheat sheet</a></li><li><a href="#fixes">Fixes and map sharpness</a></li><li><a href="#limits">Known limitations</a></li><li><a href="#internals">Internals: how the code is laid out and how the work is organised</a></li><li><a href="#documents">All documents</a></li></ol>
+<ol class="toc-sub"><li><a href="#contents">Contents</a></li><li><a href="#overview">What the odometry does with the points it reads</a></li><li><a href="#fundamentals">Fundamentals: the basic terms</a></li><li><a href="#inputs">Inputs and outputs</a></li><li><a href="#pipeline">The pipeline</a></li><li><a href="#params">Parameter reference</a></li><li><a href="#practice">Best practices</a></li><li><a href="#tuning">Tuning cheat sheet</a></li><li><a href="#fixes">Fixes and map sharpness</a></li><li><a href="#limits">Known limitations</a></li><li><a href="#instruments">Measuring instruments and tools</a></li><li><a href="#internals">Internals: how the code is laid out and how the work is organised</a></li><li><a href="#documents">All documents</a></li></ol>
 </li>
 <li><a href="README.md"><b>Documentation map</b></a> <span class="toc-desc">This file: the map of every page, by purpose.</span>
 <ol class="toc-sub"><li><a href="README.md#using-dmapper">Using dMapper</a></li><li><a href="README.md#how-the-odometry-works">How the odometry works</a></li><li><a href="README.md#code-and-architecture">Code and architecture</a></li><li><a href="README.md#plans-and-research">Plans and research</a></li><li><a href="README.md#region-knowledge-files">Region knowledge files</a></li><li><a href="README.md#agent-working-notes">Agent working notes</a></li></ol>
@@ -581,6 +590,10 @@ window (shift, stretch, curve, turn) along travel, sideways and vertical (the <b
 alone would move it (the <b>pull</b>). The <b>remaining step</b> is the pull of all terms together.
 <span class="more">→ <a href="window-terms.html">The per-term table</a></span></dd>
 </dl>
+<p>Two more instruments check whether a window's claimed uncertainty fits what it does. The
+<a class="term" href="#t-normalised-move">normalised moves</a> are logged in every run, and with <code>log_window_terms</code>
+the window's record also holds what it was prepared with and what it handed on (<code>prepared_*</code> and
+<code>handed_*</code> columns). Unit tests on synthetic recordings with known truth show why a claim does not fit. They change no result. <span class="more">→ <a href="honesty-readings.html">Honesty readings and truth tests</a></span></p>
 
 <h3 id="f-after">After the odometry</h3>
 <dl class="terms">
@@ -599,6 +612,7 @@ the correction is then spread over every node.</dd>
 </dl>
 
 <h3 id="f-tools">Runs and checks</h3>
+<p>All instruments and tools in one overview, with the command for each: <a href="#instruments">Measuring instruments and tools</a>.</p>
 <dl class="terms">
 <dt id="t-settings">Settings file</dt>
 <dd>The TOML file of a run (<code>settings/l2-vertical.toml</code>, <code>settings/livox-vertical.toml</code>); the output
@@ -759,6 +773,7 @@ by file. <span class="more">→ <a href="../tools/README.md">tools/README.md</a>
 <div class="where">optimize_windows · src/application/run_odometry.cpp</div>
 <p>The last node of a window has no points, and the ones just before it have very few. Left free, they can spin by several degrees, and the next window would inherit that error permanently, which shows up as rotated "ghost" copies of walls. So after the optimization, the last <code>handoff_tail_nodes</code> nodes are <b>recomputed from the last well-constrained node</b> using the bias-corrected IMU rotation and the optimized velocity. The next window starts from that recomputed end.</p>
 <p>The window's bias estimate and its uncertainty become the prior for the next window, and they are printed and written to the results JSON.</p>
+<p>With <code>log_window_terms</code> the window's record also keeps what it handed on (end velocity, gravity vector, offset and bias with their sigmas, the last node before and after the tail re-propagation) next to what the window was prepared with, so a hand-off can be compared across two rows (<a href="honesty-readings.html#the-prepared-and-handed-on-state">prepared and handed-on state</a>).</p>
 <div class="deep"><b>In depth</b><a href="window-chaining.html">Poses, windows and window chaining</a> (placing the next window, and the chaining fix)</div>
 <div class="params"><span>handoff_tail_nodes</span><span>gyro_bias_*</span></div>
 </li>
@@ -974,7 +989,7 @@ See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 <tr><td>working_directory_preview, current_output_dir</td><td class="val">(paths)</td><td>Written by the program: the preview folder (<code>&lt;input&gt;/preview</code>, which holds a temporary point cloud of window 1 and every 100th window after it) and the output folder. Recalculated on every run, so the stored value doesn't matter.</td></tr>
 <tr><td>clear_color <span class="badge b-gui">GUI only</span></td><td class="val">RGBA</td><td>Background colour of the 3-D view.</td></tr>
 <tr><td>software_version, config_version, build_date</td><td class="val">0.1.0</td><td>Compatibility check when loading: the file counts as compatible when major and minor version match the program (0.1); otherwise a warning is printed. A run always records the program's own version, whatever the file says.</td></tr>
-<tr><td>log_window_terms</td><td class="val">false</td><td>The per-term table of every window: each term's cost, and how strongly it holds the window and where it pulls it, at the guess and at the result; one <code>window terms N</code> line, and <code>window_terms.csv</code> / <code>window_features.csv</code> in the output folder (<a href="window-terms.html">how to read it</a>). Results unchanged.</td></tr>
+<tr><td>log_window_terms</td><td class="val">false</td><td>The per-term table of every window: each term's cost, and how strongly it holds the window and where it pulls it, at the guess and at the result; one <code>window terms N</code> line, and <code>window_terms.csv</code> / <code>window_features.csv</code> in the output folder (<a href="window-terms.html">how to read it</a>), with the window's prepared and handed-on state (<a href="honesty-readings.html#the-prepared-and-handed-on-state">columns</a>). Results unchanged.</td></tr>
 <tr><td>log_window_verdict</td><td class="val">false</td><td>One <code>window verdict N</code> line per window with a flag (bent more than 3° against the gyro, faster than 2.5 m/s, gyro bias above 0.5 °/s), with all its readings. The <code>window verdict summary</code> is logged in every run: how many windows have each flag, and the run's triggers. Investigation triggers, not a statement about the map. Results unchanged.</td></tr>
 <tr><td>log_window_noise</td><td class="val">false</td><td>One <code>window noise N</code> line per window with its noise model as sigmas: the motion edges' translation and rotation sigmas, the velocity-continuity and accelerometer sigmas, the start-velocity, gyro-bias and acceleration-offset priors, the zero-velocity sigma at rest, the NDT scale and Huber cutoff (<a href="#t-sigma">sigma</a>). The <code>noise budget</code> line with the settings' constants is logged in every run. With <code>log_window_terms</code> the same values are columns of <code>window_features.csv</code>. Results unchanged.</td></tr>
 <tr><td>capture_windows_from_s, capture_windows_to_s</td><td class="val">−1, −1 (off)</td><td>Window capture, for working on one stretch of a recording: the command line writes <code>window_capture_&lt;from&gt;-&lt;to&gt;s.bin</code> to the output folder with the odometry's state before the first window that starts at or after <i>from</i> seconds (counted from the first window's start, like <code>time_s</code> of <code>log_window_diagnostics</code>), the windows up to the last one that starts at or before <i>to</i>, their points, and what the run made of them. <code>dMapper --replay &lt;capture&gt; &lt;settings.toml&gt;</code> then runs only those windows again, in seconds or minutes instead of a whole run. With the settings of the captured run every window must come out bit for bit as in the run (the iteration counts are taken from the capture, so the time limit plays no part; exit 1 if not). With changed settings the replay reports how far the windows move: a quick screen of an idea on the stretch where it matters, starting from the run's own map, to be confirmed by a full run. A capture of 20 s of the L2 recording is about 70 MB. Doesn't change results.</td></tr>
@@ -1046,6 +1061,77 @@ See <a href="#fixes">Fixes and map sharpness</a> for measured effects.</div>
 <li><b>Loop closure also moves a correct trajectory.</b> On the synthetic two-lap recording of the unit tests (<code>tests/loop_closure_test.cpp</code>) it halves a second-lap drift, but a trajectory that is already exact is moved by up to 3 cm and 0.1°: every revisit registers with a residual of 1–3 cm, and the pose graph trusts loop edges to 5 cm. With points only within 6 m it accepted a wrong registration and moved the trajectory by 1.5 m; the overlap threshold alone does not catch that.</li>
 <li><b>The consistency pass also moves a correct trajectory</b>, on the same synthetic recording (<code>tests/consistency_test.cpp</code>): by up to 6 mm (spread evenly, the noise of the NDT fit). It removes offsets between windows.</li>
 </ul>
+<h2 id="instruments">Measuring instruments and tools</h2>
+<p>Everything dMapper has for measuring a run, a change or a map: what each instrument measures, when to use it, the command that runs it, and where its detailed page is. The instruments fall in six groups: read a run, narrow a problem to a stretch, check a code change, judge a result, test the estimator's claims, and let the assistant's skills run the checks the same way each time. Only what exists is described; a planned instrument is marked.</p>
+<h3 id="ins-in-a-run">In a run: readings in the log and the CSV files</h3>
+<p>Switched on by settings in <code>[lidar_odometry_debug_info]</code>; none changes a result.</p>
+<div class="table-wrap"><table><tr><th>Instrument</th><th>Measures</th><th>Use it when</th><th>Run</th><th>Details</th></tr>
+<tr><td>Window verdict</td><td>Per window: bend of heading, roll and pitch against the gyro, speed, gyro bias, velocity chi², information ratio, why the iterations stopped; four flags (bent over 3°, bent severely over 10°, fast over 2.5 m/s, bias over 0.5 °/s). A reading a window doesn't have is NOT MEASURED.</td><td>After every run; the summary is always logged, <code>log_window_verdict = true</code> adds a line per flagged window</td><td>the <code>window verdict summary</code> log lines</td><td><a href="#f-readings">Readings of a run</a></td></tr>
+<tr><td>Normalised moves</td><td>Whether a carried state (start velocity, velocity with offset, gyro bias) moved from its prior by about what the window claims; expected value 1, descriptive only.</td><td>To check the claimed uncertainty against behaviour</td><td>the <code>window verdict summary</code> lines</td><td><a href="honesty-readings.html">Honesty readings</a></td></tr>
+<tr><td>Per-term table</td><td>Each term's cost, residuals, weight and pull for four motions along travel, sideways and vertical, at the guess and at the result: which term holds a window back or pushes it away.</td><td>A window or stretch looks wrong and the cause must be named</td><td><code>log_window_terms = true</code>, then <code>python tools/window_terms.py window_terms.csv [--window N]</code></td><td><a href="window-terms.html">The per-term table</a></td></tr>
+<tr><td>Window features</td><td><code>window_features.csv</code>: the state a window was prepared with and what it handed on, the noise values, the flags and readings.</td><td>Collecting data per window for analysis</td><td>written next to <code>window_terms.csv</code> with <code>log_window_terms = true</code></td><td><a href="honesty-readings.html">Honesty readings</a></td></tr>
+<tr><td>Window diagnostics and noise lines</td><td>One line per window (time, iterations, step, poses); <code>window noise &lt;n&gt;:</code> lines with the noise model as sigmas; one <code>noise budget</code> line per run (the constants the settings give).</td><td>Locating a problem in time; checking what the settings imply</td><td><code>log_window_diagnostics = true</code>, <code>log_window_noise = true</code></td><td><a href="#f-readings">Readings of a run</a></td></tr>
+<tr><td>Degeneracy information</td><td>How well the LiDAR sees the motion along each axis (information ratio) and its log line.</td><td>A window slides along a corridor or a smooth wall</td><td>in the log of every run</td><td><a href="degeneracy-information.html">Degeneracy information</a></td></tr>
+</table></div>
+
+<h3 id="ins-capture-replay">Capture, replay and snapshot</h3>
+<p>These make a stretch, or the back end, cheap to repeat.</p>
+<div class="table-wrap"><table><tr><th>Instrument</th><th>Measures</th><th>Use it when</th><th>Run</th><th>Details</th></tr>
+<tr><td>Window capture</td><td>The window loop's state before a stretch, its windows and points, and each window's iterations and poses.</td><td>To test an idea on one stretch in seconds instead of a full run</td><td><code>capture_windows_from_s</code> / <code>capture_windows_to_s</code> in the settings of a CLI run</td><td><a href="#t-replay">Capture and replay</a></td></tr>
+<tr><td>Replay</td><td>Runs the captured stretch again. With the capture's own settings it must come out bit for bit (exit 1 if not); with other settings it reports how far the windows move.</td><td>Screening a setting or a code change on a stretch</td><td><code>python tools/run_replay.py &lt;capture&gt; &lt;settings&gt;</code> (the gate: waits for memory and a slot)</td><td><a href="../tools/README.md">tools/README.md</a>, <a href="regions/verification.md">Region: verification</a></td></tr>
+<tr><td>Odometry snapshot</td><td>All windows after the odometry, so loop closure and consistency can run alone in minutes.</td><td>Loop-closure and consistency experiments</td><td><code>save_odometry_snapshot = true</code>, then <code>dMapper &lt;in&gt; &lt;params&gt; &lt;out&gt; --from-snapshot &lt;file&gt;</code></td><td><a href="#t-replay">Capture and replay</a></td></tr>
+</table></div>
+
+<h3 id="ins-verification-kit">The verification kit: is a change safe?</h3>
+<div class="table-wrap"><table><tr><th>Instrument</th><th>Measures</th><th>Use it when</th><th>Run</th><th>Details</th></tr>
+<tr><td>step_checks.py</td><td>Build, unit tests, both guards, both replays, the per-term table and the short recording against their references; about 7 minutes.</td><td>Every commit of a change; exit 0 only if all hold</td><td><code>python tools/step_checks.py</code> (<code>--record</code> writes the references)</td><td><a href="regions/verification.md">Region: verification</a>, <a href="#i-checks">How a change is checked</a></td></tr>
+<tr><td>end_runs.py</td><td>The full recordings against their manifests; about 50 minutes, in the background.</td><td>Once per change</td><td><code>python tools/end_runs.py [--debug]</code></td><td><a href="../tools/README.md">tools/README.md</a></td></tr>
+<tr><td>run_replay.py</td><td>The gate every replay goes through: memory, a slot, its cost, the time-limit count.</td><td>Any replay</td><td><code>python tools/run_replay.py &lt;capture&gt; &lt;settings&gt;</code></td><td><a href="regions/verification.md">Region: verification</a></td></tr>
+<tr><td>compare_baseline.py</td><td>Whether a result is bit-identical with a baseline manifest (or within a tolerance).</td><td>After a refactor; to measure a change that alters numbers</td><td><code>python tools/compare_baseline.py &lt;out&gt; &lt;manifest.json&gt;</code></td><td><a href="../tools/README.md">tools/README.md</a></td></tr>
+<tr><td>region_owners.py</td><td>Whether the ownership list is consistent, and what a branch touches outside its region.</td><td>Before merging a region branch</td><td><code>python tools/region_owners.py --diff &lt;base&gt;..&lt;branch&gt; --region &lt;name&gt;</code></td><td><a href="regions/README.md">Regions</a></td></tr>
+<tr><td>kit_lib.py, local_paths.toml</td><td>The shared helpers of the kit (including a check that a build tree is configured with its preset's build type) and the local paths of recordings, captures and references.</td><td>Not run alone; edit the paths for a new machine</td><td>used by the scripts above</td><td><a href="regions/verification.md">Region: verification</a></td></tr>
+<tr><td>Guards and references</td><td>A characterization of single iterations and a loop guard as exact hexadecimal numbers, plus captures and references, kept in the experiments folder named in the paths file.</td><td>Compared by step_checks.py</td><td>part of <code>step_checks.py</code></td><td><a href="regions/verification.md">Region: verification</a></td></tr>
+</table></div>
+
+<h3 id="ins-analysis-tools">Analysis tools: judging a result</h3>
+<p>Pure Python scripts in <code>tools/</code>; <a href="../tools/README.md">tools/README.md</a> has a section for each.</p>
+<div class="table-wrap"><table><tr><th>Instrument</th><th>Measures</th><th>Use it when</th><th>Run</th><th>Details</th></tr>
+<tr><td>run_health.py</td><td>Did the odometry behave? Judges the log against fixed limits (bends, speed, bias, chi² median and 95th percentile).</td><td>After every run whose result is compared or shown</td><td><code>python tools/run_health.py run.log [--toml settings]</code></td><td><a href="../tools/README.md">tools/README.md</a></td></tr>
+<tr><td>imu_health.py</td><td>Is the raw IMU usable: rate, gaps, false gyro offsets, bias at rest, noise.</td><td>A new recording, before any conclusion from it</td><td><code>python tools/imu_health.py &lt;recording folder&gt;</code></td><td><a href="../tools/README.md">tools/README.md</a></td></tr>
+<tr><td>eval_odometry.py</td><td>Trajectory and map-sharpness metrics, with an optional PNG.</td><td>Comparing two results</td><td><code>python tools/eval_odometry.py &lt;dataset&gt; &lt;result_A&gt; &lt;result_B&gt;</code></td><td><a href="../tools/README.md">tools/README.md</a></td></tr>
+<tr><td>trajectory_seams.py</td><td>Largest position difference between results, when it first exceeds 5, 20 and 50 cm, and the longest stretch above.</td><td>A yaw-only check misses a lagging stretch</td><td><code>python tools/trajectory_seams.py &lt;reference&gt; &lt;result&gt;</code></td><td><a href="../tools/README.md">tools/README.md</a></td></tr>
+<tr><td>map_quality.py</td><td>Global geometry, consistency of revisits and sharpness of the map.</td><td>A change that may alter the map</td><td><code>python tools/map_quality.py [--floors] [label=]result ...</code></td><td><a href="../tools/README.md">tools/README.md</a></td></tr>
+<tr><td>wall_precision.py, plan_fit.py, plan_section.py, holdout_sharpness.py</td><td>Wall precision at a height; fit to a building plan and plan overlays; sharpness on held-out data.</td><td>Judging a map against a plan or by itself</td><td><code>python tools/wall_precision.py &lt;result&gt;</code></td><td><a href="../tools/README.md">tools/README.md</a></td></tr>
+<tr><td>perturbation_sweep.py</td><td>The noise floor of a settings file: how far results move under small, meaningless changes.</td><td>Before one variant is called better than another</td><td><code>python tools/perturbation_sweep.py --help</code></td><td><a href="../tools/README.md">tools/README.md</a></td></tr>
+<tr><td>Other checks</td><td><code>spot_check.py</code>, <code>stairwell_check.py</code>, <code>facade_check.py</code>, <code>floor_shape_check.py</code>, <code>evaluate_floors.py</code>, <code>convergence_summary.py</code>, <code>imu_time_offset.py</code>, <code>fix_imu_timestamps.py</code>, <code>restamp_imu.py</code>, <code>function_sizes.py</code>, <code>rename_identifiers.py</code>.</td><td>Specific questions</td><td>see the README</td><td><a href="../tools/README.md">tools/README.md</a></td></tr>
+</table></div>
+
+<h3 id="ins-truth-tests">Truth tests</h3>
+<p>Unit tests that generate a synthetic recording (a loop, a corridor with a blind middle, rest-walk-rest) with sensor errors drawn as the weights assume, and compare the code's answer with the known truth. The cheap ones run in <code>ctest</code>; the measured sets are skipped there.</p>
+<div class="table-wrap"><table><tr><th>Instrument</th><th>Measures</th><th>Use it when</th><th>Run</th><th>Details</th></tr>
+<tr><td>Truth tests</td><td>Whether the estimator's claimed uncertainty fits the truth, one quantity per test.</td><td>A claim of the estimator needs evidence</td><td><code>ctest --test-dir out/build/x64-Release</code>; measured sets: <code>lidar_odometry_tests -tc="window covariance*" --no-skip -s</code></td><td><a href="honesty-readings.html#the-truth-tests">Honesty readings and truth tests</a></td></tr>
+<tr><td>Consistency and loop-closure cases</td><td><code>run_consistency</code> and <code>run_loop_closure</code> on the synthetic loop (loop closure is skipped by default, about 20 s a case).</td><td>Debugging the back end</td><td><code>lidar_odometry_tests -tc="loop closure*" --no-skip -s</code></td><td><a href="regions/verification.md">Region: verification</a></td></tr>
+<tr><td>honesty_report.py</td><td><b>Planned, does not exist yet:</b> one report that gathers the honesty readings.</td><td>-</td><td>not yet</td><td><a href="honesty-readings.html">Honesty readings</a></td></tr>
+</table></div>
+
+<h3 id="ins-verify-skills">The verify skills</h3>
+<p>Four skills in <code>.claude/skills/</code> wrap the tools above for the Claude Code assistant.</p>
+<div class="table-wrap"><table><tr><th>Instrument</th><th>Measures</th><th>Use it when</th><th>Run</th><th>Details</th></tr>
+<tr><td>verify-run</td><td>Judges a run from its log alone against fixed limits.</td><td>After every run that will be compared or reported</td><td>ask the assistant, or <code>run_health.py</code></td><td><code>.claude/skills/verify-run/SKILL.md</code></td></tr>
+<tr><td>verify-map</td><td>Judges the cloud: wall thickness, agreement between visits, position difference, the three map-quality measures; prepares before and after files for a look.</td><td>A change may alter the map; two results compared</td><td>ask the assistant</td><td><code>.claude/skills/verify-map/SKILL.md</code></td></tr>
+<tr><td>verify-robustness</td><td>Measures the noise floor of a settings file by small perturbations.</td><td>Before a setting is called better or worse</td><td>ask the assistant</td><td><code>.claude/skills/verify-robustness/SKILL.md</code></td></tr>
+<tr><td>verify-recording</td><td>Checks a recording folder: rate, gaps, gyro offsets and bias, noise, rest at the start, timing.</td><td>A new recording arrives</td><td>ask the assistant</td><td><code>.claude/skills/verify-recording/SKILL.md</code></td></tr>
+</table></div>
+
+<h3 id="ins-which-to-use">Which one when</h3>
+<ul>
+<li><b>A new recording:</b> imu_health.py (verify-recording).</li>
+<li><b>A run finished:</b> the verdict summary and run_health.py (verify-run); then the map with map_quality.py (verify-map).</li>
+<li><b>A window or stretch looks wrong:</b> capture it, replay it with the per-term table on, read it with window_terms.py.</li>
+<li><b>A refactor:</b> step_checks.py on each commit, end_runs.py once; everything must read IDENTICAL.</li>
+<li><b>A change that alters numbers:</b> compare_baseline.py with a tolerance, trajectory_seams.py, map_quality.py, and the perturbation sweep for the spread.</li>
+<li><b>A claim about uncertainty:</b> the normalised moves and the truth tests.</li>
+</ul>
 <h2 id="internals">Internals: how the code is laid out and how the work is organised</h2>
 <p>This part is for whoever changes dMapper: where each part of the processing lives in the code, how a change is checked,
 and how the work is divided between the main session and the agents that own the regions of the code. The pages in depth
@@ -1091,6 +1177,7 @@ the next window, and add this window's points to the map.</li>
 <code>noise budget</code> line at the start and a <code>window verdict summary</code> at the end of the odometry.</p>
 
 <h3 id="i-checks">How a change is checked</h3>
+<p>What each check measures and how to run it: <a href="#ins-verification-kit">The verification kit</a> and <a href="#instruments">Measuring instruments and tools</a>.</p>
 <ul>
 <li><b>A refactor must not change a bit.</b> <code>python tools/step_checks.py</code> builds, runs the unit tests, compares
 two guards (a characterization of single iterations and a loop guard, both as exact hexadecimal numbers), replays
@@ -1105,6 +1192,7 @@ waits until enough memory and a slot are free (a replay needs about three times 
 look at the clouds), and against the spread of small perturbations when one variant is claimed to beat another. Once
 accepted, the new manifests (and baseline folders) go into a commit of their own. See
 <a href="#fixes">Fixes and map sharpness</a>.</li>
+<li><b>A claim of the estimator</b> (does a window's uncertainty fit what it does?) is checked by the normalised moves of a run and by truth tests: unit tests that generate a synthetic recording (a loop, a corridor with a blind middle, rest-walk-rest) with the sensor errors drawn as the weights assume, and compare the code's answer with the known truth. Each test isolates one quantity; the measured sets are skipped in <code>ctest</code> and run with <code>--no-skip</code>. See <a href="honesty-readings.html#the-truth-tests">Honesty readings and truth tests</a>.</li>
 </ul>
 
 <h3 id="i-regions">Regions and agents</h3>
