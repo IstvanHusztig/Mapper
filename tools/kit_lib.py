@@ -9,6 +9,7 @@ import ctypes
 import ctypes.wintypes as wt
 import json
 import os
+import re
 import subprocess
 import time
 import tomllib
@@ -67,7 +68,25 @@ def build(paths, preset="x64-Release", targets=("dMapper", "lidar_odometry_tests
                                             f'cmake --build --preset {preset} --target {" ".join(targets)} >> "{log}" 2>&1',
                                             "exit /b %ERRORLEVEL%"])
     errors = [l for l in log.read_text(errors="replace").splitlines() if "error C" in l or "error LNK" in l or "CMake Error" in l]
+    wrong = build_type_mismatch(preset)
+    if wrong:
+        errors.insert(0, wrong)
     return code == 0 and not errors, errors[:5]
+
+
+def build_type_mismatch(preset):
+    """None if the preset's build tree is configured with the preset's own build type, else what is wrong. A Release
+    folder once held a Debug configuration (2026-11-20, region-a): every replay ran about 30 times slower, unnoticed."""
+    want = {"x64-Release": "Release", "x64-Debug": "Debug"}.get(preset)
+    cache = ROOT / "out/build" / preset / "CMakeCache.txt"
+    if want is None or not cache.exists():
+        return None
+    m = re.search(r"^CMAKE_BUILD_TYPE:[A-Z]+=(.*)$", cache.read_text(errors="replace"), flags=re.M)
+    got = m.group(1).strip() if m else ""
+    if got == want:
+        return None
+    return (f"{cache} has CMAKE_BUILD_TYPE={got or '(unset)'}, the preset {preset} needs {want}: "
+            f"delete that CMakeCache.txt (or run cmake --preset {preset} -DCMAKE_BUILD_TYPE={want}), then build again")
 
 
 def debug_ctest(paths):

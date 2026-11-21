@@ -181,6 +181,19 @@ class VerificationTests(unittest.TestCase):
         self.assertEqual(results['dec_plus']['stability']['final']['max_diff_m'],0)
         self.assertEqual(len(list(out.glob('*/scan_lio_merged.laz'))),7)
 
+    def test_build_refuses_a_release_folder_configured_as_debug(self):
+        import kit_lib
+        with tempfile.TemporaryDirectory() as d:
+            tree = Path(d) / 'out/build/x64-Release'
+            tree.mkdir(parents=True)
+            cache = tree / 'CMakeCache.txt'
+            with patch.object(kit_lib, 'ROOT', Path(d)):
+                self.assertIsNone(kit_lib.build_type_mismatch('x64-Release'))  # not configured yet: cmake will do it
+                cache.write_text('CMAKE_BUILD_TYPE:STRING=Debug\n')
+                self.assertIn('needs Release', kit_lib.build_type_mismatch('x64-Release'))
+                cache.write_text('CMAKE_BUILD_TYPE:STRING=Release\n')
+                self.assertIsNone(kit_lib.build_type_mismatch('x64-Release'))
+
 
 if __name__=='__main__':
     unittest.main()
