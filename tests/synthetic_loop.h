@@ -9,10 +9,15 @@
 //
 // R2's outbound landmark cells are designated by key before the run, from the generator's hits (the truth), not from any
 // result: the indoor grid's cells of the latent points that the outbound leg hit in room A, minus every cell the return leg
-// hit before the nominated exit window (what it could have mapped itself). The return matches are computed by the test from
-// the exit window's points, placed with its solved poses, against the map as it was before the exit window (taken through
-// the window capture port, which records the loop's state before a range: run_odometry.cpp), because the loop's
-// translation matrix and match counts carry no identity of the visit.
+// hit before the nominated exit window (what it could have mapped itself).
+//
+// No precondition depends on the run's own outcome (user's decision of 2026-11-21: an outcome-based precondition biases the
+// paired comparison, because which runs count as valid would then depend on how each setting solved them). Every R2
+// precondition is computed from the truth: the exit window's points placed with its TRUE poses against the map built from
+// the truth-placed points of the windows before it (observe), and each blind window's truth-placed points against the
+// truth-built map. The run's own readings of the same quantities (its result table, its map before the exit taken through
+// the window capture port, its solved poses) are kept as RESULTS (R2Design::*_run, LoopWindow::blind_run), never
+// preconditions.
 
 #include "synthetic_routes.h"
 #include "window_term_sink.h"
@@ -20,6 +25,7 @@
 #include <Eigen/Dense>
 
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <set>
 #include <string>
@@ -141,7 +147,9 @@ struct LoopTolerances
     double blind_min_up_share = 0.1;
     double blind_min_side_normals = 200.0;   // sum over matched cells of (n . u_side)^2: matched side normals
     double blind_min_floor_normals = 200.0;  // sum over matched cells of (n . u_up)^2: matched floor and ceiling normals
-    double blind_max_travel_angle_deg = 10.0; // the table's travel direction against the true corridor axis
+    double blind_max_travel_angle_deg = 10.0; // the true travel direction (first to last node) against the true corridor axis
+    // (all R2 blind preconditions above from the truth-placed points against the truth-built map since the user's decision of
+    // 2026-11-21, BlindReadings; until then from the run's result table; tolerances unchanged)
     // R2, the nominated exit (the return leg's first window with this many generator hits on room A's x-facing faces)
     int exit_min_end_wall_hits = 100;
     // full support along the axis: u^T I u / lambda_max(I) at least the configuration's degenerate_projection_ratio_full
@@ -152,6 +160,9 @@ struct LoopTolerances
     // which runs count as valid would then depend on how each setting solved them. The run's own reading stays as a RESULT
     // (R2Design::exit_share_run), never a precondition.
     int min_landmark_cells = 20;         // designated outbound landmark cells
+    // the two below from the truth since the user's decision of 2026-11-21 (until then the run's map before the exit and the
+    // exit's solved poses; tolerances unchanged): the map is built from the truth-placed points of the windows before the
+    // exit (observe), the exit window's points are placed with its true poses
     double min_landmark_cells_mapped = 0.5; // share of them that the map before the exit window holds
     int exit_min_landmark_matches = 50;  // accepted matches of the exit window's points to the landmark cells
 };
@@ -197,6 +208,10 @@ struct WindowObservability
     double smallest_ratio = 0.0; // lambda_min / lambda_max: what the projection itself acts on
     Eigen::Vector3d travel = Eigen::Vector3d::Zero(); // u, estimator world frame
     Eigen::Matrix3d information = Eigen::Matrix3d::Zero();
+    // the sum over the window's nodes of the raw NDT translation blocks (top-left 3x3 of each node block, before the
+    // projection), indoor plus outdoor grid (when hierarchical), truth-placed against the truth-built maps: W in the
+    // projected shift weight w(u) = u^T P W P u (ProjectedShiftWeight)
+    Eigen::Matrix3d ndt_shift_blocks = Eigen::Matrix3d::Zero();
 };
 
 // The projected NDT rows' (ndt_indoor + ndt_outdoor) weight of a shift along ANY world direction u, from a result table.
@@ -234,13 +249,34 @@ struct BlindAxisWeight
     double condition = 0.0;
 };
 
+// R2's blindness readings of a blind window, from one placement of its points against one map. The preconditions' values
+// (LoopWindow::blind_truth) come from the truth-placed points against the truth-built map (observe): I is
+// WindowObservability::information, the projected weight is u^T P W P u with W = WindowObservability::ndt_shift_blocks and P
+// the production ndt_degeneracy_projection of that I (directly from the blocks: exact, any number of removed directions),
+// the travel direction the truth's first-to-last displacement. The run's own readings (LoopWindow::blind_run, RESULTS) come
+// from its result table at the solved poses, the projected weight through projected_shift_weight (NaN where that is not
+// measured). User's decision of 2026-11-21. NaN = not measured.
+struct BlindReadings
+{
+    bool measured = false;
+    double along_share = std::numeric_limits<double>::quiet_NaN();      // u^T I u / lambda_max(I), u the true corridor axis
+    double side_share = std::numeric_limits<double>::quiet_NaN();       // the same, sideways (horizontal, across the axis)
+    double up_share = std::numeric_limits<double>::quiet_NaN();         // the same, vertical
+    double side_normals = std::numeric_limits<double>::quiet_NaN();     // u_side^T I u_side
+    double floor_normals = std::numeric_limits<double>::quiet_NaN();    // u_up^T I u_up
+    double projected_ratio = std::numeric_limits<double>::quiet_NaN();  // projected NDT shift weight along the axis / across it
+    double travel_angle_deg = std::numeric_limits<double>::quiet_NaN(); // travel direction against the axis
+};
+
 struct LoopWindow
 {
     int window = 0; // 1-based, as WindowTermRecord::window
     WindowClass cls = WindowClass::seen;
     WindowObservability observability;
     WindowTruth truth;
-    BlindAxisWeight blind_axis; // R2 blind windows only
+    BlindReadings blind_truth;  // R2 blind windows only: the preconditions' values (truth-placed)
+    BlindReadings blind_run;    // R2 blind windows only: the run's own readings (RESULTS, never preconditions)
+    BlindAxisWeight blind_axis; // R2 blind windows only: the run's table, details of blind_run.projected_ratio (RESULT)
     std::optional<WindowTermRecord> record;
     std::vector<Eigen::Affine3d> poses; // as solved
     WindowErrors errors;
@@ -269,11 +305,20 @@ struct R2Design
     bool exit_in_run = false; // the run reaches it (a shortened run does not evaluate the return leg and the exit)
     int exit_end_wall_hits = 0;
     std::set<std::uint64_t> landmark_cells; // the indoor grid's keys in the estimator's world frame
+    // the PRECONDITIONS' values, truth-placed (user's decision of 2026-11-21): the truth-built map before the exit window
+    // (observe), the exit window's points placed with its true poses; exit_truth_counted false where not computed
+    bool exit_truth_counted = false;
     int landmark_cells_mapped = 0;          // of them, in the map before the exit window
     int exit_landmark_matches = 0;          // the exit window's accepted matches to them
     int exit_points = 0;                    // the exit window's points in range
     int exit_points_in_landmark_keys = 0;   // of them, placed into a landmark cell's key (whether the map accepts it or not)
     int exit_points_accepted = 0;           // of them, accepted by any cell of the map before the exit
+    // the run's own readings of the same (RESULTS, never preconditions): the loop's map before the exit window (window
+    // capture) and the exit's solved poses; empty where the capture or the points were not available
+    std::optional<int> landmark_cells_mapped_run;
+    std::optional<int> exit_landmark_matches_run;
+    std::optional<int> exit_points_in_landmark_keys_run;
+    std::optional<int> exit_points_accepted_run;
     // the exit window's along-axis information share u^T I u / lambda_max(I), u the true corridor axis:
     // - exit_share_truth: the PRECONDITION's value, from the truth-placed points against the truth-built map (a property of
     //   the route; user's decision of 2026-11-21); empty where the exit is not evaluated
@@ -334,6 +379,10 @@ LoopRun observe_loop(const InertialRecording &recording, const OdometryConfig &c
 // R2's exit along-axis share, both readings side by side: "exit along-axis share: truth-placed (precondition) <v>, run's
 // own (RESULT) <v>" (NOT MEASURED where a reading is empty)
 std::string exit_share_text(const R2Design &d);
+// R2's preconditions beside the run's own readings (RESULTS): the exit (along-axis share, landmark cells mapped, accepted
+// landmark matches) and the worst blind window (most failed truth-placed blind preconditions, then the largest truth-placed
+// projected ratio): "<quantity> truth <v> / run <v>" (NOT MEASURED where a reading is empty)
+std::string r2_readings_text(const LoopRun &run, const LoopTolerances &tol = {});
 
 // The declared deterministic fields (D8 "declared deterministic fields repeat"): per window the iterations, the last
 // update, the damping, the solved poses, start and end velocity, gyro bias, acceleration offset, the stop reason, the

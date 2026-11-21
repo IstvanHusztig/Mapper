@@ -337,52 +337,115 @@ namespace
         return std::acos(std::min(1.0, std::abs(a.normalized().dot(b.normalized())))) * 180.0 / 3.14159265358979323846;
     }
 
-    void blind_preconditions(LoopRun &run, LoopWindow &w, const Eigen::Affine3d &align, const OdometryConfig &config, const LoopTolerances &tol)
+    // the blindness readings from one translation information I and one travel direction (BlindReadings); the projected ratio
+    // is set by the caller
+    BlindReadings blind_readings(const Eigen::Matrix3d &I, const Eigen::Vector3d &travel, const Eigen::Affine3d &align)
     {
-        const std::string at = " (blind)";
-        if (!w.record || !w.record->result.failure.empty())
-        {
-            add(run, "blind window has its result table" + at, w.window, 0.0, 1.0, true);
-            return;
-        }
-        const WindowTermTable &t = w.record->result;
-        const Eigen::Matrix3d &I = t.translation_information;
+        BlindReadings r;
+        r.measured = true;
         const double lmax = Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d>(I, Eigen::EigenvaluesOnly).eigenvalues().maxCoeff();
         const Eigen::Vector3d axis = align.linear() * Eigen::Vector3d::UnitX();
         const Eigen::Vector3d side = align.linear() * Eigen::Vector3d::UnitY();
         const Eigen::Vector3d up = align.linear() * Eigen::Vector3d::UnitZ();
-        const double share = [&](const Eigen::Vector3d &u) { return lmax > 0.0 ? u.dot(I * u) / lmax : nan; }(axis);
-        add(run, "along-axis information share" + at, w.window, share, tol.blind_max_along_share, false);
-        // Blindness along the TRUE corridor axis (align * x, the route's blind corridor direction) and horizontally across it.
-        // Redefined after seeing the values, by the user's decision of 2026-11-21: it was taken along the table's own travel
-        // direction, which the walking gait wobbles by 0.1 to 2.4 deg against the corridor, so the old value was about
-        // sin^2 of that angle times the sideways weight. Tolerance unchanged (1e-3). ProjectedShiftWeight says how the
-        // weight along any direction follows from the table exactly.
-        const double along_w = projected_ndt_weight(t, 0), side_w = projected_ndt_weight(t, 1);
-        BlindAxisWeight &b = w.blind_axis;
-        b.travel_ratio = side_w > 0.0 ? along_w / side_w : nan;
-        b.travel_angle_deg = angle_deg(t.directions[0], axis);
-        b.axis_vertical = axis.z();
+        const auto share = [&](const Eigen::Vector3d &u) { return lmax > 0.0 ? u.dot(I * u) / lmax : nan; };
+        r.along_share = share(axis);
+        r.side_share = share(side);
+        r.up_share = share(up);
+        r.side_normals = side.dot(I * side);
+        r.floor_normals = up.dot(I * up);
+        r.travel_angle_deg = travel.norm() > 0.0 ? std::acos(std::min(1.0, std::abs(travel.normalized().dot(axis)))) * 180.0 / 3.14159265358979323846 : nan;
+        return r;
+    }
+
+    void blind_preconditions(LoopRun &run, LoopWindow &w, const Eigen::Affine3d &align, const OdometryConfig &config, const LoopTolerances &tol)
+    {
+        // Every value below from the window's TRUTH-placed points against the truth-built map (observe), by the user's decision
+        // of 2026-11-21: an outcome-based precondition biases the paired comparison (which seeds are valid would depend on how
+        // each setting solved them). Until then they were read from the run's own result table (solved poses, the run's map);
+        // those readings stay as RESULTS (LoopWindow::blind_run). Tolerances unchanged.
+        const std::string at = ", truth-placed (blind)";
+        const Eigen::Vector3d axis = align.linear() * Eigen::Vector3d::UnitX();
         const Eigen::Vector3d across = Eigen::Vector3d::UnitZ().cross(axis).normalized();
-        const ProjectedShiftWeight q = projected_shift_weight(t, config.degenerate_projection_ratio, config.degenerate_projection_ratio_full);
-        double true_ratio = nan;
+        const WindowObservability &o = w.observability;
+        BlindReadings &t = w.blind_truth;
+        t = blind_readings(o.information, o.travel, align);
+        // the projected NDT shift weight along the TRUE corridor axis / horizontally across it, directly from the truth-placed
+        // blocks: w(u) = u^T P W P u, W the summed raw translation blocks (indoor and outdoor, as the table's ndt_indoor and
+        // ndt_outdoor rows), P the production ndt_degeneracy_projection of the truth-placed I (the projection off: P = I, as
+        // the table's no_projection). Redefined along the true axis by the user's decision of 2026-11-21 (BlindAxisWeight).
+        {
+            Eigen::Matrix3d P = Eigen::Matrix3d::Identity();
+            if (config.degenerate_projection_ratio_full > 0.0)
+            {
+                NdtNoise noise;
+                noise.projection_ratio = config.degenerate_projection_ratio;
+                noise.projection_ratio_full = config.degenerate_projection_ratio_full;
+                P = ndt_degeneracy_projection(o.information, noise).M.topLeftCorner<3, 3>();
+            }
+            const Eigen::Matrix3d Q = P * o.ndt_shift_blocks * P;
+            const double across_w = across.dot(Q * across);
+            t.projected_ratio = across_w > 0.0 ? axis.dot(Q * axis) / across_w : nan;
+        }
+        add(run, "along-axis information share" + at, w.window, t.along_share, tol.blind_max_along_share, false);
+        add(run, "projected NDT weight along / sideways, true corridor axis (redefined 2026-11-21, user's decision)" + at, w.window, t.projected_ratio,
+            tol.blind_max_projected_along, false);
+        add(run, "sideways information share" + at, w.window, t.side_share, tol.blind_min_side_share, true);
+        add(run, "vertical information share" + at, w.window, t.up_share, tol.blind_min_up_share, true);
+        add(run, "matched side normals" + at, w.window, t.side_normals, tol.blind_min_side_normals, true);
+        add(run, "matched floor normals" + at, w.window, t.floor_normals, tol.blind_min_floor_normals, true);
+        add(run, "travel direction against the corridor axis [deg]" + at, w.window, t.travel_angle_deg, tol.blind_max_travel_angle_deg, false);
+
+        // the run's own readings of the same quantities: RESULTS, never preconditions (NOT MEASURED without the window's table)
+        if (!w.record || !w.record->result.failure.empty())
+            return;
+        const WindowTermTable &table = w.record->result;
+        w.blind_run = blind_readings(table.translation_information, table.directions[0], align);
+        BlindAxisWeight &b = w.blind_axis;
+        const double along_w = projected_ndt_weight(table, 0), side_w = projected_ndt_weight(table, 1);
+        b.travel_ratio = side_w > 0.0 ? along_w / side_w : nan;
+        b.travel_angle_deg = angle_deg(table.directions[0], axis);
+        b.axis_vertical = axis.z();
+        const ProjectedShiftWeight q = projected_shift_weight(table, config.degenerate_projection_ratio, config.degenerate_projection_ratio_full);
         if (q.measured)
         {
             const double across_w = q.along(across);
-            true_ratio = across_w > 0.0 ? q.along(axis) / across_w : nan;
             b.measured = true;
-            b.true_axis_ratio = true_ratio;
+            b.true_axis_ratio = across_w > 0.0 ? q.along(axis) / across_w : nan;
             b.removed_angle_deg = angle_deg(q.removed, axis);
             b.condition = q.condition;
+            w.blind_run.projected_ratio = b.true_axis_ratio;
         }
-        add(run, "projected NDT weight along / sideways, true corridor axis (redefined 2026-11-21, user's decision)" + at, w.window, true_ratio,
-            tol.blind_max_projected_along, false);
-        add(run, "sideways information share" + at, w.window, lmax > 0.0 ? side.dot(I * side) / lmax : nan, tol.blind_min_side_share, true);
-        add(run, "vertical information share" + at, w.window, lmax > 0.0 ? up.dot(I * up) / lmax : nan, tol.blind_min_up_share, true);
-        add(run, "matched side normals" + at, w.window, side.dot(I * side), tol.blind_min_side_normals, true);
-        add(run, "matched floor normals" + at, w.window, up.dot(I * up), tol.blind_min_floor_normals, true);
-        const double c = std::min(1.0, std::abs(t.directions[0].dot(axis)));
-        add(run, "travel direction against the corridor axis [deg]" + at, w.window, std::acos(c) * 180.0 / 3.14159265358979323846, tol.blind_max_travel_angle_deg, false);
+    }
+
+    // the exit window's points against a map before it, placed with the given poses: landmark cells mapped, points in range,
+    // in landmark keys, accepted anywhere, accepted landmark matches
+    struct ExitCounts
+    {
+        int mapped = 0, points = 0, in_keys = 0, accepted = 0, matches = 0;
+    };
+    ExitCounts count_exit(const NDTBucketMapType &map, const std::vector<Point3Di> &points, const std::vector<Eigen::Affine3d> &poses,
+                          const std::set<std::uint64_t> &landmarks, const OdometryConfig &c)
+    {
+        ExitCounts n;
+        for (const std::uint64_t key : landmarks)
+            n.mapped += map.count(key) ? 1 : 0;
+        for (const Point3Di &p : points)
+        {
+            if (p.index_pose < 0 || p.index_pose >= static_cast<int>(poses.size()))
+                continue;
+            const double r = p.point.norm();
+            if (r < c.min_distance_lidar || r > c.max_distance_lidar)
+                continue;
+            n.points++;
+            std::uint64_t key = 0;
+            const bool accepted = accepted_cell(map, p, poses[p.index_pose], c, key) != nullptr;
+            key = ndt_cell_index(poses[p.index_pose] * p.point, cell_size(c));
+            const bool landmark = landmarks.count(key) > 0;
+            n.in_keys += landmark;
+            n.accepted += accepted;
+            n.matches += accepted && landmark;
+        }
+        return n;
     }
 
     void exit_preconditions(LoopRun &run, Cut &cut, const KeepMapBefore &map_before, const Eigen::Affine3d &align, const LoopTolerances &tol)
@@ -407,41 +470,27 @@ namespace
         // the run's own reading of the same quantity: a RESULT, not a precondition (NOT MEASURED without the exit's table)
         if (run.windows[e - 1].record && run.windows[e - 1].record->result.failure.empty())
             d.exit_share_run = along_share(run.windows[e - 1].record->result.translation_information);
-        // NOTE (not changed, reported 2026-11-21): the two landmark preconditions below read the run's own state: the map
-        // before the exit is the loop's (built at the solved poses), and the exit's points are placed with its solved poses.
-        if (!map_before.kept || map_before.first != std::size_t(e - 1))
+        // The two landmark preconditions from the truth, by the user's decision of 2026-11-21 (until then the loop's map before
+        // the exit and the exit's solved poses; tolerances unchanged): the map built from the truth-placed points of the
+        // windows before the exit, the exit window's points placed with its true poses (observe counted them).
+        if (!d.exit_truth_counted)
         {
-            add(run, "map before the exit window kept", e, 0.0, 1.0, true);
+            add(run, "exit's truth-placed landmark readings computed", e, 0.0, 1.0, true);
             return;
         }
-        for (const std::uint64_t key : d.landmark_cells)
-            d.landmark_cells_mapped += map_before.buckets_indoor.count(key) ? 1 : 0;
-        add(run, "landmark cells in the map before the exit (share)", e,
+        add(run, "landmark cells in the map before the exit (share), truth-placed" + at, e,
             d.landmark_cells.empty() ? nan : double(d.landmark_cells_mapped) / double(d.landmark_cells.size()), tol.min_landmark_cells_mapped, true);
+        add(run, "accepted matches to the landmark cells, truth-placed" + at, e, double(d.exit_landmark_matches), double(tol.exit_min_landmark_matches), true);
+        // the run's own readings of the same: RESULTS, never preconditions (NOT MEASURED without the capture or the points)
         std::vector<Point3Di> points;
-        const LoopWindow &w = run.windows[e - 1];
-        if (!cut.store.load(PointSet::WindowIntermediate, std::size_t(e - 1), points))
+        if (map_before.kept && map_before.first == std::size_t(e - 1) && cut.store.load(PointSet::WindowIntermediate, std::size_t(e - 1), points))
         {
-            add(run, "exit window's points readable", e, 0.0, 1.0, true);
-            return;
+            const ExitCounts n = count_exit(map_before.buckets_indoor, points, run.windows[e - 1].poses, d.landmark_cells, cut.config);
+            d.landmark_cells_mapped_run = n.mapped;
+            d.exit_landmark_matches_run = n.matches;
+            d.exit_points_in_landmark_keys_run = n.in_keys;
+            d.exit_points_accepted_run = n.accepted;
         }
-        for (const Point3Di &p : points)
-        {
-            if (p.index_pose < 0 || p.index_pose >= static_cast<int>(w.poses.size()))
-                continue;
-            const double r = p.point.norm();
-            if (r < cut.config.min_distance_lidar || r > cut.config.max_distance_lidar)
-                continue;
-            d.exit_points++;
-            std::uint64_t key = 0;
-            const bool accepted = accepted_cell(map_before.buckets_indoor, p, w.poses[p.index_pose], cut.config, key) != nullptr;
-            key = ndt_cell_index(w.poses[p.index_pose] * p.point, cell_size(cut.config));
-            const bool landmark = d.landmark_cells.count(key) > 0;
-            d.exit_points_in_landmark_keys += landmark;
-            d.exit_points_accepted += accepted;
-            d.exit_landmark_matches += accepted && landmark;
-        }
-        add(run, "accepted matches to the landmark cells" + at, e, double(d.exit_landmark_matches), double(tol.exit_min_landmark_matches), true);
     }
 
     // the world as declared: each IMU error value against the declared world's
@@ -473,13 +522,19 @@ namespace
     {
         run.projection_ratio = config.degenerate_projection_ratio;
         run.projection_ratio_full = config.degenerate_projection_ratio_full;
-        NDTBucketMapType map;
+        // the indoor map, and the outdoor map where the loop keeps one (seed_map, add_window_to_map): the outdoor grid only
+        // feeds the truth-placed NDT shift blocks (R2's projected weight), never the observability information
+        const bool outdoor_used = config.ablation_study_use_hierarchical_rgd;
+        NDTBucketMapType map, map_outdoor;
         std::vector<Point3Di> seed = cut.state.initial_points; // as seed_map places them (holdout_block_s 0 in the candidate)
         for (Point3Di &p : seed)
             p.point = cut.state.m_g * p.point;
         update_rgd(config.in_out_params_indoor, map, seed, cut.state.m_g.translation(), config.use_exact_ndt_bucket_statistics);
+        if (outdoor_used)
+            update_rgd(config.in_out_params_outdoor, map_outdoor, seed, cut.state.m_g.translation(), config.use_exact_ndt_bucket_statistics);
         const ScanToMapOptions s2m = get_scan_to_map_options(config);
         const NdtNoise noise = ndt_noise(s2m);
+        R2Design &d = run.r2;
         for (int w = 0; w < static_cast<int>(run.windows.size()); w++)
         {
             LoopWindow &lw = run.windows[w];
@@ -491,6 +546,23 @@ namespace
             truth_window.poses = lw.truth.poses;
             const NdtSums sums = sum_ndt_grid_blocks(indoor_ndt_grid(map, s2m, noise), truth_window, points, s2m, false);
             o.information = window_translation_information(sums);
+            for (const auto &block : sums.blocks)
+                o.ndt_shift_blocks += block.topLeftCorner<3, 3>();
+            if (outdoor_used)
+                for (const auto &block : sum_ndt_grid_blocks(outdoor_ndt_grid(map_outdoor, s2m, noise), truth_window, points, s2m, false).blocks)
+                    o.ndt_shift_blocks += block.topLeftCorner<3, 3>();
+            // R2's exit: its points with the TRUE poses against the truth-built map before it (the preconditions' values; user's
+            // decision of 2026-11-21)
+            if (d.present && d.exit_in_run && w == d.exit_window - 1)
+            {
+                const ExitCounts n = count_exit(map, points, lw.truth.poses, d.landmark_cells, config);
+                d.landmark_cells_mapped = n.mapped;
+                d.exit_points = n.points;
+                d.exit_points_in_landmark_keys = n.in_keys;
+                d.exit_points_accepted = n.accepted;
+                d.exit_landmark_matches = n.matches;
+                d.exit_truth_counted = true;
+            }
             const Eigen::Vector3d ev = Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d>(o.information, Eigen::EigenvaluesOnly).eigenvalues();
             const double lmax = ev.maxCoeff();
             o.smallest_ratio = lmax > 0.0 ? ev.minCoeff() / lmax : 0.0;
@@ -508,6 +580,8 @@ namespace
             for (Point3Di &p : placed)
                 p.point = lw.truth.poses[p.index_pose] * p.point;
             update_rgd(config.in_out_params_indoor, map, placed, lw.truth.poses[0].translation(), config.use_exact_ndt_bucket_statistics);
+            if (outdoor_used)
+                update_rgd(config.in_out_params_outdoor, map_outdoor, placed, lw.truth.poses[0].translation(), config.use_exact_ndt_bucket_statistics);
         }
     }
 
@@ -1083,6 +1157,62 @@ std::string exit_share_text(const R2Design &d)
         return s.str();
     };
     return "exit along-axis share: truth-placed (precondition) " + v(d.exit_share_truth) + ", run's own (RESULT) " + v(d.exit_share_run);
+}
+
+std::string r2_readings_text(const LoopRun &run, const LoopTolerances &tol)
+{
+    const R2Design &d = run.r2;
+    const auto v = [](double x)
+    {
+        if (!std::isfinite(x))
+            return std::string("NOT MEASURED");
+        std::ostringstream s;
+        s << std::setprecision(4) << x;
+        return s.str();
+    };
+    const auto o = [&](const std::optional<double> &x) { return x ? v(*x) : std::string("NOT MEASURED"); };
+    const double cells = double(d.landmark_cells.size());
+    std::ostringstream s;
+    s << "R2 exit w" << d.exit_window;
+    if (!d.exit_in_run)
+        s << " not in the run";
+    else
+        s << ": along share truth " << o(d.exit_share_truth) << " / run " << o(d.exit_share_run) << " (>= " << run.projection_ratio_full
+          << "); landmark cells mapped (share of " << d.landmark_cells.size() << ") truth "
+          << (d.exit_truth_counted && cells > 0 ? v(d.landmark_cells_mapped / cells) : "NOT MEASURED") << " / run "
+          << (d.landmark_cells_mapped_run && cells > 0 ? v(*d.landmark_cells_mapped_run / cells) : "NOT MEASURED") << " (>= " << tol.min_landmark_cells_mapped
+          << "); accepted landmark matches truth " << (d.exit_truth_counted ? std::to_string(d.exit_landmark_matches) : "NOT MEASURED") << " / run "
+          << (d.exit_landmark_matches_run ? std::to_string(*d.exit_landmark_matches_run) : "NOT MEASURED") << " (>= " << tol.exit_min_landmark_matches << ")";
+    // the worst blind window: most failed truth-placed blind preconditions, then the largest truth-placed projected ratio
+    const LoopWindow *worst = nullptr;
+    int worst_failed = -1, blind = 0;
+    for (const LoopWindow &w : run.windows)
+    {
+        if (w.cls != WindowClass::blind || !w.blind_truth.measured)
+            continue;
+        blind++;
+        int failed = 0;
+        for (const Precondition &p : run.preconditions)
+            failed += p.window == w.window && !p.holds && p.name.find("(blind)") != std::string::npos;
+        const double r = std::isfinite(w.blind_truth.projected_ratio) ? w.blind_truth.projected_ratio : 1e300;
+        const double wr = worst && std::isfinite(worst->blind_truth.projected_ratio) ? worst->blind_truth.projected_ratio : (worst ? 1e300 : -1.0);
+        if (failed > worst_failed || (failed == worst_failed && r > wr))
+        {
+            worst = &w;
+            worst_failed = failed;
+        }
+    }
+    if (!worst)
+        return s.str() + "; no blind window evaluated";
+    const BlindReadings &t = worst->blind_truth, &r = worst->blind_run;
+    s << "; worst blind window w" << worst->window << " of " << blind << " (" << worst_failed << " failed): along share truth " << v(t.along_share) << " / run "
+      << v(r.along_share) << " (<= " << tol.blind_max_along_share << "), projected along/across truth " << v(t.projected_ratio) << " / run " << v(r.projected_ratio)
+      << " (<= " << tol.blind_max_projected_along << "), side share " << v(t.side_share) << " / " << v(r.side_share) << " (>= " << tol.blind_min_side_share
+      << "), up share " << v(t.up_share) << " / " << v(r.up_share) << " (>= " << tol.blind_min_up_share << "), side normals " << v(t.side_normals) << " / "
+      << v(r.side_normals) << " (>= " << tol.blind_min_side_normals << "), floor normals " << v(t.floor_normals) << " / " << v(r.floor_normals) << " (>= "
+      << tol.blind_min_floor_normals << "), travel angle " << v(t.travel_angle_deg) << " / " << v(r.travel_angle_deg) << " deg (<= " << tol.blind_max_travel_angle_deg
+      << ")";
+    return s.str();
 }
 
 bool same_deterministic_fields(const LoopRun &a, const LoopRun &b, std::string &difference)
