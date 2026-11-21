@@ -342,7 +342,12 @@ namespace
 
 void cut_into_windows(Cut &cut, const InertialRecording &recording, int chunks)
 {
-    cut.config = front_end_config(recording.sensor);
+    cut_into_windows(cut, recording, front_end_config(recording.sensor), chunks);
+}
+
+void cut_into_windows(Cut &cut, const InertialRecording &recording, const OdometryConfig &config, int chunks)
+{
+    cut.config = config;
     SyntheticSource source(recording.raw(), chunks);
     NullPreview preview;
     SerialExecutor serial;
