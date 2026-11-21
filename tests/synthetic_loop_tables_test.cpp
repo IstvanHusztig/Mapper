@@ -49,9 +49,13 @@
 //   LOOP_TABLES_ROUTES      routes, e.g. "3" or "1,3" (default "1,2,3")
 //   LOOP_TABLES_SETTINGS    settings, e.g. "off,on" (default "off,on,shipped")
 // Outputs (rewritten after every seed, so an interrupted run leaves what it measured):
-//   windows.csv   one row per window of every run (empty cell = NOT MEASURED; the *_why columns say why)
+//   windows.csv   one row per window of every run (empty cell = NOT MEASURED; the *_why columns say why); for R2's blind
+//                 windows the blind preconditions' truth-placed values (blind_*_truth_precondition) beside the run's own
+//                 readings of the same quantities (blind_*_run_RESULT, results)
 //   runs.csv      one row per run: validity, failed preconditions, errors, windows, time; for R2 the exit's along-axis
-//                 share truth-placed (the precondition's value) and the run's own reading (exit_share_run_RESULT, a result)
+//                 share, landmark cells mapped (share) and accepted landmark matches, each truth-placed (the precondition's
+//                 value, *_truth_precondition) and the run's own reading (*_run_RESULT, a result)
+// No precondition depends on the run's own outcome (user's decision of 2026-11-21; synthetic_loop.h).
 //   tables.md     the class tables, the exclusions per setting and the paired comparison off vs on
 //   settings.txt  the seeds, routes, settings and the shipped set's overrides
 // Time measured 2026-11-21 (Release): see the task's hand-back; about 0.55 s per window (R1 79, R2 124, R3 35 windows).
@@ -201,7 +205,11 @@ namespace
         // R2 only: the exit's along-axis share, truth-placed (the precondition's value) and the run's own reading (a RESULT,
         // never a precondition; user's decision of 2026-11-21)
         std::optional<double> exit_share_truth, exit_share_run;
+        // R2 only: the exit's landmark readings, truth-placed (the preconditions' values) and the run's own (RESULTS)
+        std::optional<double> landmark_mapped_share_truth, landmark_mapped_share_run, landmark_matches_truth, landmark_matches_run;
     };
+
+    std::string finite_cell(double v) { return std::isfinite(v) ? cell(v) : std::string(); }
 
     std::string velocity_nees_why(const LoopWindow &w)
     {
@@ -228,7 +236,21 @@ namespace
              "heading_bend_deg,roll_bend_deg,pitch_bend_deg,speed_mps,max_bias_deg_s,velocity_chi2,information_ratio,"
              "stop,iterations,remaining_step_m,lidar_share_along,"
              "move_velocity,move_velocity_why,move_joint,move_joint_why,move_bias,move_bias_why,"
-             "rotation_rate_rad_s,start_acceleration_mps2,bent,fast,bias_high\n";
+             "rotation_rate_rad_s,start_acceleration_mps2,bent,fast,bias_high";
+        // R2's blind windows: the preconditions' truth-placed values and the run's own readings (RESULTS); empty elsewhere
+        for (const char *q : {"along_share", "projected_along_across", "side_share", "up_share", "side_normals", "floor_normals", "travel_angle_deg"})
+            o << ",blind_" << q << "_truth_precondition,blind_" << q << "_run_RESULT";
+        o << "\n";
+    }
+
+    void write_blind_cells(std::ostream &csv, const LoopWindow &w)
+    {
+        const bool blind = w.cls == WindowClass::blind;
+        const BlindReadings &t = w.blind_truth, &r = w.blind_run;
+        const double BlindReadings::*q[] = {&BlindReadings::along_share, &BlindReadings::projected_ratio, &BlindReadings::side_share, &BlindReadings::up_share,
+                                            &BlindReadings::side_normals, &BlindReadings::floor_normals, &BlindReadings::travel_angle_deg};
+        for (const auto m : q)
+            csv << "," << (blind && t.measured ? finite_cell(t.*m) : std::string()) << "," << (blind && r.measured ? finite_cell(r.*m) : std::string());
     }
 
     // one run's windows: the CSV rows and the table rows
@@ -283,11 +305,13 @@ namespace
                 csv << cell(w.record->rotation_rate_rad_s) << ","
                     << (w.record->start_acceleration_mps2 ? cell(w.record->start_acceleration_mps2->norm()) : std::string()) << ","
                     << optional_check(w.record->verdict.bent) << "," << optional_check(w.record->verdict.fast) << ","
-                    << optional_check(w.record->verdict.bias_high) << "\n";
+                    << optional_check(w.record->verdict.bias_high);
             }
             else
                 csv << std::string(11, ',') << ",no record,,no record,,no record,,," << check_name(Check::not_measured) << ","
-                    << check_name(Check::not_measured) << "," << check_name(Check::not_measured) << "\n";
+                    << check_name(Check::not_measured) << "," << check_name(Check::not_measured);
+            write_blind_cells(csv, w);
+            csv << "\n";
         }
     }
 
@@ -317,6 +341,20 @@ namespace
         r.unavailable_total = run.unavailable.total();
         r.exit_share_truth = run.r2.exit_share_truth;
         r.exit_share_run = run.r2.exit_share_run;
+        const R2Design &d = run.r2;
+        if (d.present && d.exit_in_run && !d.landmark_cells.empty())
+        {
+            const double cells = double(d.landmark_cells.size());
+            if (d.exit_truth_counted)
+            {
+                r.landmark_mapped_share_truth = d.landmark_cells_mapped / cells;
+                r.landmark_matches_truth = double(d.exit_landmark_matches);
+            }
+            if (d.landmark_cells_mapped_run)
+                r.landmark_mapped_share_run = *d.landmark_cells_mapped_run / cells;
+            if (d.exit_landmark_matches_run)
+                r.landmark_matches_run = double(*d.exit_landmark_matches_run);
+        }
         return r;
     }
 
@@ -325,7 +363,8 @@ namespace
         std::ofstream o(file);
         o << "route,setting,seed,valid,completed,failed_count,failed_preconditions,windows_cut,windows_run,end_error_m,largest_error_m,"
              "largest_vel_nees_3dof,loop_seconds,run_seconds,generate_seconds,time_limit_windows,map_rebuilds,moving_judged_at_rest,unavailable_total,"
-             "exit_share_truth_precondition,exit_share_run_RESULT\n";
+             "exit_share_truth_precondition,exit_share_run_RESULT,landmark_mapped_share_truth_precondition,landmark_mapped_share_run_RESULT,"
+             "landmark_matches_truth_precondition,landmark_matches_run_RESULT\n";
         for (const RunRow &r : runs)
         {
             std::string failed;
@@ -336,7 +375,8 @@ namespace
               << ",\"" << failed << "\"," << r.windows_cut << "," << r.windows_run << "," << cell(r.end_error_m) << "," << cell(r.largest_error_m) << ","
               << cell(r.largest_velocity_nees) << "," << cell(r.loop_seconds) << "," << cell(r.run_seconds) << "," << cell(r.generate_seconds) << ","
               << r.time_limit_windows << "," << r.map_rebuilds << "," << r.moving_judged_at_rest << "," << r.unavailable_total << ","
-              << cell(r.exit_share_truth) << "," << cell(r.exit_share_run) << "\n";
+              << cell(r.exit_share_truth) << "," << cell(r.exit_share_run) << "," << cell(r.landmark_mapped_share_truth) << "," << cell(r.landmark_mapped_share_run)
+              << "," << cell(r.landmark_matches_truth) << "," << cell(r.landmark_matches_run) << "\n";
         }
     }
 
@@ -435,11 +475,13 @@ namespace
           << "candidate set with both layer switches off / on (one recording per route and seed, paired); `shipped` = settings/livox-vertical.toml "
           << "(its own world, another recording with the same seed; a separate measurement, never paired with off or on).\n\n"
           << kShippedR2Why << "\n\n"
-          << "R2's exit precondition \"along-axis information share (full support), truth-placed\" is computed from the exit window's "
-          << "truth-placed points against the truth-built map (a property of the route; user's decision of 2026-11-21). The run's own "
-          << "reading of the same share is a RESULT (runs.csv `exit_share_run_RESULT`), not a precondition. The two landmark "
-          << "preconditions at the exit (landmark cells in the map before the exit, accepted matches) still read the run's own map "
-          << "and solved poses.\n\n"
+          << "No precondition depends on the run's own outcome (user's decision of 2026-11-21: an outcome-based precondition biases "
+          << "the paired comparison). R2's preconditions are computed from the truth: at the exit (along-axis share, landmark cells in "
+          << "the map before the exit, accepted landmark matches) from the exit window's points placed with its true poses against the "
+          << "map built from the truth-placed points of the windows before it; in each blind window (along-axis, sideways and vertical "
+          << "shares, matched side and floor normals, projected NDT weight along / across the true axis, travel direction) from its "
+          << "truth-placed points against the truth-built map. The run's own readings of the same quantities are RESULTS "
+          << "(runs.csv `*_run_RESULT`, windows.csv `blind_*_run_RESULT`), never preconditions.\n\n"
           << "**Independence:** the windows of one walk are NOT independent draws (D5, D6). The number of independent draws behind a row is its "
           << "`seeds` column. The 1 % interval is the chi-square interval of the mean of `NEES n` normalised errors per degree of freedom IF they "
           << "were independent 3-dof draws (truth_statistics::chi2_interval(3n, 0.01) / 3n); it is a reference scale, not a test. "
@@ -737,7 +779,7 @@ TEST_CASE("synthetic loop: class tables" * doctest::skip())
                 MESSAGE("seed ", seed, " R", route, " ", std::string(setting_name(setting)), ": ", std::string(run.valid() ? "valid" : "NOT valid"), ", ", run.windows_run,
                         " windows, loop ", num(run.seconds, 1), " s, run ", num(row.run_seconds, 1), " s, generate ", num(generate_s, 1), " s, end error ",
                         num(row.end_error_m, 3), " m, failed ", row.failed.size(), ", time limit ", run.time_limit_windows,
-                        route == 2 ? "; " + exit_share_text(run.r2) : std::string());
+                        route == 2 ? "; " + r2_readings_text(run) : std::string());
                 CHECK(run.completed);
                 runs.push_back(std::move(row));
             }
