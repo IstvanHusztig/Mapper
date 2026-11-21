@@ -1,7 +1,10 @@
 #include "synthetic_loop.h"
 
 #include "ndt_map.h"
+#include "ndt_term.h"
+#include "optimizer_options.h"
 #include "run_odometry.h"
+#include "window_noise_model.h"
 #include "toml_config_repository.h"
 #include "truth_statistics.h"
 #include "window_capture.h"
@@ -349,6 +352,73 @@ namespace
             cut.config.degenerate_projection_ratio_full, true);
     }
 
+    // the world as declared: each IMU error value against the declared world's
+    void world_preconditions(LoopRun &run, const InertialRecording &rec, const OdometryConfig &config, LoopWorld world, const LoopTolerances &tol)
+    {
+        const ImuNoise &a = rec.imu.options.noise;
+        // the noise-free control against ImuNoise::none(); every other world against the settings' claims (the mismatch case
+        // fails here by design)
+        const ImuNoise b = world == LoopWorld::noise_free ? ImuNoise::none() : imu_noise_from_config(config);
+        const std::string what = world == LoopWorld::noise_free ? "world is noise-free: " : "world matches settings: ";
+        const auto rel = [](double x, double y)
+        {
+            const double m = std::max(std::abs(x), std::abs(y));
+            return m == 0.0 ? 0.0 : std::abs(x - y) / m;
+        };
+        const char *axes = "xyz";
+        for (int i = 0; i < 3; i++)
+            add(run, what + "gyro white noise " + axes[i] + " [deg/sqrt(s)]", 0, rel(a.gyro_arw_deg_sqrt_s[i], b.gyro_arw_deg_sqrt_s[i]), tol.world_noise_relative, false);
+        add(run, what + "gyro bias walk [deg/s/sqrt(s)]", 0, rel(a.gyro_bias_rw_deg_s_sqrt_s, b.gyro_bias_rw_deg_s_sqrt_s), tol.world_noise_relative, false);
+        add(run, what + "acceleration offset walk [m/s2/sqrt(s)]", 0, rel(a.accel_offset_rw_mps2_sqrt_s, b.accel_offset_rw_mps2_sqrt_s), tol.world_noise_relative, false);
+        add(run, what + "accelerometer density (effective) [m/s2/sqrt(Hz)]", 0, rel(a.accel_density_mps2_sqrt_hz, b.accel_density_mps2_sqrt_hz), tol.world_noise_relative,
+            false);
+        add(run, what + "initial gyro bias [deg/s]", 0, (a.gyro_bias0_deg_s - b.gyro_bias0_deg_s).cwiseAbs().maxCoeff(), 0.0, false);
+        add(run, what + "initial acceleration offset [m/s2]", 0, (a.accel_offset0_mps2 - b.accel_offset0_mps2).cwiseAbs().maxCoeff(), 0.0, false);
+    }
+
+    // the observability classes (ObservabilityClass): the run's own seed map, then each window at its true poses
+    void observe(LoopRun &run, Cut &cut, const OdometryConfig &config, const LoopTolerances &tol)
+    {
+        run.projection_ratio = config.degenerate_projection_ratio;
+        run.projection_ratio_full = config.degenerate_projection_ratio_full;
+        NDTBucketMapType map;
+        std::vector<Point3Di> seed = cut.state.initial_points; // as seed_map places them (holdout_block_s 0 in the candidate)
+        for (Point3Di &p : seed)
+            p.point = cut.state.m_g * p.point;
+        update_rgd(config.in_out_params_indoor, map, seed, cut.state.m_g.translation(), config.use_exact_ndt_bucket_statistics);
+        const ScanToMapOptions s2m = get_scan_to_map_options(config);
+        const NdtNoise noise = ndt_noise(s2m);
+        for (int w = 0; w < static_cast<int>(run.windows.size()); w++)
+        {
+            LoopWindow &lw = run.windows[w];
+            WindowObservability &o = lw.observability;
+            std::vector<Point3Di> points;
+            if (!cut.store.load(PointSet::WindowIntermediate, std::size_t(w), points))
+                throw std::runtime_error("observe: window points not readable");
+            Window truth_window = cut.windows[w];
+            truth_window.poses = lw.truth.poses;
+            const NdtSums sums = sum_ndt_grid_blocks(indoor_ndt_grid(map, s2m, noise), truth_window, points, s2m, false);
+            o.information = window_translation_information(sums);
+            const Eigen::Vector3d ev = Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d>(o.information, Eigen::EigenvaluesOnly).eigenvalues();
+            const double lmax = ev.maxCoeff();
+            o.smallest_ratio = lmax > 0.0 ? ev.minCoeff() / lmax : 0.0;
+            const Eigen::Vector3d d = lw.truth.poses.back().translation() - lw.truth.poses.front().translation();
+            if (d.norm() >= tol.observability_min_travel_m)
+            {
+                o.travel = d.normalized();
+                o.along_share = lmax > 0.0 ? o.travel.dot(o.information * o.travel) / lmax : 0.0;
+                o.cls = o.along_share < config.degenerate_projection_ratio        ? ObservabilityClass::removed
+                        : o.along_share < config.degenerate_projection_ratio_full ? ObservabilityClass::partly_kept
+                                                                                  : ObservabilityClass::kept_whole;
+            }
+            // the map grows by the window at its true poses, as the loop's map does at the solved ones
+            std::vector<Point3Di> placed = points;
+            for (Point3Di &p : placed)
+                p.point = lw.truth.poses[p.index_pose] * p.point;
+            update_rgd(config.in_out_params_indoor, map, placed, lw.truth.poses[0].translation(), config.use_exact_ndt_bucket_statistics);
+        }
+    }
+
     void count_unavailable(LoopRun &run)
     {
         Unavailable &u = run.unavailable;
@@ -476,6 +546,97 @@ OdometryConfig loop_candidate_config(const SensorProfile &sensor, bool switches)
     return c;
 }
 
+ImuNoise imu_noise_from_config(const OdometryConfig &c)
+{
+    ImuNoise n;
+    n.gyro_arw_deg_sqrt_s = Eigen::Vector3d(c.gyro_arw_x_deg_sqrt_s, c.gyro_arw_y_deg_sqrt_s, c.gyro_arw_z_deg_sqrt_s);
+    n.gyro_bias_rw_deg_s_sqrt_s = c.gyro_bias_rw_deg_s_sqrt_s;
+    n.accel_offset_rw_mps2_sqrt_s = c.imu_acceleration_offset_rw_mps2_sqrt_s;
+    n.accel_density_mps2_sqrt_hz = std::sqrt(c.imu_accel_noise_density_mps2_sqrt_hz * c.imu_accel_noise_density_mps2_sqrt_hz +
+                                             c.imu_accel_floor_sigma_mps2 * c.imu_accel_floor_sigma_mps2 * kAccelDensitySpan_s);
+    n.gyro_bias0_deg_s.setZero();
+    n.accel_offset0_mps2.setZero();
+    return n;
+}
+
+const char *loop_world_name(LoopWorld w)
+{
+    switch (w)
+    {
+    case LoopWorld::matched: return "matched";
+    case LoopWorld::noise_free: return "noise-free";
+    case LoopWorld::default_mismatch: return "default world (MISMATCH)";
+    }
+    return "?";
+}
+
+ImuNoise loop_world_noise(LoopWorld w, const OdometryConfig &config)
+{
+    switch (w)
+    {
+    case LoopWorld::matched: return imu_noise_from_config(config);
+    case LoopWorld::noise_free: return ImuNoise::none();
+    case LoopWorld::default_mismatch: return ImuNoise{};
+    }
+    throw std::logic_error("loop_world_noise");
+}
+
+InertialRecording generate_loop_recording(const Route &route, const SensorProfile &sensor, const OdometryConfig &config, LoopWorld world)
+{
+    return generate_recording(route, sensor, loop_world_noise(world, config));
+}
+
+const char *observability_class_name(ObservabilityClass c)
+{
+    switch (c)
+    {
+    case ObservabilityClass::removed: return "removed";
+    case ObservabilityClass::partly_kept: return "partly kept";
+    case ObservabilityClass::kept_whole: return "kept whole";
+    case ObservabilityClass::not_moving: return "not moving";
+    }
+    return "?";
+}
+
+double LoopRun::end_error_m() const
+{
+    return windows.empty() ? nan : windows.back().errors.last_position.norm();
+}
+
+double LoopRun::largest_error_m() const
+{
+    double m = windows.empty() ? nan : 0.0;
+    for (const LoopWindow &w : windows)
+        m = std::max(m, w.errors.last_position.norm());
+    return m;
+}
+
+std::optional<double> LoopRun::largest_velocity_end_normalised() const
+{
+    std::optional<double> m;
+    for (const LoopWindow &w : windows)
+        if (w.errors.velocity_end_normalised)
+            m = std::max(m.value_or(0.0), *w.errors.velocity_end_normalised);
+    return m;
+}
+
+std::string LoopRun::observability_text() const
+{
+    std::ostringstream s;
+    s << "observability (truth-placed, thresholds " << projection_ratio << " / " << projection_ratio_full << "):";
+    for (int o = 0; o < kObservabilityClasses; o++)
+        s << " " << observability_class_name(ObservabilityClass(o)) << " " << observability_windows[o];
+    s << "; per truth class (removed/partly/whole/not moving):";
+    for (int c = 0; c < kWindowClasses; c++)
+        if (class_windows[c] > 0)
+        {
+            s << " " << window_class_name(WindowClass(c)) << " ";
+            for (int o = 0; o < kObservabilityClasses; o++)
+                s << (o ? "/" : "") << class_observability[c][o];
+        }
+    return s.str();
+}
+
 const char *window_class_name(WindowClass c)
 {
     switch (c)
@@ -549,7 +710,8 @@ std::vector<std::string> LoopRun::failed() const
 std::string LoopRun::summary() const
 {
     std::ostringstream s;
-    s << route << (switches ? " switches on" : " switches off") << ": " << windows_run << " of " << windows_cut << " windows, " << std::fixed
+    s << route << " [" << loop_world_name(world) << " world, ahrs_gain " << ahrs_gain << (estimated ? "" : ", observed only, no run") << "]"
+      << (switches ? " switches on" : " switches off") << ": " << windows_run << " of " << windows_cut << " windows, " << std::fixed
       << std::setprecision(1) << seconds << " s, time limit " << time_limit_windows << ", map rebuilds " << map_rebuilds << ", moving windows judged at rest "
       << moving_judged_at_rest << " (first " << first_moving_judged_at_rest << "); classes";
     for (int c = 0; c < kWindowClasses; c++)
@@ -557,21 +719,28 @@ std::string LoopRun::summary() const
     int holds = 0;
     for (const Precondition &p : preconditions)
         holds += p.holds;
+    s << "; " << observability_text();
     s << "; preconditions " << holds << " of " << preconditions.size() << " hold, " << not_evaluated.size() << " groups not evaluated; unavailable "
       << unavailable.total();
     return s.str();
 }
 
-LoopRun run_loop(const InertialRecording &rec, const OdometryConfig &config_in, int max_windows, const LoopTolerances &tol)
+namespace
+{
+LoopRun loop_run(const InertialRecording &rec, const OdometryConfig &config_in, LoopWorld world, int max_windows, const LoopTolerances &tol, bool estimate)
 {
     LoopRun run;
     run.route = rec.route.name;
+    run.world = world;
+    run.ahrs_gain = config_in.ahrs_gain;
+    run.estimated = estimate;
     run.switches = config_in.imu_edges_follow_state || config_in.imu_carry_joint_covariance;
     Cut cut;
     cut_into_windows(cut, rec, config_in);
     run.windows_cut = static_cast<int>(cut.windows.size());
     add(run, "front end cut the recording", 0, cut.ok ? 1.0 : 0.0, 1.0, true);
     add(run, "sensor jitter sigma [m] (K9)", 0, rec.sensor.jitter_sigma_m, tol.min_jitter_sigma_m, true);
+    world_preconditions(run, rec, config_in, world, tol);
     if (!cut.ok)
         return run;
     // the cut is the generator's: the predicted count, and each window's nodes at the predicted timestamps
@@ -629,6 +798,22 @@ LoopRun run_loop(const InertialRecording &rec, const OdometryConfig &config_in, 
     run.windows.resize(n);
     cut.windows.resize(n);
     run.r2.exit_in_run = run.r2.exit_window > 0 && run.r2.exit_window <= n;
+    observe(run, cut, config_in, tol); // before the run, which changes the windows and the state
+    const auto count_classes = [&](LoopWindow &lw)
+    {
+        lw.cls = classify(lw, rec, exits, tol);
+        run.class_windows[int(lw.cls)]++;
+        run.class_seconds[int(lw.cls)] += lw.truth.duration_s;
+        run.observability_windows[int(lw.observability.cls)]++;
+        run.class_observability[int(lw.cls)][int(lw.observability.cls)]++;
+    };
+    if (!estimate)
+    {
+        for (LoopWindow &lw : run.windows)
+            count_classes(lw);
+        run.not_evaluated.push_back("everything the run gives (observed only)");
+        return run;
+    }
 
     OdometryConfig config = config_in;
     KeepMapBefore map_before;
@@ -678,15 +863,13 @@ LoopRun run_loop(const InertialRecording &rec, const OdometryConfig &config_in, 
         }
         if (lw.record && lw.record->verdict.evidence.stop == LmStop::time_limit)
             run.time_limit_windows++;
-        lw.cls = classify(lw, rec, exits, tol);
+        count_classes(lw);
         if (lw.cls != WindowClass::rest && lw.record && lw.record->at_rest)
         {
             run.moving_judged_at_rest++;
             if (run.first_moving_judged_at_rest == 0)
                 run.first_moving_judged_at_rest = lw.window;
         }
-        run.class_windows[int(lw.cls)]++;
-        run.class_seconds[int(lw.cls)] += lw.truth.duration_s;
     }
 
     // every run
@@ -722,6 +905,17 @@ LoopRun run_loop(const InertialRecording &rec, const OdometryConfig &config_in, 
     }
     count_unavailable(run);
     return run;
+}
+}
+
+LoopRun run_loop(const InertialRecording &rec, const OdometryConfig &config, LoopWorld world, int max_windows, const LoopTolerances &tol)
+{
+    return loop_run(rec, config, world, max_windows, tol, true);
+}
+
+LoopRun observe_loop(const InertialRecording &rec, const OdometryConfig &config, LoopWorld world, int max_windows, const LoopTolerances &tol)
+{
+    return loop_run(rec, config, world, max_windows, tol, false);
 }
 
 bool same_deterministic_fields(const LoopRun &a, const LoopRun &b, std::string &difference)

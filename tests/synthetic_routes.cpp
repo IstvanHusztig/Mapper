@@ -55,9 +55,44 @@ namespace
     std::int64_t node_ns(const SensorProfile &s, std::int64_t t0_ns, int k) { return t0_ns + static_cast<std::int64_t>(k) * s.dt_ns; }
 }
 
-Route route_r1()
+Scene loop_scene_along_structure()
 {
-    Route r{"R1", loop_scene(), Motion(Eigen::Vector3d(-6.0, -4.0, 1.5) + grid_offset, 0.0), 0, 0.0, 0.0};
+    // loop_scene() is shifted by grid_offset; the frames are placed in the unshifted coordinates and shifted the same way.
+    // The corridors (unshifted): south y in [-6, -2] and north y in [2, 6] for x in [-6, 6]; west x in [-10, -6] and east
+    // x in [6, 10] for y in [-2, 2]. Frames at irregular places, away from the corners and from R1/R3's start at x = -6.
+    Scene s;
+    const double h = 3.0, jamb = 0.6, thick = 0.2, lintel = 2.4;
+    for (const double x : {-4.4, -1.9, 0.6, 3.3, 5.2}) // south corridor
+    {
+        add_box(s, {x, -6.0, 0.0}, {x + thick, -6.0 + jamb, h});
+        add_box(s, {x, -2.0 - jamb, 0.0}, {x + thick, -2.0, h});
+        add_box(s, {x, -6.0 + jamb, lintel}, {x + thick, -2.0 - jamb, h});
+    }
+    for (const double x : {-5.0, -2.3, 0.9, 3.6}) // north corridor
+    {
+        add_box(s, {x, 2.0, 0.0}, {x + thick, 2.0 + jamb, h});
+        add_box(s, {x, 6.0 - jamb, 0.0}, {x + thick, 6.0, h});
+        add_box(s, {x, 2.0 + jamb, lintel}, {x + thick, 6.0 - jamb, h});
+    }
+    for (const double y : {-1.1, 1.0}) // east and west corridors (frames normal to y)
+    {
+        for (const double x0 : {6.0, -10.0})
+        {
+            const double yy = x0 > 0 ? y : -y - thick;
+            add_box(s, {x0, yy, 0.0}, {x0 + jamb, yy + thick, h});
+            add_box(s, {x0 + 4.0 - jamb, yy, 0.0}, {x0 + 4.0, yy + thick, h});
+            add_box(s, {x0 + jamb, yy, lintel}, {x0 + 4.0 - jamb, yy + thick, h});
+        }
+    }
+    Scene out = loop_scene();
+    for (const Face &f : shifted(s, grid_offset).faces)
+        out.faces.push_back(f);
+    return out;
+}
+
+Route route_r1(bool along_structure)
+{
+    Route r{"R1", along_structure ? loop_scene_along_structure() : loop_scene(), Motion(Eigen::Vector3d(-6.0, -4.0, 1.5) + grid_offset, 0.0), 0, 0.0, 0.0};
     const double v = 2.0, rate = 1.0, ramp = 0.5;
     const double turn_s = 0.5 * pi / rate + ramp;
     // a quarter turn's displacement in the heading's frame, found on a copy (the gait does not move the path's line)
@@ -138,9 +173,9 @@ Route route_r2()
     return r;
 }
 
-Route route_r3()
+Route route_r3(bool along_structure)
 {
-    Route r{"R3", loop_scene(), Motion(Eigen::Vector3d(-6.0, -4.0, 1.5) + grid_offset, 0.0), 0, 0.0, 0.0};
+    Route r{"R3", along_structure ? loop_scene_along_structure() : loop_scene(), Motion(Eigen::Vector3d(-6.0, -4.0, 1.5) + grid_offset, 0.0), 0, 0.0, 0.0};
     const double v = 1.2;
     r.motion.rest(4.0).change_speed(v, 2.0, 0.5, true).cruise(6.0, true).change_speed(-v, 2.0, 0.5, true).rest(2.0);
     return r;

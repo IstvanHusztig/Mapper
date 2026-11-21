@@ -34,6 +34,36 @@ namespace synthetic
 // invalidates the run). `switches` sets imu_edges_follow_state and imu_carry_joint_covariance.
 OdometryConfig loop_candidate_config(const SensorProfile &sensor, bool switches = false);
 
+// ---- one sensor model (task 6.1a (1)) ----
+
+// the accelerometer span at which the generator's white density gives the term's shipped weight (design D4: a term's
+// variance is (density^2 / tau + floor^2) tau^2; white samples of density D = sqrt(density^2 + floor^2 tau0) match it at
+// tau0 only, as ImuNoise documents)
+constexpr double kAccelDensitySpan_s = 0.011;
+
+// The world's IMU errors as the run's settings claim them: gyro white noise gyro_arw_{x,y,z}_deg_sqrt_s, gyro bias walk
+// gyro_bias_rw_deg_s_sqrt_s, acceleration offset walk imu_acceleration_offset_rw_mps2_sqrt_s, accelerometer density the
+// generator's effective one sqrt(imu_accel_noise_density^2 + imu_accel_floor_sigma^2 kAccelDensitySpan_s); initial bias
+// and offset zero.
+ImuNoise imu_noise_from_config(const OdometryConfig &config);
+
+// The world a loop recording is drawn from, declared with the run (its values are a precondition of the run):
+//  - matched: imu_noise_from_config of the run's settings (the main set);
+//  - noise_free: ImuNoise::none() (the control: the run's settings still claim their noise; the precondition is that the
+//    world is noise-free);
+//  - default_mismatch: ImuNoise{}'s defaults (the code's built-in values, the world of task 6.1's first runs), a labelled
+//    model-mismatch case: its precondition "world matches settings" fails by design, so the run is never valid.
+enum class LoopWorld
+{
+    matched,
+    noise_free,
+    default_mismatch
+};
+const char *loop_world_name(LoopWorld w);
+ImuNoise loop_world_noise(LoopWorld w, const OdometryConfig &config);
+// generate_recording with loop_world_noise(world, config)
+InertialRecording generate_loop_recording(const Route &route, const SensorProfile &sensor, const OdometryConfig &config, LoopWorld world);
+
 // a window's class, by the truth (D8 "per class of window"): the first that applies, in this order
 enum class WindowClass
 {
@@ -45,6 +75,21 @@ enum class WindowClass
 };
 constexpr int kWindowClasses = 5;
 const char *window_class_name(WindowClass c);
+
+// What the LiDAR can tell along travel (task 6.1a (2)), by the truth: the window's points placed with the TRUE poses,
+// matched to an indoor map built from truth (the run's own seed, then every earlier window's points at their true poses,
+// with the run's grid settings and update_rgd, as the loop builds its map), through the production term
+// (sum_ndt_grid_blocks, window_translation_information). The share u^T I u / lambda_max(I) along the true travel
+// direction u (first to last node) against the run's projection thresholds:
+enum class ObservabilityClass
+{
+    removed,     // share < degenerate_projection_ratio: the projection removes the LiDAR's information along travel
+    partly_kept, // share < degenerate_projection_ratio_full: scaled down
+    kept_whole,  // share >= degenerate_projection_ratio_full
+    not_moving   // the body travels less than LoopTolerances::observability_min_travel_m over the window: no direction
+};
+constexpr int kObservabilityClasses = 4;
+const char *observability_class_name(ObservabilityClass c);
 
 // The tolerances of the preconditions, declared before any run (D8: "predeclared"). They are the run's validity, never its
 // outcome. Ratios of the indoor grid's translation information I (sum n n^T of the matched cells' normals, world frame,
@@ -61,6 +106,12 @@ struct LoopTolerances
     // window 0's first node, aligned to before the run, moved by the run (largest entry of the pose matrix): the origin fix is
     // a finite weight (K10), so the node moves by a little; the alignment is valid while this is small
     double origin_moved = 1e-5;
+    // the world as declared (LoopWorld): each IMU error value against the declared one, |a - b| / max(|a|, |b|) (0 when
+    // both are zero); float tolerance
+    double world_noise_relative = 1e-6;
+    // observability: no travel direction below this distance from the window's first to its last node (a reading's
+    // definition, not a precondition)
+    double observability_min_travel_m = 0.1;
     // R2, each blind window
     int min_blind_windows_return = 5;   // the return leg's blind stretch must be at least this long (the time in the regime)
     double blind_max_along_share = 0.02;     // u^T I u / lambda_max(I) along the true corridor axis: near zero
@@ -112,10 +163,21 @@ struct WindowErrors
     std::optional<double> velocity_end_normalised;                 // e^T P^-1 e with the handed-on covariance (3 dof); D5
 };
 
+// the window's along-travel observability by the truth (ObservabilityClass)
+struct WindowObservability
+{
+    ObservabilityClass cls = ObservabilityClass::not_moving;
+    double along_share = 0.0;    // u^T I u / lambda_max(I) (0 without information)
+    double smallest_ratio = 0.0; // lambda_min / lambda_max: what the projection itself acts on
+    Eigen::Vector3d travel = Eigen::Vector3d::Zero(); // u, estimator world frame
+    Eigen::Matrix3d information = Eigen::Matrix3d::Zero();
+};
+
 struct LoopWindow
 {
     int window = 0; // 1-based, as WindowTermRecord::window
     WindowClass cls = WindowClass::seen;
+    WindowObservability observability;
     WindowTruth truth;
     std::optional<WindowTermRecord> record;
     std::vector<Eigen::Affine3d> poses; // as solved
@@ -155,6 +217,9 @@ struct R2Design
 struct LoopRun
 {
     std::string route;
+    LoopWorld world = LoopWorld::matched;
+    double ahrs_gain = 0.0;
+    bool estimated = true;     // false: observe_loop (truth, classes, observability and the R2 design only; no run)
     bool switches = false;
     bool completed = false;    // optimize_windows returned true
     int windows_cut = 0;       // what the front end made (before any truncation)
@@ -173,6 +238,15 @@ struct LoopRun
     Unavailable unavailable;
     int class_windows[kWindowClasses] = {0, 0, 0, 0, 0};
     double class_seconds[kWindowClasses] = {0, 0, 0, 0, 0};
+    int observability_windows[kObservabilityClasses] = {0, 0, 0, 0};
+    int class_observability[kWindowClasses][kObservabilityClasses] = {}; // truth class x observability class
+    double projection_ratio = 0.0, projection_ratio_full = 0.0;        // the run's thresholds
+
+    // readings over the run's windows (descriptive)
+    double end_error_m() const;      // the last window's last node, |solved - truth|
+    double largest_error_m() const;  // the same, largest over the windows' last nodes
+    std::optional<double> largest_velocity_end_normalised() const;
+    std::string observability_text() const; // the counts, and per truth class
 
     bool valid() const; // completed and every precondition holds
     std::vector<std::string> failed() const; // the preconditions that do not hold, as text
@@ -182,7 +256,11 @@ struct LoopRun
 // Cuts the recording with `config` (its front end fields must be front_end_config's), keeps the first `max_windows`
 // windows (0: all) and runs optimize_windows on them with a keeping term sink (and, for R2 with an exit in the range, a
 // capture sink over the exit window). Every precondition is computed with `tol`.
-LoopRun run_loop(const InertialRecording &recording, const OdometryConfig &config, int max_windows = 0, const LoopTolerances &tol = {});
+// `world` is the world the recording was declared to be drawn from (LoopWorld); its values are checked.
+LoopRun run_loop(const InertialRecording &recording, const OdometryConfig &config, LoopWorld world, int max_windows = 0, const LoopTolerances &tol = {});
+// the same up to the run: the cut, the truth, the classes, the observability, the R2 design and the run-independent
+// preconditions (seconds; for scene design). LoopRun::estimated is false.
+LoopRun observe_loop(const InertialRecording &recording, const OdometryConfig &config, LoopWorld world, int max_windows = 0, const LoopTolerances &tol = {});
 
 // The declared deterministic fields (D8 "declared deterministic fields repeat"): per window the iterations, the last
 // update, the damping, the solved poses, start and end velocity, gyro bias, acceleration offset, the stop reason, the
