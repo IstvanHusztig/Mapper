@@ -25,9 +25,9 @@ Explanations with measurements: one mechanism per page.
 
 Where the code is going, the current plan, and the review findings.
 
-- [Architecture](ARCHITECTURE.md): The target architecture (layers, ports, SOLID) and the migration roadmap (steps 0-11, done). *In the menu under Reference.*
-- [Code split and region agents](code-split-and-region-agents-plan.md): The current plan, stages 0-8, with its progress. *In the menu under Reference.*
-- [Code-review tracker](code-review-tracker.md): The findings of the code review of 2026-10-13 and their status. *In the menu under Reference.*
+- [Architecture](ARCHITECTURE.md): The target architecture (layers, ports, SOLID) and the migration roadmap (steps 0-11, done).
+- [Code split and region agents](code-split-and-region-agents-plan.md): The current plan, stages 0-8, with its progress.
+- [Code-review tracker](code-review-tracker.md): The findings of the code review of 2026-10-13 and their status.
 
 ## Plans and research
 

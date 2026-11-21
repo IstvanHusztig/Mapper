@@ -276,21 +276,25 @@ def sub_entries(rel, secs):
     return h2
 
 
-def build_contents(groups, parsed, in_map, unlisted, pages):
-    """The contents block of the guide: each group, its pages, and each page's main sections."""
+def contents_layout(groups, parsed, unlisted):
+    """The Contents' groups in order, each (name, intro, [(path, title, desc)]) with the pages that exist."""
     layout = [(g["name"], g["intro"], [(p, t, d) for p, t, d in g["items"]]) for g in groups]
     layout.append((EXTRA_GROUP, "Outside docs/: the project rules and the analysis tools.",
                    [(p, parsed[p][0], EXTRA_DESC[p]) for p in EXTRA_DESC]))
     if unlisted:
         layout.append((UNLISTED_GROUP, "Pages that docs/README.md does not list yet.",
                        [(p, parsed[p][0], "") for p in unlisted]))
+    return [(name, intro, [(p, t, d) for p, t, d in items if p in parsed or (DOCS / p).exists()])
+            for name, intro, items in layout]
+
+
+def build_contents(groups, parsed, in_map, unlisted, pages):
+    """The contents block of the guide: each group, its pages, and each page's main sections."""
     out = [BEGIN, CONTENTS_STYLE]
-    for name, intro, items in layout:
+    for name, intro, items in contents_layout(groups, parsed, unlisted):
         out.append(f'<h3 id="c-{slugify(name)}">{html.escape(name)}</h3>')
         out.append('<ol class="toc">')
         for path, title, desc in items:
-            if path not in parsed and not (DOCS / path).exists():
-                continue
             href = "#" if path == "index.html" else path
             out.append(f'<li><a href="{href}"><b>{html.escape(title)}</b></a>'
                        + (f' <span class="toc-desc">{md_to_html(desc)}</span>' if desc else ""))
@@ -315,15 +319,20 @@ CONTENTS_STYLE = """<style>
 </style>"""
 
 
-def build_menu(secs):
-    """The guide's side menu: each chapter (h2) a collapsible group with its sections (h3), the same headings the
-    Contents list for this guide."""
+def build_menu(layout, secs):
+    """The guide's side menu, for navigating this page only (every link is an anchor on index.html): "Contents" with
+    the Contents' group headings below it, then each chapter (h2) of the guide with its sections (h3) below it. A
+    chapter without sections is a plain item. It never links to another document."""
     out = [MENU_BEGIN]
+    groups = [name for name, _intro, items in layout if items]
+    out.append('<details class="menu-group"><summary><a href="#contents">Contents</a></summary>')
+    out += [f'<a class="indent" href="#c-{slugify(n)}">{html.escape(n)}</a>' for n in groups]
+    out.append("</details>")
     chapters = []
     for s in secs:
         if not s["anchor"]:
             continue
-        if s["level"] == 2:
+        if s["level"] == 2 and s["anchor"] != "contents":
             chapters.append((s, []))
         elif s["level"] == 3 and chapters:
             chapters[-1][1].append(s)
@@ -333,7 +342,7 @@ def build_menu(secs):
             out.append(f'<div class="menu-item">{link}</div>')
             continue
         out.append(f'<details class="menu-group"><summary>{link}</summary>')
-        out += [f'<a class="indent" href="#{s["anchor"]}">{html.escape(s["title"])}</a>' for s in subs]
+        out += [f'<a class="indent" href="#{x["anchor"]}">{html.escape(x["title"])}</a>' for x in subs]
         out.append("</details>")
     out.append(MENU_END)
     return "\n".join(out)
@@ -399,7 +408,7 @@ def main():
         print("agent notes not in docs/README.md:", ", ".join(unlisted_agents))
     for w in warns:
         print("link warning:", w)
-    files = {DOCS / "search-index.js": index_js, DOCS / "index.html": guide_with_contents(contents, build_menu(parsed["index.html"][1]))}
+    files = {DOCS / "search-index.js": index_js, DOCS / "index.html": guide_with_contents(contents, build_menu(contents_layout(read_map(), parsed, unlisted), parsed["index.html"][1]))}
     if "--check" in args:
         bad = list(errors)
         for f, text in files.items():
