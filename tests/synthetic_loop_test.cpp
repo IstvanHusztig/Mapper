@@ -3,6 +3,7 @@
 #include "synthetic_loop.h"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstdint>
 #include <optional>
@@ -146,6 +147,64 @@ namespace
                   << f(w.observability.smallest_ratio, 3) << " -> " << observability_class_name(w.observability.cls);
         return t.str();
     }
+
+    // R2's blind windows: the projected NDT shift weight along / sideways by the table's travel direction (the definition
+    // before 2026-11-21) and by the true corridor axis (since), the travel direction's and the removed direction's angle
+    std::string blind_axis_table(const LoopRun &run)
+    {
+        std::ostringstream t;
+        for (const LoopWindow &w : run.windows)
+            if (w.cls == WindowClass::blind)
+            {
+                const BlindAxisWeight &b = w.blind_axis;
+                t << "\n  BLIND w" << w.window << " travel " << std::setprecision(4) << b.travel_ratio << " true axis ";
+                if (b.measured)
+                    t << b.true_axis_ratio;
+                else
+                    t << "NOT MEASURED";
+                t << " | travel angle " << f(b.travel_angle_deg, 3) << " deg, removed direction " << f(b.removed_angle_deg, 3) << " deg, axis z "
+                  << std::setprecision(3) << b.axis_vertical << ", condition " << b.condition;
+            }
+        return t.str();
+    }
+}
+
+// The true-axis blindness reading (ProjectedShiftWeight): from three shift weights of a projected quadratic form with one
+// removed direction, the weight along any other direction, against the form itself. Pure algebra, no run.
+TEST_CASE("synthetic loop: projected shift weight along any direction from the table's three")
+{
+    // translation information with a weak direction v (ratio 0.001 < 0.02: removed), the others kept (ratios 0.5, 1)
+    const Eigen::Vector3d v = Eigen::Vector3d(1.0, 0.03, 0.002).normalized();
+    const Eigen::Vector3d e1 = Eigen::Vector3d::UnitZ().cross(v).normalized();
+    const Eigen::Vector3d e2 = v.cross(e1);
+    WindowTermTable t;
+    t.translation_information = 0.001 * v * v.transpose() + 0.5 * e1 * e1.transpose() + 1.0 * e2 * e2.transpose();
+    Eigen::Matrix3d W; // any positive definite raw translation block sum
+    W << 900.0, 40.0, -15.0, 40.0, 700.0, 25.0, -15.0, 25.0, 1200.0;
+    const Eigen::Matrix3d P = Eigen::Matrix3d::Identity() - v * v.transpose();
+    const Eigen::Matrix3d Wp = P * W * P;
+    // the table's directions: travel 1.3 deg off the x axis, sideways across it, vertical
+    const double a = 1.3 * 3.14159265358979323846 / 180.0;
+    t.directions = {Eigen::Vector3d(std::cos(a), std::sin(a), 0.0), Eigen::Vector3d(-std::sin(a), std::cos(a), 0.0), Eigen::Vector3d::UnitZ()};
+    WindowTermRow indoor, outdoor;
+    indoor.name = "ndt_indoor";
+    outdoor.name = "ndt_outdoor";
+    for (int d = 0; d < kTermDirections; d++)
+    {
+        const double wd = t.directions[d].dot(Wp * t.directions[d]);
+        indoor.weight[0][d] = 0.7 * wd; // the two grids' rows add up
+        outdoor.weight[0][d] = 0.3 * wd;
+    }
+    t.rows = {indoor, outdoor};
+    const ProjectedShiftWeight q = projected_shift_weight(t, 0.02, 0.04);
+    REQUIRE_MESSAGE(q.measured, q.why);
+    CHECK(std::abs(std::abs(q.removed.dot(v)) - 1.0) < 1e-12);
+    const std::array<Eigen::Vector3d, 4> probes{Eigen::Vector3d::UnitX(), Eigen::Vector3d::UnitY(), Eigen::Vector3d(0.3, -0.8, 0.5).normalized(), v};
+    for (const Eigen::Vector3d &u : probes)
+        CHECK(std::abs(q.along(u) - u.dot(Wp * u)) <= 1e-9 * Wp.norm());
+    // nothing removed (the weak ratio above the full threshold): not measured
+    t.translation_information = 0.1 * v * v.transpose() + 0.5 * e1 * e1.transpose() + 1.0 * e2 * e2.transpose();
+    CHECK_FALSE(projected_shift_weight(t, 0.02, 0.04).measured);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -276,6 +335,8 @@ namespace
             config.ahrs_gain = set.gain;
             const LoopRun run = run_loop(rec, config, set.world);
             MESSAGE(probe_line(run), "\n", run.summary(), preconditions_text(run, false), observability_table(run, 5));
+            if (run.r2.present)
+                MESSAGE("R2 blind windows (projected NDT shift weight along / sideways):", blind_axis_table(run));
             if (run.r2.present)
                 MESSAGE("R2: turn ", run.r2.turn_window, ", exit ", run.r2.exit_window, " (end-wall hits ", run.r2.exit_end_wall_hits, "), landmark cells ",
                         run.r2.landmark_cells.size(), ", in the map before the exit ", run.r2.landmark_cells_mapped, ", accepted landmark matches ",

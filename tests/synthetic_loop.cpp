@@ -23,6 +23,63 @@
 
 namespace synthetic
 {
+double ProjectedShiftWeight::along(const Eigen::Vector3d &u) const
+{
+    const Eigen::Vector2d q = E.transpose() * u;
+    return q.dot(S * q);
+}
+
+ProjectedShiftWeight projected_shift_weight(const WindowTermTable &t, double projection_ratio, double projection_ratio_full)
+{
+    ProjectedShiftWeight r;
+    if (!t.failure.empty())
+    {
+        r.why = "the table was not computed";
+        return r;
+    }
+    NdtNoise noise;
+    noise.projection_ratio = projection_ratio;
+    noise.projection_ratio_full = projection_ratio_full;
+    const Eigen::Matrix3d P = ndt_degeneracy_projection(t.translation_information, noise).M.topLeftCorner<3, 3>();
+    const Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eig(P);
+    const Eigen::Vector3d s = eig.eigenvalues(); // ascending: the projection's factors
+    if (!(std::abs(s(0)) < 1e-9))
+    {
+        r.why = "no direction removed by the projection (smallest factor " + std::to_string(s(0)) + ")";
+        return r;
+    }
+    if (!(s(1) > 1e-9))
+    {
+        r.why = "more than one direction removed by the projection";
+        return r;
+    }
+    r.removed = eig.eigenvectors().col(0);
+    r.E = eig.eigenvectors().rightCols<2>();
+    // the summed projected NDT rows' shift weight along each of the table's directions: w(d) = p^T S p, p = E^T d
+    Eigen::Matrix3d A;
+    Eigen::Vector3d w = Eigen::Vector3d::Zero();
+    for (int d = 0; d < kTermDirections; d++)
+    {
+        const Eigen::Vector2d p = r.E.transpose() * t.directions[d];
+        A.row(d) << p(0) * p(0), 2.0 * p(0) * p(1), p(1) * p(1);
+        for (const WindowTermRow &row : t.rows)
+            if (row.name == "ndt_indoor" || row.name == "ndt_outdoor")
+                w(d) += row.weight[0][d];
+    }
+    const Eigen::JacobiSVD<Eigen::Matrix3d> svd(A);
+    const Eigen::Vector3d sv = svd.singularValues();
+    r.condition = sv(2) > 0.0 ? sv(0) / sv(2) : std::numeric_limits<double>::infinity();
+    if (!(r.condition < 1e12))
+    {
+        r.why = "the table's three directions do not fix the weight (condition " + std::to_string(r.condition) + ")";
+        return r;
+    }
+    const Eigen::Vector3d x = A.colPivHouseholderQr().solve(w);
+    r.S << x(0), x(1), x(1), x(2);
+    r.measured = true;
+    return r;
+}
+
 namespace
 {
     constexpr double nan = std::numeric_limits<double>::quiet_NaN();
@@ -275,7 +332,12 @@ namespace
         return s;
     }
 
-    void blind_preconditions(LoopRun &run, const LoopWindow &w, const Eigen::Affine3d &align, const LoopTolerances &tol)
+    double angle_deg(const Eigen::Vector3d &a, const Eigen::Vector3d &b)
+    {
+        return std::acos(std::min(1.0, std::abs(a.normalized().dot(b.normalized())))) * 180.0 / 3.14159265358979323846;
+    }
+
+    void blind_preconditions(LoopRun &run, LoopWindow &w, const Eigen::Affine3d &align, const OdometryConfig &config, const LoopTolerances &tol)
     {
         const std::string at = " (blind)";
         if (!w.record || !w.record->result.failure.empty())
@@ -291,8 +353,30 @@ namespace
         const Eigen::Vector3d up = align.linear() * Eigen::Vector3d::UnitZ();
         const double share = [&](const Eigen::Vector3d &u) { return lmax > 0.0 ? u.dot(I * u) / lmax : nan; }(axis);
         add(run, "along-axis information share" + at, w.window, share, tol.blind_max_along_share, false);
+        // Blindness along the TRUE corridor axis (align * x, the route's blind corridor direction) and horizontally across it.
+        // Redefined after seeing the values, by the user's decision of 2026-11-21: it was taken along the table's own travel
+        // direction, which the walking gait wobbles by 0.1 to 2.4 deg against the corridor, so the old value was about
+        // sin^2 of that angle times the sideways weight. Tolerance unchanged (1e-3). ProjectedShiftWeight says how the
+        // weight along any direction follows from the table exactly.
         const double along_w = projected_ndt_weight(t, 0), side_w = projected_ndt_weight(t, 1);
-        add(run, "projected NDT weight along / sideways" + at, w.window, side_w > 0.0 ? along_w / side_w : nan, tol.blind_max_projected_along, false);
+        BlindAxisWeight &b = w.blind_axis;
+        b.travel_ratio = side_w > 0.0 ? along_w / side_w : nan;
+        b.travel_angle_deg = angle_deg(t.directions[0], axis);
+        b.axis_vertical = axis.z();
+        const Eigen::Vector3d across = Eigen::Vector3d::UnitZ().cross(axis).normalized();
+        const ProjectedShiftWeight q = projected_shift_weight(t, config.degenerate_projection_ratio, config.degenerate_projection_ratio_full);
+        double true_ratio = nan;
+        if (q.measured)
+        {
+            const double across_w = q.along(across);
+            true_ratio = across_w > 0.0 ? q.along(axis) / across_w : nan;
+            b.measured = true;
+            b.true_axis_ratio = true_ratio;
+            b.removed_angle_deg = angle_deg(q.removed, axis);
+            b.condition = q.condition;
+        }
+        add(run, "projected NDT weight along / sideways, true corridor axis (redefined 2026-11-21, user's decision)" + at, w.window, true_ratio,
+            tol.blind_max_projected_along, false);
         add(run, "sideways information share" + at, w.window, lmax > 0.0 ? side.dot(I * side) / lmax : nan, tol.blind_min_side_share, true);
         add(run, "vertical information share" + at, w.window, lmax > 0.0 ? up.dot(I * up) / lmax : nan, tol.blind_min_up_share, true);
         add(run, "matched side normals" + at, w.window, side.dot(I * side), tol.blind_min_side_normals, true);
@@ -886,10 +970,10 @@ LoopRun loop_run(const InertialRecording &rec, const OdometryConfig &config_in, 
     if (r2)
     {
         int return_blind = 0;
-        for (const LoopWindow &lw : run.windows)
+        for (LoopWindow &lw : run.windows)
             if (lw.cls == WindowClass::blind)
             {
-                blind_preconditions(run, lw, align, tol);
+                blind_preconditions(run, lw, align, config, tol);
                 return_blind += run.r2.turn_window > 0 && lw.window >= run.r2.turn_window;
             }
         add(run, "nominated exit in the recording", 0, double(run.r2.exit_window), 1.0, true);

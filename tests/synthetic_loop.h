@@ -115,7 +115,9 @@ struct LoopTolerances
     // R2, each blind window
     int min_blind_windows_return = 5;   // the return leg's blind stretch must be at least this long (the time in the regime)
     double blind_max_along_share = 0.02;     // u^T I u / lambda_max(I) along the true corridor axis: near zero
-    double blind_max_projected_along = 1e-3; // the NDT rows' projected weight of a shift along travel / sideways
+    // the NDT rows' projected weight of a shift along the TRUE corridor axis / horizontally across it (BlindAxisWeight;
+    // measured along the table's travel direction until the user's decision of 2026-11-21; tolerance unchanged)
+    double blind_max_projected_along = 1e-3;
     double blind_min_side_share = 0.1;       // the transverse information is kept: sideways and vertical shares
     double blind_min_up_share = 0.1;
     double blind_min_side_normals = 200.0;   // sum over matched cells of (n . u_side)^2: matched side normals
@@ -173,12 +175,48 @@ struct WindowObservability
     Eigen::Matrix3d information = Eigen::Matrix3d::Zero();
 };
 
+// The projected NDT rows' (ndt_indoor + ndt_outdoor) weight of a shift along ANY world direction u, from a result table.
+// The table gives it only along its own three directions (travel, sideways, vertical). A shift moves every node's
+// translation by u and the NDT terms are node blocks projected as M B M (M = diag(P, I), ndt_degeneracy_projection of the
+// table's translation_information, the matrix the table projected with), so the weight is the quadratic form
+// w(u) = u^T (P W P) u, W the sum of the nodes' raw translation blocks. Where the projection removes one direction v
+// (s = 0: P v = 0), P W P lives in the plane across v and has three unknowns S (2x2 in a basis E of that plane): the
+// table's three weights fix them exactly, w(d) = (E^T d)^T S (E^T d). measured false (with `why`) where no direction or
+// more than one is removed, or the three directions do not fix S (the system's condition above 1e12).
+struct ProjectedShiftWeight
+{
+    bool measured = false;
+    std::string why;
+    Eigen::Vector3d removed = Eigen::Vector3d::Zero(); // v (world frame)
+    Eigen::Matrix<double, 3, 2> E = Eigen::Matrix<double, 3, 2>::Zero();
+    Eigen::Matrix2d S = Eigen::Matrix2d::Zero();
+    double condition = 0.0; // of the 3x3 system that fixes S
+    double along(const Eigen::Vector3d &u) const;
+};
+ProjectedShiftWeight projected_shift_weight(const WindowTermTable &result, double projection_ratio, double projection_ratio_full);
+
+// R2's blindness reading of a blind window (precondition "projected NDT weight along / sideways"): the projected shift
+// weights along the table's travel direction (the definition before 2026-11-21) and along the true corridor axis (the
+// definition since: the user's decision of 2026-11-21, made after seeing the values, because the walking gait wobbles the
+// travel direction by 0.1 to 2.4 deg against the corridor, so the old value was about sin^2 of that angle)
+struct BlindAxisWeight
+{
+    bool measured = false;
+    double travel_ratio = 0.0;      // the table's: along travel / sideways
+    double true_axis_ratio = 0.0;   // along the true axis / horizontally across it
+    double travel_angle_deg = 0.0;  // the table's travel direction against the true axis
+    double removed_angle_deg = 0.0; // the removed direction v against the true axis
+    double axis_vertical = 0.0;     // the true axis's vertical component (estimator world frame)
+    double condition = 0.0;
+};
+
 struct LoopWindow
 {
     int window = 0; // 1-based, as WindowTermRecord::window
     WindowClass cls = WindowClass::seen;
     WindowObservability observability;
     WindowTruth truth;
+    BlindAxisWeight blind_axis; // R2 blind windows only
     std::optional<WindowTermRecord> record;
     std::vector<Eigen::Affine3d> poses; // as solved
     WindowErrors errors;
