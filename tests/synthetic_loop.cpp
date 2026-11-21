@@ -106,7 +106,7 @@ namespace
     }
 
     // the route's heading at motion time t without the gait's yaw twist: the body heading averaged over one twist period
-    // (2 / step_hz, the twist goes at half the step rate), centred on t and clamped to the motion; R1 and R2 have no gait
+    // (2 / step_hz, the twist goes at half the step rate), centred on t and clamped to the motion
     double route_heading(const InertialRecording &rec, double t)
     {
         const Motion &m = rec.route.motion;

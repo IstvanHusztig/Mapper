@@ -19,10 +19,14 @@
 // The whole routes are task 6.2's (minutes each, about 0.55 s per window in Release: R1 79, R2 124, R3 35 windows); the case
 // below only lists what each gives, on demand:
 //   lidar_odometry_tests -tc="synthetic loop: whole routes*" --no-skip -s
-// Measured while building the runner (2026-11-21, switches off, 1 cm jitter): R2 completes (124 windows, 68.6 s, no time
-// limit, no rebuild) but its blind and exit preconditions fail, because window 12 (constant 1.5 m/s, no gait) passes the
-// rest test (A2 / F10), the end velocity drops to 0.22 m/s and the estimate stalls in the corridor (27 m behind at the
-// exit); R3 (walking) completes and its solved last node ends 5.8 m short of the true 9.6 m walk (a reading, not checked).
+// Measured while building the runner (2026-11-21, switches off, 1 cm jitter), with R1 and R2 then unwalked: R2's window 12
+// (constant 1.5 m/s, no gait) passed the rest test (A2 / F10) and the estimate stalled in the corridor (27 m behind at the
+// exit). Measured again with all routes walked (2026-11-21, same settings; readings, not checked): no moving window is
+// taken for rest in any route. R1 79 windows, 43.1 s, all its preconditions hold, last node 14.5 m off (solved 18.5 m from
+// the start, truth 4.0 m). R2 124 windows, 70.1 s, 162 of 209 preconditions hold: the blind along share and projected
+// along/sideways weight fail in most blind windows, the exit has 1 accepted landmark match (>= 50) and along share 0.016
+// (>= 0.04); last node 16.2 m off. R3 35 windows, 19.2 s, its solved last node 3.8 m from the start against the true 9.6 m.
+// In all three the solved position falls behind the truth from about window 10 on and later runs backwards.
 
 using namespace synthetic;
 
@@ -155,8 +159,21 @@ TEST_CASE("synthetic loop: whole routes R1, R2, R3, preconditions listed" * doct
     for (const InertialRecording *rec : {&r1_recording(), &r2_recording(), &r3_recording()})
     {
         const LoopRun run = run_loop(*rec, loop_candidate_config(rec->sensor));
-        MESSAGE(run.summary(), preconditions_text(run, true));
+        MESSAGE(run.summary(), preconditions_text(run, false));
         MESSAGE("unavailable: ", run.unavailable.text());
+        std::ostringstream rest;
+        for (const LoopWindow &w : run.windows)
+            if (w.record && w.record->at_rest && w.cls != WindowClass::rest)
+                rest << " w" << w.window << " (" << window_class_name(w.cls) << ")";
+        MESSAGE("moving windows judged at rest:", rest.str().empty() ? std::string(" none") : rest.str());
+        if (!run.windows.empty())
+        {
+            const LoopWindow &first = run.windows.front(), &last = run.windows.back();
+            const Eigen::Vector3d start = first.truth.poses.front().translation();
+            MESSAGE("end (last node of w", last.window, "): error ", f(last.errors.last_position.norm(), 3), " m (", f(last.errors.last_position.x(), 3), " ",
+                    f(last.errors.last_position.y(), 3), " ", f(last.errors.last_position.z(), 3), "); from the start solved ",
+                    f((last.poses.back().translation() - start).norm(), 3), " m, truth ", f((last.truth.poses.back().translation() - start).norm(), 3), " m");
+        }
         if (run.r2.present)
             MESSAGE("R2: turn ", run.r2.turn_window, ", exit ", run.r2.exit_window, " (end-wall hits ", run.r2.exit_end_wall_hits, "), landmark cells ",
                     run.r2.landmark_cells.size(), ", in the map before the exit ", run.r2.landmark_cells_mapped, ", exit points ", run.r2.exit_points,

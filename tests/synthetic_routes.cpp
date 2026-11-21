@@ -32,7 +32,8 @@ namespace
     }
 
     // a straight leg of the current speed along the current heading until the position's coordinate `axis` reaches `target`
-    void leg_to(Motion &m, int axis, double target)
+    // (walking: with the gait, which moves the body around the leg's line but not the line's end)
+    void leg_to(Motion &m, int axis, double target, bool walking)
     {
         const Eigen::Vector3d p = m.end_position();
         const double heading = m.end_heading();
@@ -40,7 +41,7 @@ namespace
         const double length = (target - p[axis]) / direction[axis];
         if (length < 0.5 || m.end_speed() <= 0.0)
             throw std::logic_error("synthetic route: a leg that is too short or at rest");
-        m.cruise(length / m.end_speed());
+        m.cruise(length / m.end_speed(), walking);
     }
 
     // the time a stop from the current speed takes in distance, by trying it on a copy
@@ -59,7 +60,7 @@ Route route_r1()
     Route r{"R1", loop_scene(), Motion(Eigen::Vector3d(-6.0, -4.0, 1.5) + grid_offset, 0.0), 0, 0.0, 0.0};
     const double v = 2.0, rate = 1.0, ramp = 0.5;
     const double turn_s = 0.5 * pi / rate + ramp;
-    // a quarter turn's displacement in the heading's frame, found on a copy
+    // a quarter turn's displacement in the heading's frame, found on a copy (the gait does not move the path's line)
     Motion probe(Eigen::Vector3d::Zero(), 0.0);
     probe.change_speed(v, 2.0, ramp);
     const Eigen::Vector3d before = probe.end_position();
@@ -68,19 +69,22 @@ Route route_r1()
     const double dx = d.x(), dy = d.y();
     (void)dy;
 
+    // walked: the gait of Motion on every straight piece (speed changes and legs), the same gait as R3's; Motion's turns
+    // carry no gait (the gait fades out over the last ramp of a leg and back in over the first of the next)
     Motion &m = r.motion;
-    m.rest(4.0).change_speed(v, 2.0, ramp);
+    constexpr bool walk = true;
+    m.rest(4.0).change_speed(v, 2.0, ramp, walk);
     // the corridors' centrelines (x = +-8, y = +-4) are where each quarter turn ends
-    leg_to(m, 0, 8.0 + grid_offset.x() - dx);
+    leg_to(m, 0, 8.0 + grid_offset.x() - dx, walk);
     m.turn(0.5 * pi, turn_s, ramp);
-    leg_to(m, 1, 4.0 + grid_offset.y() - dx);
+    leg_to(m, 1, 4.0 + grid_offset.y() - dx, walk);
     m.turn(0.5 * pi, turn_s, ramp);
-    leg_to(m, 0, -8.0 + grid_offset.x() + dx);
+    leg_to(m, 0, -8.0 + grid_offset.x() + dx, walk);
     m.turn(0.5 * pi, turn_s, ramp);
-    leg_to(m, 1, -4.0 + grid_offset.y() + dx);
+    leg_to(m, 1, -4.0 + grid_offset.y() + dx, walk);
     m.turn(0.5 * pi, turn_s, ramp);
-    leg_to(m, 0, -2.0 + grid_offset.x() - stopping_distance(m, 2.0));
-    m.change_speed(-v, 2.0, ramp).rest(1.5);
+    leg_to(m, 0, -2.0 + grid_offset.x() - stopping_distance(m, 2.0), walk);
+    m.change_speed(-v, 2.0, ramp, walk).rest(1.5);
     return r;
 }
 
@@ -122,13 +126,15 @@ Route route_r2()
     s = shifted(s, grid_offset);
 
     Route r{"R2", s, Motion(Eigen::Vector3d(-3.0, 0.0, 1.2) + grid_offset, 0.0), shell, 6.0 + grid_offset.x(), 14.0 + grid_offset.x()};
-    const double v = 1.5;
+    // walked: the gait of Motion on every straight piece (as R1 and R3); the turn in place, between two rests, has none
+    const double v = 1.5, ramp = 0.5;
+    constexpr bool walk = true;
     Motion &m = r.motion;
-    m.rest(4.0).change_speed(v, 2.5);
-    leg_to(m, 0, 23.0 + grid_offset.x() - stopping_distance(m, 2.5));
-    m.change_speed(-v, 2.5).rest(0.5).turn(pi, 3.0).rest(0.5).change_speed(v, 2.5);
-    leg_to(m, 0, -1.0 + grid_offset.x() + stopping_distance(m, 2.5));
-    m.change_speed(-v, 2.5).rest(1.5);
+    m.rest(4.0).change_speed(v, 2.5, ramp, walk);
+    leg_to(m, 0, 23.0 + grid_offset.x() - stopping_distance(m, 2.5), walk);
+    m.change_speed(-v, 2.5, ramp, walk).rest(0.5).turn(pi, 3.0).rest(0.5).change_speed(v, 2.5, ramp, walk);
+    leg_to(m, 0, -1.0 + grid_offset.x() + stopping_distance(m, 2.5), walk);
+    m.change_speed(-v, 2.5, ramp, walk).rest(1.5);
     return r;
 }
 
