@@ -150,7 +150,7 @@ files they name;** the orchestrator adds them when it integrates a hand-back.
 
 ## 7. The tool and the replays
 
-- [ ] 7.1 Verification: `tools/honesty_report.py` with tests in `tests/test_verification_tools.py` and a section in
+- [x] 7.1 Verification: `tools/honesty_report.py` with tests in `tests/test_verification_tools.py` and a section in
   `tools/README.md`: the table of D11 from the new columns, each figure with its mask and definition, "unavailable"
   for a missing input. Verify: the tests pass, including one with an old table (every figure that needs a new
   column is unavailable) and one synthetic table with known figures.
