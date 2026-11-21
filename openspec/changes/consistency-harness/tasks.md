@@ -130,7 +130,7 @@ files they name;** the orchestrator adds them when it integrates a hand-back.
   its preconditions hold, its declared deterministic fields repeat and its unavailable readings are counted; all
   new cases in `ctest` take at most one minute in Release (the time is reported, and a run that reached the
   solver's wall-clock limit does not count); loop-level cases are skipped in Debug.
-- [ ] 6.1a Verification (added 2026-11-21 after the loop-lag diagnosis, `experiments/consistency/loop/analysis-claude.md`
+- [x] 6.1a Verification (added 2026-11-21 after the loop-lag diagnosis, `experiments/consistency/loop/analysis-claude.md`
   and `analysis-codex.md`; tests only): the loop fixture made honest before 6.2. (1) One sensor model: the world's IMU
   errors (gyro white noise, gyro bias walk, accelerometer offset walk, accelerometer density) built from the run's own
   `OdometryConfig`, their equality a precondition, the old default world kept only as a labelled mismatch case. (2)
