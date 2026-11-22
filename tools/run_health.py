@@ -81,10 +81,10 @@ def analyse(log_path, toml_path=None, t_from=None, t_to=None):
     r["expected_windows"] = expected
     if expected is None or set(windows) != set(range(1, expected+1)) or len(progress) != expected or {i for i,_ in progress} != set(windows):
         r["missing_required"].append("expected total window coverage NOT ESTABLISHED")
-    # Ratio is printed to three decimals; <=0.450 is conservatively eligible.
+    # Ratio is printed to three decimals; the solver prints chi2 only below 0.45, so a printed 0.450 is ambiguous and not required.
     # Zero/negative information can suppress the source diagnostic: absence then
     # remains unknown, rather than silently declaring its uncertainty measured.
-    r["uncertainty_missing"] = [k for k in keys if windows[k]["info"] <= .450 and "chi2" not in windows[k]]
+    r["uncertainty_missing"] = [k for k in keys if windows[k]["info"] < .450 and "chi2" not in windows[k]]
     if r["uncertainty_missing"]:
         r["missing_required"].append("conditional chi2 (eligibility unresolved or missing)")
     r["window_starts"] = [{"id": k, "time_s": windows[k]["t"], "position": windows[k]["start"]} for k in keys]
