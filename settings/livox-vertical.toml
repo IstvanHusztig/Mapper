@@ -146,11 +146,15 @@ save_calibration_validation = false
 
 [lidar_imu_extrinsics]
 # Mid-360S IMU position in the point frame (user manual 3.5; IMU axes = point axes): native X = 0.011, Y = 0.02329,
-# Z = -0.04412. TODO: set in the vertical mount's NWU output axes (X front, Y left, Z up) once the mount's axis mapping
-# is known, then check the sign on the first recording (sharpness after a turn on the spot). Zero until then.
-lidar_imu_lever_arm_x_m = 0.0
-lidar_imu_lever_arm_y_m = 0.0
-lidar_imu_lever_arm_z_m = 0.0
+# Z = -0.04412 (51.1 mm from the LiDAR origin). The Livox recordings need no axis remap: the IMU reads +1 g on its Z axis at
+# rest, so the sensor axes are the output axes (X front, Y left, Z up). The setting is added to each point to express it at
+# the IMU origin, so the physical value is the negative of the position: x = -0.011, y = -0.02329, z = +0.04412.
+# SET 2026-11-22 after the Livox 4 run with these values (experiments/consistency/livox4_lever/physical): the turn at 134 s
+# no longer shows the 558 mm correction and the 0.92 m/s2 offset of window 373, and the map looks better to the eye. This
+# changes every Livox result: the Livox 3 end-run manifest no longer matches until it is re-recorded (user's decision).
+lidar_imu_lever_arm_x_m = -0.011
+lidar_imu_lever_arm_y_m = -0.02329
+lidar_imu_lever_arm_z_m = 0.04412
 
 [madgwick_filter]
 ahrs_gain = 0.05
