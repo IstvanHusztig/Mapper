@@ -145,16 +145,17 @@ log_window_noise = false
 save_calibration_validation = false
 
 [lidar_imu_extrinsics]
-# Mid-360S IMU position in the point frame (user manual 3.5; IMU axes = point axes): native X = 0.011, Y = 0.02329,
-# Z = -0.04412 (51.1 mm from the LiDAR origin). The Livox recordings need no axis remap: the IMU reads +1 g on its Z axis at
-# rest, so the sensor axes are the output axes (X front, Y left, Z up). The setting is added to each point to express it at
-# the IMU origin, so the physical value is the negative of the position: x = -0.011, y = -0.02329, z = +0.04412.
-# SET 2026-11-22 after the Livox 4 run with these values (experiments/consistency/livox4_lever/physical): the turn at 134 s
-# no longer shows the 558 mm correction and the 0.92 m/s2 offset of window 373, and the map looks better to the eye. This
-# changes every Livox result: the Livox 3 end-run manifest no longer matches until it is re-recorded (user's decision).
-lidar_imu_lever_arm_x_m = -0.011
-lidar_imu_lever_arm_y_m = -0.02329
-lidar_imu_lever_arm_z_m = 0.04412
+# Mid-360S IMU position (user manual 3.5, native point axes): X = 0.011, Y = 0.02329, Z = -0.04412 (51.1 mm from the LiDAR
+# origin). The recorder turns the axes for the hand-held mount (output = native Z, X, Y; points and IMU alike) and writes the
+# IMU position in the output axes into every recording: timing*.json, imu_position_m = (-0.04412, 0.011, 0.02329). The setting
+# is added to each point to express it at the IMU origin, so it is the negative of that position.
+# History: 2026-11-22 first set as (-0.011, -0.02329, +0.04412), the manual's vector without the recorder's axis turn
+# (692fd91; 88 mm off; the Livox 4 run with it is experiments/consistency/livox4_lever/physical). Corrected the same day
+# after the axis audit (experiments/consistency/doubles/codex/analysis-codex.md: 48 axis permutations against the raw ray
+# angles). This changes every Livox result: the Livox 3 end-run manifest does not match until it is re-recorded.
+lidar_imu_lever_arm_x_m = 0.04412
+lidar_imu_lever_arm_y_m = -0.011
+lidar_imu_lever_arm_z_m = -0.02329
 
 [madgwick_filter]
 ahrs_gain = 0.05
