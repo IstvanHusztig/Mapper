@@ -13,6 +13,11 @@ against fixed limits. It needs no map and no reference run, so it is the first c
                  reported only as a proxy, never a physical closure verdict
   loop closure   accepted loops and the largest segment correction
   log            warnings, dropped window slices, iteration range (stop reasons unavailable)
+  timing         `stage durations: loading <s> s, odometry <s> s, loop closure <s> s, consistency <s> s, saving <s> s`
+                 (a stage that did not run may print `n/a`): listed when present, NOT MEASURED when the line is missing
+  time limit     `windows stopped at the time limit: <n>`: 0 = result independent of the machine's load, n > 0 = the
+                 result depends on the machine's load (the limit ended iterations), line missing = NOT MEASURED
+                 (logs of older builds); neither is a trigger and neither changes the exit code
 
 Exit 2 for incomplete evidence, 1 for diagnostic triggers, 0 for complete diagnostics without triggers. Never an accuracy PASS.
 
@@ -124,9 +129,38 @@ def analyse(log_path, toml_path=None, t_from=None, t_to=None):
 
     m = re.search(r"loop closure: (\d+) loop\(s\) accepted, largest segment correction (" + NUM + ") m", text)
     r["loops"], r["lc_max_m"] = (int(m.group(1)), float(m.group(2))) if m else (None, None)
+    r["stage_durations"], r["time_limit_windows"] = read_timing(text)
     r["warnings"] = len(re.findall(r"(?im)^.*warning.*$", text))
     r["dropped_slices"] = len(re.findall(r"window slice \d+ dropped", text))
     return r
+
+
+STAGES = ("loading", "odometry", "loop closure", "consistency", "saving")
+
+
+def read_timing(text):
+    """(stage durations {stage: seconds or None for n/a}, windows stopped at the time limit) of a log; None for a line
+    that is missing. A line that starts as one of the two but does not parse, or appears twice, is an error."""
+    durations = limit = None
+    value = r"(" + NUM + r"|n/a)"
+    pattern = r"^stage durations: " + ", ".join(f"{name} {value} s" for name in STAGES) + r"\s*$"
+    lines = re.findall(r"^stage durations:.*$", text, re.M)
+    if len(lines) > 1:
+        raise ValueError("duplicate 'stage durations' lines")
+    if lines:
+        m = re.match(pattern, lines[0])
+        if not m:
+            raise ValueError("malformed 'stage durations' line")
+        durations = {name: (None if v == "n/a" else float(v)) for name, v in zip(STAGES, m.groups())}
+    lines = re.findall(r"^windows stopped at the time limit:.*$", text, re.M)
+    if len(lines) > 1:
+        raise ValueError("duplicate 'windows stopped at the time limit' lines")
+    if lines:
+        m = re.match(r"^windows stopped at the time limit: (\d+)\s*$", lines[0])
+        if not m:
+            raise ValueError("malformed 'windows stopped at the time limit' line")
+        limit = int(m.group(1))
+    return durations, limit
 
 
 def judge(r, args):
@@ -166,6 +200,18 @@ def judge(r, args):
     row("path before loop closure", f"{r['path_m']:.0f} m, height {r['z_min']:.2f} to {r['z_max']:.2f} m")
     row("window-start endpoint proxy", f"{r['closure_m']:.2f} m (height {r['closure_z_m']:.2f} m)", "not physical closure accuracy")
     row("loop closure", "NOT MEASURED" if r["loops"] is None else f"{r['loops']} loops, largest correction {r['lc_max_m']:.2f} m", "descriptive only")
+    d = r.get("stage_durations")
+    if d is None:
+        rows.append(("stage durations", "NOT MEASURED", "no 'stage durations' line in the log", "NOT MEASURED"))
+    else:
+        row("stage durations", ", ".join(f"{k} {'n/a' if v is None else format(v, 'g') + ' s'}" for k, v in d.items()), "descriptive only")
+    n = r.get("time_limit_windows")
+    if n is None:
+        rows.append(("windows stopped at the time limit", "NOT MEASURED", "no count in the log (older build)", "NOT MEASURED"))
+    elif n == 0:
+        row("windows stopped at the time limit", "0: result independent of the machine's load", "descriptive only")
+    else:
+        row("windows stopped at the time limit", f"{n}: result depends on the machine's load", "descriptive only")
     row("log", f"{r['warnings']} warnings, {r['dropped_slices']} dropped slices; iteration range {r['iteration_range']}", "stop cause NOT MEASURED")
     return rows
 
