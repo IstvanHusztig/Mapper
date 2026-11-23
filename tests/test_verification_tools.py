@@ -19,6 +19,8 @@ import perturbation_sweep as sweep
 import honesty_report as honesty
 import wall_pairs as wp
 import cloud_from_trajectory as cft
+import contacts_to_wall_pairs as c2w
+import landmark_check as lm
 
 
 def log_text(complete=True):
@@ -527,6 +529,305 @@ class CloudFromTrajectoryTests(unittest.TestCase):
         shifted[1] += [0., 0., 1.]  # only node 1 moves
         y = cft.carry(self.points, self.times, (self.T, self.R, self.P), (self.T, self.R, shifted))
         self.assertEqual(np.round(y[:, 2] - self.points[:, 2], 12).tolist(), [0., 1., 0., 1.])
+
+
+class _WalkMixin:
+    """A sensor walking along x with a turning heading, a node every 0.1 s (as the wall pairs tests)."""
+
+    def walk(self):
+        import numpy as np
+        self.np = np
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.ns = np.arange(0, 60_000_000_000, 100_000_000, dtype=np.int64) + 50_000_000
+        tt = self.ns * 1e-9
+        self.rot = np.array([_yaw(0.1 * t) for t in tt])
+        self.pos = np.column_stack([tt, np.zeros_like(tt), np.zeros_like(tt)])
+        self.origin = wp.Trajectory("origin", self.ns, self.rot, self.pos)
+
+    def moved(self, name, shift_after=None, rigid=None, ns_offset=0, shift_all=None):
+        np = self.np
+        rot, pos = self.rot.copy(), self.pos.copy()
+        if rigid is not None:
+            q, v = np.array(_yaw(rigid)), np.array([3., -2., 1.])
+            rot, pos = q @ rot, pos @ q.T + v
+        if shift_after is not None:
+            pos[self.ns * 1e-9 >= 30., 1] += shift_after
+        if shift_all is not None:
+            pos[:, 1] += shift_all
+        return wp.Trajectory(name, self.ns + ns_offset, rot, pos)
+
+    def trajectory_patch(self, **trs):
+        return patch.object(wp, "load_trajectory", lambda spec: trs[spec])
+
+
+class WallPairsUnionTests(_WalkMixin, unittest.TestCase):
+    """Two maps of one walk. Map A shows the wall y = 2 (visits at 10-14 s and 40-44 s, 0.05 m apart) and a second wall
+    (y = 5, visits at 20-24 s and 50-54 s) that A has doubled by 0.3 m, more than the 0.2 m admission across the line, so
+    A's table cannot hold it. Map B shows both walls with 0.05 m between their visits."""
+
+    def setUp(self):
+        self.walk()
+        np = self.np
+        rng = np.random.default_rng(5)
+        t = [np.linspace(10.02, 14.02, 40), np.linspace(40.02, 44.02, 40), np.linspace(20.02, 24.02, 40), np.linspace(50.02, 54.02, 40)]
+        x = [rng.uniform(0, 0.5, 40) for _ in range(4)]
+        col = lambda xs, y: np.column_stack([xs, np.full(40, y), np.full(40, 0.5)])
+        self.cloud = {"A": (np.vstack([col(x[0], 2.0), col(x[1], 2.05), col(x[2], 5.0), col(x[3], 5.3)]), np.concatenate(t)),
+                      "B": (np.vstack([col(x[0], 2.01), col(x[1], 2.06), col(x[2], 5.0), col(x[3], 5.05)]), np.concatenate(t))}
+        head = "piece,x,y,dir_deg,length_m,points,pairs,visit_offsets_m,visit_times_s,plan_dist_m\n"
+        tables = {"A": head + "7,0.25,2.0,0.0,0.5,80,1,+0.000;+0.050,10.0-14.0;40.0-44.0,0.01\n"
+                              "8,0.25,5.0,0.0,0.5,80,1,+0.000;+0.050,20.0-24.0;50.0-54.0,0.01\n",
+                  "B": head + "3,0.25,2.01,0.0,0.5,80,1,+0.000;+0.050,10.0-14.0;40.0-44.0,0.01\n"
+                              "4,0.25,5.0,0.0,0.5,80,1,+0.000;+0.050,20.0-24.0;50.0-54.0,0.01\n"}
+        for k, v in tables.items():
+            (self.root / f"{k}.csv").write_text(v)
+        self.out = self.root / "union.npz"
+
+    def run_freeze(self, specs, out=None, ns_b=None, **kw):
+        T = self.ns * 1e-9
+        def traj(result):
+            return ((ns_b * 1e-9) if (ns_b is not None and str(result).endswith("B")) else T), self.rot, self.pos
+        specs = [s.replace("@", str(self.root) + "/") for s in specs]
+        with patch.object(wp, "_read_slice", lambda r, h, ht: self.cloud[str(r)[-1]]), patch("map_quality_lib.trajectory", traj):
+            return wp.freeze_union(specs, str(out or self.out), log=lambda *a: None, height=0.5, **kw)
+
+    @staticmethod
+    def specs(*keys):
+        return [f"{k}=@{k}=@{k}.csv" for k in keys]
+
+    def test_the_same_wall_in_two_maps_is_counted_once_and_a_wall_only_one_map_admits_is_kept(self):
+        meta = self.run_freeze(self.specs("A", "B"))
+        ws = wp.WallSet(self.out)
+        self.assertEqual([o["mismatched_pieces"] for o in meta["origins"]], [1, 0])   # A cannot show its second wall
+        self.assertEqual(meta["pairs"], 2)                        # wall 1 once (found in both), wall 2 from B only
+        self.assertEqual(sorted(ws.pair_origin_mask.tolist()), [2, 3])
+        self.assertEqual(ws.origin_labels.tolist(), ["A", "B"])
+        self.assertEqual([o["pairs_found"] for o in meta["origins"]], [1, 2])
+        self.assertIn("union of 2 results", meta["selection"])
+        self.assertIn("A = ", meta["origin_result"])
+
+    def test_a_gap_the_first_map_cannot_show_is_measured_on_another_trajectory(self):
+        self.run_freeze(self.specs("A", "B"))
+        out = []
+        with self.trajectory_patch(a=self.origin, b=self.moved("b", shift_after=0.3)):
+            wp.measure(str(self.out), ["a", "b"], threshold=0.08, severe=0.30, by_origin=True, log=out.append)
+        text = "\n".join(out)
+        self.assertIn("0.050 / 0.050 / 0 / 0 / 0.050", text)
+        self.assertIn("0.350 / 0.350 / 2 / 2 / 0.350", text)      # both walls end 0.05 + 0.3 apart
+        self.assertIn("found only in B (1 pairs)", text)
+        self.assertIn("found in A (1 pairs)", text)
+        # a set frozen from A alone holds the first wall only and cannot show the second
+        self.run_freeze(self.specs("A"), out=self.root / "a_only.npz")
+        self.assertEqual(wp.WallSet(self.root / "a_only.npz").meta["pairs"], 1)
+
+    def test_origins_on_different_node_grids_equal_labels_or_a_bad_spec_are_refused(self):
+        with self.assertRaisesRegex(ValueError, "node times differ"):
+            self.run_freeze(self.specs("A", "B"), ns_b=self.ns + 1)
+        with self.assertRaisesRegex(ValueError, "labels must differ"):
+            self.run_freeze(["A=@A=@A.csv", "A=@B=@B.csv"])
+        with self.assertRaisesRegex(ValueError, "expected"):
+            self.run_freeze(["nonsense"])
+
+    def test_overlap_is_measured_on_point_times(self):
+        np = self.np
+        t = np.linspace(10.0, 14.0, 40)
+        self.assertEqual(wp._overlap(t, t + 1e-12), 1.0)
+        self.assertEqual(wp._overlap(t, t + 100.0), 0.0)
+        self.assertAlmostEqual(wp._overlap(t, np.r_[t[20:], t[-1] + 1.0 + np.arange(20) * 0.01]), 0.5)
+
+    def test_measure_adds_the_severe_count_and_the_largest_gap(self):
+        self.run_freeze(self.specs("B"))
+        out = []
+        with self.trajectory_patch(a=self.origin, b=self.moved("b", shift_after=0.07), c=self.moved("c", shift_after=0.3)):
+            wp.measure(str(self.out), ["a", "b", "c"], threshold=0.08, severe=0.30, log=out.append)
+        text = "\n".join(out)
+        self.assertIn("0.050 / 0.050 / 0 / 0 / 0.050", text)
+        self.assertIn("0.120 / 0.120 / 2 / 0 / 0.120", text)
+        self.assertIn("0.350 / 0.350 / 2 / 2 / 0.350", text)
+        self.assertIn("count at or above 300 mm / largest", text)
+
+
+class ContactsToWallPairsTests(_WalkMixin, unittest.TestCase):
+    """One contact with three shared cells on the wall y = 2 (the later visit 0.01, 0.05 and 0.20 m further out: the
+    contact's gap is their median, 0.05) and a second contact with one cell 0.5 m apart."""
+
+    def setUp(self):
+        import pickle
+        self.walk()
+        np = self.np
+        rng = np.random.default_rng(11)
+        t, xyz, ia, ib, ga, gb = [], [], [], [], [], []
+        cur = 0
+
+        def add(tv, off, ids, cells, cell):
+            nonlocal cur
+            t.append(tv)
+            xyz.append(np.column_stack([rng.uniform(0, 0.5, 20), np.full(20, 2.0 + off), np.full(20, 0.5)]))
+            ids.extend(range(cur, cur + 20))
+            cells.extend([cell] * 20)
+            cur += 20
+
+        for c, gap in enumerate([0.01, 0.05, 0.20]):
+            add(np.linspace(10.02 + c, 12.02 + c, 20), 0.0, ia, ga, 100 + c)
+            add(np.linspace(40.02 + c, 42.02 + c, 20), gap, ib, gb, 100 + c)
+        add(np.linspace(20.02, 22.02, 20), 0.0, ia, ga, 7)
+        add(np.linspace(55.02, 57.02, 20), 0.5, ib, gb, 7)
+        arr = lambda v, lo, hi: np.array(v[lo:hi])
+        q1 = dict(level=0, c=np.array([0.25, 2.0, 0.5]), n=np.array([0., 1., 0.]), shared=np.array([100, 101, 102]),
+                  ia=arr(ia, 0, 60), ib=arr(ib, 0, 60), ga=arr(ga, 0, 60), gb=arr(gb, 0, 60))
+        q2 = dict(level=2, c=np.array([0.25, 2.0, 0.5]), n=np.array([0., 1., 0.]), shared=np.array([7]),
+                  ia=arr(ia, 60, 80), ib=arr(ib, 60, 80), ga=arr(ga, 60, 80), gb=arr(gb, 60, 80))
+        self.contacts, self.sample, self.out = self.root / "c.pkl", self.root / "s.npz", self.root / "contacts.npz"
+        with open(self.contacts, "wb") as fp:
+            pickle.dump([q1, q2], fp)
+        np.savez(self.sample, t=np.concatenate(t), xyz=np.vstack(xyz))     # the placed points: world positions on the origin trajectory
+
+    def convert(self, out=None, **kw):
+        with patch.object(wp, "load_trajectory", lambda spec: self.origin):
+            return c2w.convert(str(self.contacts), str(self.sample), "origin", str(out or self.out), log=lambda *a: None, **kw)
+
+    def test_contact_gap_is_the_median_of_its_cells_and_classes_follow_the_contact(self):
+        self.convert()
+        ws = wp.WallSet(self.out)
+        self.assertEqual((ws.meta["pieces"], ws.meta["pairs"], ws.meta["visits"]), (2, 4, 8))
+        self.assertEqual(ws.pair_contact.tolist(), [0, 0, 0, 1])
+        self.assertEqual(self.np.round(wp.pair_gaps(ws, self.origin), 9).tolist(), [0.01, 0.05, 0.2, 0.5])
+        self.assertEqual(self.np.round(wp.contact_gaps(ws, self.origin), 9).tolist(), [0.05, 0.5])
+        out = []
+        with self.trajectory_patch(o=self.origin, s=self.moved("s", shift_after=0.1)):
+            wp.measure(str(self.out), ["o", "s"], threshold=0.08, severe=0.30, before=50., after=0.0, log=out.append,
+                       csv_path=str(self.root / "g.csv"))
+        text = "\n".join(out)
+        self.assertIn("all pairs (2 pairs)", text)
+        self.assertIn("2 contacts", text)
+        self.assertIn("storey 0 (1 pairs)", text)
+        self.assertIn("storey 2 (1 pairs)", text)
+        self.assertIn("both visits before 50 s (1 pairs)", text)         # contact 1's later visit ends at 57 s
+        self.assertIn("0.050 / 0.050 / 0 / 0 / 0.050", text)             # contact 0 on the origin trajectory
+        self.assertIn("0.150 / 0.150 / 1 / 0 / 0.150", text)             # and with the later visit moved by 0.1
+        self.assertEqual(len((self.root / "g.csv").read_text().strip().splitlines()), 3)    # header and two contacts
+
+    def test_a_rigid_move_changes_nothing_and_a_shift_between_the_visits_shows(self):
+        self.convert()
+        ws = wp.WallSet(self.out)
+        g0 = wp.contact_gaps(ws, self.origin)
+        self.assertLess(self.np.abs(wp.contact_gaps(ws, self.moved("r", rigid=0.7)) - g0).max(), 1e-9)
+        self.assertAlmostEqual(float(wp.contact_gaps(ws, self.moved("s", shift_after=0.07))[0]), 0.12, places=9)
+
+    def test_local_shift_and_node_ties_are_applied_and_the_node_grid_is_checked(self):
+        np = self.np
+        self.convert()
+        plain = wp.WallSet(self.out).local.copy()
+        self.convert(local_shift=(0.0, 0.5, 0.0))
+        ws = wp.WallSet(self.out)
+        self.assertTrue(np.allclose(ws.local - plain, [0.0, 0.5, 0.0]))
+        self.assertEqual(ws.meta["local_shift_m"], [0.0, 0.5, 0.0])
+        self.assertNotIn(3, ws.node.tolist())
+        ties = self.root / "ties.npz"
+        np.savez(ties, ns=np.array([int(np.rint(10.02 * 1e9))]), idx=np.array([3]))     # the first return ties node 3
+        self.convert(node_ties=str(ties))
+        self.assertIn(3, wp.WallSet(self.out).node.tolist())
+        with self.assertRaisesRegex(ValueError, "node times differ"):
+            wp.contact_gaps(wp.WallSet(self.out), self.moved("m", ns_offset=1))
+        self.assertEqual(c2w.main([str(self.contacts), str(self.sample), str(self.root / "missing"), str(self.out)]), 2)
+
+
+class LandmarkCheckTests(_WalkMixin, unittest.TestCase):
+    """The wall y = 2.03 in world seen at 10-14 s. The plan fit puts the wall at plan y = target_y: with rotation 0 the
+    plan y is y + shift_y, so shift_y - target_y = -2 puts the expected line at y = 2."""
+
+    def setUp(self):
+        self.walk()
+        np = self.np
+        rng = np.random.default_rng(2)
+        self.t = np.linspace(10.02, 14.02, 200)
+        self.world = np.column_stack([rng.uniform(0, 0.5, 200), np.full(200, 2.03), np.full(200, 0.5)])
+        self.node = wp.node_of(self.t, self.ns)
+        self.local = wp.to_local(self.world, self.node, self.origin)
+
+    def cohort(self, shift=(1.0, -1.0), target_y=1.0, rotation=0.0):
+        p = self.root / "cohort.npz"
+        self.np.savez(p, node=self.node, body=self.local, rotation_deg=rotation, shift_x=shift[0], shift_y=shift[1], target_y=target_y,
+                      raw_ids=self.np.arange(200))
+        return p
+
+    def convert(self, name, **kw):
+        out = self.root / name
+        with patch.object(wp, "load_trajectory", lambda spec: self.origin):
+            lm.from_cohort(str(self.cohort(**kw)), "origin", str(out), label="synthetic", log=lambda *a: None)
+        return out
+
+    def test_line_from_the_plan_fit_and_signed_median_of_a_cohort(self):
+        np = self.np
+        p0, n = lm.line_from_plan_fit(0.0, (1.0, -1.0), 1.0)
+        self.assertEqual(n.tolist(), [0.0, 1.0, 0.0])
+        self.assertAlmostEqual(float(p0[1]), 2.0)
+        p0, n = lm.line_from_plan_fit(90.0, (0.0, 0.0), 3.0)     # plan y = x: the wall at world x = 3
+        self.assertTrue(np.allclose(n, [1, 0, 0], atol=1e-12) and abs(p0[0] - 3.0) < 1e-12)
+        out = self.convert("wall.npz")
+        res = []
+        with self.trajectory_patch(a=self.origin, b=self.moved("b", shift_all=0.2), r=self.moved("r", rigid=0.4)):
+            rows = lm.measure(str(out), ["a", "b", "r"], log=res.append)["rows"]
+        self.assertAlmostEqual(rows[0][1], 0.03, places=9)
+        self.assertAlmostEqual(rows[1][1], 0.23, places=9)
+        self.assertGreater(abs(rows[2][1] - 0.03), 0.1)           # the line is fixed in the world: a rigid move shows (the anchor)
+        text = "\n".join(res)
+        self.assertIn("caveat: the absolute value depends on the plan alignment", text)
+        self.assertIn("rotation 0.0000 deg", text)
+        self.assertIn("+0.200", text)                             # change of b against the first
+
+    def test_the_change_between_trajectories_does_not_depend_on_the_anchor_but_the_absolute_value_does(self):
+        out1 = self.convert("w1.npz", shift=(1.0, -1.0))
+        out2 = self.convert("w2.npz", shift=(1.0, -0.4))          # another plan alignment
+        with self.trajectory_patch(a=self.origin, b=self.moved("b", shift_all=0.2)):
+            r1 = lm.measure(str(out1), ["a", "b"], log=lambda *a: None)["rows"]
+            r2 = lm.measure(str(out2), ["a", "b"], log=lambda *a: None)["rows"]
+        self.assertAlmostEqual(r1[0][1], 0.03, places=9)
+        self.assertAlmostEqual(r2[0][1], 0.63, places=9)
+        self.assertAlmostEqual(r1[1][3], 0.2, places=9)
+        self.assertAlmostEqual(r2[1][3], 0.2, places=9)
+        with self.trajectory_patch(c=self.moved("c", ns_offset=1)):
+            with self.assertRaisesRegex(ValueError, "node times differ"):
+                lm.measure(str(out1), ["c"], log=lambda *a: None)
+        self.assertEqual(lm.main(["measure", str(out1), str(self.root / "missing")]), 2)
+
+    def write_las(self, path, world, t_s):
+        import laspy
+        header = laspy.LasHeader(point_format=1, version="1.4")
+        header.scales = self.np.array([1e-6, 1e-6, 1e-6])
+        las = laspy.LasData(header)
+        las.x, las.y, las.z = world[:, 0], world[:, 1], world[:, 2]
+        las.gps_time = t_s * 1e9
+        las.write(str(path))
+
+    def test_freeze_takes_the_time_window_inside_the_band_and_counts_the_rest(self):
+        np = self.np
+        result = self.root / "ref"
+        result.mkdir()
+        far = self.world[:50] + [0.0, 3.0, 0.0]                   # 3 m behind the wall: outside a 1 m band
+        t_all = np.r_[self.t, self.t[:50], np.linspace(30.02, 32.0, 50)]
+        self.write_las(result / "scan_lio_merged.las", np.vstack([self.world, far, self.world[:50]]), t_all)
+        (result / "scan_lio_merged.las").replace(result / "scan_lio_merged.laz")
+        T = self.ns * 1e-9
+        line = (np.array([0., 2., 0.]), np.array([0., 1., 0.]))
+        out = self.root / "freeze.npz"
+        with patch("map_quality_lib.trajectory", lambda r: (T, self.rot, self.pos)):
+            meta = lm.freeze(str(result), str(out), (9.9, 20.0), line, band=1.0, log=lambda *a: None)
+            self.assertEqual((meta["returns"], meta["returns_in_time_window"]), (200, 250))
+            self.assertLess(meta["max_round_trip_m"], 1e-5)
+            with self.assertRaisesRegex(ValueError, "no returns"):
+                lm.freeze(str(result), str(out), (40.0, 50.0), line, log=lambda *a: None)
+            fit = self.root / "plan_fit.json"
+            fit.write_text(json.dumps({"rotation_deg": 0.0, "shift_m": [1.0, -1.0]}))
+            out2 = self.root / "freeze2.npz"
+            self.assertEqual(lm.main(["freeze", str(result), str(out2), "--time", "9.9", "20", "--plan-fit", str(fit), "--plan-y", "1.0"]), 0)
+            self.assertEqual(lm.main(["freeze", str(result), str(out2), "--time", "0", "1"]), 2)      # no line given
+        self.assertIn("plan_fit.json", lm.Landmark(out2).meta["plan_fit"])
+        with patch.object(wp, "load_trajectory", lambda spec: self.origin):
+            rows = lm.measure(str(out2), ["a"], log=lambda *a: None)["rows"]
+        self.assertAlmostEqual(rows[0][1], 0.03, places=5)
 
 
 if __name__=='__main__':
