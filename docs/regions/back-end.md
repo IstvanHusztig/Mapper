@@ -106,7 +106,7 @@ orchestrator's):
 - **Tools**: `trajectory_seams.py` (world positions; sees what loop closure moves), `map_quality.py --floors` (revisit
   heading/offset, jitter, railing, stairwell on 44 s0/s1/s2), `stairwell_check.py`, `spot_check.py`,
   `evaluate_floors.py`, `wall_precision.py` (`pair_diff_m`: two visits of one wall), `holdout_sharpness.py` (whether
-  consistency only fits its own points), `snapshot_trajectory.py`, `wall_pairs.py` (two visits of a wall measured from poses, no cloud: the replay's yardstick). Skills: `verify-run`, then `verify-map`.
+  consistency only fits its own points), `snapshot_trajectory.py`, `wall_pairs.py` (two visits of a wall measured from poses, no cloud: the replay's yardstick), `loop_graph.py` (the pose graph in Python for the kept edges: prototype a weighting rule and read the leave-one-out table before any C++; `check` against a replay; no registration, no pruning). Skills: `verify-run`, then `verify-map`.
 
 ## Known flaws
 

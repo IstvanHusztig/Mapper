@@ -153,6 +153,30 @@ Checked on a loop closure stage against dMapper's own cloud of that stage: withi
 56 million points. It moves points; it does not register them again. Tests: `CloudFromTrajectoryTests` in
 `tests/test_verification_tools.py`.
 
+## loop_graph.py
+
+dMapper's loop closure pose graph in Python, to prototype a rule in minutes before any C++. It reads a loop closure capture
+(`loop_closure_capture.bin`), builds the graph of `optimize_loop_pose_graph` for a list of kept edges (default: a replay folder's
+`loop_closure_edges.json`; an edge is `i-j`, or `i-jx` cross floor; also a json or a text file of `i j [x]` lines), solves it, and
+puts the correction onto every node as `close_loops` does.
+
+```
+python tools/loop_graph.py solve <capture> <replay folder or edge list> <out folder> [--drop i-j]... [--loop-scale i-j=s]... [--odo-sigma M DEG] [--kernel-scale K]
+python tools/loop_graph.py loo   <capture> <replay folder or edge list> [--csv file] [--top N]
+python tools/loop_graph.py check <capture> <replay folder>
+```
+
+- `solve` writes a trajectory folder (`session_poses.mrp`, `trajectory_lio_0.csv`) that `wall_pairs.py measure` and `cloud_from_trajectory.py` read like a replay's.
+- `loo` prints, for each kept edge, its innovation predicted from the rest of the graph (weighted norm, and in metres) and the cost change. A disputed edge is not thereby a false one.
+- `check` solves the replay's kept edges and reports the largest node difference to the replay's own trajectory.
+- Hooks in the module for prototypes: a scale per loop edge's information, a sigma or a 6x6 per odometry edge, a given 6x6 per loop edge, the robust kernel.
+
+Checked on a real capture (182,880 nodes): `check` 0.005 mm, 2.4 s; `loo` about 27 s. Limits: no registration (the transforms are the
+capture's), no choice of edges, no pruning or dropping by residual, no consistency, no replay; it takes the kept edges as given. Jacobians
+are central differences and the solve a sparse LU, not dMapper's analytic ones and Cholesky. The result is dMapper's solution for those
+edges, not a statement about the map; a rule that survives is built into dMapper and confirmed by the replay and one reprocessing.
+Tests: `LoopGraphTest` in `tests/test_loop_graph.py`.
+
 ## spot_check.py
 
 Checks one place of a result for a structure drawn twice (a doubled railing or wall) and tells which passes draw which copy. `eval_odometry.py` and revisit checks that fit walls and floors don't see thin structures. Pure Python, plus CloudCompare for the export.
