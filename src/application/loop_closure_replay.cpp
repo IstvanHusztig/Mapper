@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <cmath>
 #include <map>
+#include <set>
+#include <sstream>
 #include <tuple>
 
 namespace
@@ -12,7 +14,8 @@ namespace
     class CapturedRegistrations : public LoopClosureRegistrations
     {
     public:
-        explicit CapturedRegistrations(const LoopClosureCapture &capture) : capture_(capture)
+        CapturedRegistrations(const LoopClosureCapture &capture, const std::vector<std::pair<int, int>> &reject)
+            : capture_(capture), reject_(reject.begin(), reject.end())
         {
             for (size_t k = 0; k < capture.tries.size(); k++)
             {
@@ -32,10 +35,20 @@ namespace
             return nullptr;
         }
 
+        bool rejected(int i, int j, bool) override
+        {
+            if (reject_.count({i, j}) == 0)
+                return false;
+            asked.insert({i, j});
+            return true;
+        }
+
         std::vector<std::string> missing;
+        std::set<std::pair<int, int>> asked; // the tries named for rejection that close_loops asked for
 
     private:
         const LoopClosureCapture &capture_;
+        std::set<std::pair<int, int>> reject_;
         std::map<std::tuple<int, int, bool>, size_t> index_;
     };
 
@@ -46,7 +59,38 @@ namespace
     }
 } // namespace
 
-LoopClosureReplayResult replay_loop_closure(const LoopClosureCapture &capture, const OdometryConfig &params, Logger &logger)
+bool parse_loop_try_names(const std::string &text, std::vector<std::pair<int, int>> &tries, std::string &why)
+{
+    tries.clear();
+    std::stringstream list(text);
+    std::string item;
+    while (std::getline(list, item, ','))
+    {
+        int i = 0, j = 0;
+        char dash = 0;
+        std::istringstream in(item);
+        if (!(in >> i >> dash >> j) || dash != '-' || i < 0 || j < 0 || !(in >> std::ws).eof())
+        {
+            why = "'" + item + "' is not a try i-j";
+            return false;
+        }
+        tries.emplace_back(i, j);
+    }
+    if (tries.empty())
+    {
+        why = "no try named";
+        return false;
+    }
+    return true;
+}
+
+std::string loop_try_name(const std::pair<int, int> &t)
+{
+    return std::to_string(t.first) + "-" + std::to_string(t.second);
+}
+
+LoopClosureReplayResult replay_loop_closure(const LoopClosureCapture &capture, const OdometryConfig &params, Logger &logger,
+                                            const std::vector<std::pair<int, int>> &reject)
 {
     LoopClosureReplayResult result;
     result.windows = capture.windows;
@@ -57,9 +101,22 @@ LoopClosureReplayResult replay_loop_closure(const LoopClosureCapture &capture, c
     if (!result.segments_match)
         return result;
 
-    CapturedRegistrations registrations(capture);
+    for (const auto &t : reject)
+    {
+        const bool held = std::any_of(capture.tries.begin(), capture.tries.end(),
+                                      [&](const CapturedLoopTry &c) { return c.registration.i == t.first && c.registration.j == t.second; });
+        if (!held && std::find(result.rejected_not_in_capture.begin(), result.rejected_not_in_capture.end(), loop_try_name(t)) ==
+                         result.rejected_not_in_capture.end())
+            result.rejected_not_in_capture.push_back(loop_try_name(t));
+    }
+    if (!result.rejected_not_in_capture.empty())
+        return result;
+
+    CapturedRegistrations registrations(capture, reject);
     result.loops = close_loops(result.windows, segments, registrations, params, logger, &result.report);
     result.missing = registrations.missing;
+    for (const auto &t : std::set<std::pair<int, int>>(reject.begin(), reject.end()))
+        (registrations.asked.count(t) ? result.rejected : result.rejected_not_asked).push_back(loop_try_name(t));
 
     for (size_t w = 0; w < result.windows.size() && w < capture.result_poses.size(); w++)
     {

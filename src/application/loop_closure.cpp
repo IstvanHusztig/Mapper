@@ -973,7 +973,8 @@ int close_loops(std::vector<Window> &windows, const std::vector<LoopClosureSegme
                 if (!registration || !registration->registered)
                     continue;
                 const LoopClosureTry &r = *registration;
-                const bool accepted = loop_try_accepted(r, params);
+                const bool named = registrations.rejected(best_i, j, cross_floor);
+                const bool accepted = !named && loop_try_accepted(r, params);
                 if (cross_floor)
                     cross_floor_tries++;
                 log_info(logger) << (cross_floor ? "cross-floor " : "") << "loop candidate segments " << best_i << " -> " << j << " (t "
@@ -982,7 +983,7 @@ int close_loops(std::vector<Window> &windows, const std::vector<LoopClosureSegme
                                  << " -> " << r.overlap_after << ", correction " << r.shift_m << " m " << std::setprecision(1) << r.angle_deg
                                  << " deg"
                                  << (cross_floor ? ", information ratio " + std::to_string(r.information_ratio) : path_note(segments[best_i], segments[j]))
-                                 << (accepted ? " ACCEPTED" : " rejected");
+                                 << (accepted ? " ACCEPTED" : named ? " rejected (named for rejection)" : " rejected");
                 if (accepted)
                 {
                     LoopClosureEdge e;
@@ -991,6 +992,8 @@ int close_loops(std::vector<Window> &windows, const std::vector<LoopClosureSegme
                     e.correction = r.correction;
                     e.fitness = r.overlap_after;
                     e.cross_floor = cross_floor;
+                    e.shift_m = r.shift_m;
+                    e.angle_deg = r.angle_deg;
                     const Eigen::Vector3d &centre = r.centre;
                     if (cross_floor && near_r >= 0.0 && std::hypot(centre.x() - near_x, centre.y() - near_y) > near_r)
                     {
@@ -1086,6 +1089,11 @@ int close_loops(std::vector<Window> &windows, const std::vector<LoopClosureSegme
     {
         optimized = optimize_loop_pose_graph(initial, loops, params);
         residuals = loop_edge_residuals(initial, optimized, loops);
+        if (rep.first_solve.empty())
+        {
+            rep.first_solve = loops;
+            rep.first_solve_residuals = residuals;
+        }
         const size_t worst = loop_edge_to_drop(initial, optimized, loops, params);
         if (worst == loops.size())
         {

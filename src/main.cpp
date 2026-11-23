@@ -1,5 +1,5 @@
 // composition root: 3 arguments (or 3 + --from-snapshot <file>) run the command line, --replay <capture> <params> replays a
-// window capture, --replay-loop-closure <capture> <params> <output> a loop closure capture, anything else opens the GUI
+// window capture, --replay-loop-closure <capture> <params> <output> [--reject-tries i-j,...] a loop closure capture, anything else opens the GUI
 
 #include "cli.h"
 
@@ -18,8 +18,8 @@ int main(int argc, char *argv[])
     {
         if (argc == 4 && std::string(argv[1]) == "--replay")
             return run_replay(argv[2], argv[3]);
-        if (argc == 5 && std::string(argv[1]) == "--replay-loop-closure")
-            return run_loop_closure_replay(argv[2], argv[3], argv[4]);
+        if ((argc == 5 || (argc == 7 && std::string(argv[5]) == "--reject-tries")) && std::string(argv[1]) == "--replay-loop-closure")
+            return run_loop_closure_replay(argv[2], argv[3], argv[4], argc == 7 ? argv[6] : nullptr);
         if (argc == 4 || (argc == 6 && std::string(argv[4]) == "--from-snapshot")) // running from the command line
             return run_cli(argc, argv);
         return run_gui(argc, argv);
