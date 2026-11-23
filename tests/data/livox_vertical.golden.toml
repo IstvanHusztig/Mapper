@@ -94,9 +94,9 @@ resolution_Y = 0.4
 resolution_Z = 0.4
 
 [lidar_imu_extrinsics]
-lidar_imu_lever_arm_x_m = 0.0
-lidar_imu_lever_arm_y_m = 0.0
-lidar_imu_lever_arm_z_m = 0.0
+lidar_imu_lever_arm_x_m = 0.04412
+lidar_imu_lever_arm_y_m = -0.011
+lidar_imu_lever_arm_z_m = -0.02329
 
 [lidar_odometry_control]
 convergence_delta_threshold = 1e-12
