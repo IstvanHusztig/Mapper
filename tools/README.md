@@ -138,6 +138,21 @@ python tools/wall_pairs.py measure set.npz <result or replay folder | odometry_s
 
 Besides the odometry readings, the table has two rows from the log: `stage durations` (the `stage durations: loading .. s, odometry .. s, loop closure .. s, consistency .. s, saving .. s` line every run logs; a stage that did not run prints `n/a`) and `windows stopped at the time limit` (0: the result does not depend on the machine's load; n > 0: it does, since the per-window time limit ended iterations). The count comes from the dedicated line, or from the `time limit` count of the window verdict summary when the line is missing; a log with neither is NOT MEASURED. Both rows are descriptive: no trigger, no change to the exit code.
 
+## cloud_from_trajectory.py
+
+A point cloud for a trajectory that has none of its own: a loop closure replay (`dMapper --replay-loop-closure`) or an odometry
+snapshot (`odometry_snapshot.bin`). It carries the points of a result's `scan_lio_merged.laz` from that result's trajectory to the
+other one; each point keeps its position relative to its own node (the last node at or before its time). Both trajectories must have
+the same node times (same recording, same cut); the output keeps the source cloud's header and attributes.
+
+```
+python tools/cloud_from_trajectory.py <result folder> <result/replay folder or odometry_snapshot.bin> <out.laz>
+```
+
+Checked on a loop closure stage against dMapper's own cloud of that stage: within 0.2 mm (the file's resolution); about 25 s for
+56 million points. It moves points; it does not register them again. Tests: `CloudFromTrajectoryTests` in
+`tests/test_verification_tools.py`.
+
 ## spot_check.py
 
 Checks one place of a result for a structure drawn twice (a doubled railing or wall) and tells which passes draw which copy. `eval_odometry.py` and revisit checks that fit walls and floors don't see thin structures. Pure Python, plus CloudCompare for the export.

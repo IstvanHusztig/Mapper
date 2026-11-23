@@ -18,6 +18,7 @@ import run_health as health
 import perturbation_sweep as sweep
 import honesty_report as honesty
 import wall_pairs as wp
+import cloud_from_trajectory as cft
 
 
 def log_text(complete=True):
@@ -494,6 +495,38 @@ class RunHealthTimingTests(unittest.TestCase):
                       "stage durations: loading 1 s, odometry 2 s\n", self.STAGES * 2):
             with self.assertRaises(ValueError):
                 self.run_log(extra)
+
+
+class CloudFromTrajectoryTests(unittest.TestCase):
+    def setUp(self):
+        import numpy as np
+        self.np = np
+        self.T = np.array([0.0, 1.0, 2.0])
+        rot = lambda a: np.array([[np.cos(a), -np.sin(a), 0.], [np.sin(a), np.cos(a), 0.], [0., 0., 1.]])
+        self.R = np.stack([rot(0.0), rot(0.3), rot(-0.2)])
+        self.P = np.array([[0., 0., 0.], [1., 2., 0.], [3., -1., 0.5]])
+        self.points = np.array([[1., 0., 0.], [2., 2., 1.], [4., -1., 0.5], [3.5, -0.5, 0.]])
+        self.times = np.array([0.5, 1.2, 2.5, 1.99])
+
+    def test_the_same_trajectory_leaves_every_point_where_it_is(self):
+        tr = (self.T, self.R, self.P)
+        self.assertTrue(self.np.allclose(cft.carry(self.points, self.times, tr, tr), self.points, atol=1e-12))
+
+    def test_a_rigid_move_of_the_trajectory_moves_the_points_with_it(self):
+        np = self.np
+        a = 0.4
+        M = np.array([[np.cos(a), -np.sin(a), 0.], [np.sin(a), np.cos(a), 0.], [0., 0., 1.]])
+        d = np.array([5., -2., 1.])
+        moved = (self.T, np.einsum("ij,njk->nik", M, self.R), self.P @ M.T + d)
+        y = cft.carry(self.points, self.times, (self.T, self.R, self.P), moved)
+        self.assertTrue(np.allclose(y, self.points @ M.T + d, atol=1e-12))
+
+    def test_a_point_belongs_to_the_last_node_at_or_before_its_time(self):
+        np = self.np
+        shifted = self.P.copy()
+        shifted[1] += [0., 0., 1.]  # only node 1 moves
+        y = cft.carry(self.points, self.times, (self.T, self.R, self.P), (self.T, self.R, shifted))
+        self.assertEqual(np.round(y[:, 2] - self.points[:, 2], 12).tolist(), [0., 1., 0., 1.])
 
 
 if __name__=='__main__':
