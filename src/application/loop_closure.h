@@ -66,6 +66,8 @@ public:
     virtual ~LoopClosureRegistrations() = default;
     // segment j registered against segment i; nullptr if this source can't give it (a capture that doesn't hold it)
     virtual const LoopClosureTry *registration(int i, int j, bool cross_floor) = 0;
+    // true: this try counts as rejected whatever its acceptance rule says (a replay's --reject-tries)
+    virtual bool rejected(int, int, bool) { return false; }
 };
 
 // What close_loops did with the edges: the edges kept, those dropped (in the order dropped, with the residual that dropped
@@ -126,6 +128,8 @@ struct LoopClosureEdge
     // (see loop_edge_information)
     bool information = false;
     Eigen::Matrix<double, 6, 6> omega = Eigen::Matrix<double, 6, 6>::Zero();
+    double shift_m = 0.0;   // its registration's shift_m and angle_deg (for the report; the pose graph doesn't read them)
+    double angle_deg = 0.0;
 };
 
 // The information matrix of a loop edge's relative-pose residual from its registration's information H (the normal matrix
@@ -201,5 +205,7 @@ struct LoopClosureReport
     std::vector<LoopEdgeResidual> kept_residuals;
     std::vector<LoopClosureEdge> dropped; // in the order dropped
     std::vector<LoopEdgeResidual> dropped_residuals;
+    std::vector<LoopClosureEdge> first_solve; // every edge of the first solve, before any was dropped, with its residual there
+    std::vector<LoopEdgeResidual> first_solve_residuals;
     double largest_segment_correction_m = 0.0; // of the last solve (also when implausible)
 };

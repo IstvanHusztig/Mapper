@@ -47,7 +47,7 @@ namespace
     }
 } // namespace
 
-int run_loop_closure_replay(const char *capture_file, const char *params_file, const char *output_folder)
+int run_loop_closure_replay(const char *capture_file, const char *params_file, const char *output_folder, const char *reject_tries)
 {
     OdometryConfig config{};
     RunPaths paths;
@@ -59,9 +59,15 @@ int run_loop_closure_replay(const char *capture_file, const char *params_file, c
         return 1;
     }
     ConsoleReporter reporter;
+    std::vector<std::pair<int, int>> reject;
+    std::string why;
+    if (reject_tries && !parse_loop_try_names(reject_tries, reject, why))
+    {
+        log_error(reporter) << "--reject-tries: " << why;
+        return 1;
+    }
     LoopClosureCapture capture;
     std::map<std::string, std::string> captured_settings;
-    std::string why;
     if (!read_loop_closure_capture(capture_file, capture, captured_settings, why))
     {
         log_error(reporter) << "Cannot read the loop closure capture: " << why;
@@ -82,15 +88,30 @@ int run_loop_closure_replay(const char *capture_file, const char *params_file, c
     log_info(logger) << "loop closure replay of " << capture.windows.size() << " windows, " << capture.segments.size() << " segments, "
                      << capture.tries.size() << " captured registrations ("
                      << (own_settings ? "the capture's own loop closure settings" : "changed settings: " + joined(settings.changed)) << ")";
+    if (!reject.empty())
+    {
+        std::vector<std::string> names;
+        for (const auto &t : reject)
+            names.push_back(loop_try_name(t));
+        log_info(logger) << "loop closure replay: tries counted as rejected (--reject-tries): " << joined(names);
+    }
 
     const auto start = std::chrono::steady_clock::now();
-    const LoopClosureReplayResult r = replay_loop_closure(capture, config, logger);
+    const LoopClosureReplayResult r = replay_loop_closure(capture, config, logger, reject);
     const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
     if (!r.segments_match)
     {
         log_error(logger) << "loop closure replay: the capture's windows don't give the capture's segments with these settings";
         return 1;
     }
+    if (!r.rejected_not_in_capture.empty())
+    {
+        log_error(logger) << "loop closure replay: --reject-tries names tries the capture doesn't hold, nothing run: " << joined(r.rejected_not_in_capture);
+        return 1;
+    }
+    if (!reject.empty())
+        log_info(logger) << "loop closure replay: rejected " << (r.rejected.empty() ? std::string("none") : joined(r.rejected))
+                         << (r.rejected_not_asked.empty() ? std::string() : "; named but never asked for (no effect): " + joined(r.rejected_not_asked));
     if (!r.missing.empty())
     {
         log_error(logger) << "loop closure replay: the settings ask for " << r.missing.size()
@@ -122,7 +143,7 @@ int run_loop_closure_replay(const char *capture_file, const char *params_file, c
     }
     if (!logger.ok())
         log_warning(reporter) << "loop closure replay: the loop log could not be written to " << output_folder;
-    if (own_settings && r.identical_nodes != r.nodes)
+    if (own_settings && reject.empty() && r.identical_nodes != r.nodes)
     {
         log_error(logger) << "loop closure replay: the capture's own settings did not reproduce the run";
         return 1;

@@ -1210,3 +1210,101 @@ TEST_CASE("loop closure capture: registrations made only for the capture change 
     MESSAGE("cap 1000: ", complete.capture.tries.size(), " registrations, ", held, " of ", qualifying, " qualifying pairs held");
     CHECK(held == qualifying);
 }
+
+// ---- --reject-tries (change livox4-double-walls-cause, task 2.3) ----
+namespace
+{
+    // a capture of the drifting loop recording with a registration for every same-floor try close_loops asks for: each
+    // accepted, with fixed sigmas (no information), its correction a small shift that differs from try to try
+    LoopClosureCapture capture_with_tries(const OdometryConfig &config)
+    {
+        Recording r = loop_recording(2);
+        add_second_lap_drift(r, {0.3, 0.4, 0.0}, 2.0 * deg);
+        LoopClosureCapture c;
+        c.windows = r.windows;
+        c.segments = loop_closure_segments(c.windows, config);
+        std::vector<RevisitSegment> revisit_segments;
+        for (const auto &s : c.segments)
+            revisit_segments.push_back({s.center, s.path_begin, s.path_end});
+        for (int j = 0; j < static_cast<int>(c.segments.size()); j++)
+            for (const auto &t : revisit_tries(revisit_segments, j, config))
+            {
+                CapturedLoopTry k;
+                k.registration.i = t.i;
+                k.registration.j = j;
+                k.registration.registered = true;
+                k.registration.overlap_before = 0.6;
+                k.registration.overlap_after = 0.8 - 0.01 * (c.tries.size() % 7);
+                k.registration.correction.translation() = Eigen::Vector3d(-0.2 + 0.03 * (c.tries.size() % 5), -0.3, 0.0);
+                k.registration.shift_m = k.registration.correction.translation().norm();
+                k.accepted = loop_try_accepted(k.registration, config);
+                k.requested_by_run = true;
+                c.tries.push_back(k);
+            }
+        for (const auto &w : c.windows)
+            c.result_poses.push_back(w.poses);
+        return c;
+    }
+}
+
+TEST_CASE("loop closure replay: a rejected try changes the edges and the result, an unknown one is named, none changes nothing")
+{
+    const OdometryConfig config = loop_closure_config();
+    const LoopClosureCapture capture = capture_with_tries(config);
+    NullLogger logger;
+    const LoopClosureReplayResult plain = replay_loop_closure(capture, config, logger);
+    REQUIRE(plain.missing.empty());
+    REQUIRE(plain.loops >= 2);
+    MESSAGE(capture.tries.size(), " tries, ", plain.loops, " loops, ", plain.report.dropped.size(), " dropped");
+    CHECK(plain.report.first_solve.size() == plain.report.kept.size() + plain.report.dropped.size());
+
+    // no rejection named: the same as without the option
+    const LoopClosureReplayResult none = replay_loop_closure(capture, config, logger, {});
+    CHECK(none.loops == plain.loops);
+    CHECK(same_bits(all_poses(none.windows), all_poses(plain.windows)));
+    CHECK(none.rejected.empty());
+
+    // a kept edge's try rejected: that edge is gone, and the trajectory moves
+    const LoopClosureEdge &kept = plain.report.kept.front();
+    const std::pair<int, int> named{kept.i, kept.j};
+    const LoopClosureReplayResult without = replay_loop_closure(capture, config, logger, {named});
+    CHECK(without.rejected_not_in_capture.empty());
+    CHECK(without.rejected == std::vector<std::string>{loop_try_name(named)});
+    CHECK(without.rejected_not_asked.empty());
+    for (const auto &e : without.report.first_solve)
+        CHECK(!(e.i == kept.i && e.j == kept.j));
+    CHECK(!same_bits(all_poses(without.windows), all_poses(plain.windows)));
+
+    // a try the capture doesn't hold: named, nothing run
+    const std::pair<int, int> unknown{0, 1};
+    const LoopClosureReplayResult bad = replay_loop_closure(capture, config, logger, {named, unknown});
+    CHECK(bad.rejected_not_in_capture == std::vector<std::string>{"0-1"});
+    CHECK(bad.loops == 0);
+    CHECK(same_bits(all_poses(bad.windows), all_poses(capture.windows)));
+
+    // the edge list carries the edges' registration and first-solve readings and the tries rejected
+    const auto file = std::filesystem::temp_directory_path() / "lidar_odometry_tests_loop_closure_edges.json";
+    std::string why;
+    REQUIRE(write_loop_closure_replay_json(file, without, LoopClosureSettingsDifference{}, config, why));
+    std::ifstream in(file);
+    const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    in.close();
+    std::filesystem::remove(file);
+    for (const char *field : {"\"shift_m\"", "\"angle_deg\"", "\"first_solve_residual_m\"", "\"rejected_tries\"", "\"edges_kept\""})
+        CHECK_MESSAGE(text.find(field) != std::string::npos, field);
+    CHECK(text.find(loop_try_name(named)) != std::string::npos);
+}
+
+TEST_CASE("loop closure replay: the tries to reject are read as i-j[,i-j...]")
+{
+    std::vector<std::pair<int, int>> tries;
+    std::string why;
+    REQUIRE(parse_loop_try_names("3-17,12-40", tries, why));
+    CHECK(tries == std::vector<std::pair<int, int>>{{3, 17}, {12, 40}});
+    CHECK(loop_try_name(tries[1]) == "12-40");
+    CHECK(!parse_loop_try_names("3-17,x", tries, why));
+    CHECK(why.find("'x'") != std::string::npos);
+    CHECK(!parse_loop_try_names("3:17", tries, why));
+    CHECK(!parse_loop_try_names("3-17-2", tries, why));
+    CHECK(!parse_loop_try_names("", tries, why));
+}

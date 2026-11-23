@@ -140,7 +140,38 @@ namespace
         if (e.information)
             j["weighted_residual_m"] = r.weighted * config.loop_closure_edge_sigma_m;
         j["drop_ratio"] = loop_edge_drop_ratio(e, r, config);
+        j["shift_m"] = e.shift_m;
+        j["angle_deg"] = e.angle_deg;
+        if (e.information)
+        {
+            // the eigenvalues of the edge's information (omega), ascending: its translation block [1/m^2] in segment i's
+            // frame, its rotation block [1/rad^2]
+            const auto eigenvalues = [](const Eigen::Matrix3d &m)
+            {
+                const Eigen::Vector3d v = Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d>(m, Eigen::EigenvaluesOnly).eigenvalues();
+                return std::vector<double>{v(0), v(1), v(2)};
+            };
+            j["information_translation_eigenvalues"] = eigenvalues(e.omega.topLeftCorner<3, 3>());
+            j["information_rotation_eigenvalues"] = eigenvalues(e.omega.bottomRightCorner<3, 3>());
+        }
         return j;
+    }
+
+    // the residual of an edge at the first solve, before any edge was dropped
+    void add_first_solve_residual(nlohmann::json &j, const LoopClosureEdge &e, const LoopClosureReport &report, const OdometryConfig &config)
+    {
+        for (size_t k = 0; k < report.first_solve.size(); k++)
+        {
+            const LoopClosureEdge &f = report.first_solve[k];
+            if (f.i != e.i || f.j != e.j || f.cross_floor != e.cross_floor)
+                continue;
+            const LoopEdgeResidual &r = report.first_solve_residuals[k];
+            j["first_solve_residual_m"] = r.translation_m;
+            j["first_solve_residual_deg"] = r.angle_deg;
+            if (f.information)
+                j["first_solve_weighted_residual_m"] = r.weighted * config.loop_closure_edge_sigma_m;
+            return;
+        }
     }
 } // namespace
 
@@ -299,13 +330,22 @@ bool write_loop_closure_replay_json(const std::filesystem::path &file, const Loo
     j["own_settings"] = settings.refused.empty() && settings.changed.empty();
     j["settings_changed"] = settings.changed;
     j["missing_tries"] = result.missing;
+    j["rejected_tries"] = result.rejected;
+    j["rejected_tries_not_asked"] = result.rejected_not_asked;
+    j["rejected_tries_not_in_capture"] = result.rejected_not_in_capture;
     nlohmann::json kept = nlohmann::json::array();
     for (size_t k = 0; k < result.report.kept.size(); k++)
+    {
         kept.push_back(edge_json(result.report.kept[k], result.report.kept_residuals[k], config));
+        add_first_solve_residual(kept.back(), result.report.kept[k], result.report, config);
+    }
     j["edges_kept"] = kept;
     nlohmann::json dropped = nlohmann::json::array();
     for (size_t k = 0; k < result.report.dropped.size(); k++)
+    {
         dropped.push_back(edge_json(result.report.dropped[k], result.report.dropped_residuals[k], config));
+        add_first_solve_residual(dropped.back(), result.report.dropped[k], result.report, config);
+    }
     j["edges_dropped"] = dropped;
     nlohmann::json against;
     against["nodes"] = result.nodes;
