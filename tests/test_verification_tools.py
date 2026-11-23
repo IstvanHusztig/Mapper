@@ -481,6 +481,14 @@ class RunHealthTimingTests(unittest.TestCase):
         self.assertEqual(rows["stage durations"][3], "NOT MEASURED")
         self.assertEqual(r["missing_required"], [])
 
+    def test_the_window_verdict_summary_gives_the_count(self):
+        summary = ("window verdict summary: iterations stopped: converged 0, iteration limit 1016, time limit {}, forced 0; "
+                   "rejected steps 3, steps not applied 0, big-jump nodes 0\n")
+        self.assertEqual(self.run_log(summary.format(0))["time_limit_windows"], 0)
+        self.assertEqual(self.run_log(summary.format(2))["time_limit_windows"], 2)
+        # the dedicated line wins over the summary
+        self.assertEqual(self.run_log(summary.format(2) + "windows stopped at the time limit: 0\n")["time_limit_windows"], 0)
+
     def test_malformed_or_duplicate_lines_are_errors(self):
         for extra in ("windows stopped at the time limit: many\n", "windows stopped at the time limit: 0\nwindows stopped at the time limit: 1\n",
                       "stage durations: loading 1 s, odometry 2 s\n", self.STAGES * 2):

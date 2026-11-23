@@ -3,6 +3,7 @@
 
 #include "loop_closure.h"
 
+#include <algorithm>
 #include <chrono>
 #include <iomanip>
 
@@ -34,6 +35,23 @@ namespace
         const char *step_;
         std::chrono::steady_clock::time_point start_;
     };
+    // adds the time from its construction to the end of its scope to one stage's seconds (a stage that did not run stays < 0)
+    class StageClock
+    {
+    public:
+        explicit StageClock(double &seconds) : seconds_(seconds), start_(std::chrono::steady_clock::now()) {}
+        ~StageClock()
+        {
+            const std::chrono::duration<double> d = std::chrono::steady_clock::now() - start_;
+            seconds_ = std::max(seconds_, 0.0) + d.count();
+        }
+        StageClock(const StageClock &) = delete;
+        StageClock &operator=(const StageClock &) = delete;
+
+    private:
+        double &seconds_;
+        std::chrono::steady_clock::time_point start_;
+    };
 } // namespace
 
 OdometryPipeline::OdometryPipeline(const OdometryConfig &config, Logger &logger, ProgressReporter &progress, RunInputs inputs,
@@ -45,6 +63,7 @@ OdometryPipeline::OdometryPipeline(const OdometryConfig &config, Logger &logger,
 
 bool OdometryPipeline::load()
 {
+    StageClock clock(stage_seconds_[0]);
     const OdometryConfig &params = *config_;
     progress_->stage_started(RunStage::Loading);
     progress_->checkpoint();
@@ -70,6 +89,7 @@ bool OdometryPipeline::load()
 
 bool OdometryPipeline::run_odometry()
 {
+    StageClock clock(stage_seconds_[1]);
     progress_->stage_started(RunStage::Odometry);
     progress_->checkpoint();
     double ts_failure = 0.0;
@@ -89,6 +109,7 @@ OdometrySnapshot OdometryPipeline::snapshot() const
 
 bool OdometryPipeline::restore_odometry(const OdometrySnapshot &snapshot, std::string &why)
 {
+    StageClock clock(stage_seconds_[1]);
     progress_->stage_started(RunStage::Odometry);
     if (snapshot.windows.size() != windows.size())
     {
@@ -117,6 +138,7 @@ void OdometryPipeline::post_process()
         progress_->stage_started(RunStage::LoopClosure);
         progress_->checkpoint();
         StepTiming timing(params, *logger_, "loop_closure");
+        StageClock clock(stage_seconds_[2]);
         run_loop_closure(windows, params, *inputs_.points, *logger_);
     }
 
@@ -125,6 +147,7 @@ void OdometryPipeline::post_process()
         progress_->stage_started(RunStage::Consistency);
         progress_->checkpoint();
         StepTiming timing(params, *logger_, "consistency");
+        StageClock clock(stage_seconds_[3]);
         run_consistency(windows, params, *inputs_.points, *logger_);
     }
 }
@@ -139,8 +162,24 @@ bool OdometryPipeline::run_all()
 void OdometryPipeline::save(ResultSink &sink, const GuiPreferences &gui, double elapsed_seconds)
 {
     progress_->stage_started(RunStage::Saving);
-    StepTiming timing(*config_, *logger_, "save");
-    save_result(windows, *config_, state, gui, elapsed_seconds, sink, *inputs_.points, *logger_);
+    {
+        StageClock clock(stage_seconds_[4]);
+        StepTiming timing(*config_, *logger_, "save");
+        save_result(windows, *config_, state, gui, elapsed_seconds, sink, *inputs_.points, *logger_);
+    }
+    // one line with every stage's seconds (tools/run_health.py reads it); "n/a" for a stage that did not run
+    auto line = log_info(*logger_);
+    line << "stage durations: ";
+    const char *names[5] = {"loading", "odometry", "loop closure", "consistency", "saving"};
+    for (int k = 0; k < 5; k++)
+    {
+        line << (k ? ", " : "") << names[k] << " ";
+        if (stage_seconds_[k] < 0.0)
+            line << "n/a";
+        else
+            line << std::fixed << std::setprecision(1) << stage_seconds_[k];
+        line << " s";
+    }
 }
 
 void OdometryPipeline::clear_point_store()

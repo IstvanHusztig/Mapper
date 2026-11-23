@@ -68,6 +68,9 @@ private:
     bool debug_;
     WindowCaptureSink *capture_ = nullptr;
     WindowTermSink *terms_ = nullptr;
+    // seconds per stage (loading, odometry, loop closure, consistency, saving) of this run, < 0 for a stage that did not
+    // run; logged as one "stage durations" line at the end of save() (tools/run_health.py reads it)
+    double stage_seconds_[5] = {-1.0, -1.0, -1.0, -1.0, -1.0};
     RunInputs inputs_;
     RunServices services_;
 };

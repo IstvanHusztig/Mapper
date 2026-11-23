@@ -160,6 +160,14 @@ def read_timing(text):
         if not m:
             raise ValueError("malformed 'windows stopped at the time limit' line")
         limit = int(m.group(1))
+    else:
+        # the window verdict summary of every run since consistency-harness counts the windows whose iterations the time
+        # limit ended ("iterations stopped: converged a, iteration limit b, time limit c, forced d")
+        lines = re.findall(r"^window verdict summary: iterations stopped: .*?, time limit (\d+),", text, re.M)
+        if len(set(lines)) > 1:
+            raise ValueError("window verdict summaries with different time-limit counts")
+        if lines:
+            limit = int(lines[0])
     return durations, limit
 
 
