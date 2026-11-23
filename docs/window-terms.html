@@ -264,6 +264,36 @@ windows) should not be read as a statement about the path.</p>
 what they show is that no window stands out. The edges, the accelerometer and the bias and offset priors end below 1.
 The velocity prior is the only term far above it.</p>
 
+<h2 id="a-conflict-case-right-after-a-fast-turn">A conflict case: a window right after a fast turn</h2>
+<p>The stretch above shows the table in balance. A window where the terms fight shows what the per-term view is for. The
+excerpt below is one window right after a fast turn, read with
+<code>python tools/window_terms.py &lt;window_terms.csv&gt; --window N --state result</code>, reduced to the stretch along
+travel (the tool prints every motion; its cost column is in <code>%.3g</code> form, so 19,200 appears as 1.92e+04, and the
+pulls with four decimals).</p>
+<div class="table-wrap"><table>
+<tr><th>Term</th><th class="num">Cost per residual at the result</th><th class="num">Pull in a stretch along travel [m]</th><th>What it says</th></tr>
+<tr><td>NDT, indoor</td><td class="num">0.33</td><td class="num">+0.022</td><td>the map points want only a small stretch</td></tr>
+<tr><td>Edge position</td><td class="num">34.7</td><td class="num">−0.27</td><td>the motion model wants the window shorter</td></tr>
+<tr><td>Velocity prior</td><td class="num">19,200</td><td class="num">−0.24</td><td>the carried start velocity pulls the same way, and its cost is huge</td></tr>
+<tr><td>Accelerometer</td><td class="num">123</td><td class="num">not an along-stretch term (its row shows −0.03 for a curve)</td><td>it still disagrees after the solve</td></tr>
+<tr><td>Gyro bias prior</td><td class="num">33</td><td class="num">no pull</td><td>the term does not act on this motion</td></tr>
+<tr><td>Offset prior</td><td class="num">1,020</td><td class="num">no pull</td><td>the term does not act on this motion</td></tr>
+<tr><td>Origin fix</td><td class="num">0</td><td class="num">no pull</td><td>holds the first pose</td></tr>
+<tr><td>Total</td><td class="num">0.83</td><td class="num">0</td><td>the sum is at its balance point</td></tr>
+</table></div>
+<ul>
+<li><b>Cost per residual:</b> about 1 means the term is satisfied. 0.33 is satisfied, 19,200 is badly violated.</li>
+<li><b>Pull:</b> where the term alone would move the window, in metres at the last node. The terms pull in different
+directions here (+0.02 from the map, −0.27 and −0.24 from the edges and the prior). The total sits at 0 because the solve
+balances them.</li>
+<li><b>Hold:</b> how tightly the term alone keeps that motion, as a sigma. A small value is a stiff term, and
+<code>inf</code> means the term does not constrain that motion at all (the excerpt leaves the hold columns out).</li>
+<li><b>What the per-term view adds:</b> it shows which term fights which. The velocity prior costs 19,200 per residual
+while the map only asks for 2 cm, a conflict a single total cost would hide.</li>
+</ul>
+<p><b>Caveats.</b> This window was picked because it is a conflict case; it is not a typical one. The table says which
+term holds a window back, not which of them is right.</p>
+
 <h2 id="how-far-the-table-can-be-trusted">How far the table can be trusted</h2>
 <p>A pull is one linear step with everything else held. To see what that costs, the table at the guess can be compared
 with what each window then actually did (84 windows):</p>

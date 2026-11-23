@@ -120,6 +120,24 @@ python tools/trajectory_seams.py "<raw data>/44/lio_result_2" "<raw data>/44/lio
 - Used for `odometry-stall-fix`: a `/fp:fast` and a `/fp:precise` build of the same code should stay within a few centimetres over the whole 44.
 - Positions are world positions: each chunk's rows are placed with its pose from `session_poses.mrp`. Before 2026-10-10 the tool compared the chunk-relative rows, so it missed what loop closure moves (the chunk poses) and mixed frames in the route length. Earlier comparisons of loop-closure variants with it understate the differences.
 
+## wall_pairs.py
+
+Measures how far apart two visits of the same wall lie, from trajectory poses and a set of wall returns frozen once, so every trajectory of a recording is judged on the same walls and no cloud is read. Pure Python plus numpy and scipy (laspy for `freeze`).
+
+```
+python tools/wall_pairs.py freeze <result> <result>/map_quality_cache/wall_precision_+0.50.csv set.npz [--plan-walls]
+python tools/wall_pairs.py measure set.npz <result or replay folder | odometry_snapshot.bin | label=path>... [--threshold 0.08] [--before T1] [--after T2] [--csv out.csv]
+```
+
+- `freeze` takes the returns of each `wall_precision.py` piece's visits (same side of the piece's line only) from the result's cloud and trajectory and stores, for each return, its time, trajectory node and position relative to that node. Pieces and pairs that do not match the table are left out and counted. `--plan-walls` keeps only pieces on the plan's walls (the table must come from `wall_precision.py --plan`).
+- `measure` places each return with the trajectory, brings each pair into the earlier visit's node frame (a rigid move of the whole trajectory gives zero) and takes the difference of the two visits' median positions along the piece's normal. Per trajectory: median, 90th percentile and the number of pairs at or above the threshold, for all pairs and with `--before` / `--after` for pairs by time; then the pairs that cross the threshold between trajectories. A trajectory whose node times differ from the set's is refused.
+- Not accuracy: it is agreement between visits on the frozen set. A set chosen on one result favours that result's walls, so freeze the set before the variants are run; its origin is printed with every table.
+- Use: a loop closure replay's trajectory (`--replay-loop-closure` writes it) and the run's own, in seconds each.
+
+## run_health.py: stage durations and time limit
+
+Besides the odometry readings, the table has two rows from the log: `stage durations` (the `stage durations: loading .. s, odometry .. s, loop closure .. s, consistency .. s, saving .. s` line every run logs; a stage that did not run prints `n/a`) and `windows stopped at the time limit` (0: the result does not depend on the machine's load; n > 0: it does, since the per-window time limit ended iterations). The count comes from the dedicated line, or from the `time limit` count of the window verdict summary when the line is missing; a log with neither is NOT MEASURED. Both rows are descriptive: no trigger, no change to the exit code.
+
 ## spot_check.py
 
 Checks one place of a result for a structure drawn twice (a doubled railing or wall) and tells which passes draw which copy. `eval_odometry.py` and revisit checks that fit walls and floors don't see thin structures. Pure Python, plus CloudCompare for the export.

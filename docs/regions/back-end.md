@@ -86,6 +86,7 @@ orchestrator's):
     seams, offsets between windows reduced, and the `should_fail` truth case (moves the true trajectory up to 6.3 mm).
   - `-tc="odometry snapshot*"`: round trip bit for bit, refused for other odometry settings, damaged file, restore checks,
     post-processing after a restore equal to after the odometry.
+- **Loop closure replay** (the way to test a loop rule): a CLI run (also `--from-snapshot`) with `capture_loop_closure = true` writes `loop_closure_capture.bin`; `dMapper --replay-loop-closure <capture> <params.toml> <output_folder>` runs `close_loops` on the recorded registrations (edge choice, pose graph, pruning, node correction) and writes the trajectory and its loop log, in seconds. With the capture's own settings every node must equal the run's bit for bit (exit 1 otherwise). The capture holds no points, so it only chooses among recorded tries: settings that ask for another try are named as missing and write nothing; odometry settings, `loop_closure_segment_windows`, `loop_closure_max_correction_m` and `loop_closure_cross_floor_search_m` are refused. Measure the replayed trajectory with `wall_pairs.py measure` and `trajectory_seams.py`; a rule that looks better is confirmed by a full run. `capture_loop_closure_max_tries` bounds the tries kept. Files: `loop_closure_capture.h`, `loop_closure_replay.{h,cpp}`, `loop_closure_capture_file.{h,cpp}`, `loop_closure_replay_cli.cpp`.
 - **Replays do not reach this region**: `dMapper --replay` runs only the window loop. `python tools/step_checks.py` still
   covers it through the unit tests and 44_short against its manifest, but 44_short (30 s) hardly exercises loop
   closure; only the full 44 does (`tools/README.md`).
@@ -105,7 +106,7 @@ orchestrator's):
 - **Tools**: `trajectory_seams.py` (world positions; sees what loop closure moves), `map_quality.py --floors` (revisit
   heading/offset, jitter, railing, stairwell on 44 s0/s1/s2), `stairwell_check.py`, `spot_check.py`,
   `evaluate_floors.py`, `wall_precision.py` (`pair_diff_m`: two visits of one wall), `holdout_sharpness.py` (whether
-  consistency only fits its own points), `snapshot_trajectory.py`. Skills: `verify-run`, then `verify-map`.
+  consistency only fits its own points), `snapshot_trajectory.py`, `wall_pairs.py` (two visits of a wall measured from poses, no cloud: the replay's yardstick). Skills: `verify-run`, then `verify-map`.
 
 ## Known flaws
 

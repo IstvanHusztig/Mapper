@@ -284,6 +284,8 @@ A code review of the processing path; the measured profile that followed it is [
 
 The debug setting `log_stage_timing` (`[lidar_odometry_debug_info]`, off by default; change `stage-timing`) logs the time of each pipeline step and, at the end of the odometry, where the window loop spent it. The results are bit-identical with the setting on. These runs used the Release (`/fp:fast`) build with `settings/l2-vertical.toml` and nothing else running; the machine has 16 logical cores, and the run uses one of them.
 
+Without any setting, every run now logs one line, `stage durations: loading .. s, odometry .. s, loop closure .. s, consistency .. s, saving .. s` (`n/a` for a stage that did not run), and `tools/run_health.py` prints it, with the number of windows stopped at the time limit (0: the run's result does not depend on the machine's load). `log_stage_timing` is still needed for the split inside a stage.
+
 **Pipeline steps:**
 
 | Step | `44_short` (70 windows) | `44` (690 windows) |
