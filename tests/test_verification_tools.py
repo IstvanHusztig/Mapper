@@ -17,6 +17,7 @@ import snapshot_trajectory as snapshot
 import run_health as health
 import perturbation_sweep as sweep
 import honesty_report as honesty
+import wall_pairs as wp
 
 
 def log_text(complete=True):
@@ -331,6 +332,160 @@ class HonestyReportTests(unittest.TestCase):
         bad.write_text("a,b\n1,2\n", encoding="utf-8")
         with contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(honesty.main([str(bad)]), 2)
+
+
+
+def _yaw(a):
+    c, s_ = math.cos(a), math.sin(a)
+    return [[c, -s_, 0.], [s_, c, 0.], [0., 0., 1.]]
+
+
+class WallPairsTests(unittest.TestCase):
+    """A synthetic wall (the line y = 2, two visits 30 s apart, the second 0.05 m further out) seen by a sensor that
+    walks along x with a turning heading; no cloud files, no recording."""
+
+    def setUp(self):
+        import numpy as np
+        self.np = np
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.ns = np.arange(0, 60_000_000_000, 100_000_000, dtype=np.int64) + 50_000_000   # a node every 0.1 s
+        tt = self.ns * 1e-9
+        self.rot = np.array([_yaw(0.1 * t) for t in tt])
+        self.pos = np.column_stack([tt, np.zeros_like(tt), np.zeros_like(tt)])
+        self.origin = wp.Trajectory("origin", self.ns, self.rot, self.pos)
+        rng = np.random.default_rng(3)
+        t1, t2 = np.linspace(10.02, 14.02, 40), np.linspace(40.02, 44.02, 40)
+        self.t = np.r_[t1, t2]
+        self.world = np.column_stack([rng.uniform(0, 0.5, 80), np.r_[np.full(40, 2.0), np.full(40, 2.05)], np.full(80, 0.5)])
+        self.table = self.root / "wall_precision_+0.50.csv"
+        self.table.write_text("piece,x,y,dir_deg,length_m,points,pairs,visit_offsets_m,visit_times_s,plan_dist_m\n"
+                              "7,0.25,2.0,0.0,0.5,80,1,+0.000;+0.050,10.0-14.0;40.0-44.0,0.01\n")
+
+    def freeze(self, **kw):
+        out = self.root / "set.npz"
+        T = self.ns * 1e-9
+        with patch.object(wp, "_read_slice", lambda *a: (self.world, self.t)), \
+                patch("map_quality_lib.trajectory", lambda r: (T, self.rot, self.pos)):
+            self.meta = wp.freeze(str(self.root), str(self.table), str(out), log=lambda *a: None, **kw)
+        return wp.WallSet(out)
+
+    def trajectory_patch(self, **trs):
+        return patch.object(wp, "load_trajectory", lambda spec: trs[spec])
+
+    def moved(self, name, shift_after=None, rigid=None, ns_offset=0):
+        np = self.np
+        rot, pos = self.rot.copy(), self.pos.copy()
+        if rigid is not None:
+            q, v = np.array(_yaw(rigid)), np.array([3., -2., 1.])
+            rot, pos = q @ rot, pos @ q.T + v
+        if shift_after is not None:
+            pos[self.ns * 1e-9 >= 30., 1] += shift_after
+        return wp.Trajectory(name, self.ns + ns_offset, rot, pos)
+
+    def test_frozen_result_reproduces_its_cloud(self):
+        ws = self.freeze()
+        self.assertEqual((ws.meta["pieces"], ws.meta["visits"], ws.meta["pairs"], ws.meta["returns"]), (1, 2, 1, 80))
+        self.assertEqual(ws.meta["selection"], "all pieces with visits")
+        self.assertLess(self.np.abs(wp.reproduction_error(ws, self.origin)).max(), 1e-9)
+        self.assertLess(ws.meta["max_round_trip_m"], 1e-9)
+        self.assertAlmostEqual(float(wp.pair_gaps(ws, self.origin)[0]), 0.05, places=9)
+
+    def test_rigid_move_changes_nothing_and_a_shifted_visit_shows_its_shift(self):
+        ws = self.freeze()
+        g0 = wp.pair_gaps(ws, self.origin)
+        self.assertLess(abs(wp.pair_gaps(ws, self.moved("rigid", rigid=0.7))[0] - g0[0]), 1e-9)
+        self.assertAlmostEqual(float(wp.pair_gaps(ws, self.moved("shift", shift_after=0.07))[0]), 0.12, places=9)
+        self.assertAlmostEqual(float(wp.pair_gaps(ws, self.moved("shift", shift_after=-0.05))[0]), 0.0, places=9)
+
+    def test_measure_table_crossings_and_refusal(self):
+        self.freeze()
+        out = []
+        path = self.root / "set.npz"
+        with self.trajectory_patch(a=self.origin, b=self.moved("b", shift_after=0.07), c=self.moved("c", ns_offset=1)):
+            wp.measure(str(path), ["a", "b"], threshold=0.08, before=20., after=30., log=out.append)
+            text = "\n".join(out)
+            self.assertIn("not accuracy", text)
+            self.assertIn("all pairs (1 pairs)", text)
+            self.assertIn("before 20 s / after 30 s (1 pairs)", text)
+            self.assertIn("0.050 / 0.050 / 0", text)
+            self.assertIn("0.120 / 0.120 / 1", text)
+            self.assertIn("origin -> b: 1 cross above, 0 fall below", text)
+            with self.assertRaisesRegex(ValueError, "node times differ"):
+                wp.measure(str(path), ["a", "c"], log=out.append)
+        self.assertEqual(wp.main(["measure", str(path), str(self.root / "missing")]), 2)
+
+    def test_plan_walls_selection_and_table_mismatch(self):
+        self.freeze(plan_walls=True)
+        self.assertIn("plan walls", self.meta["selection"])
+        self.table.write_text(self.table.read_text().replace(",0.01\n", ",0.5\n"))
+        with self.assertRaisesRegex(ValueError, "no pair survived"):
+            self.freeze(plan_walls=True)
+        # a table offset the cloud does not show: the pair is left out
+        self.table.write_text(self.table.read_text().replace("+0.050", "+0.090"))
+        with self.assertRaisesRegex(ValueError, "no pair survived"):
+            self.freeze()
+
+    def test_node_of_tie_goes_to_the_node_before(self):
+        np = self.np
+        nodes = np.array([1_000_000_000, 2_000_000_000, 3_000_000_000])
+        self.assertEqual(wp.node_of(np.array([1.5, 2.0, 2.0000000004, 3.2]), nodes).tolist(), [0, 0, 0, 2])
+        self.assertEqual(wp.node_of(np.array([0.5]), nodes).tolist(), [-1])
+
+    def test_snapshot_trajectory_keeps_the_rotation(self):
+        p = self.root / "odometry_snapshot.bin"
+        p.write_bytes(snapshot_bytes())
+        tr = wp.load_trajectory(str(p))
+        self.assertEqual(tr.name, "odometry_snapshot")
+        self.assertEqual(tr.ns.tolist(), [1_000_000_000, 2_000_000_000])
+        self.assertEqual(self.np.round(tr.rot[0]).tolist(), [[0., -1., 0.], [1., 0., 0.], [0., 0., 1.]])
+        self.assertEqual(tr.pos[1].tolist(), [4., 5., 6.])
+
+
+class RunHealthTimingTests(unittest.TestCase):
+    STAGES = "stage durations: loading 12.5 s, odometry 400 s, loop closure 20.25 s, consistency n/a s, saving 3 s\n"
+
+    def run_log(self, extra):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "run.log"
+            p.write_text(log_text() + extra)
+            return health.analyse(p)
+
+    def rows(self, r):
+        import argparse
+        ap = argparse.ArgumentParser()
+        health.add_limits(ap)
+        return {row[0]: row for row in health.judge(r, ap.parse_args([]))}
+
+    def test_zero_windows_at_the_limit_is_independent_of_load(self):
+        r = self.run_log(self.STAGES + "windows stopped at the time limit: 0\n")
+        self.assertEqual(r["time_limit_windows"], 0)
+        self.assertEqual(r["stage_durations"]["odometry"], 400.0)
+        self.assertIsNone(r["stage_durations"]["consistency"])
+        rows = self.rows(r)
+        self.assertIn("independent of the machine's load", rows["windows stopped at the time limit"][1])
+        self.assertIn("loop closure 20.25 s", rows["stage durations"][1])
+        self.assertIn("consistency n/a", rows["stage durations"][1])
+
+    def test_a_count_above_zero_is_load_dependent(self):
+        row = self.rows(self.run_log(self.STAGES + "windows stopped at the time limit: 3\n"))["windows stopped at the time limit"]
+        self.assertIn("depends on the machine's load", row[1])
+        self.assertNotIn("independent", row[1])
+        self.assertNotEqual(row[3], "TRIGGER")
+
+    def test_missing_lines_are_not_measured_and_do_not_change_the_exit_code(self):
+        r = self.run_log("")
+        rows = self.rows(r)
+        self.assertEqual(rows["windows stopped at the time limit"][3], "NOT MEASURED")
+        self.assertEqual(rows["stage durations"][3], "NOT MEASURED")
+        self.assertEqual(r["missing_required"], [])
+
+    def test_malformed_or_duplicate_lines_are_errors(self):
+        for extra in ("windows stopped at the time limit: many\n", "windows stopped at the time limit: 0\nwindows stopped at the time limit: 1\n",
+                      "stage durations: loading 1 s, odometry 2 s\n", self.STAGES * 2):
+            with self.assertRaises(ValueError):
+                self.run_log(extra)
 
 
 if __name__=='__main__':

@@ -11,7 +11,7 @@ import struct
 import math
 
 
-def load_snapshot(path, with_metadata=False):
+def load_snapshot(path, with_metadata=False, with_poses=False):
     from trajectory_seams import validate
     data = Path(path).read_bytes()
     offset = 0
@@ -37,6 +37,7 @@ def load_snapshot(path, with_metadata=False):
     if windows > 1_000_000 or windows > len(data) // 256:
         raise ValueError("invalid snapshot window count")
     rows = []
+    poses_out = []
     starts = []
     for _ in range(windows):
         poses, model, stamps, angles, accel = array(16), array(16), array(2), array(3), array(3)
@@ -50,9 +51,12 @@ def load_snapshot(path, with_metadata=False):
         for p, t in zip(poses, stamps):
             if any(abs(p[i] - v) > 1e-12 for i, v in ((3, 0), (7, 0), (11, 0), (15, 1))):
                 raise ValueError("invalid snapshot affine matrix")
+            poses_out.append(p)
             rows.append((Decimal(str(t[0])) * Decimal(1_000_000_000), p[12], p[13], p[14]))
     tail = take("18d")
     if offset != len(data) or not all(math.isfinite(v) for v in tail):
         raise ValueError("invalid snapshot tail or trailing bytes")
     validate(rows)
+    if with_poses:  # the 16 numbers of each node's pose, column-major as stored (rotation: p[0:3], p[4:7], p[8:11] are its columns)
+        return rows, poses_out
     return (rows, {"settings_hash": settings_hash, "windows": starts}) if with_metadata else rows
