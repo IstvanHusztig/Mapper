@@ -111,6 +111,8 @@ functions = [
 files = [
     "src/application/loop_closure.h",
     "src/application/loop_closure.cpp",
+    "src/application/loop_closure_replay.h",
+    "src/application/loop_closure_replay.cpp",
     "src/application/consistency.h",
     "src/application/consistency.cpp",
     "src/domain/odometry_snapshot.h",

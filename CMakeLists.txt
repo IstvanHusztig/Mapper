@@ -182,6 +182,7 @@ add_library(lo_application STATIC
   src/application/lidar_odometry.cpp
   src/application/run_odometry.cpp
   src/application/loop_closure.cpp
+  src/application/loop_closure_replay.cpp
   src/application/consistency.cpp
   src/application/window_replay.cpp)
 target_include_directories(lo_application PUBLIC src/application)
@@ -204,6 +205,7 @@ add_library(lo_infrastructure STATIC
   src/infrastructure/toml_config_repository.cpp
   src/infrastructure/odometry_snapshot_file.cpp
   src/infrastructure/window_capture_file.cpp
+  src/infrastructure/loop_closure_capture_file.cpp
   src/infrastructure/window_term_csv.cpp
   src/infrastructure/console_reporting.cpp)
 target_include_directories(lo_infrastructure
@@ -262,6 +264,7 @@ set(SOURCES
   src/presentation/format_time.h
   src/presentation/cli/cli.cpp
   src/presentation/cli/cli.h
+  src/presentation/cli/loop_closure_replay_cli.cpp
   src/presentation/gui/lidar_odometry_gui.cpp
 )
 

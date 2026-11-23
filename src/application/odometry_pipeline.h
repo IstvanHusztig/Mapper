@@ -10,6 +10,8 @@
 #include <string>
 #include <vector>
 
+class LoopClosureCaptureSink; // loop_closure_capture.h (not included: loop_closure.h must not meet <windows.h>'s near/far)
+
 // One processing run, shared by the CLI and the GUI:
 //   load (load_data -> calculate_trajectory -> compute_step_1)
 //   -> run_odometry (optimize_windows)
@@ -33,6 +35,8 @@ public:
     bool run_odometry();
     // where run_odometry writes a window capture (capture_windows_from_s / _to_s); none if not set
     void set_window_capture(WindowCaptureSink *sink) { capture_ = sink; }
+    // where post_process writes the loop closure capture (capture_loop_closure); none if not set
+    void set_loop_closure_capture(LoopClosureCaptureSink *sink) { loop_closure_capture_ = sink; }
     // where run_odometry writes each window's per-term table (log_window_terms); none if not set (the log line is written
     // without it too)
     void set_window_terms(WindowTermSink *sink) { terms_ = sink; }
@@ -67,6 +71,7 @@ private:
     ProgressReporter *progress_;
     bool debug_;
     WindowCaptureSink *capture_ = nullptr;
+    LoopClosureCaptureSink *loop_closure_capture_ = nullptr;
     WindowTermSink *terms_ = nullptr;
     // seconds per stage (loading, odometry, loop closure, consistency, saving) of this run, < 0 for a stage that did not
     // run; logged as one "stage durations" line at the end of save() (tools/run_health.py reads it)

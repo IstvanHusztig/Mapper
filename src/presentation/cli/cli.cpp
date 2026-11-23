@@ -4,6 +4,7 @@
 #include "folder_inputs.h"
 #include "folder_result_sink.h"
 #include "format_time.h"
+#include "loop_closure_capture_file.h"
 #include "odometry_config.h"
 #include "odometry_pipeline.h"
 #include "odometry_snapshot_file.h"
@@ -54,6 +55,8 @@ int run_cli(int argc, char *argv[])
     OdometryPipeline pipeline(config, reporter, reporter, make_folder_inputs(input_file_names, reporter), make_run_services(), paths);
     FolderWindowCaptureSink capture(argv[3], config);
     pipeline.set_window_capture(&capture);
+    FolderLoopClosureCaptureSink loop_closure_capture(argv[3], config); // capture_loop_closure: loop_closure_capture.bin
+    pipeline.set_loop_closure_capture(&loop_closure_capture);
     FolderWindowTermSink terms(argv[3]); // log_window_terms: window_terms.csv and window_features.csv in the output folder
     if (config.log_window_terms)
         pipeline.set_window_terms(&terms);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Eigen/Dense>
+#include <string>
 #include <vector>
 #include "input_ports.h"
 #include "odometry_config.h"
@@ -15,7 +16,72 @@
 //  4. a pose graph over the segment poses (odometry edges + accepted loop edges) is optimized,
 //  5. the correction is interpolated onto every trajectory node of every window.
 // Returns the number of accepted loop edges.
-int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params, PointStore &point_store, Logger &logger);
+// The registrations (step 3, the only step that reads points) are made by a LoopClosureRegistrations source; everything
+// else is close_loops, which the run and the loop closure replay (loop_closure_replay.h) share. With a capture sink the
+// run hands it what close_loops worked from (loop_closure_capture.h); the results are the same with and without it.
+class LoopClosureCaptureSink;
+int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params, PointStore &point_store, Logger &logger,
+                     LoopClosureCaptureSink *capture = nullptr);
+
+// Step 1 without the points: the windows grouped into segments of loop_closure_segment_windows windows (the last one may be
+// shorter), with the path walked (path_at_windows) and times
+struct LoopClosureSegment
+{
+    int first_window = 0;
+    int last_window = 0;                                  // inclusive
+    Eigen::Affine3d pose = Eigen::Affine3d::Identity();   // world pose of the first node
+    Eigen::Vector3d center = Eigen::Vector3d::Zero();     // mean node position
+    double path_begin = 0.0;                              // path walked up to the first window's first node [m]
+    double path_end = 0.0;                                // ... up to the next segment's first node
+    double t_begin = 0.0;
+    double t_end = 0.0;
+};
+std::vector<LoopClosureSegment> loop_closure_segments(const std::vector<Window> &windows, const OdometryConfig &params);
+
+// One registration of step 3: segment j registered against segment i with its neighbours (cross_floor: only the
+// footprint both share). registered is false when either side had fewer than 500 points (nothing else is set then).
+struct LoopClosureTry
+{
+    int i = 0;
+    int j = 0;
+    bool cross_floor = false;
+    bool registered = false;
+    double overlap_before = 0.0; // share of the source points in occupied 0.2 m target voxels, before / after
+    double overlap_after = 0.0;
+    Eigen::Affine3d correction = Eigen::Affine3d::Identity();            // world transform moving segment j onto i
+    Eigen::Matrix<double, 6, 6> information = Eigen::Matrix<double, 6, 6>::Zero(); // the refinement's normal matrix
+    double shift_m = 0.0;   // the move of the registered points' centre
+    double angle_deg = 0.0; // the correction's rotation angle
+    double information_ratio = 1.0; // cross-floor tries: information_ratio of the target; 1 for same-floor tries (not computed)
+    Eigen::Vector3d centre = Eigen::Vector3d::Zero(); // centre of the registered (source) points
+};
+
+// whether a registration passes the acceptance rule of its kind (loop_closure_min_fitness, ..._cross_floor_*)
+bool loop_try_accepted(const LoopClosureTry &t, const OdometryConfig &params);
+
+// Where close_loops gets its registrations from: the run registers the points, a replay looks them up in a capture
+class LoopClosureRegistrations
+{
+public:
+    virtual ~LoopClosureRegistrations() = default;
+    // segment j registered against segment i; nullptr if this source can't give it (a capture that doesn't hold it)
+    virtual const LoopClosureTry *registration(int i, int j, bool cross_floor) = 0;
+};
+
+// What close_loops did with the edges: the edges kept, those dropped (in the order dropped, with the residual that dropped
+// them), and the outcome
+struct LoopClosureReport;
+
+// Steps 2, 4 and 5 on the segments: the tries chosen and accepted, the edges, the pose graph with its pruning, and the
+// correction of every node of `windows` (from which `segments` were made). Returns the number of loop edges applied.
+int close_loops(std::vector<Window> &windows, const std::vector<LoopClosureSegment> &segments, LoopClosureRegistrations &registrations,
+                const OdometryConfig &params, Logger &logger, LoopClosureReport *report = nullptr);
+
+// The earlier segments that qualify as cross-floor revisits of segment j, nearest (horizontally) first: at least
+// loop_closure_cross_floor_min_time_gap_s apart, neither in loop_closure_cross_floor_exclude_segments, a vertical offset
+// above loop_closure_max_vertical_offset_m and at most loop_closure_cross_floor_max_vertical_m, horizontally within
+// loop_closure_search_radius_m. Empty when cross-floor loops are off.
+std::vector<int> cross_floor_revisits(const std::vector<LoopClosureSegment> &segments, int j, const OdometryConfig &params);
 
 // Step 2, the path walked: for each window, the path [m] from the first window to its first node, summed over the
 // windows' first nodes; a step counts only once the position has moved at least 0.1 m from the last counted one, so that
@@ -126,3 +192,14 @@ size_t loop_edge_to_drop(const std::vector<Eigen::Affine3d> &initial, const std:
 // the largest accepted loop correction (a pose graph that ran away). max_shift_m receives the largest segment correction.
 bool loop_pose_graph_plausible(const std::vector<Eigen::Affine3d> &initial, const std::vector<Eigen::Affine3d> &optimized,
                                const std::vector<LoopClosureEdge> &loops, const OdometryConfig &params, double &max_shift_m);
+
+struct LoopClosureReport
+{
+    // too_few_windows, no_loops, all_dropped, implausible, applied
+    std::string outcome = "too_few_windows";
+    std::vector<LoopClosureEdge> kept;
+    std::vector<LoopEdgeResidual> kept_residuals;
+    std::vector<LoopClosureEdge> dropped; // in the order dropped
+    std::vector<LoopEdgeResidual> dropped_residuals;
+    double largest_segment_correction_m = 0.0; // of the last solve (also when implausible)
+};

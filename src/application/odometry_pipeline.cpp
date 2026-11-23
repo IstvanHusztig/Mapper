@@ -2,6 +2,7 @@
 #include "run_odometry.h"
 
 #include "loop_closure.h"
+#include "loop_closure_capture.h"
 
 #include <algorithm>
 #include <chrono>
@@ -139,7 +140,7 @@ void OdometryPipeline::post_process()
         progress_->checkpoint();
         StepTiming timing(params, *logger_, "loop_closure");
         StageClock clock(stage_seconds_[2]);
-        run_loop_closure(windows, params, *inputs_.points, *logger_);
+        run_loop_closure(windows, params, *inputs_.points, *logger_, params.capture_loop_closure ? loop_closure_capture_ : nullptr);
     }
 
     if (params.use_consistency && params.num_constistency_iter > 0)

@@ -1,12 +1,21 @@
 #include <doctest/doctest.h>
 
 #include "angle_units.h"
+#include "lidar_odometry.h"
 #include "loop_closure.h"
+#include "loop_closure_capture.h"
+#include "loop_closure_capture_file.h"
+#include "loop_closure_replay.h"
 #include "memory_point_store.h"
 #include "synthetic_recording.h"
 #include <transformations.h>
 
+#include <algorithm>
 #include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <map>
+#include <string>
 #include <limits>
 
 // run_loop_closure on the loop recording (two laps around a block, see synthetic_recording.h) against its true
@@ -824,4 +833,380 @@ TEST_CASE("loop closure: the plausibility check does not depend on the distance 
         CHECK(loop_pose_graph_plausible(initial, optimized, {e}, params, max_shift_m));
         CHECK(max_shift_m < 1e-9);
     }
+}
+
+// ---- loop closure capture and replay (change faster-experiments, tasks 1.1 to 1.5) ----
+namespace
+{
+    struct MemoryLoopClosureCaptureSink : LoopClosureCaptureSink
+    {
+        LoopClosureCapture capture;
+        int writes = 0;
+        bool write(const LoopClosureCapture &c, std::string &) override
+        {
+            capture = c;
+            writes++;
+            return true;
+        }
+    };
+
+    // a capture of the loop recording's windows without any registration
+    LoopClosureCapture capture_without_tries(const OdometryConfig &config)
+    {
+        LoopClosureCapture c;
+        c.windows = loop_recording(2).windows;
+        c.segments = loop_closure_segments(c.windows, config);
+        for (const auto &w : c.windows)
+            c.result_poses.push_back(w.poses);
+        return c;
+    }
+
+    bool same_bits(const std::vector<Eigen::Affine3d> &a, const std::vector<Eigen::Affine3d> &b)
+    {
+        if (a.size() != b.size())
+            return false;
+        for (size_t k = 0; k < a.size(); k++)
+            if (a[k].matrix() != b[k].matrix())
+                return false;
+        return true;
+    }
+
+    bool contains(const std::vector<std::string> &names, const std::string &name)
+    {
+        return std::find(names.begin(), names.end(), name) != names.end();
+    }
+
+    // a ResultSink that keeps the trajectory rows and chunk poses (save_result's other output is dropped)
+    struct TrajectorySink : ResultSink
+    {
+        std::vector<std::vector<TrajectoryRow>> rows;
+        std::vector<Eigen::Affine3d> first_poses;
+        bool begin() override { return true; }
+        void point_sizes(const std::vector<int> &) override {}
+        bool open_merged_cloud() override { return true; }
+        void chunk_cloud(std::size_t, const std::vector<Eigen::Vector3d> &, const std::vector<unsigned short> &, const std::vector<double> &) override {}
+        void merged_cloud(const std::vector<Eigen::Vector3d> &, const std::vector<unsigned short> &, const std::vector<double> &) override {}
+        bool chunk_trajectory(std::size_t, const std::vector<TrajectoryRow> &r) override
+        {
+            rows.push_back(r);
+            return true;
+        }
+        void close_merged_cloud() override {}
+        void chunk_poses(const std::vector<Eigen::Affine3d> &p) override { first_poses = p; }
+        void index_poses(const std::vector<std::vector<int>> &) override {}
+        void session(const SessionSummary &) override {}
+        void parameters(const OdometryConfig &, const RunPaths &, const GuiPreferences &) override {}
+        void processing_results(const OdometryConfig &, const OdometryState &, const std::vector<Window> &, double) override {}
+    };
+}
+
+TEST_CASE("loop closure replay settings: odometry and registration settings are refused by name, rules are changes, diagnostics don't count")
+{
+    const OdometryConfig captured = loop_closure_config();
+    const auto text = settings_as_text(captured);
+
+    const LoopClosureSettingsDifference same = loop_closure_replay_settings(text, captured);
+    CHECK(same.refused.empty());
+    CHECK(same.changed.empty());
+
+    OdometryConfig c = captured;
+    c.loop_closure_min_fitness = 0.6;
+    c.loop_closure_max_residual_m = 0.1;
+    c.capture_loop_closure = true; // diagnostics
+    c.capture_loop_closure_max_tries = 5;
+    c.num_constistency_iter = 3; // consistency
+    const LoopClosureSettingsDifference rules = loop_closure_replay_settings(text, c);
+    CHECK(rules.refused.empty());
+    CHECK(rules.changed == std::vector<std::string>{"loop_closure_max_residual_m", "loop_closure_min_fitness"});
+
+    c.loop_closure_segment_windows = 5;
+    c.loop_closure_max_correction_m = 4.0;
+    c.loop_closure_cross_floor_search_m = 2.0;
+    c.max_distance_lidar = 20.0; // an odometry setting (it also changes the segments' points)
+    const LoopClosureSettingsDifference refused = loop_closure_replay_settings(text, c);
+    CHECK(contains(refused.refused, "loop_closure_segment_windows"));
+    CHECK(contains(refused.refused, "loop_closure_max_correction_m"));
+    CHECK(contains(refused.refused, "loop_closure_cross_floor_search_m"));
+    CHECK(contains(refused.refused, "max_distance_lidar"));
+    CHECK(contains(refused.refused, "odometry_settings_hash"));
+    CHECK(!contains(refused.refused, "loop_closure_min_fitness"));
+
+    // a setting the capture doesn't list counts as at its default
+    auto older = text;
+    older.erase("loop_closure_kernel_scale");
+    CHECK(loop_closure_replay_settings(older, captured).changed.empty());
+    OdometryConfig kernel = captured;
+    kernel.loop_closure_kernel_scale = 3.0;
+    CHECK(loop_closure_replay_settings(older, kernel).changed == std::vector<std::string>{"loop_closure_kernel_scale"});
+}
+
+TEST_CASE("loop closure replay: the tries the settings ask for and the capture doesn't hold are named, and nothing is applied")
+{
+    const OdometryConfig config = loop_closure_config();
+    const LoopClosureCapture capture = capture_without_tries(config);
+    NullLogger logger;
+    const LoopClosureReplayResult r = replay_loop_closure(capture, config, logger);
+    CHECK(r.segments_match);
+    REQUIRE(!r.missing.empty());
+    MESSAGE("missing: ", r.missing.size(), ", first ", r.missing.front());
+    CHECK(r.missing.front().rfind("segments ", 0) == 0);
+    CHECK(r.loops == 0);
+    CHECK(r.report.outcome == "no_loops");
+    CHECK(r.identical_nodes == r.nodes);
+
+    // other segment settings than the capture's: the segments differ and nothing runs
+    OdometryConfig other = config;
+    other.loop_closure_segment_windows = 5;
+    CHECK(!replay_loop_closure(capture, other, logger).segments_match);
+}
+
+TEST_CASE("loop closure capture file: written and read back bit for bit; another file is refused")
+{
+    const OdometryConfig config = loop_closure_config();
+    LoopClosureCapture c = capture_without_tries(config);
+    CapturedLoopTry t;
+    t.registration.i = 2;
+    t.registration.j = 9;
+    t.registration.cross_floor = true;
+    t.registration.registered = true;
+    t.registration.overlap_before = 0.123456789;
+    t.registration.overlap_after = 0.7;
+    t.registration.correction.translate(Eigen::Vector3d(0.1, -0.2, 0.3));
+    t.registration.correction.rotate(Eigen::AngleAxisd(0.01, Eigen::Vector3d(1, 2, 3).normalized()));
+    for (int k = 0; k < 36; k++)
+        t.registration.information.data()[k] = 1.0 / (k + 3.0);
+    t.registration.shift_m = 0.37;
+    t.registration.angle_deg = 0.57;
+    t.registration.information_ratio = 0.31;
+    t.registration.centre = Eigen::Vector3d(1.0 / 3.0, 2.0, -7.0);
+    t.accepted = true;
+    t.requested_by_run = false;
+    c.tries = {t, CapturedLoopTry{}};
+    c.result_poses.back().back().translation().x() += 1e-3;
+    c.loops = 3;
+
+    const auto file = std::filesystem::temp_directory_path() / "lidar_odometry_tests_loop_closure_capture.bin";
+    std::string why;
+    REQUIRE(write_loop_closure_capture(file, c, config, why));
+    LoopClosureCapture back;
+    std::map<std::string, std::string> settings;
+    REQUIRE(read_loop_closure_capture(file, back, settings, why));
+    CHECK(settings == settings_as_text(config));
+    REQUIRE(back.windows.size() == c.windows.size());
+    for (size_t w = 0; w < c.windows.size(); w++)
+        CHECK(same_bits(back.windows[w].poses, c.windows[w].poses));
+    REQUIRE(back.segments.size() == c.segments.size());
+    for (size_t k = 0; k < c.segments.size(); k++)
+    {
+        CHECK(back.segments[k].pose.matrix() == c.segments[k].pose.matrix());
+        CHECK(back.segments[k].center == c.segments[k].center);
+        CHECK(back.segments[k].t_end == c.segments[k].t_end);
+        CHECK(back.segments[k].path_end == c.segments[k].path_end);
+        CHECK(back.segments[k].last_window == c.segments[k].last_window);
+    }
+    REQUIRE(back.tries.size() == 2);
+    const LoopClosureTry &b = back.tries[0].registration;
+    CHECK(b.i == 2);
+    CHECK(b.j == 9);
+    CHECK(b.cross_floor);
+    CHECK(b.registered);
+    CHECK(b.overlap_before == t.registration.overlap_before);
+    CHECK(b.correction.matrix() == t.registration.correction.matrix());
+    CHECK(b.information == t.registration.information);
+    CHECK(b.information_ratio == t.registration.information_ratio);
+    CHECK(b.centre == t.registration.centre);
+    CHECK(back.tries[0].accepted);
+    CHECK(!back.tries[0].requested_by_run);
+    CHECK(!back.tries[1].registration.registered);
+    REQUIRE(back.result_poses.size() == c.result_poses.size());
+    CHECK(same_bits(back.result_poses.back(), c.result_poses.back()));
+    CHECK(back.loops == 3);
+
+    // another file (here the start of a window capture) is not a loop closure capture
+    {
+        std::ofstream out(file, std::ios::binary | std::ios::trunc);
+        out << "DMCAPT01 something else";
+    }
+    CHECK(!read_loop_closure_capture(file, back, settings, why));
+    std::filesystem::remove(file);
+}
+
+TEST_CASE("loop closure replay: the trajectory is cut into output chunks as save_result cuts it")
+{
+    const OdometryConfig config = loop_closure_config();
+    std::vector<Window> windows;
+    for (int copy = 0; copy < 3; copy++) // 132 windows: chunks of 51, 51 and 30
+    {
+        const auto r = loop_recording(2);
+        windows.insert(windows.end(), r.windows.begin(), r.windows.end());
+    }
+    for (Window &w : windows) // an orientation per node, as the odometry gives them
+        for (size_t n = w.imu_angles.size(); n < w.poses.size(); n++)
+            w.imu_angles.push_back(Eigen::Vector3d(0.001 * n, -0.002, 0.5));
+    TrajectorySink sink;
+    MemoryPointStore store;
+    NullLogger logger;
+    save_result(windows, config, OdometryState{}, GuiPreferences{}, 0.0, sink, store, logger);
+    const std::vector<TrajectoryChunk> chunks = trajectory_chunks(windows, config);
+    REQUIRE(chunks.size() == 3);
+    REQUIRE(sink.rows.size() == chunks.size());
+    REQUIRE(sink.first_poses.size() == chunks.size());
+    for (size_t k = 0; k < chunks.size(); k++)
+    {
+        CHECK(chunks[k].first_pose.matrix() == sink.first_poses[k].matrix());
+        REQUIRE(chunks[k].rows.size() == sink.rows[k].size());
+        bool same = true;
+        for (size_t n = 0; n < chunks[k].rows.size(); n++)
+            same = same && chunks[k].rows[n].pose.matrix() == sink.rows[k][n].pose.matrix() &&
+                   chunks[k].rows[n].timestamps == sink.rows[k][n].timestamps && chunks[k].rows[n].om_fi_ka == sink.rows[k][n].om_fi_ka;
+        CHECK(same);
+    }
+}
+
+// The capture of a run on the drifting loop recording, replayed (skipped like the other end-to-end cases: the run registers)
+TEST_CASE("loop closure capture: capturing changes nothing, the own settings replay bit for bit, a stricter acceptance re-solves, a try the capture lacks is named" *
+          doctest::skip())
+{
+    Recording r = loop_recording(2);
+    MemoryPointStore store;
+    store_points(r, store);
+    add_second_lap_drift(r, {0.3, 0.4, 0.0}, 2.0 * deg);
+    const OdometryConfig config = loop_closure_config();
+    NullLogger logger;
+
+    std::vector<Window> plain = r.windows;
+    const int loops_plain = run_loop_closure(plain, config, store, logger);
+    std::vector<Window> captured_run = r.windows;
+    MemoryLoopClosureCaptureSink sink;
+    const int loops = run_loop_closure(captured_run, config, store, logger, &sink);
+    CHECK(loops == loops_plain);
+    CHECK(same_bits(all_poses(captured_run), all_poses(plain)));
+    REQUIRE(sink.writes == 1);
+    const LoopClosureCapture &capture = sink.capture;
+    CHECK(capture.loops == loops);
+    CHECK(same_bits(all_poses(capture.windows), all_poses(r.windows)));
+    int accepted = 0;
+    for (const auto &t : capture.tries)
+    {
+        CHECK(t.requested_by_run);
+        accepted += t.accepted;
+    }
+    MESSAGE("capture: ", capture.segments.size(), " segments, ", capture.tries.size(), " registrations, ", accepted, " accepted, ", loops, " loops");
+    REQUIRE(loops >= 1);
+
+    // the own settings, from memory and through the file
+    const auto start = std::chrono::steady_clock::now();
+    const LoopClosureReplayResult own = replay_loop_closure(capture, config, logger);
+    const double replay_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+    MESSAGE("replay with the own settings: ", own.identical_nodes, " of ", own.nodes, " nodes identical, ", replay_ms, " ms");
+    CHECK(own.missing.empty());
+    CHECK(own.loops == loops);
+    CHECK(own.identical_nodes == own.nodes);
+    CHECK(same_bits(all_poses(own.windows), all_poses(plain)));
+    const auto file = std::filesystem::temp_directory_path() / "lidar_odometry_tests_loop_closure_replay.bin";
+    std::string why;
+    REQUIRE(write_loop_closure_capture(file, capture, config, why));
+    LoopClosureCapture back;
+    std::map<std::string, std::string> settings;
+    REQUIRE(read_loop_closure_capture(file, back, settings, why));
+    std::filesystem::remove(file);
+    const LoopClosureSettingsDifference own_difference = loop_closure_replay_settings(settings, config);
+    CHECK(own_difference.refused.empty());
+    CHECK(own_difference.changed.empty());
+    const LoopClosureReplayResult from_file = replay_loop_closure(back, config, logger);
+    CHECK(from_file.identical_nodes == from_file.nodes);
+
+    // a stricter acceptance: the median overlap of the accepted registrations
+    std::vector<double> fitness;
+    for (const auto &t : capture.tries)
+        if (t.accepted)
+            fitness.push_back(t.registration.overlap_after);
+    REQUIRE(!fitness.empty());
+    std::sort(fitness.begin(), fitness.end());
+    OdometryConfig stricter = config;
+    stricter.loop_closure_min_fitness = fitness[fitness.size() / 2];
+    CHECK(loop_closure_replay_settings(settings, stricter).changed == std::vector<std::string>{"loop_closure_min_fitness"});
+    const LoopClosureReplayResult strict = replay_loop_closure(capture, stricter, logger);
+    MESSAGE("min fitness ", stricter.loop_closure_min_fitness, ": ", strict.loops, " loops (", loops, " with ", config.loop_closure_min_fitness,
+            "), ", strict.report.dropped.size(), " dropped, nodes identical with the run ", strict.identical_nodes, " of ", strict.nodes);
+    CHECK(strict.missing.empty());
+    for (const auto &e : strict.report.kept)
+        CHECK(e.fitness >= stricter.loop_closure_min_fitness);
+    for (const auto &e : strict.report.dropped)
+        CHECK(e.fitness >= stricter.loop_closure_min_fitness);
+
+    // a try the run made but the capture lacks (as a changed rule would ask for one never registered): named, not applied
+    LoopClosureCapture lacking = capture;
+    const LoopClosureTry dropped = lacking.tries.front().registration;
+    lacking.tries.erase(lacking.tries.begin());
+    const LoopClosureReplayResult missing = replay_loop_closure(lacking, config, logger);
+    const std::string name = "segments " + std::to_string(dropped.i) + " -> " + std::to_string(dropped.j);
+    MESSAGE("without the try ", name, ": ", missing.missing.size(), " missing, first ", missing.missing.empty() ? std::string() : missing.missing.front());
+    CHECK(missing.missing == std::vector<std::string>{name});
+}
+
+TEST_CASE("loop closure capture: registrations made only for the capture change nothing and cover the qualifying revisits" * doctest::skip())
+{
+    Recording r = loop_recording(2);
+    MemoryPointStore store;
+    store_points(r, store);
+    add_second_lap_drift(r, {0.3, 0.4, 0.0}, 2.0 * deg);
+    const OdometryConfig config = loop_closure_config();
+    NullLogger logger;
+
+    std::vector<Window> plain = r.windows;
+    MemoryLoopClosureCaptureSink run_only;
+    run_loop_closure(plain, config, store, logger, &run_only);
+    std::vector<Window> with_extra = r.windows;
+    MemoryLoopClosureCaptureSink sink;
+    OdometryConfig capturing = config;
+    capturing.capture_loop_closure_max_tries = 8;
+    run_loop_closure(with_extra, capturing, store, logger, &sink);
+    CHECK(same_bits(all_poses(with_extra), all_poses(plain)));
+    int extra = 0;
+    for (const auto &t : sink.capture.tries)
+        extra += !t.requested_by_run;
+    MESSAGE("registrations: ", run_only.capture.tries.size(), " by the run, ", extra, " more for the capture");
+    CHECK(extra > 0);
+    const LoopClosureReplayResult own = replay_loop_closure(sink.capture, capturing, logger);
+    CHECK(own.identical_nodes == own.nodes);
+
+    // a stricter selection (a smaller search radius or radius per path): every try it asks for is among the qualifying
+    // ones, so the extra registrations never add a missing one (on this recording the run's own tries already suffice)
+    for (const auto &[radius, per_path] : std::vector<std::pair<double, double>>{{3.0, 0.5}, {2.0, 0.5}, {8.0, 0.25}, {8.0, 0.1}})
+    {
+        OdometryConfig stricter = config;
+        stricter.loop_closure_search_radius_m = radius;
+        stricter.loop_closure_radius_per_path = per_path;
+        const LoopClosureReplayResult without = replay_loop_closure(run_only.capture, stricter, logger);
+        const LoopClosureReplayResult with = replay_loop_closure(sink.capture, stricter, logger);
+        MESSAGE("search radius ", radius, " m, radius per path ", per_path, ": ", without.missing.size(), " tries missing without the extra registrations, ",
+                with.missing.size(), " with them; ", with.loops, " loops");
+        CHECK(with.missing.size() <= without.missing.size());
+    }
+
+    // with a cap above every segment's qualifying count the capture holds every qualifying same-floor pair
+    std::vector<Window> all = r.windows;
+    MemoryLoopClosureCaptureSink complete;
+    OdometryConfig every = config;
+    every.capture_loop_closure_max_tries = 1000;
+    run_loop_closure(all, every, store, logger, &complete);
+    CHECK(same_bits(all_poses(all), all_poses(plain)));
+    std::vector<RevisitSegment> revisit_segments;
+    for (const auto &s : complete.capture.segments)
+        revisit_segments.push_back({s.center, s.path_begin, s.path_end});
+    size_t qualifying = 0, held = 0;
+    for (int j = 0; j < static_cast<int>(revisit_segments.size()); j++)
+        for (const int i : same_floor_revisits(revisit_segments, j, config))
+        {
+            qualifying++;
+            for (const auto &t : complete.capture.tries)
+                if (t.registration.i == i && t.registration.j == j && !t.registration.cross_floor)
+                {
+                    held++;
+                    break;
+                }
+        }
+    MESSAGE("cap 1000: ", complete.capture.tries.size(), " registrations, ", held, " of ", qualifying, " qualifying pairs held");
+    CHECK(held == qualifying);
 }
