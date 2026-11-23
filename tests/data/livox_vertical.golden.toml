@@ -94,9 +94,9 @@ resolution_Y = 0.4
 resolution_Z = 0.4
 
 [lidar_imu_extrinsics]
-lidar_imu_lever_arm_x_m = 0.0
-lidar_imu_lever_arm_y_m = 0.0
-lidar_imu_lever_arm_z_m = 0.0
+lidar_imu_lever_arm_x_m = 0.04412
+lidar_imu_lever_arm_y_m = -0.011
+lidar_imu_lever_arm_z_m = -0.02329
 
 [lidar_odometry_control]
 convergence_delta_threshold = 1e-12
@@ -113,6 +113,8 @@ use_motion_from_previous_step = true
 
 [lidar_odometry_debug_info]
 calibration_validation_points = 1000000
+capture_loop_closure = false
+capture_loop_closure_max_tries = 0
 capture_windows_from_s = -1.0
 capture_windows_to_s = -1.0
 log_iteration_convergence = false
