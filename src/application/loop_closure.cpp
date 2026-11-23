@@ -1,4 +1,5 @@
 #include "loop_closure.h"
+#include "loop_closure_capture.h"
 #include "holdout.h"
 #include "ndt_map.h"
 #include <transformations.h>
@@ -6,6 +7,9 @@
 #include <python-scripts/constraints/relative_pose_tait_bryan_wc_jacobian.h>
 
 #include <algorithm>
+#include <deque>
+#include <map>
+#include <tuple>
 #include <iomanip>
 #include <limits>
 #include <cstdio>
@@ -18,21 +22,8 @@ namespace
 {
     constexpr double DEG = M_PI / 180.0;
 
-    struct Segment
-    {
-        int first_window = 0;
-        int last_window = 0;                 // inclusive
-        Eigen::Affine3d pose;                // world pose of the first node
-        Eigen::Vector3d center;              // mean node position
-        double path_begin = 0.0;             // path walked up to the first window's first node [m]
-        double path_end = 0.0;               // ... up to the next segment's first node
-        double t_begin = 0.0;
-        double t_end = 0.0;
-        std::vector<Eigen::Vector3d> points; // world coordinates, voxel-decimated
-    };
-
     // the path walked between two segments and their horizontal centre distance, for the candidate log line
-    std::string path_note(const Segment &earlier, const Segment &later)
+    std::string path_note(const LoopClosureSegment &earlier, const LoopClosureSegment &later)
     {
         const double walked = later.path_begin - earlier.path_end;
         const double distance = (later.center - earlier.center).head<2>().norm();
@@ -765,13 +756,20 @@ std::vector<int> same_floor_revisits(const std::vector<RevisitSegment> &segments
     return out;
 }
 
-std::vector<RevisitTry> revisit_tries(const std::vector<RevisitSegment> &segments, int j, const OdometryConfig &params)
+// the same-floor revisits of segment j, horizontally nearest first (equal distances in the order of same_floor_revisits)
+static std::vector<int> nearest_same_floor_revisits(const std::vector<RevisitSegment> &segments, int j, const std::vector<int> &by_path)
 {
-    const std::vector<int> by_path = same_floor_revisits(segments, j, params); // longest path first
     std::vector<int> by_distance = by_path;
     std::stable_sort(by_distance.begin(), by_distance.end(), [&](int a, int b) {
         return (segments[j].center - segments[a].center).head<2>().norm() < (segments[j].center - segments[b].center).head<2>().norm();
     });
+    return by_distance;
+}
+
+std::vector<RevisitTry> revisit_tries(const std::vector<RevisitSegment> &segments, int j, const OdometryConfig &params)
+{
+    const std::vector<int> by_path = same_floor_revisits(segments, j, params); // longest path first
+    const std::vector<int> by_distance = nearest_same_floor_revisits(segments, j, by_path);
     // the first of an ordered list, then the first at least 3 segments away from it
     const auto two_apart = [](const std::vector<int> &ordered) {
         std::vector<int> out;
@@ -834,20 +832,15 @@ std::vector<LoopClosureEdge> revisit_slots(const std::vector<AcceptedRevisit> &a
     return {overall->edge};
 }
 
-int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params, PointStore &point_store, Logger &logger)
+std::vector<LoopClosureSegment> loop_closure_segments(const std::vector<Window> &windows, const OdometryConfig &params)
 {
     const int windows_per_segment = std::max(1, params.loop_closure_segment_windows);
     const int n_windows = static_cast<int>(windows.size());
-    if (n_windows < 2 * windows_per_segment)
-        return 0;
-    log_info(logger) << "loop closure START";
-
-    // 1. segments with their world points
     const std::vector<double> path = path_at_windows(windows);
-    std::vector<Segment> segments;
+    std::vector<LoopClosureSegment> segments;
     for (int w0 = 0; w0 < n_windows; w0 += windows_per_segment)
     {
-        Segment s;
+        LoopClosureSegment s;
         s.first_window = w0;
         s.last_window = std::min(n_windows, w0 + windows_per_segment) - 1;
         s.path_begin = path[w0];
@@ -857,36 +850,38 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
         s.t_end = windows[s.last_window].timestamps.back().first;
         Eigen::Vector3d sum = Eigen::Vector3d::Zero();
         int count = 0;
-        std::vector<Eigen::Vector3d> points;
         for (int w = s.first_window; w <= s.last_window; w++)
-        {
-            const auto &tr = windows[w].poses;
-            for (const auto &node : tr)
+            for (const auto &node : windows[w].poses)
             {
                 sum += node.translation();
                 count++;
             }
-            std::vector<Point3Di> window_points;
-            if (!point_store.load(PointSet::WindowIntermediate, w, window_points))
-                continue;
-            remove_held_out(window_points, params.holdout_block_s);
-            for (const auto &p : window_points)
-            {
-                const double r = p.point.norm();
-                if (r < params.min_distance_lidar || r > params.max_distance_lidar || p.index_pose < 0 || p.index_pose >= static_cast<int>(tr.size()))
-                    continue;
-                points.push_back(tr[p.index_pose] * p.point);
-            }
-        }
         s.center = count > 0 ? Eigen::Vector3d(sum / count) : s.pose.translation();
-        s.points = voxel_decimate(points, 0.1);
-        segments.push_back(std::move(s));
+        segments.push_back(s);
     }
+    return segments;
+}
 
-    // 2.+3. revisit candidates and their registration
-    std::vector<LoopClosureEdge> loops;
-    const bool use_cross_floor = params.loop_closure_cross_floor_max_vertical_m > params.loop_closure_max_vertical_offset_m;
-    // diagnostics: segment ranges whose cross-floor pairs are not tried (loop_closure_cross_floor_exclude_segments)
+bool loop_try_accepted(const LoopClosureTry &t, const OdometryConfig &params)
+{
+    if (!t.registered)
+        return false;
+    // an already aligned revisit (no improvement possible) is a valid constraint as well. Between floors only the shaft is
+    // shared: a lower overlap, and a correction no larger than the drift between floors can be
+    constexpr double cross_floor_max_shift_m = 1.0;
+    // between floors the shared region may be a single wall (a facade), which fixes only the direction across it
+    return t.cross_floor ? t.overlap_after >= params.loop_closure_cross_floor_min_fitness && t.overlap_after >= t.overlap_before - 0.02 &&
+                               t.shift_m <= cross_floor_max_shift_m && t.angle_deg <= params.loop_closure_cross_floor_max_angle_deg &&
+                               t.information_ratio >= params.loop_closure_cross_floor_min_information_ratio
+                         : t.overlap_after >= params.loop_closure_min_fitness && t.overlap_after >= t.overlap_before - 0.02 &&
+                               t.shift_m <= params.loop_closure_max_correction_m + 1.0 && t.angle_deg <= 15.0;
+}
+
+std::vector<int> cross_floor_revisits(const std::vector<LoopClosureSegment> &segments, int j, const OdometryConfig &params)
+{
+    if (!(params.loop_closure_cross_floor_max_vertical_m > params.loop_closure_max_vertical_offset_m))
+        return {};
+    // segment ranges whose cross-floor pairs are not tried (loop_closure_cross_floor_exclude_segments)
     std::vector<std::pair<int, int>> excluded_ranges;
     {
         std::stringstream list(params.loop_closure_cross_floor_exclude_segments);
@@ -900,8 +895,6 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
                 excluded_ranges.emplace_back(a, a);
         }
     }
-    double near_x = 0.0, near_y = 0.0, near_r = -1.0; // loop_closure_cross_floor_only_near, r < 0: off
-    std::sscanf(params.loop_closure_cross_floor_only_near.c_str(), "%lf %lf %lf", &near_x, &near_y, &near_r);
     const auto excluded = [&](int segment)
     {
         for (const auto &[a, b] : excluded_ranges)
@@ -909,6 +902,45 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
                 return true;
         return false;
     };
+    std::vector<std::pair<double, int>> nearest;
+    for (int i = 0; i < j; i++)
+    {
+        if (segments[j].t_begin - segments[i].t_end < params.loop_closure_cross_floor_min_time_gap_s)
+            continue;
+        if (excluded(i) || excluded(j))
+            continue;
+        const Eigen::Vector3d d = segments[j].center - segments[i].center;
+        const double dz = std::abs(d.z());
+        if (!(dz > params.loop_closure_max_vertical_offset_m && dz <= params.loop_closure_cross_floor_max_vertical_m))
+            continue;
+        const double dh = d.head<2>().norm();
+        if (dh < params.loop_closure_search_radius_m)
+            nearest.emplace_back(dh, i);
+    }
+    std::sort(nearest.begin(), nearest.end());
+    std::vector<int> out;
+    for (const auto &[dh, i] : nearest)
+        out.push_back(i);
+    return out;
+}
+
+int close_loops(std::vector<Window> &windows, const std::vector<LoopClosureSegment> &segments, LoopClosureRegistrations &registrations,
+                const OdometryConfig &params, Logger &logger, LoopClosureReport *report)
+{
+    LoopClosureReport local;
+    LoopClosureReport &rep = report ? *report : local;
+    rep = LoopClosureReport{};
+    const int windows_per_segment = std::max(1, params.loop_closure_segment_windows);
+    const int n_windows = static_cast<int>(windows.size());
+    if (n_windows < 2 * windows_per_segment)
+        return 0;
+    log_info(logger) << "loop closure START";
+
+    // 2.+3. revisit candidates and their registration
+    std::vector<LoopClosureEdge> loops;
+    const bool use_cross_floor = params.loop_closure_cross_floor_max_vertical_m > params.loop_closure_max_vertical_offset_m;
+    double near_x = 0.0, near_y = 0.0, near_r = -1.0; // loop_closure_cross_floor_only_near, r < 0: off
+    std::sscanf(params.loop_closure_cross_floor_only_near.c_str(), "%lf %lf %lf", &near_x, &near_y, &near_r);
     int cross_floor_tries = 0;
     int cross_floor_accepted = 0;
     std::vector<RevisitSegment> revisit_segments;
@@ -932,91 +964,34 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
                     candidates.push_back(t.i);
             }
             else
-            {
-                std::vector<std::pair<double, int>> nearest;
-                for (int i = 0; i < j; i++)
-                {
-                    if (segments[j].t_begin - segments[i].t_end < params.loop_closure_cross_floor_min_time_gap_s)
-                        continue;
-                    if (excluded(i) || excluded(j))
-                        continue;
-                    const Eigen::Vector3d d = segments[j].center - segments[i].center;
-                    const double dz = std::abs(d.z());
-                    if (!(dz > params.loop_closure_max_vertical_offset_m && dz <= params.loop_closure_cross_floor_max_vertical_m))
-                        continue;
-                    const double dh = d.head<2>().norm();
-                    if (dh < params.loop_closure_search_radius_m)
-                        nearest.emplace_back(dh, i);
-                }
-                std::sort(nearest.begin(), nearest.end());
-                for (const auto &[dh, i] : nearest)
-                    candidates.push_back(i);
-            }
+                candidates = cross_floor_revisits(segments, j, params);
             const int tries = std::min(static_cast<int>(candidates.size()), std::max(1, params.loop_closure_candidates));
             for (int c = 0; c < tries; c++)
             {
                 const int best_i = candidates[c];
-
-                // target: the earlier segment with its neighbours
-                std::vector<Eigen::Vector3d> target;
-                for (int i = std::max(0, best_i - 1); i <= std::min(j - 1, best_i + 1); i++)
-                    target.insert(target.end(), segments[i].points.begin(), segments[i].points.end());
-                std::vector<Eigen::Vector3d> source = segments[j].points;
-                if (cross_floor)
-                {
-                    // only what both floors see (the shaft): the rest of each segment is ground the other never saw
-                    const std::vector<Eigen::Vector3d> shared_target = crop_to_shared_footprint(target, source, 0.5);
-                    source = crop_to_shared_footprint(source, target, 0.5);
-                    target = shared_target;
-                }
-                if (source.size() < 500 || target.size() < 500)
+                const LoopClosureTry *registration = registrations.registration(best_i, j, cross_floor);
+                if (!registration || !registration->registered)
                     continue;
-
-                const auto fitness_grid = voxel_set(target, 0.2);
-                const double before = overlap(source, Eigen::Affine3d::Identity(), fitness_grid, 0.2);
-                Eigen::Affine3d T = coarse_search(source, target, cross_floor ? params.loop_closure_cross_floor_search_m
-                                                                              : params.loop_closure_max_correction_m);
-                Eigen::Matrix<double, 6, 6> registration_information = Eigen::Matrix<double, 6, 6>::Zero();
-                T = ndt_refine(source, target, T, params.use_exact_ndt_bucket_statistics, &registration_information);
-                const double after = overlap(source, T, fitness_grid, 0.2);
-                // how far the correction moves the segment: its centre's movement (T's translation would also contain the
-                // rotation about the world origin, growing with the distance from the start)
-                Eigen::Vector3d source_centre = Eigen::Vector3d::Zero();
-                for (const auto &p : source)
-                    source_centre += p;
-                source_centre /= static_cast<double>(source.size());
-                const double shift = (T * source_centre - source_centre).norm();
-                const double angle = Eigen::AngleAxisd(T.linear()).angle() / DEG;
-                // between floors the shared region may be a single wall (a facade), which fixes only the direction across it
-                const double info_ratio = cross_floor ? information_ratio(target, 0.2) : 1.0;
-                // an already aligned revisit (no improvement possible) is a valid constraint as well. Between floors only
-                // the shaft is shared: a lower overlap, and a correction no larger than the drift between floors can be
-                constexpr double cross_floor_max_shift_m = 1.0; // a correction no larger than the drift between floors can be
-                const bool accepted = cross_floor ? after >= params.loop_closure_cross_floor_min_fitness && after >= before - 0.02 &&
-                                                        shift <= cross_floor_max_shift_m && angle <= params.loop_closure_cross_floor_max_angle_deg &&
-                                                        info_ratio >= params.loop_closure_cross_floor_min_information_ratio
-                                                  : after >= params.loop_closure_min_fitness && after >= before - 0.02 &&
-                                                        shift <= params.loop_closure_max_correction_m + 1.0 && angle <= 15.0;
+                const LoopClosureTry &r = *registration;
+                const bool accepted = loop_try_accepted(r, params);
                 if (cross_floor)
                     cross_floor_tries++;
                 log_info(logger) << (cross_floor ? "cross-floor " : "") << "loop candidate segments " << best_i << " -> " << j << " (t "
                                  << std::fixed << std::setprecision(1) << segments[best_i].t_begin - segments[0].t_begin << " s / "
-                                 << segments[j].t_begin - segments[0].t_begin << " s): overlap " << std::setprecision(2) << before << " -> "
-                                 << after << ", correction " << shift << " m " << std::setprecision(1) << angle << " deg"
-                                 << (cross_floor ? ", information ratio " + std::to_string(info_ratio) : path_note(segments[best_i], segments[j]))
+                                 << segments[j].t_begin - segments[0].t_begin << " s): overlap " << std::setprecision(2) << r.overlap_before
+                                 << " -> " << r.overlap_after << ", correction " << r.shift_m << " m " << std::setprecision(1) << r.angle_deg
+                                 << " deg"
+                                 << (cross_floor ? ", information ratio " + std::to_string(r.information_ratio) : path_note(segments[best_i], segments[j]))
                                  << (accepted ? " ACCEPTED" : " rejected");
                 if (accepted)
                 {
                     LoopClosureEdge e;
                     e.i = best_i;
                     e.j = j;
-                    e.correction = T;
-                    e.fitness = after;
+                    e.correction = r.correction;
+                    e.fitness = r.overlap_after;
                     e.cross_floor = cross_floor;
-                    Eigen::Vector3d centre = Eigen::Vector3d::Zero();
-                    for (const auto &p : source)
-                        centre += p;
-                    centre /= double(std::max<size_t>(source.size(), 1));
+                    const Eigen::Vector3d &centre = r.centre;
                     if (cross_floor && near_r >= 0.0 && std::hypot(centre.x() - near_x, centre.y() - near_y) > near_r)
                     {
                         log_info(logger) << "  cross-floor edge " << best_i << " -> " << j << " not used: shared region outside "
@@ -1035,7 +1010,7 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
                         // weighted by what the registration determines (height kept); a registration whose information is
                         // unusable keeps the fixed sigmas loop_closure_edge_sigma_m / _deg
                         bool ok = false;
-                        e.omega = loop_edge_information(segments[best_i].pose, segments[j].pose, e.correction, registration_information, false,
+                        e.omega = loop_edge_information(segments[best_i].pose, segments[j].pose, e.correction, r.information, false,
                                                         params.loop_closure_edge_sigma_m, ok);
                         e.information = ok;
                     }
@@ -1044,7 +1019,7 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
                         // weighted by what the registration determines, without the height (a shaft fixes neither its
                         // height nor the turn about its axis)
                         bool ok = false;
-                        e.omega = loop_edge_information(segments[best_i].pose, segments[j].pose, e.correction, registration_information, cross_floor,
+                        e.omega = loop_edge_information(segments[best_i].pose, segments[j].pose, e.correction, r.information, cross_floor,
                                                         params.loop_closure_edge_sigma_m, ok);
                         e.information = ok;
                         auto line = log_info(logger);
@@ -1094,6 +1069,7 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
 
     if (loops.empty())
     {
+        rep.outcome = "no_loops";
         log_info(logger) << "loop closure: no loops accepted, trajectory unchanged";
         return 0;
     }
@@ -1105,10 +1081,11 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
     // a loop edge the solution disagrees with by more than loop_closure_max_residual_m / _deg is a false match that bends
     // the trajectory (a ghost wall at the revisit): the worst one is dropped and the graph solved again
     std::vector<Eigen::Affine3d> optimized;
+    std::vector<LoopEdgeResidual> residuals;
     for (;;)
     {
         optimized = optimize_loop_pose_graph(initial, loops, params);
-        const std::vector<LoopEdgeResidual> residuals = loop_edge_residuals(initial, optimized, loops);
+        residuals = loop_edge_residuals(initial, optimized, loops);
         const size_t worst = loop_edge_to_drop(initial, optimized, loops, params);
         if (worst == loops.size())
         {
@@ -1129,16 +1106,24 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
                          << " deg"
                          << (loops[worst].information ? ", weighted " + std::to_string(residuals[worst].weighted * params.loop_closure_edge_sigma_m) + " m"
                                                       : std::string());
+        rep.dropped.push_back(loops[worst]);
+        rep.dropped_residuals.push_back(residuals[worst]);
         loops.erase(loops.begin() + static_cast<std::ptrdiff_t>(worst));
         if (loops.empty())
         {
+            rep.outcome = "all_dropped";
             log_info(logger) << "loop closure: no loops left, trajectory unchanged";
             return 0;
         }
     }
+    rep.kept = loops;
+    rep.kept_residuals = residuals;
     double max_shift = 0.0;
-    if (!loop_pose_graph_plausible(initial, optimized, loops, params, max_shift))
+    const bool plausible = loop_pose_graph_plausible(initial, optimized, loops, params, max_shift);
+    rep.largest_segment_correction_m = max_shift;
+    if (!plausible)
     {
+        rep.outcome = "implausible";
         log_warning(logger) << "loop closure: the pose graph result is implausible (largest segment correction " << std::fixed << std::setprecision(2)
                             << max_shift << " m), discarded; trajectory unchanged";
         return 0;
@@ -1166,7 +1151,179 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
             windows[w].motion_model_poses = tr;
         }
     }
+    rep.outcome = "applied";
     log_info(logger) << "loop closure: " << loops.size() << " loop(s) accepted, largest segment correction " << std::fixed << std::setprecision(2)
                      << max_shift << " m";
     return static_cast<int>(loops.size());
+}
+
+namespace
+{
+    // a segment's points in world coordinates (as the odometry placed them), 0.1 m voxel-decimated
+    std::vector<Eigen::Vector3d> segment_points(const std::vector<Window> &windows, const LoopClosureSegment &s, const OdometryConfig &params,
+                                                PointStore &point_store)
+    {
+        std::vector<Eigen::Vector3d> points;
+        for (int w = s.first_window; w <= s.last_window; w++)
+        {
+            const auto &tr = windows[w].poses;
+            std::vector<Point3Di> window_points;
+            if (!point_store.load(PointSet::WindowIntermediate, w, window_points))
+                continue;
+            remove_held_out(window_points, params.holdout_block_s);
+            for (const auto &p : window_points)
+            {
+                const double r = p.point.norm();
+                if (r < params.min_distance_lidar || r > params.max_distance_lidar || p.index_pose < 0 || p.index_pose >= static_cast<int>(tr.size()))
+                    continue;
+                points.push_back(tr[p.index_pose] * p.point);
+            }
+        }
+        return voxel_decimate(points, 0.1);
+    }
+
+    // step 3 on the points: each pair registered once, kept in the order registered
+    class PointRegistrations : public LoopClosureRegistrations
+    {
+    public:
+        PointRegistrations(std::vector<std::vector<Eigen::Vector3d>> points, const OdometryConfig &params) : points_(std::move(points)), params_(params) {}
+
+        const LoopClosureTry *registration(int i, int j, bool cross_floor) override
+        {
+            const auto key = std::make_tuple(i, j, cross_floor);
+            if (const auto it = index_.find(key); it != index_.end())
+                return &tries_[it->second];
+            index_[key] = tries_.size();
+            tries_.push_back(register_pair(i, j, cross_floor));
+            return &tries_.back();
+        }
+        bool has(int i, int j, bool cross_floor) const { return index_.count(std::make_tuple(i, j, cross_floor)) > 0; }
+        // the registrations of segment j of one kind so far
+        int count(int j, bool cross_floor) const
+        {
+            int n = 0;
+            for (const auto &t : tries_)
+                n += t.j == j && t.cross_floor == cross_floor;
+            return n;
+        }
+        const std::deque<LoopClosureTry> &tries() const { return tries_; }
+
+    private:
+        LoopClosureTry register_pair(int i, int j, bool cross_floor) const
+        {
+            LoopClosureTry t;
+            t.i = i;
+            t.j = j;
+            t.cross_floor = cross_floor;
+            // target: the earlier segment with its neighbours
+            std::vector<Eigen::Vector3d> target;
+            for (int k = std::max(0, i - 1); k <= std::min(j - 1, i + 1); k++)
+                target.insert(target.end(), points_[k].begin(), points_[k].end());
+            std::vector<Eigen::Vector3d> source = points_[j];
+            if (cross_floor)
+            {
+                // only what both floors see (the shaft): the rest of each segment is ground the other never saw
+                const std::vector<Eigen::Vector3d> shared_target = crop_to_shared_footprint(target, source, 0.5);
+                source = crop_to_shared_footprint(source, target, 0.5);
+                target = shared_target;
+            }
+            if (source.size() < 500 || target.size() < 500)
+                return t;
+            t.registered = true;
+
+            const auto fitness_grid = voxel_set(target, 0.2);
+            t.overlap_before = overlap(source, Eigen::Affine3d::Identity(), fitness_grid, 0.2);
+            Eigen::Affine3d T = coarse_search(source, target, cross_floor ? params_.loop_closure_cross_floor_search_m : params_.loop_closure_max_correction_m);
+            T = ndt_refine(source, target, T, params_.use_exact_ndt_bucket_statistics, &t.information);
+            t.overlap_after = overlap(source, T, fitness_grid, 0.2);
+            // how far the correction moves the segment: its centre's movement (T's translation would also contain the
+            // rotation about the world origin, growing with the distance from the start)
+            Eigen::Vector3d centre = Eigen::Vector3d::Zero();
+            for (const auto &p : source)
+                centre += p;
+            centre /= static_cast<double>(source.size());
+            t.centre = centre;
+            t.correction = T;
+            t.shift_m = (T * centre - centre).norm();
+            t.angle_deg = Eigen::AngleAxisd(T.linear()).angle() / DEG;
+            if (cross_floor)
+                t.information_ratio = information_ratio(target, 0.2);
+            return t;
+        }
+
+        std::vector<std::vector<Eigen::Vector3d>> points_;
+        const OdometryConfig &params_;
+        std::deque<LoopClosureTry> tries_; // a deque: the pointers handed out stay valid while it grows
+        std::map<std::tuple<int, int, bool>, size_t> index_;
+    };
+
+    // capture_loop_closure_max_tries: per segment and kind, the qualifying candidates not yet registered (nearest first)
+    // until that many registrations exist; for replays with rules that would ask for them. Returns how many were added.
+    int register_for_capture(const std::vector<LoopClosureSegment> &segments, PointRegistrations &registrations, const OdometryConfig &params)
+    {
+        const int cap = params.capture_loop_closure_max_tries;
+        int added = 0;
+        std::vector<RevisitSegment> revisit_segments;
+        for (const auto &s : segments)
+            revisit_segments.push_back({s.center, s.path_begin, s.path_end});
+        for (int j = 0; j < static_cast<int>(segments.size()); j++)
+            for (const bool cross_floor : {false, true})
+            {
+                const std::vector<int> qualifying =
+                    cross_floor ? cross_floor_revisits(segments, j, params)
+                                : nearest_same_floor_revisits(revisit_segments, j, same_floor_revisits(revisit_segments, j, params));
+                int have = registrations.count(j, cross_floor);
+                for (const int i : qualifying)
+                {
+                    if (have >= cap)
+                        break;
+                    if (registrations.has(i, j, cross_floor))
+                        continue;
+                    registrations.registration(i, j, cross_floor);
+                    have++;
+                    added++;
+                }
+            }
+        return added;
+    }
+} // namespace
+
+int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params, PointStore &point_store, Logger &logger,
+                     LoopClosureCaptureSink *capture)
+{
+    const std::vector<LoopClosureSegment> segments = loop_closure_segments(windows, params);
+    // 1. the segments' world points (the only step besides the registrations that reads points)
+    // (none with too few windows: close_loops then registers nothing)
+    const bool enough_windows = static_cast<int>(windows.size()) >= 2 * std::max(1, params.loop_closure_segment_windows);
+    std::vector<std::vector<Eigen::Vector3d>> points;
+    if (enough_windows)
+        for (const auto &s : segments)
+            points.push_back(segment_points(windows, s, params, point_store));
+    PointRegistrations registrations(std::move(points), params);
+
+    LoopClosureCapture captured;
+    if (capture)
+        captured.windows = windows;
+    const int loops = close_loops(windows, segments, registrations, params, logger);
+    if (!capture)
+        return loops;
+
+    const size_t requested = registrations.tries().size();
+    const int extra = params.capture_loop_closure_max_tries > 0 && enough_windows ? register_for_capture(segments, registrations, params) : 0;
+    captured.segments = segments;
+    for (size_t k = 0; k < registrations.tries().size(); k++)
+    {
+        const LoopClosureTry &t = registrations.tries()[k];
+        captured.tries.push_back({t, loop_try_accepted(t, params), k < requested});
+    }
+    for (const auto &w : windows)
+        captured.result_poses.push_back(w.poses);
+    captured.loops = loops;
+    std::string why;
+    if (capture->write(captured, why))
+        log_info(logger) << "loop closure capture: " << captured.segments.size() << " segments, " << captured.tries.size() << " registrations ("
+                         << extra << " only for the capture), written";
+    else
+        log_error(logger) << "loop closure capture not written: " << why;
+    return loops;
 }

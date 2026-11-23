@@ -94,6 +94,14 @@ struct OdometryConfig
     // seconds. Off while capture_windows_to_s < capture_windows_from_s or capture_windows_from_s < 0.
     double capture_windows_from_s = -1.0;
     double capture_windows_to_s = -1.0;
+    // loop closure capture (CLI, also with --from-snapshot): the windows as the odometry left them, the segments, every
+    // registration the loop closure made with its result, and the poses it produced, written to loop_closure_capture.bin in
+    // the output folder (loop_closure_capture.h). dMapper --replay-loop-closure <file> <params.toml> <output_folder> runs
+    // everything after the registrations again in seconds. capture_loop_closure_max_tries > 0 also registers, for the
+    // capture only, the qualifying candidates the run didn't try (nearest first), up to that many registrations per segment
+    // and kind (same floor, cross-floor), so that replays with stricter rules find their tries. Results unchanged.
+    bool capture_loop_closure = false;
+    int capture_loop_closure_max_tries = 0;
     int calibration_validation_points = 1000000;
 
     //consistency
