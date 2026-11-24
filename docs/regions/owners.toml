@@ -116,6 +116,7 @@ files = [
     "src/application/consistency.h",
     "src/application/consistency.cpp",
     "src/domain/odometry_snapshot.h",
+    "src/domain/chi_square.h",
     "src/infrastructure/odometry_snapshot_file.h",
     "src/infrastructure/odometry_snapshot_file.cpp",
     "tests/loop_closure_test.cpp",
