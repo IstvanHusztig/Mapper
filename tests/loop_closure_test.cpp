@@ -873,6 +873,8 @@ TEST_CASE("loop closure odometry steps: windows without readings are not read, t
     for (int w : {4, 5, 7, 8, 9, 19})
         full[w] = weak_window(Eigen::Vector3d::UnitX(), Eigen::Vector3d(0.1, 0.0, 0.0));
     const std::vector<LoopClosureSegment> segments = segments_of_three(30);
+    for (int w = 16; w < 19; w++)
+        full[w].placed_move = Eigen::Vector3d(0.2, 0.0, 0.0); // the pace before window 19: 0.5 m/s, after it 1 m/s
     const LoopOdometryRule rule;
     std::vector<std::optional<WindowReadings>> first_part = all_read(full);
     for (int w = 20; w < 30; w++)
@@ -888,7 +890,10 @@ TEST_CASE("loop closure odometry steps: windows without readings are not read, t
     // window 19: nothing after it to bridge to or take the pace from, the pace before stands for both
     CHECK(part.runs[1].first_window == 19);
     CHECK(part.runs[1].last_window == 19);
-    CHECK(part.runs[1].pace_after_mps == doctest::Approx(1.0));
+    CHECK(all.runs[1].pace_before_mps == doctest::Approx(0.5));
+    CHECK(all.runs[1].pace_after_mps == doctest::Approx(1.0));
+    CHECK(part.runs[1].pace_before_mps == doctest::Approx(0.5));
+    CHECK(part.runs[1].pace_after_mps == doctest::Approx(0.5));
     // the steps of the unsolved windows keep the fixed sigmas
     const double wt = 1.0 / (rule.sigma_m * rule.sigma_m);
     for (int k = 7; k < 9; k++)
@@ -905,6 +910,42 @@ TEST_CASE("loop closure odometry steps: windows without readings are not read, t
     REQUIRE(split.runs.size() == 2);
     CHECK(split.runs[0].last_window == 11);
     CHECK(split.runs[1].first_window == 13);
+}
+
+TEST_CASE("loop closure odometry steps: a window with a reading that is not a number is not read, like one without readings")
+{
+    // windows 4-9 weak (6 seen, bridged); a reading not a number in weak window 7 and in window 11, a pace neighbour
+    std::vector<WindowReadings> rd(30, seen_window());
+    for (int w : {4, 5, 7, 8, 9})
+        rd[w] = weak_window(Eigen::Vector3d::UnitX(), Eigen::Vector3d(0.1, 0.0, 0.0));
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    rd[7].placed_move.x() = nan;
+    rd[11].placed_move.y() = nan;
+    const std::vector<LoopClosureSegment> segments = segments_of_three(30);
+    const LoopOdometryInformation out = loop_odometry_step_information(all_read(rd), segments, LoopOdometryRule{});
+    for (const auto &omega : out.information)
+        CHECK(omega.allFinite());
+    // window 7 splits the run as a missing one would: 4-5 (seen window 6 is not bridged, 7 is not weak) and 8-9
+    std::vector<std::optional<WindowReadings>> missing = all_read(rd);
+    missing[7].reset();
+    missing[11].reset();
+    const LoopOdometryInformation without = loop_odometry_step_information(missing, segments, LoopOdometryRule{});
+    REQUIRE(out.runs.size() == without.runs.size());
+    for (size_t k = 0; k < out.runs.size(); k++)
+    {
+        CHECK(out.runs[k].first_window == without.runs[k].first_window);
+        CHECK(out.runs[k].last_window == without.runs[k].last_window);
+        CHECK(out.runs[k].sigma_m == without.runs[k].sigma_m);
+        CHECK(std::isfinite(out.runs[k].sigma_m));
+    }
+    CHECK(out.information == without.information);
+    REQUIRE(out.runs.size() == 2);
+    CHECK(out.runs[0].last_window == 5);
+    CHECK(out.runs[1].first_window == 8);
+    // a weak axis not a number is not read either
+    rd[7].placed_move.x() = 0.1;
+    rd[7].weak_axis.z() = nan;
+    CHECK(loop_odometry_step_information(all_read(rd), segments, LoopOdometryRule{}).runs.size() == 2);
 }
 
 TEST_CASE("loop closure odometry steps: the pace line runs from the pace before to the pace after, by the windows' mid times")

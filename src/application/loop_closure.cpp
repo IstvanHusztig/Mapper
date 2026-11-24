@@ -498,7 +498,8 @@ namespace
         for (int k = 0; k < W; k++)
         {
             const std::optional<WindowReadings> &x = readings[k];
-            readable[k] = x && std::isfinite(x->information_ratio) && std::isfinite(x->duration_s) && x->duration_s > 0.0 && !x->at_rest;
+            readable[k] = x && std::isfinite(x->information_ratio) && std::isfinite(x->duration_s) && x->duration_s > 0.0 &&
+                          x->placed_move.allFinite() && x->weak_axis.allFinite() && !x->at_rest;
             weak[k] = readable[k] && x->information_ratio < rule.weak_ratio;
         }
         const auto rd = [&](int k) -> const WindowReadings & { return *readings[k]; };
