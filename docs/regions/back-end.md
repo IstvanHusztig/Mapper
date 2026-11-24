@@ -140,6 +140,20 @@ From `python tools/function_sizes.py src --min 80` (2026-11-18):
 
 ## Experiments
 
+- **2026-11-24, match check (held-out innovation), built, off by default** (`loop_closure_match_check`, needs the
+  readings rule; refuses a quantile outside (0, 1) and the robust kernel). On the format 2 Livox 4 capture with both
+  switches on: the same 10 edges pruned as the Python prototype, then 24 → 63 dropped (T 35.99, limit 22.46, 2 held out,
+  innovation 2.08 m), 81 kept; largest T left 13.71 / 7.77 / 5.88 / 5.23; trajectory equal to the prototype's within 1 µm;
+  loop closure step 1.12 s without the check, 6.71 s with it. On uniform steps the check rejects 12 edges the rule graph
+  accepts (the four corridor-mouth edges among them). Frozen rule
+  `experiments/consistency/livox4_lever/match_check/RULE.md`; change `loop-closure-weak-runs-and-match-check`.
+- **2026-11-24, odometry steps from the windows' readings (blind-stretch rule), built, off by default**
+  (`loop_closure_odometry_from_readings`). `Window::readings`, snapshot and capture format 2. On Livox 4 the C++ rule
+  gives the prototype's 25 runs (stall, windows 482–506: T 8.95 s, S1 2.00, S2 4.63, sigma 5.04 m, shares
+  0.16/0.24/0.24/0.24/0.12); with the rule on the pruning keeps 82 (the 79 of uniform steps plus 51 ⇒ 79, 71 → 81,
+  75 → 82), and the solve equals `tools/loop_graph.py` with the same steps within 0.002 mm. Frozen rule
+  `experiments/consistency/livox4_lever/odo_cov/RULE.md`; agent folder
+  `experiments/regions/back-end/2026-11-24-odometry-step-covariance/`. One recording; not validated.
 - **2026-11-16, Livox 3:** with the AHRS gain switch made effective, the odometry was unchanged but loop closure
   corrected up to 1.48 m (0.33 m without), route 355 vs 313 m; the switch was removed (front-end). Tracker C3.
 - **2026-11-13, full Livox 2, post-processing from a pinned snapshot:** loop closure moved the trajectory up to 10.47 m
@@ -199,6 +213,15 @@ From `python tools/function_sizes.py src --min 80` (2026-11-18):
 - The dense-route growth through the consistency passes on Livox 2 (x smoothness weight 100× below y and z): a
   single-pass weight diagnostic was deferred.
 - Loop closure cannot see where the odometry drifted (yaw disagreement, per-window bias): not in `Window` or the snapshot.
+  (Since 2026-11-24 the information ratio, weak axis, rest test, placed move and duration are: `Window::readings`.)
+- Blind-stretch rule: a run's time in the last segment has no odometry step and is not represented (logged "after the
+  last step"); should the last segment get an end node? A window without any LiDAR information is loosened along one
+  arbitrary axis only, and a window weak in two axes along one (code review 2026-11-24); the rule is frozen until the
+  next recording has tested it.
+- Match check: its time on a long recording is not measured (two graph solves per edge and round; the covariance form
+  of design D3 if it matters); each test solve starts from the odometry poses, the prototype's from the full solution
+  (equal to 0.01 in T on Livox 4); the test is conservative while the steps keep 0.1 m (median T 0.3 where the model
+  expects 5.3).
 - (Settled 2026-11-18: `run_consistency` is this region's, by a function entry in `owners.toml`, although it lies in
   the front-end's file; `--from-snapshot` runs are the orchestrator's until this region's first job.)
 

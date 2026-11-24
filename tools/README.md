@@ -173,6 +173,7 @@ python tools/loop_graph.py check <capture> <replay folder>
 - `loo` prints, for each kept edge, its innovation predicted from the rest of the graph (weighted norm, and in metres) and the cost change. A disputed edge is not thereby a false one.
 - `check` solves the replay's kept edges and reports the largest node difference to the replay's own trajectory.
 - Hooks in the module for prototypes: a scale per loop edge's information, a sigma or a 6x6 per odometry edge, a given 6x6 per loop edge, the robust kernel.
+- `read_capture` reads capture formats 1 and 2. Format 2 carries the windows' readings (`Capture.readings`: information ratio, weak axis, at rest, placed move, duration, indexed by window from 0; `present` is false for a format 1 file), which the blind-stretch rule (`loop_closure_odometry_from_readings`) uses. `check` and `solve` use fixed odometry sigmas unless the caller passes the steps' information.
 
 Checked on a real capture (182,880 nodes): `check` 0.005 mm, 2.4 s; `loo` about 27 s. Limits: no registration (the transforms are the
 capture's), no choice of edges, no pruning or dropping by residual, no consistency, no replay; it takes the kept edges as given. Jacobians
