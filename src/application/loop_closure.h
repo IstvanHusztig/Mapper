@@ -78,8 +78,9 @@ struct LoopClosureReport;
 
 // Steps 2, 4 and 5 on the segments: the tries chosen and accepted, the edges, the pose graph with its pruning, and the
 // correction of every node of `windows` (from which `segments` were made). Returns the number of loop edges applied.
-// With loop_closure_odometry_from_readings every window must have its readings: otherwise an error is logged and nothing
-// is registered or applied (outcome readings_missing), never the fixed sigmas instead. loop_closure_match_check without
+// With loop_closure_odometry_from_readings and no window with readings (a file written before them) an error is logged and
+// nothing is registered or applied (outcome readings_missing), never the fixed sigmas instead; when only some windows lack
+// them (a run the odometry stopped early) a warning names them and the rule treats them as unreadable. loop_closure_match_check without
 // loop_closure_odometry_from_readings is refused the same way (outcome match_check_without_readings): on uniform steps the
 // match check rates true edges across a blind stretch as false.
 int close_loops(std::vector<Window> &windows, const std::vector<LoopClosureSegment> &segments, LoopClosureRegistrations &registrations,
@@ -210,9 +211,10 @@ struct LoopOdometryInformation
     std::vector<Eigen::Matrix<double, 6, 6>> information; // per step (segments.size() - 1), in the residual of relative_measurement
     std::vector<LoopOdometryRun> runs;
 };
-// readings: one per window, in window order (the segments' window indices index it)
-LoopOdometryInformation loop_odometry_step_information(const std::vector<WindowReadings> &readings, const std::vector<LoopClosureSegment> &segments,
-                                                       const LoopOdometryRule &rule);
+// readings: one per window, in window order (the segments' window indices index it); a window without readings (not
+// solved by the odometry) is not readable: never weak, never bridged, never a pace reference
+LoopOdometryInformation loop_odometry_step_information(const std::vector<std::optional<WindowReadings>> &readings,
+                                                       const std::vector<LoopClosureSegment> &segments, const LoopOdometryRule &rule);
 
 // Levenberg-Marquardt on the segment poses: odometry edges between consecutive segments, loop edges, first pose fixed.
 // A step is kept only if the cost falls (a plain Gauss-Newton step first, damping only when it fails). With
@@ -309,6 +311,7 @@ struct LoopClosureReport
     // (loop_match_check_refusal: nothing registered or applied), no_loops, all_dropped, implausible, applied
     std::string outcome = "too_few_windows";
     std::vector<LoopOdometryRun> odometry_runs; // loop_closure_odometry_from_readings: the runs found
+    int windows_without_readings = 0;           // loop_closure_odometry_from_readings: windows the rule could not read
     std::vector<LoopClosureEdge> kept;
     std::vector<LoopEdgeResidual> kept_residuals;
     std::vector<LoopClosureEdge> dropped; // in the order dropped

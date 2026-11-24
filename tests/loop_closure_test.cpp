@@ -733,6 +733,23 @@ namespace
         return WindowReadings{0.01, axis, false, move, 0.4};
     }
 
+    // every window with its readings
+    std::vector<std::optional<WindowReadings>> all_read(const std::vector<WindowReadings> &rd)
+    {
+        return std::vector<std::optional<WindowReadings>>(rd.begin(), rd.end());
+    }
+
+    // keeps the warnings
+    struct WarningLogger : Logger
+    {
+        std::vector<std::string> warnings;
+        void write(LogLevel level, std::string_view message) override
+        {
+            if (level == LogLevel::Warning)
+                warnings.emplace_back(message);
+        }
+    };
+
     // segments of 3 windows each; segment k turned by 30 k deg about z (the steps' frames differ from the world's)
     std::vector<LoopClosureSegment> segments_of_three(int windows)
     {
@@ -770,7 +787,7 @@ TEST_CASE("loop closure odometry steps: weak runs, their sigmas and their shares
         rd[w] = weak_window(-Eigen::Vector3d::UnitX(), Eigen::Vector3d(0.2, 0.0, 0.0));
     const std::vector<LoopClosureSegment> segments = segments_of_three(30);
     const LoopOdometryRule rule; // 0.05, 30 deg, 0.05 m/s^2, 0.1 m, 0.5 deg
-    const LoopOdometryInformation out = loop_odometry_step_information(rd, segments, rule);
+    const LoopOdometryInformation out = loop_odometry_step_information(all_read(rd), segments, rule);
     REQUIRE(out.information.size() == 9);
     REQUIRE(out.runs.size() == 5);
 
@@ -849,6 +866,47 @@ TEST_CASE("loop closure odometry steps: weak runs, their sigmas and their shares
     CHECK((extra2 - a.sigma_m * a.sigma_m * 0.5 * along * along.transpose()).norm() < 1e-9);
 }
 
+TEST_CASE("loop closure odometry steps: windows without readings are not read, the rule applies to the others")
+{
+    // 30 windows, 10 segments: windows 4-9 weak and stalled (window 6 seen, bridged), window 19 weak; windows 20-29 not solved
+    std::vector<WindowReadings> full(30, seen_window());
+    for (int w : {4, 5, 7, 8, 9, 19})
+        full[w] = weak_window(Eigen::Vector3d::UnitX(), Eigen::Vector3d(0.1, 0.0, 0.0));
+    const std::vector<LoopClosureSegment> segments = segments_of_three(30);
+    const LoopOdometryRule rule;
+    std::vector<std::optional<WindowReadings>> first_part = all_read(full);
+    for (int w = 20; w < 30; w++)
+        first_part[w].reset();
+    const LoopOdometryInformation all = loop_odometry_step_information(all_read(full), segments, rule);
+    const LoopOdometryInformation part = loop_odometry_step_information(first_part, segments, rule);
+    REQUIRE(part.runs.size() == 2);
+    // the run in the solved part is the one the full readings give
+    CHECK(part.runs[0].first_window == 4);
+    CHECK(part.runs[0].last_window == 9);
+    CHECK(part.runs[0].sigma_m == all.runs[0].sigma_m);
+    CHECK(part.information[1] == all.information[1]);
+    // window 19: nothing after it to bridge to or take the pace from, the pace before stands for both
+    CHECK(part.runs[1].first_window == 19);
+    CHECK(part.runs[1].last_window == 19);
+    CHECK(part.runs[1].pace_after_mps == doctest::Approx(1.0));
+    // the steps of the unsolved windows keep the fixed sigmas
+    const double wt = 1.0 / (rule.sigma_m * rule.sigma_m);
+    for (int k = 7; k < 9; k++)
+        CHECK(part.information[k].topLeftCorner<3, 3>().isApprox(Eigen::Matrix3d::Identity() * wt));
+
+    // readings missing in the middle: the weak windows before and after them are two runs, not one bridged over the gap
+    std::vector<WindowReadings> rd(30, seen_window());
+    for (int w : {10, 11, 13, 14})
+        rd[w] = weak_window(Eigen::Vector3d::UnitX(), Eigen::Vector3d(0.1, 0.0, 0.0));
+    std::vector<std::optional<WindowReadings>> gap = all_read(rd);
+    CHECK(loop_odometry_step_information(gap, segments, rule).runs.size() == 1); // window 12 seen: bridged
+    gap[12].reset();
+    const LoopOdometryInformation split = loop_odometry_step_information(gap, segments, rule);
+    REQUIRE(split.runs.size() == 2);
+    CHECK(split.runs[0].last_window == 11);
+    CHECK(split.runs[1].first_window == 13);
+}
+
 TEST_CASE("loop closure odometry steps: the pace line runs from the pace before to the pace after, by the windows' mid times")
 {
     // windows 3-4 weak and stalled; before 0.5 m/s, after 1.5 m/s: v_ref 0.75 and 1.25 at the two mid times
@@ -859,7 +917,7 @@ TEST_CASE("loop closure odometry steps: the pace line runs from the pace before 
         rd[w].placed_move = Eigen::Vector3d(0.0, 0.6, 0.0); // a turn after the run: the pace ignores the direction
     rd[3] = weak_window(Eigen::Vector3d::UnitX(), Eigen::Vector3d::Zero());
     rd[4] = weak_window(Eigen::Vector3d::UnitX(), Eigen::Vector3d(0.04, 0.0, 0.0));
-    const LoopOdometryInformation out = loop_odometry_step_information(rd, segments_of_three(9), LoopOdometryRule{});
+    const LoopOdometryInformation out = loop_odometry_step_information(all_read(rd), segments_of_three(9), LoopOdometryRule{});
     REQUIRE(out.runs.size() == 1);
     const LoopOdometryRun &r = out.runs[0];
     CHECK(r.pace_before_mps == doctest::Approx(0.5));
@@ -877,7 +935,7 @@ TEST_CASE("loop closure odometry steps: the fixed sigmas as information give the
     std::vector<LoopClosureSegment> segments = segments_of_three(static_cast<int>(rd.size()));
     for (size_t k = 0; k < segments.size(); k++)
         segments[k].pose = s.initial[k];
-    const LoopOdometryInformation steps = loop_odometry_step_information(rd, segments, loop_odometry_rule(c));
+    const LoopOdometryInformation steps = loop_odometry_step_information(all_read(rd), segments, loop_odometry_rule(c));
     REQUIRE(steps.runs.empty());
     REQUIRE(steps.information.size() + 1 == s.initial.size());
     const auto solved = optimize_loop_pose_graph(s.initial, loops, c, &steps.information);
@@ -1057,7 +1115,7 @@ TEST_CASE("loop closure match check: edges across a blind stretch are kept with 
     const std::vector<LoopClosureEdge> loops{g.edge(3, 36), g.edge(12, 27)};
     const OdometryConfig c = with_kernel(0.0);
 
-    const LoopOdometryInformation rule = loop_odometry_step_information(g.readings(4, 9), g.segments(), loop_odometry_rule(c));
+    const LoopOdometryInformation rule = loop_odometry_step_information(all_read(g.readings(4, 9)), g.segments(), loop_odometry_rule(c));
     REQUIRE(rule.runs.size() == 1);
     MESSAGE("run sigma ", rule.runs[0].sigma_m, " m");
     for (const LoopMatchTest &t : loop_match_tests(g.initial, loops, c, &rule.information))
@@ -1365,26 +1423,31 @@ TEST_CASE("loop closure replay: the tries the settings ask for and the capture d
     CHECK(!replay_loop_closure(capture, other, logger).segments_match);
 }
 
-TEST_CASE("loop closure replay: odometry from readings with a window without readings is an error, nothing is registered or applied")
+TEST_CASE("loop closure: readings for the first windows only, the loop closure runs and names the windows without them")
 {
     OdometryConfig config = loop_closure_config();
     LoopClosureCapture capture = capture_without_tries(config);
-    for (Window &w : capture.windows)
-        w.readings = WindowReadings{0.5, Eigen::Vector3d::UnitX(), false, Eigen::Vector3d(0.4, 0.0, 0.0), 0.4};
-    capture.windows[3].readings.reset();
+    const int n = static_cast<int>(capture.windows.size());
+    for (int w = 0; w < n; w++)
+        if (w < n / 2)
+            capture.windows[w].readings = WindowReadings{0.5, Eigen::Vector3d::UnitX(), false, Eigen::Vector3d(0.4, 0.0, 0.0), 0.4};
+        else
+            capture.windows[w].readings.reset();
     config.loop_closure_odometry_from_readings = true;
-    NullLogger logger;
+    config.loop_closure_match_check = true;
+    WarningLogger logger;
     const LoopClosureReplayResult r = replay_loop_closure(capture, config, logger);
-    CHECK(r.report.outcome == "readings_missing");
-    CHECK(r.loops == 0);
-    CHECK(r.missing.empty()); // no registration was asked for
-    CHECK(r.identical_nodes == r.nodes);
+    CHECK(r.report.outcome == "no_loops"); // it ran (and asked for the registrations the capture doesn't hold)
+    CHECK(!r.missing.empty());
+    CHECK(r.report.windows_without_readings == n - n / 2);
+    REQUIRE(logger.warnings.size() == 1);
+    MESSAGE(logger.warnings[0]);
+    CHECK(logger.warnings[0].find("windows " + std::to_string(n / 2) + "-" + std::to_string(n - 1)) != std::string::npos);
 
-    // with every window's readings it runs (and here asks for the registrations the capture doesn't hold)
-    capture.windows[3].readings = capture.windows[2].readings;
-    const LoopClosureReplayResult all = replay_loop_closure(capture, config, logger);
-    CHECK(all.report.outcome == "no_loops");
-    CHECK(!all.missing.empty());
+    // none with readings: refused as before
+    for (Window &w : capture.windows)
+        w.readings.reset();
+    CHECK(replay_loop_closure(capture, config, logger).report.outcome == "readings_missing");
 }
 
 TEST_CASE("loop closure replay: the match check without the readings' steps is refused, nothing is registered or applied")

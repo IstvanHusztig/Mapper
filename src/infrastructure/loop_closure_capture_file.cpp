@@ -332,6 +332,8 @@ bool write_loop_closure_replay_json(const std::filesystem::path &file, const Loo
     j["outcome"] = result.segments_match ? result.report.outcome : "segments_differ";
     j["loops"] = result.loops;
     j["largest_segment_correction_m"] = result.report.largest_segment_correction_m;
+    if (result.report.windows_without_readings > 0) // loop_closure_odometry_from_readings: windows the rule could not read
+        j["windows_without_readings"] = result.report.windows_without_readings;
     j["own_settings"] = settings.refused.empty() && settings.changed.empty();
     j["settings_changed"] = settings.changed;
     j["missing_tries"] = result.missing;
