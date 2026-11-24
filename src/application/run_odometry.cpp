@@ -1297,6 +1297,7 @@ namespace
         if (!add_window_distance(windows[i], w.poses_before_optimization, carry, c.ts_failure, c.logger))
         {
             // the run stops here but is still saved: the remaining windows continue from this one's restored end
+            windows[i].readings.reset(); // they describe the discarded solve; the loop closure then counts this window as unread
             place_windows_after(windows, i + 1);
             write_window_record(c, w, WindowHandOff::cancelled);
             return false;
