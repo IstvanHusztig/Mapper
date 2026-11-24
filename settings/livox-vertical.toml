@@ -16,7 +16,8 @@ config_version = "1.0"
 build_date = "Mar 28 2026"
 
 [consistency]
-use_consistency = true
+# off since 2026-11-24 with the settings of the Livox 4 run the user judged (see the note at degenerate_projection_ratio)
+use_consistency = false
 num_constistency_iter = 10
 consistency_gyro_rotation_term = false
 consistency_gyro_sigma_scale = 3.0
@@ -58,6 +59,12 @@ loop_closure_max_correction_m = 6.0
 loop_closure_min_fitness = 0.5
 loop_closure_odometry_sigma_m = 0.1
 loop_closure_odometry_sigma_deg = 0.5
+# blind-stretch rule: the odometry steps of a stretch where the LiDAR did not hold the travel are loosened along it, so a
+# loop's correction lands there and is not spread over the walk (on since 2026-11-24, the user's decision on the Livox 4 maps)
+loop_closure_odometry_from_readings = true
+# match check: after the pruning, an edge the rest of the graph contradicts (tested with the edges that reuse its scans held
+# out) is dropped; needs the blind-stretch rule (on since 2026-11-24)
+loop_closure_match_check = true
 loop_closure_edge_sigma_m = 0.05
 loop_closure_edge_sigma_deg = 0.3
 loop_closure_cross_floor_max_vertical_m = 6.0
@@ -70,8 +77,12 @@ loop_closure_cross_floor_max_angle_deg = 10.0
 ndt_huber_cutoff = 3.0
 ndt_information_scale = 0.1
 imu_position_information_scale = 0.1
-degenerate_projection_ratio = 0.1
-degenerate_projection_ratio_full = 0.2
+# 2026-11-24, the user's decision: the settings of the Livox 4 run whose map the user judged good go into this file
+# (experiments/consistency/livox4_lever/loop_capture/settings.toml): these two ratios (were 0.1 / 0.2),
+# imu_acceleration_offset_rw_mps2_sqrt_s 0.01 (was 0.0001), use_exact_ndt_bucket_statistics true, use_consistency false,
+# ahrs_gain 0.0 (was 0.05), gyro_scale_z 1.004 (this unit's gyro), and the two loop closure rules
+degenerate_projection_ratio = 0.02
+degenerate_projection_ratio_full = 0.04
 imu_always_on = true
 # TODO: measure on a static Mid-360S recording (L2 value)
 imu_accel_noise_density_mps2_sqrt_hz = 0.0013
@@ -84,7 +95,7 @@ imu_zero_velocity_sigma_mps = 0.01
 # sigma). TODO: count the dropped terms on the first recording
 imu_acceleration_span_s = 0.01
 imu_acceleration_offset_initial_sigma_mps2 = 0.1
-imu_acceleration_offset_rw_mps2_sqrt_s = 0.0001
+imu_acceleration_offset_rw_mps2_sqrt_s = 0.01
 use_imu_translation_prediction = false
 use_zero_velocity_detection = false
 
@@ -131,7 +142,7 @@ sliding_window_trajectory_length_threshold = 200.0
 threshold_initial_points = 60000
 # window of 0.36 s at the 500 Hz IMU
 threshold_nr_poses = 180
-use_exact_ndt_bucket_statistics = false
+use_exact_ndt_bucket_statistics = true
 use_motion_from_previous_step = true
 
 [lidar_odometry_debug_info]
@@ -158,7 +169,7 @@ lidar_imu_lever_arm_y_m = -0.011
 lidar_imu_lever_arm_z_m = -0.02329
 
 [madgwick_filter]
-ahrs_gain = 0.05
+ahrs_gain = 0.0
 fusionConventionEnu = false
 fusionConventionNed = false
 fusionConventionNwu = true
@@ -211,4 +222,10 @@ working_directory_preview = ''
 
 [performance]
 real_time_threshold_seconds = 10.0
+
+[sensor_calibration]
+# gyro scale of the unit the recordings were made with (measured, change gyro-scale-correction); 1.0 for an unmeasured unit
+gyro_scale_x = 1.0
+gyro_scale_y = 1.0
+gyro_scale_z = 1.004
 
