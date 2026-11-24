@@ -49,6 +49,10 @@
   calls `trajectory_seams.load(folder, stage)`, which the committed `trajectory_seams.py` lacks (added that way in
   8ebf43f). The six members run with `experiments/stage8/tools/s8_scale_repeats.py` (same family, same settings). Verify: wall measures
   (`wall_precision.py --height 0.5`) and plan fit of every member, passage and end-stretch speeds, full sheets.
+  Result 2026-11-19 (all six, time limit 0 windows each; table in `experiments/stage8/scale/scale_summary.md`):
+  largest difference from the base 1.16-3.07 m (limit 0.85 m), at 178-179 s; plan fit 67-74 % (base 79 %); pair
+  diff p50 0.021-0.057 m (base 0.022); endpoint proxy 1.20-5.71 m (base 4.24). Per-window speeds only as the largest
+  per member (1.42-1.96 m/s); passage and end-stretch speeds NOT MEASURED. Sheets `full_sheets/8`-`13`.
 - [ ] 2.4 Results into a summary file and this file, no verdict; the user's look at the Livox 3 and repeat sheets.
 
 ## 3. Shipping (after the user's decision)

@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>dMapper target layout (modern-gui mockup)</title>
+<!--
+  Target layout of the modern-gui change (openspec/backlog/modern-gui), approved by the user on 2026-11-17.
+  No menu bar: every action is in the Run panel or the toolbar. A static mockup: the cloud is made up, the numbers are examples. Theme, edge shading and its strength work.
+  Opens offline; with no network it falls back to system fonts (the app embeds Inter and JetBrains Mono).
+  Canvas version: https://claude.ai/artifact/4CifpNooZMKzEuWEPqoCr5
+-->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root[data-theme="dark"]{
+  --bg:#0f1216;--chrome:#0b0e12;--panel:#151a20;--field:#1b2129;--border:#262e38;--track:#262e38;
+  --text:#e6e9ee;--muted:#9aa4b2;--accent:#4c8dff;--on-accent:#08111f;--accent-soft:#16294a;
+  --vp:#090b0e;--traj:#ff8a3d;--pick-ring:rgba(255,138,61,.25);--tip:#1b2129;--tip-text:#e6e9ee;
+  --overlay-line:rgba(230,233,238,.55);--overlay-text:#c4cbd5;--overlay-bg:rgba(9,11,14,.5);
+  --info:#9aa4b2;--warn:#f2b84b;--err:#ff6b6b;--ok:#4cc38a}
+:root[data-theme="light"]{
+  --bg:#eef0f3;--chrome:#e6e9ed;--panel:#ffffff;--field:#f6f7f9;--border:#d6dbe1;--track:#e3e7ec;
+  --text:#1b1f24;--muted:#5b6472;--accent:#1f5fd6;--on-accent:#ffffff;--accent-soft:#e3ecfc;
+  --vp:#f7f8fa;--traj:#c2410c;--pick-ring:rgba(194,65,12,.18);--tip:#ffffff;--tip-text:#1b1f24;
+  --overlay-line:rgba(27,31,36,.55);--overlay-text:#3b434e;--overlay-bg:rgba(255,255,255,.6);
+  --info:#5b6472;--warn:#9a6400;--err:#c62828;--ok:#1e7b4f}
+*{box-sizing:border-box}
+body{margin:0;font:13px Inter,system-ui,sans-serif;color:var(--text);background:var(--bg)}
+button{font:inherit;cursor:pointer;color:var(--text)}
+.mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+.app{height:100vh;min-height:640px;display:flex;flex-direction:column;overflow:hidden}
+.body{flex:1 1 auto;min-height:0;display:flex}
+.run{width:300px;flex:none;background:var(--panel);border-right:1px solid var(--border);padding:16px;display:flex;flex-direction:column;gap:18px;overflow:auto}
+.cap{font-size:11px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--muted)}
+.lbl{font-size:12px;color:var(--muted)}
+.field{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--field)}
+.field span{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.link{background:none;border:0;color:var(--accent);padding:0;font-size:12px}
+.primary{min-height:40px;width:100%;border:0;border-radius:8px;background:var(--accent);color:var(--on-accent);font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px}
+.secondary{min-height:40px;width:100%;border:1px solid var(--border);border-radius:8px;background:var(--field);display:flex;align-items:center;justify-content:center;gap:8px}
+.sep{height:1px;background:var(--border)}
+.stage{display:flex;align-items:center;gap:10px}
+.stage .dot{width:10px;height:10px;border-radius:50%;flex:none;border:2px solid var(--border)}
+.stage.done .dot{background:var(--ok);border-color:var(--ok)}
+.stage.run .dot{background:var(--accent);border-color:var(--accent)}
+.stage.run .name{font-weight:600}
+.stage.todo .name{color:var(--muted)}
+.stage .name{flex:1 1 auto}
+.stage .info{font-size:12px;color:var(--muted)}
+.bar{margin:6px 0 0 20px;height:6px;border-radius:3px;background:var(--track);overflow:hidden}
+.bar div{width:62%;height:100%;background:var(--accent);border-radius:3px}
+.main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column}
+.toolbar{flex:none;display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--border)}
+.tb{min-height:32px;padding:0 12px;border-radius:6px;border:1px solid var(--border);background:var(--field);display:flex;align-items:center;gap:8px}
+.tb[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.vsep{width:1px;height:22px;background:var(--border);margin:0 6px}
+.toolbar label{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}
+.toolbar input{width:110px;accent-color:var(--accent)}
+.grow{flex:1 1 auto}
+.viewport{flex:1 1 auto;min-height:300px;position:relative;overflow:hidden;background:var(--vp)}
+.viewport canvas{position:absolute;inset:0;width:100%;height:100%}
+.pick{position:absolute;width:14px;height:14px;border-radius:50%;transform:translate(-50%,-50%);border:2px solid var(--traj);background:var(--vp);box-shadow:0 0 0 3px var(--pick-ring)}
+.tip{position:absolute;transform:translate(12px,-44px);padding:6px 10px;border-radius:6px;background:var(--tip);color:var(--tip-text);font-size:12px;white-space:nowrap;border:1px solid var(--border)}
+.compass{position:absolute;top:16px;right:16px;width:56px;height:56px;border-radius:50%;border:1.5px solid var(--overlay-line);display:flex;justify-content:center;padding-top:4px;color:var(--overlay-text);font-size:11px;font-weight:600;background:var(--overlay-bg)}
+.scale{position:absolute;left:16px;bottom:16px;display:flex;flex-direction:column;gap:4px;color:var(--overlay-text);font-size:11px}
+.scale div{width:120px;height:6px;border:1.5px solid var(--overlay-line);border-top:0}
+.ramp{position:absolute;right:16px;bottom:16px;display:flex;align-items:center;gap:8px;color:var(--overlay-text);font-size:11px}
+.ramp div{width:140px;height:8px;border-radius:4px}
+.log{flex:none;height:190px;display:flex;flex-direction:column;background:var(--panel);border-top:1px solid var(--border)}
+.loghead{display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--border)}
+.pill{min-height:26px;padding:0 10px;border-radius:13px;border:1px solid var(--border);background:var(--field);font-size:12px}
+.pill[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.lines{flex:1 1 auto;overflow:auto;padding:6px 12px;font-size:12px;line-height:20px}
+.lines div{display:flex;gap:12px;white-space:nowrap}
+.lines .t{color:var(--muted)}.lines .l{width:44px;color:var(--info)}
+.lines .warn .l,.lines .warn .m{color:var(--warn)}
+.status{height:26px;flex:none;display:flex;align-items:center;gap:18px;padding:0 12px;background:var(--chrome);border-top:1px solid var(--border);color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="body">
+    <aside class="run">
+      <div class="cap">Run</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <span class="lbl">Parameters</span>
+          <div class="field"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg><span>l2-vertical.toml</span><button class="link">Load…</button></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <span class="lbl">Recording</span>
+          <div class="field"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>raw data\44_short</span><button class="link" title="Pick a recording folder (Ctrl+O)">Load…</button></div>
+        </div>
+        <button class="primary" title="Load the recording, process it and save the result"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l12-7.5z"/></svg>Start processing</button>
+      </div>
+      <div class="sep"></div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;justify-content:space-between"><span class="cap">Stages</span><span class="mono lbl">03:12 elapsed</span></div>
+        <div class="stage done"><span class="dot"></span><span class="name">Loading</span><span class="info mono">0:18</span></div>
+        <div>
+          <div class="stage run"><span class="dot"></span><span class="name">Odometry</span><span class="info mono">62 %</span></div>
+          <div class="bar"><div></div></div>
+          <div class="lbl" style="margin:4px 0 0 20px">412 / 663 windows · finishes about 22:41</div>
+        </div>
+        <div class="stage todo"><span class="dot"></span><span class="name">Loop closure</span></div>
+        <div class="stage todo"><span class="dot"></span><span class="name">Consistency</span></div>
+        <div class="stage todo"><span class="dot"></span><span class="name">Saving</span></div>
+        <button class="secondary" title="Pausing keeps no intermediate state: a paused run can't be resumed after closing dMapper."><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M9 5v14M15 5v14"/></svg>Pause</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="toolbar">
+        <button class="tb" title="Top view (T)">Top</button><button class="tb" title="Front view (F)">Front</button><button class="tb" title="Isometric view (I)">Iso</button><button class="tb" title="Reset the view (Z)">Reset</button>
+        <span class="vsep"></span>
+        <button class="tb" aria-pressed="true">Ortho</button><button class="tb" aria-pressed="true">Cloud</button><button class="tb" aria-pressed="true">Trajectory</button><button class="tb" aria-pressed="true" title="Show compass and ruler (C)">Compass</button>
+        <span class="vsep"></span>
+        <button class="tb" id="edge" aria-pressed="true">Edge shading</button>
+        <label>Strength <input id="strength" type="range" min="0" max="100" value="60"></label>
+        <span class="grow"></span>
+        <button class="tb" id="theme" aria-label="Switch between dark and light theme">Light</button>
+      </div>
+      <div class="viewport" id="vp">
+        <canvas id="cloud" aria-hidden="true"></canvas>
+        <div class="pick" id="pick"></div>
+        <div class="tip" id="tip">Window 412 · t = 248.6 s</div>
+        <div class="compass">N</div>
+        <div class="scale"><span>10 m</span><div></div></div>
+        <div class="ramp"><span>-2.1 m</span><div id="ramp"></div><span>+6.4 m</span></div>
+      </div>
+      <div class="log">
+        <div class="loghead">
+          <span class="cap" style="margin-right:8px">Log</span>
+          <button class="pill" aria-pressed="true">All</button><button class="pill">Info</button><button class="pill">Warnings</button><button class="pill">Errors</button>
+          <span class="grow"></span><button class="link">Copy</button>
+        </div>
+        <div class="lines mono">
+          <div><span class="t">22:38:01</span><span class="l">INFO</span><span class="m">[stage] loading: 24 LAZ files, 1 IMU file</span></div>
+          <div><span class="t">22:38:19</span><span class="l">INFO</span><span class="m">[stage] odometry</span></div>
+          <div><span class="t">22:39:47</span><span class="l">INFO</span><span class="m">window 380 done (12 iterations, converged)</span></div>
+          <div class="warn"><span class="t">22:40:02</span><span class="l">WARN</span><span class="m">window verdict 391: bent 3.4° against the gyro</span></div>
+          <div><span class="t">22:40:30</span><span class="l">INFO</span><span class="m">window 405 done (9 iterations, converged)</span></div>
+          <div><span class="t">22:40:41</span><span class="l">INFO</span><span class="m">point cloud preview: 1 241 806 points</span></div>
+          <div><span class="t">22:40:44</span><span class="l">INFO</span><span class="m">window 412 done (11 iterations, converged)</span></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div class="status">
+    <span>1.24 M points</span><span>60 fps</span><span>cam 12.3, 4.5, 1.8</span><span>node 412 · 248.6 s</span>
+    <span class="grow"></span><span>l2-vertical.toml</span><span>dMapper 0.1.0</span>
+  </div>
+</div>
+
+<script>
+(function () {
+  // made-up cave passage, top view, coloured by height (viridis; top trimmed on the light theme)
+  var s = 7;
+  function rnd() { s |= 0; s = (s + 0x6D2B79F5) | 0; var t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }
+  function cy(x) { return 50 + 16 * Math.sin(x / 100 * 5.2) + 6 * Math.sin(x / 100 * 13); }
+  function hw(x) { return 13 + 4 * Math.sin(x / 100 * 9 + 1); }
+  var pts = [];
+  for (var i = 0; i < 2400; i++) {
+    var x = 3 + rnd() * 94, y, h, wall = rnd() < 0.78;
+    if (wall) { y = cy(x) + (rnd() < 0.5 ? -1 : 1) * (hw(x) + (rnd() - 0.3) * 4.5); h = 0.5 + 0.5 * rnd(); }
+    else { y = cy(x) + (rnd() * 2 - 1) * (hw(x) - 2.5); h = 0.05 + 0.25 * rnd(); }
+    pts.push({ x: x, y: y, h: Math.min(1, Math.max(0, 0.75 * h + 0.25 * x / 100)), wall: wall, s: 1.5 + rnd() * 1.3 });
+  }
+  var stops = [[68,1,84],[59,82,139],[33,145,140],[94,201,98],[253,231,37]];
+  function ramp(t, max) { var v = Math.min(1, Math.max(0, t)) * max * 4, i = Math.min(3, Math.floor(v)), f = v - i, a = stops[i], b = stops[i + 1];
+    return 'rgb(' + [0, 1, 2].map(function (k) { return Math.round(a[k] + (b[k] - a[k]) * f); }).join(',') + ')'; }
+
+  var root = document.documentElement, vp = document.getElementById('vp'), cv = document.getElementById('cloud');
+  var edgeBtn = document.getElementById('edge'), strength = document.getElementById('strength'), themeBtn = document.getElementById('theme');
+  function css(n) { return getComputedStyle(root).getPropertyValue(n).trim(); }
+
+  function draw() {
+    var dark = root.dataset.theme === 'dark', max = dark ? 1 : 0.8;
+    var edge = edgeBtn.getAttribute('aria-pressed') === 'true', a = strength.value / 100 * 0.6;
+    var dpr = window.devicePixelRatio || 1, w = vp.clientWidth, h = vp.clientHeight;
+    cv.width = w * dpr; cv.height = h * dpr;
+    var g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+    pts.forEach(function (p) {
+      var px = p.x / 100 * w, py = p.y / 100 * h;
+      g.beginPath(); g.arc(px, py, p.s, 0, 2 * Math.PI); g.fillStyle = ramp(p.h, max); g.fill();
+      if (edge) { g.lineWidth = 1; g.strokeStyle = 'rgba(0,0,0,' + (p.wall ? a : a * 0.35) + ')'; g.stroke(); }
+    });
+    g.beginPath();
+    for (var x = 5; x <= 95; x += 1) { var X = x / 100 * w, Y = cy(x) / 100 * h; x === 5 ? g.moveTo(X, Y) : g.lineTo(X, Y); }
+    g.strokeStyle = css('--traj'); g.lineWidth = 2.5; g.lineJoin = g.lineCap = 'round'; g.stroke();
+    var pk = document.getElementById('pick'), tip = document.getElementById('tip');
+    pk.style.left = tip.style.left = '62%'; pk.style.top = tip.style.top = cy(62) + '%';
+    document.getElementById('ramp').style.background =
+      'linear-gradient(90deg,' + [0, .25, .5, .75, 1].map(function (v) { return ramp(v, max); }).join(',') + ')';
+  }
+  edgeBtn.onclick = function () { edgeBtn.setAttribute('aria-pressed', edgeBtn.getAttribute('aria-pressed') !== 'true'); draw(); };
+  strength.oninput = draw;
+  themeBtn.onclick = function () { var d = root.dataset.theme === 'dark'; root.dataset.theme = d ? 'light' : 'dark'; themeBtn.textContent = d ? 'Dark' : 'Light'; draw(); };
+  window.onresize = draw; draw();
+})();
+</script>
+</body>
+</html>

@@ -7,7 +7,9 @@
 # Version information is stored in [version_info] section for compatibility checking.
 #
 # Livox Mid-360S, vertical handheld mount (cave/outdoor): IMU 500 Hz (firmware 35.1.1.13), 200k pts/s, Z-up NWU.
-# PROVISIONAL: copied from l2-vertical.toml; the values marked TODO are measured on the first Mid-360S recordings.
+# Tuned on two indoor Mid-360S recordings (Livox 3 and 4, 2026-11-16 to 2026-11-24): lever arm, NDT Huber and information
+# scale, the odometry settings of the Livox 4 map the user judged good, honest-inertial-carry layer 1 and the two loop
+# closure rules. The values still marked TODO keep the L2's until they are measured on a Mid-360S.
 # Stand still >= 1-2 s at the start (IMU gyro bias removal + initial map).
 
 [version_info]

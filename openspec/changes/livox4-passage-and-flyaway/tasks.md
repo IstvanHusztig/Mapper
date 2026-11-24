@@ -130,11 +130,144 @@
   nothing checks (the runaway is that design's known failure). Nothing found on a systematic pull of voxel
   matching along surfaces. Not read: Point-LIO, LIO-SAM, the gyro's datasheet (secondary: sensitivity +-0.5 %).
 
+- [x] 3.9 Code review of the path behind the passage stall (master-reviewer, reading only), and one replay of its top
+  finding.
+  Result: no sign, frame or Jacobian defect. Three new findings in the default cell statistics: (1) a cell's mean is
+  its first point for good (`ndt_map.cpp::new_legacy_cell`); with the sensor-frame key order of `decimate` (C30) and
+  this mount's X axis pointing forward, that point is the cell's rearmost one along the walk, so later points lie ahead
+  of the stored mean and pull the window back; (2) cells with 1 or 2 points pull with an isotropic 3 cm information,
+  pass the view-point gate and are not counted by the degeneracy projection (`ndt_term.cpp:151`, `:233`); (3) the
+  covariance about the fixed mean is weighted (n−1)/n² instead of 1/n. One replay of the passage capture with
+  `use_exact_ndt_bucket_statistics = true` (measured gyro noise, `experiments/stage8/passage/p_gyro_exact`): path
+  100–110 s 6.04 → 9.63 m (true about 10 m), velocity chi² median 123 → 16; 110–124 s 12.41 → 10.90 m with a largest
+  speed of 2.07 m/s. The capture's map was built with the default statistics, so a full run has to confirm it.
+- [x] 3.10 Region job, experiment branch (not for merge): (a) a reading per window of how far the stored mean of the
+  matched cells lies behind the window's own points in them, along travel, by the cell's point count (1, 2, 3–9, 10 and
+  more) and per grid; (b) a switch that keeps cells with fewer than 3 points out of the matching. Replays with the
+  measured gyro noise on the four captures (passage, stairs, Livox 3, end stretch): default statistics, exact
+  statistics, each with and without (b).
+  Result: branch `region/lidar-matching/2026-11-18-cell-statistics-experiment` (2cf91a6; step checks hold but for the
+  parameters file's new key), 16 replays, one per variant, none at the time limit, every capture map built with the
+  default statistics. Default / exact / default + 3-point rule / exact + 3-point rule: passage 100–110 s 6.04 / 9.63 /
+  6.20 / 9.63 m; stairs 207–215 s 6.03 / 21.21 / 6.00 / 20.95 m with largest speeds 1.38 / 5.51 / 2.86 / 5.33 m/s; end
+  stretch 28.9 / 53.4 / 30.1 / 55.4 m; Livox 3 largest difference to default – / 1.14 / 0.002 / 1.07 m. Two controls
+  with the degeneracy projection off (mine, 8 replays): default 5.75 m, exact 6.22 m in the passage; exact then does
+  not run away (stairs 5.96 m, 1.43 m/s; end 29.85 m, 1.90 m/s). With the exact statistics the information ratio is
+  below 0.1 (the projection's lower threshold) in 43 of 84 passage, 225 of 250 stairs, 32 of 84 Livox 3 and 60 of 131
+  end windows, with the default statistics in none (minimum 0.117–0.170): there the projection removes the NDT's
+  translation part along the weak direction and the inertial terms decide (result = guess within 0.7 mm in passage
+  windows 289–298). So the 9.63 m is not a LiDAR result, and the exact statistics alone do not lengthen the passage
+  beyond what one replay resolves. The reading (a), point-weighted, mm along travel, cells with 10 and more points,
+  indoor / outdoor grid: default statistics passage (100–110 s) +9.7 / +25.4, stairs +5.3 / +17.3, end +12.4 / +40.2;
+  exact (projection off) +2.4 / +9.9, +0.4 / +3.4, +2.3 / +8.2. Young cells in the stall windows 285–300 lie +19 to
+  +34 mm ahead with both statistics (the reviewer's recount). The in-plane pull in windows 288–292 falls from −38 …
+  −43 to −17 … −26 mm, the outdoor grid's from −77 … −154 to −59 … −75 mm. Reviewed (conclusion reviewer): numbers hold;
+  the pulls are single linear steps, not a causal split; the 3-point rule is dropped.
+  `experiments/regions/lidar-matching/2026-11-18-cell-statistics/`.
+- [x] 3.12 The acceleration offset's random walk (`imu_acceleration_offset_rw_mps2_sqrt_s`, 0.0001 in the Livox file,
+  built-in 0.05; the offset is folded into the gravity vector after each window, so it is the state that can absorb a
+  tilt of the attitude) and the projection's thresholds, replays on the same four captures (28, one per variant, none
+  at the time limit; same folder, `run_offset_rw.py`, `run_low_thresholds.py`, tables `experiments/stage8/tools/
+  s8_cs_table.py`). The accelerometer's steady misfit against the solved path as a tilt (10 s block means), default
+  settings: passage 0.03–0.15°, Livox 3 0.07–0.10°, stairs 1.01° falling to 0.06°, end 0.64–0.72°; the offset's prior
+  sigma is 0.002 m/s². Random walk 0.01 with the default statistics: stairs tilt 1.01 → 0.33°, velocity chi² median
+  267 → 37; end 0.72 → 0.22°, 219 → 28; Livox 3 within 0.02 m; but the passage runs to 11.20 m and 20.91 m (true about
+  10 and 12) at up to 3.66 m/s: the offset takes up the NDT's braking (cumulative offset +0.3, +0.3 m/s² in windows
+  287–297). Exact statistics + random walk 0.01 + projection at 0.1 / 0.2: passage 9.42 / 12.79 m, stairs largest
+  speed 2.22 m/s, end 107 m at up to 4.86 m/s. Exact + 0.01 + projection at 0.01 / 0.02 and at 0.02 / 0.04: passage
+  8.84 / 9.37 m and 13.07 / 13.05 m, largest speed 1.27 / 1.28 m/s; stairs 207–215 s 5.89 m, 1.42 m/s, chi² 48 / 47,
+  tilt 0.35°; Livox 3 within 0.06 m of the default; end 25.12 / 25.32 m, 1.31 m/s; no bent or fast flags (bias-high 4
+  against 3 on the stairs); projection off: passage 7.91 m. Against the default the stairs replay ends 7.7 m away
+  (vertical move −5.0 against −4.0 m) and the end stretch 4.5 m: which is right is not known from replays.
+  Reviewed (conclusion reviewer): the numbers hold. The tilt reading and the chi² are computed with the gravity vector
+  the offset is folded into, so their fall is partly by construction and no proof of a better attitude; the
+  independent evidence is the passage's length and speeds. The thresholds were chosen on these same four captures, one
+  replay each, and the margin is thin (0.1 / 0.2 with the same settings runs away). Not run: the default statistics
+  with the low thresholds and the offset at 0.01. How the looser offset drives the speed up in the passage is not
+  isolated (0.03 behaves differently from 0.01).
+- [ ] 3.11 Full Livox 4 and Livox 3 runs with the candidate of 3.12 (exact statistics, offset random walk 0.01,
+  projection 0.02 / 0.04), maps built with the exact statistics from the start; the run check; the user's look at
+  the maps.
+  Runs done (commit 54dff85, `experiments/stage8/candidate_livox{4,3}`, settings `candidate_livox.toml`; Livox 4 wall
+  2016 s, Livox 3 1342 s), against `full_gyro_livox{4,3}`. Livox 4: passage 100–110 s 5.94 → 9.53 m, 110–124 s 11.98 →
+  13.07 m; stairs 195–285 s 87.85 → 88.00 m, vertical −5.26 → −5.15 m; end stretch 315–362 s 24.85 → 24.48 m; no bent,
+  fast or bias flags (largest speed 1.62 → 1.42 m/s, largest bias 0.58 → 0.49 °/s); velocity chi² median 73 → 38;
+  start-to-end before loop closure 3.73 → 5.03 m, in height 0.70 → 0.04 m; loops 66 → 83, largest correction 4.36 →
+  5.01 m; the final trajectories differ by up to 5.08 m (168.7 s). Livox 3: start-to-end 0.06 m both, largest
+  correction 0.22 → 0.17 m, chi² 39 → 27, final trajectories within 0.33 m. The user's look at Livox 4
+  (`alt_full_sheet.png`): fewer double walls than `full_gyro_livox4`, double walls remain around the start rooms.
+  Three more Livox 4 runs (commit 54dff85; summary `experiments/stage8/candidate_runs_summary.md`, no verdict yet):
+  the candidate on the yaw-scaled copy `4_gz0040` (`candidate_livox4_gz0040`), and the candidate with `ahrs_gain = 0`
+  on Livox 4 and on `4_gz0040` (`candidate_gain0_livox4`, `candidate_gain0_livox4_gz0040`). Candidate / gz / gain 0 /
+  gain 0 + gz: passage 100–110 s 9.53 / 9.51 / 9.30 / 9.45 m, 110–124 s 13.07 / 13.08 / 13.06 / 13.06 m; stairs
+  88.00 / 87.95 / 87.82 / 88.01 m; end stretch 24.48 / 24.82 / 25.47 / 24.87 m; no bent or fast flags, largest bias
+  0.49 / 0.45 / 0.49 / 0.49 °/s; chi² median 38 / 38 / 37 / 36; start-to-end 5.03 / 4.79 / 3.82 / 4.24 m (height
+  0.04 / 0.13 / 0.69 / 0.04 m); loops 83 / 86 / 85 / 88, largest correction 5.01 / 4.77 / 3.81 / 4.22 m; whole-floor
+  plan fit mean |d| 0.087 / 0.084 / 0.087 / 0.073 m, within 10 cm 73 / 72 / 73 / 79 %. Final trajectories against
+  the candidate: up to 1.08 / 1.40 / 1.61 m. The gain-0 Livox 4 run check is INCOMPLETE (window 414's uncertainty
+  eligibility unresolved). The user's look at the three full sheets is open.
+
 ## 4. Report and decision
 
 - [ ] 4.1 The numbers for the user, without a verdict; the conclusion reviewed (Sonnet) before it is stated.
 - [ ] 4.2 The user's decision: which fix is proposed as its own change, or what is looked at next.
 - [x] 4.3 Knowledge entries of the regions that took part; tracker rows for defects found.
+
+## 5. Corridor slow stretches (found by the repeats of `gyro-scale-correction`, 2026-11-19)
+
+- [x] 5.1 Where the scatter of the six Livox 4 repeats (1.2–3.1 m, limit 0.85 m) is made: the logs and the raw IMU of
+  the seven runs. Reviewed (conclusion reviewer).
+  Result (`experiments/stage8/scale/analysis/README.md`, section Reading): the odometry of the seven runs agrees within
+  10 cm until 121 s and keeps its offsets after 196 s (changes up to 0.7 m); it splits in corridor passes: 126–136 s
+  (speeds 1.16–1.52 m/s), 137–141 s (three runs slow to 0.1–0.6 m/s for 3 s) and 177–181 s on the lower storey (the
+  base, span_plus and all five earlier runs slow to 0.2–0.45 m/s for 4–5 s), 2–3 m each, while the IMU's step shocks
+  stay at walking level. The two runs slow in neither place end 1.20 and 1.37 m from their start before loop closure,
+  the others 3.8–5.7 m.
+- [x] 5.2 Why: the per-window tables the full runs wrote (`window_features.csv`, `window_terms.csv`), all twelve Livox 4
+  runs and Livox 3. Reviewed before it is stated.
+  Result (same README, section Mechanism, with the reviewer's corrections): in windows with the information ratio
+  below 0.02 the result equals the guess along travel within a few mm (p95 3, largest 5): dead reckoning from the
+  carried velocity and the accelerometer, by construction. Livox 4 has 90–110 of 1016 windows below 0.04 in 6–9
+  stretches of 3–6 s, Livox 3 24 of 702 in two stretches of 2–3 s. Lower corridor (windows 485–497, 4.65 s): all 11
+  runs with the projection lose 0.25–0.78 m/s; the loss orders with the carried gravity vector's offset along travel
+  at entry (r = −0.91 over 10 distinct runs, slope half the physical one); the run without the projection ends the
+  stretch at 0.02 m/s. Runs leaving it at 0.36 m/s or less stay slow for 3 s: the LiDAR cost has a lower minimum
+  15–70 cm ahead in every such window, the window moves 5–47 mm towards it. Carried velocity sigma 4–11 mm/s (mainly
+  the motion-edge position terms, sigma 1e-4 m at weight 0.1, pinning the window to a guess built from the same
+  accelerometer), against corrections of 0.25–0.7 m/s at velocity chi² of hundreds to 57,000; nearly every
+  dead-reckoned stretch ends with a window moved 5–27 cm from its guess. Upper passage exit: edge_plus window 385 is
+  moved −158 mm (velocity 0.58 → 0.29 m/s, offset +0.24 m/s²), the base +148 mm. Tested and not supported: a
+  sensor-fixed accelerometer bias (3–9 % of the gravity state's variance).
+- [x] 5.3 Captures of both stretches, each run stopped once its capture is written (`experiments/stage8/tools/
+  s8_stall_captures.py`, `s8_stall_extra.py`, results `experiments/stage8/stalls/`): the lower corridor 160–186 s with
+  the base settings, the upper passage 122–143 s with the edge_plus member's settings; replays with the own settings
+  (identical) and with settings changed. Verify: own-settings replays identical, no window at the time limit.
+  Result (`experiments/stage8/stalls/replay_tables.txt`; 24 replays, none at the time limit, own settings identical
+  72 of 72 and 59 of 59 windows; commit 9ddf0dc). Path walked in the slow stretch, upper 134.0–141.6 s / lower
+  173.5–182.6 s; the full runs that do not slow down have 8.0–8.24 m / 9.09–9.23 m: own 5.77 / 6.05 m; projection
+  thresholds 0.01, 0.02: 7.55 / 9.02 (but 1.2 m short in the rest of the lower range); 0.04, 0.08: 9.02 / 6.63; off:
+  8.12 / 6.07 (2.4 m short in the rest); offset random walk 0.003: 8.12 / 7.17; 0.03: 8.10 / 5.92; accelerometer
+  floor 0.3: 8.12 / 8.13; `imu_position_information_scale` 0.01: 7.57 / 8.80; 1.0: 7.63 / 7.01; floor 0.3 with scale
+  0.01: 8.13 / 10.14 (one window at 2.55 m/s); the same with thresholds 0.01, 0.02: 8.12 / 7.18; with the projection
+  off: 8.14 / 5.23. Velocity chi² median own 51 / 38, floor 0.3: 14 / 18.
+  Null control (12 replays, changes of 0.1–1 %, the family's span × 1.05, the other member's edge sigma): lower
+  5.92–6.36 m, ends within 0.5 m of the own replay (the stall stays in all six); upper 5.77–5.79 m and within 0.21 m
+  for the four 0.1–1 % changes, 5.97 m with the base's edge sigma on the edge_plus state (the stall stays, although
+  the base's own full run walks 8.16 m there), 7.45 m with span × 1.05. Reviewed: the variants cannot be ranked
+  finely from one replay each; a changed setting also changes the state the stretch is entered with (thresholds
+  0.01, 0.02 lose 0.33 m/s in the dead-reckoned windows against 0.66), so entry and recovery effects are not
+  separated; with the floor at 0.3 the loss is 0.54 m/s and the windows after it move 24–129 mm per window towards
+  the LiDAR's minimum (own: 5–47 mm).
+- [x] 5.5 `imu_accel_floor_sigma_mps2` by replay (the user's option 1; `experiments/stage8/tools/s8_floor_calib.py`,
+  90 replays, time limit 0, every own replay identical): three more captures with the base settings (passage 95–125 s,
+  stairs 200–245 s, end stretch 315–362 s), a family of seven per value (0.2, 0.3, 0.5) on both corridor captures, one
+  replay per value on the three new ones. Result (reviewed; `experiments/stage8/stalls/floor_calib_summary.md`): path in
+  the slow stretch, lower / upper, 0.1: 5.92–6.36 / 5.77–7.45 m; 0.2: 6.67–8.33 / 8.12; 0.3: 6.70–8.62 / 8.12;
+  0.5: 8.44–8.86 / 8.12 (reference runs 9.09–9.23 / 8.0–8.24). At 0.2 and 0.3 tiny changes decide whether the lower
+  corridor recovers (one of seven and three of seven do); at 0.5 all seven do, 0.23–0.79 m short. The speed drop inside
+  the blind windows stays at every value. End stretch: 0.5 ends 1.88 m behind the base replay (one replay, no truth;
+  its family is run by `s8_floor_end_family.py`). Passage and stairs: 0.05–0.16 m. No value is proposed for shipping.
+- [ ] 5.4 The numbers for the user without a verdict; the user's decision on what is proposed as its own change.
 
 ## Open, for a later look at higher effort
 
