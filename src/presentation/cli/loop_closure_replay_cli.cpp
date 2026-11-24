@@ -104,7 +104,7 @@ int run_loop_closure_replay(const char *capture_file, const char *params_file, c
         log_error(logger) << "loop closure replay: the capture's windows don't give the capture's segments with these settings";
         return 1;
     }
-    if (r.report.outcome == "readings_missing" || r.report.outcome == "match_check_without_readings")
+    if (r.report.outcome == "readings_missing" || r.report.outcome.rfind("match_check_", 0) == 0)
     {
         log_error(logger) << "loop closure replay: loop closure not run (" << r.report.outcome << "), no trajectory written";
         return 1;

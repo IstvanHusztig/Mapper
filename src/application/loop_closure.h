@@ -280,10 +280,18 @@ struct LoopMatchTest
 std::vector<LoopMatchTest> loop_match_tests(const std::vector<Eigen::Affine3d> &initial, const std::vector<LoopClosureEdge> &loops,
                                             const OdometryConfig &params, const LoopOdometryEdgeInformation *odometry_information);
 
+// Why the match check settings can't run (outcome, message), nothing with loop_closure_match_check off:
+// match_check_bad_quantile (loop_closure_match_check_quantile not in (0, 1)), match_check_with_kernel
+// (loop_closure_kernel_scale > 0: the graphs would be solved with the kernel and scored without it),
+// match_check_without_readings (loop_closure_odometry_from_readings off), checked in that order. close_loops then registers and applies nothing.
+std::optional<std::pair<std::string, std::string>> loop_match_check_refusal(const OdometryConfig &params);
+
 struct LoopClosureReport;
 // Step 4 of close_loops on the segment poses `initial`: the pose graph solved, the loop edge loop_edge_to_drop names dropped
 // and the graph solved again until none is beyond the limits; then, with loop_closure_match_check, while the largest
-// loop_match_tests value is beyond its limit (largest T / limit), that edge dropped and the pruning run again. `loops` keeps
+// loop_match_tests value is beyond its limit (largest T / limit), that edge dropped and the pruning run again. An edge
+// without a degree of freedom or a finite test value is not tested (kept, named in the log). A bad quantile or a kernel
+// (loop_match_check_refusal) returns false at once with that outcome. `loops` keeps
 // the edges left; optimized and residuals are the last solve's. false: no edge left (outcome all_dropped).
 bool solve_and_prune_loop_pose_graph(const std::vector<Eigen::Affine3d> &initial, std::vector<LoopClosureEdge> &loops, const OdometryConfig &params,
                                      const LoopOdometryEdgeInformation *odometry_information, Logger &logger, LoopClosureReport &rep,
@@ -297,8 +305,8 @@ bool loop_pose_graph_plausible(const std::vector<Eigen::Affine3d> &initial, cons
 struct LoopClosureReport
 {
     // too_few_windows, readings_missing (loop_closure_odometry_from_readings with a window without readings: nothing
-    // registered or applied), match_check_without_readings (loop_closure_match_check without
-    // loop_closure_odometry_from_readings: nothing registered or applied), no_loops, all_dropped, implausible, applied
+    // registered or applied), match_check_without_readings, match_check_bad_quantile, match_check_with_kernel
+    // (loop_match_check_refusal: nothing registered or applied), no_loops, all_dropped, implausible, applied
     std::string outcome = "too_few_windows";
     std::vector<LoopOdometryRun> odometry_runs; // loop_closure_odometry_from_readings: the runs found
     std::vector<LoopClosureEdge> kept;

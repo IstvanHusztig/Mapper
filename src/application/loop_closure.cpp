@@ -1007,32 +1007,76 @@ namespace
         }
     }
 
-    // the edge with the largest T / limit (the earlier one on ties)
-    size_t largest_match_test(const std::vector<LoopMatchTest> &tests)
+    // an edge whose test means something: at least one degree of freedom, a finite T and limit
+    bool match_testable(const LoopMatchTest &t)
     {
-        size_t worst = 0;
-        for (size_t e = 1; e < tests.size(); e++)
-            if (tests[e].t / tests[e].limit > tests[worst].t / tests[worst].limit)
-                worst = e;
-        return worst;
+        return t.dof > 0 && std::isfinite(t.t) && std::isfinite(t.limit) && t.limit > 0.0;
+    }
+
+    // the testable edges, by T / limit, largest first (the earlier one on ties)
+    std::vector<size_t> match_tests_by_ratio(const std::vector<LoopMatchTest> &tests)
+    {
+        std::vector<size_t> order;
+        for (size_t e = 0; e < tests.size(); e++)
+            if (match_testable(tests[e]))
+                order.push_back(e);
+        std::stable_sort(order.begin(), order.end(),
+                         [&](size_t a, size_t b) { return tests[a].t / tests[a].limit > tests[b].t / tests[b].limit; });
+        return order;
     }
 } // namespace
+
+std::optional<std::pair<std::string, std::string>> loop_match_check_refusal(const OdometryConfig &params)
+{
+    if (!params.loop_closure_match_check)
+        return std::nullopt;
+    const double q = params.loop_closure_match_check_quantile;
+    if (!(std::isfinite(q) && q > 0.0 && q < 1.0))
+    {
+        std::ostringstream why;
+        why << "loop_closure_match_check_quantile = " << q << " is not a probability between 0 and 1 (exclusive)";
+        return std::make_pair(std::string("match_check_bad_quantile"), why.str());
+    }
+    if (params.loop_closure_kernel_scale > 0.0)
+    {
+        std::ostringstream why;
+        why << "loop_closure_match_check with loop_closure_kernel_scale = " << params.loop_closure_kernel_scale
+            << ": the graphs would be solved with the kernel and scored without it, so the test value is not the held-out innovation";
+        return std::make_pair(std::string("match_check_with_kernel"), why.str());
+    }
+    if (!params.loop_closure_odometry_from_readings)
+        return std::make_pair(std::string("match_check_without_readings"),
+                              std::string("loop_closure_match_check needs loop_closure_odometry_from_readings (on uniform odometry steps it "
+                                          "rates true edges across a blind stretch as false)"));
+    return std::nullopt;
+}
 
 bool solve_and_prune_loop_pose_graph(const std::vector<Eigen::Affine3d> &initial, std::vector<LoopClosureEdge> &loops, const OdometryConfig &params,
                                      const LoopOdometryEdgeInformation *odometry_information, Logger &logger, LoopClosureReport &rep,
                                      std::vector<Eigen::Affine3d> &optimized, std::vector<LoopEdgeResidual> &residuals)
 {
+    if (params.loop_closure_match_check)
+        if (const auto refused = loop_match_check_refusal(params); refused && refused->first != "match_check_without_readings")
+        {
+            rep.outcome = refused->first;
+            log_error(logger) << "loop closure: " << refused->second << "; loop closure not run, trajectory unchanged";
+            return false;
+        }
     if (!prune_loop_pose_graph(initial, loops, params, odometry_information, logger, rep, optimized, residuals))
         return false;
     if (params.loop_closure_match_check)
     {
         int rounds = 0, dropped = 0;
         std::vector<LoopMatchTest> tests;
+        std::vector<size_t> order;
         for (;;)
         {
             tests = loop_match_tests(initial, loops, params, odometry_information);
             rounds++;
-            const size_t worst = largest_match_test(tests);
+            order = match_tests_by_ratio(tests);
+            if (order.empty())
+                break;
+            const size_t worst = order.front();
             const LoopMatchTest &t = tests[worst];
             if (!(t.t > t.limit))
                 break;
@@ -1053,17 +1097,19 @@ bool solve_and_prune_loop_pose_graph(const std::vector<Eigen::Affine3d> &initial
                 return false;
         }
         rep.kept_match_tests = tests;
-        // the largest values left, by T / limit
-        std::vector<size_t> order(tests.size());
-        for (size_t e = 0; e < order.size(); e++)
-            order[e] = e;
-        std::stable_sort(order.begin(), order.end(),
-                         [&](size_t a, size_t b) { return tests[a].t / tests[a].limit > tests[b].t / tests[b].limit; });
+        // the largest values left, by T / limit; the edges that could not be tested (kept)
         auto line = log_info(logger);
-        line << "loop closure match check: " << rounds << " round(s), " << tests.size() << " edges tested in the last, " << dropped
+        line << "loop closure match check: " << rounds << " round(s), " << order.size() << " edges tested in the last, " << dropped
              << " dropped; largest T left" << std::fixed << std::setprecision(2);
         for (size_t k = 0; k < std::min<size_t>(4, order.size()); k++)
             line << " " << edge_name(loops[order[k]]) << " " << tests[order[k]].t << " (limit " << tests[order[k]].limit << ")";
+        if (order.size() < tests.size())
+        {
+            line << "; " << tests.size() - order.size() << " not testable (no degree of freedom or no finite test value), kept:";
+            for (size_t e = 0; e < tests.size(); e++)
+                if (!match_testable(tests[e]))
+                    line << " " << edge_name(loops[e]);
+        }
     }
     auto line = log_info(logger);
     line << "loop closure: loop edge residuals [m/deg] (=> cross-floor)" << std::fixed;
@@ -1328,11 +1374,10 @@ int close_loops(std::vector<Window> &windows, const std::vector<LoopClosureSegme
         return 0;
     log_info(logger) << "loop closure START";
 
-    if (params.loop_closure_match_check && !params.loop_closure_odometry_from_readings)
+    if (const auto refused = loop_match_check_refusal(params))
     {
-        rep.outcome = "match_check_without_readings";
-        log_error(logger) << "loop closure: loop_closure_match_check needs loop_closure_odometry_from_readings (on uniform odometry steps it "
-                          << "rates true edges across a blind stretch as false); loop closure not run, trajectory unchanged";
+        rep.outcome = refused->first;
+        log_error(logger) << "loop closure: " << refused->second << "; loop closure not run, trajectory unchanged";
         return 0;
     }
 

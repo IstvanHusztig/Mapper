@@ -1073,6 +1073,34 @@ TEST_CASE("loop closure match check: edges across a blind stretch are kept with 
     }
 }
 
+TEST_CASE("loop closure match check: an edge without a degree of freedom is not tested and doesn't decide by its place")
+{
+    // the influential false edge of the case above, with an edge that carries no information first in the list
+    const OutAndBack g(40);
+    LoopClosureEdge empty = g.edge(18, 61);
+    empty.omega.setZero();
+    std::vector<LoopClosureEdge> loops{empty};
+    for (int i : {3, 13, 23, 33})
+        loops.push_back(g.edge(i, 79 - i));
+    loops.push_back(g.edge(8, 71, 2.0, 0.01));
+    OdometryConfig c = with_kernel(0.0);
+    c.loop_closure_match_check = true;
+    const LoopOdometryEdgeInformation steps = uniform_steps(g.initial.size(), c);
+    NullLogger logger;
+    LoopClosureReport rep;
+    std::vector<Eigen::Affine3d> optimized;
+    std::vector<LoopEdgeResidual> residuals;
+    REQUIRE(solve_and_prune_loop_pose_graph(g.initial, loops, c, &steps, logger, rep, optimized, residuals));
+    REQUIRE(rep.dropped.size() == 1);
+    CHECK(rep.dropped[0].i == 8);
+    REQUIRE(loops.size() == 5);
+    CHECK(loops[0].i == 18);
+    REQUIRE(rep.kept_match_tests.size() == 5);
+    CHECK(rep.kept_match_tests[0].dof == 0);
+    for (size_t k = 1; k < 5; k++)
+        CHECK(rep.kept_match_tests[k].dof == 6);
+}
+
 TEST_CASE("loop closure match check: an edge no other loop reaches is kept")
 {
     // the only revisit, 1 m off after 76 steps of odometry: the rest of the graph predicts it only loosely
@@ -1374,6 +1402,52 @@ TEST_CASE("loop closure replay: the match check without the readings' steps is r
     CHECK(r.identical_nodes == r.nodes);
     config.loop_closure_odometry_from_readings = true;
     CHECK(replay_loop_closure(capture, config, logger).report.outcome == "no_loops");
+}
+
+TEST_CASE("loop closure match check: a quantile outside (0, 1) or the robust kernel is refused, nothing is registered or applied")
+{
+    OdometryConfig config = loop_closure_config();
+    LoopClosureCapture capture = capture_without_tries(config);
+    for (Window &w : capture.windows)
+        w.readings = WindowReadings{0.5, Eigen::Vector3d::UnitX(), false, Eigen::Vector3d(0.4, 0.0, 0.0), 0.4};
+    config.loop_closure_odometry_from_readings = true;
+    config.loop_closure_match_check = true;
+    NullLogger logger;
+    for (double q : {0.0, 1.0, -0.5, 1.5, std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity()})
+    {
+        OdometryConfig c = config;
+        c.loop_closure_match_check_quantile = q;
+        const LoopClosureReplayResult r = replay_loop_closure(capture, c, logger);
+        CHECK(r.report.outcome == "match_check_bad_quantile");
+        CHECK(r.missing.empty()); // nothing was asked for
+        CHECK(r.identical_nodes == r.nodes);
+    }
+    OdometryConfig kernel = config;
+    kernel.loop_closure_kernel_scale = 3.0;
+    const LoopClosureReplayResult k = replay_loop_closure(capture, kernel, logger);
+    CHECK(k.report.outcome == "match_check_with_kernel");
+    CHECK(k.missing.empty());
+    CHECK(k.identical_nodes == k.nodes);
+    kernel.loop_closure_match_check = false; // the kernel alone runs
+    CHECK(replay_loop_closure(capture, kernel, logger).report.outcome == "no_loops");
+
+    // the pose-graph step refuses them too
+    const OutAndBack g(10);
+    std::vector<LoopClosureEdge> loops{g.edge(1, 18)};
+    OdometryConfig c = with_kernel(0.0);
+    c.loop_closure_match_check = true;
+    c.loop_closure_match_check_quantile = 1.0;
+    const LoopOdometryEdgeInformation steps = uniform_steps(g.initial.size(), c);
+    LoopClosureReport rep;
+    std::vector<Eigen::Affine3d> optimized;
+    std::vector<LoopEdgeResidual> residuals;
+    CHECK_FALSE(solve_and_prune_loop_pose_graph(g.initial, loops, c, &steps, logger, rep, optimized, residuals));
+    CHECK(rep.outcome == "match_check_bad_quantile");
+    c = with_kernel(0.5);
+    c.loop_closure_match_check = true;
+    rep = LoopClosureReport{};
+    CHECK_FALSE(solve_and_prune_loop_pose_graph(g.initial, loops, c, &steps, logger, rep, optimized, residuals));
+    CHECK(rep.outcome == "match_check_with_kernel");
 }
 
 TEST_CASE("loop closure capture file: written and read back bit for bit; another file is refused")
