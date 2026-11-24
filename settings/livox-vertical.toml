@@ -72,6 +72,10 @@ loop_closure_cross_floor_min_fitness = 0.3
 loop_closure_cross_floor_max_angle_deg = 10.0
 
 [imu_translation]
+# the motion edges follow the window's start velocity and acceleration offset (honest-inertial-carry layer 1): the LiDAR
+# can correct a wrong carried speed after a blind stretch; on since 2026-11-25 (removed the Livox 4 corridor stall and its
+# ghost wall; the user's look on Livox 4 and Livox 3)
+imu_edges_follow_state = true
 # Livox 3's good map (user's verdict 2026-11-16, run G): Huber kernel on the NDT points, NDT information and the
 # position pull towards the guess both x0.1 (from Codex's build cbca36d), with the AHRS gain constant
 ndt_huber_cutoff = 3.0
