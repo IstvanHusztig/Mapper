@@ -1214,6 +1214,7 @@ namespace
 
         if (params.log_window_noise)
             log_window_noise(i + 1, window_noise_sigmas(w.noise), c.logger);
+        c.windows[i].readings = window_readings(c.windows[i], w.lidar_translation_information, w.at_rest); // for the loop closure
         const WindowVerdict verdict = judge_window(window_evidence(c, w, record ? &*record : nullptr));
         carry.verdicts.push_back(verdict);
         if (params.log_window_verdict && verdict.any())

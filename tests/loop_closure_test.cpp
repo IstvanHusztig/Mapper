@@ -12,8 +12,10 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <map>
 #include <string>
 #include <limits>
@@ -717,6 +719,177 @@ TEST_CASE("loop closure information edges: with the fixed sigmas as information 
     CHECK(largest < 1e-9);
 }
 
+namespace
+{
+    // walking at 1 m/s along x, 0.4 s windows, seen well (ratio 0.5)
+    WindowReadings seen_window()
+    {
+        return WindowReadings{0.5, Eigen::Vector3d::UnitX(), false, Eigen::Vector3d(0.4, 0.0, 0.0), 0.4};
+    }
+
+    WindowReadings weak_window(const Eigen::Vector3d &axis, const Eigen::Vector3d &move)
+    {
+        return WindowReadings{0.01, axis, false, move, 0.4};
+    }
+
+    // segments of 3 windows each; segment k turned by 30 k deg about z (the steps' frames differ from the world's)
+    std::vector<LoopClosureSegment> segments_of_three(int windows)
+    {
+        std::vector<LoopClosureSegment> segments;
+        for (int w0 = 0; w0 < windows; w0 += 3)
+        {
+            LoopClosureSegment s;
+            s.first_window = w0;
+            s.last_window = std::min(windows, w0 + 3) - 1;
+            s.pose = Eigen::Affine3d(Eigen::AngleAxisd(30.0 * deg * (w0 / 3), Eigen::Vector3d::UnitZ()));
+            s.pose.translation() = Eigen::Vector3d(0.4 * w0, 0.0, 0.0);
+            segments.push_back(s);
+        }
+        return segments;
+    }
+}
+
+TEST_CASE("loop closure odometry steps: weak runs, their sigmas and their shares among the steps")
+{
+    // 30 windows, 10 segments (9 steps):
+    //  - windows 4-9 weak along x and stalled (0.1 m per window), window 6 seen in between (bridged): steps 1, 2, 3
+    //  - window 13 weak along y, alone: step 4
+    //  - windows 19 (weak along x) and 20 (weak along y): two runs, their axes differ
+    //  - window 22 weak but at rest: no run
+    //  - windows 26-29 weak along -x (the axis turns to the travel), in segments 8 and 9: step 8 and the last segment
+    std::vector<WindowReadings> rd(30, seen_window());
+    for (int w : {4, 5, 7, 8, 9})
+        rd[w] = weak_window(w == 7 ? Eigen::Vector3d(-Eigen::Vector3d::UnitX()) : Eigen::Vector3d(Eigen::Vector3d::UnitX()), Eigen::Vector3d(0.1, 0.0, 0.0));
+    rd[13] = weak_window(Eigen::Vector3d::UnitY(), Eigen::Vector3d(0.4, 0.1, 0.0));
+    rd[19] = weak_window(Eigen::Vector3d::UnitX(), Eigen::Vector3d(0.4, 0.0, 0.0));
+    rd[20] = weak_window(Eigen::Vector3d::UnitY(), Eigen::Vector3d(0.4, 0.0, 0.0));
+    rd[22] = weak_window(Eigen::Vector3d::UnitX(), Eigen::Vector3d::Zero());
+    rd[22].at_rest = true;
+    for (int w = 26; w < 30; w++)
+        rd[w] = weak_window(-Eigen::Vector3d::UnitX(), Eigen::Vector3d(0.2, 0.0, 0.0));
+    const std::vector<LoopClosureSegment> segments = segments_of_three(30);
+    const LoopOdometryRule rule; // 0.05, 30 deg, 0.05 m/s^2, 0.1 m, 0.5 deg
+    const LoopOdometryInformation out = loop_odometry_step_information(rd, segments, rule);
+    REQUIRE(out.information.size() == 9);
+    REQUIRE(out.runs.size() == 5);
+
+    const LoopOdometryRun &a = out.runs[0];
+    CHECK(a.first_window == 4);
+    CHECK(a.last_window == 9);
+    CHECK(a.weak_windows == 5);
+    CHECK(a.duration_s == doctest::Approx(2.4));
+    CHECK(a.axis.isApprox(Eigen::Vector3d::UnitX()));
+    CHECK(a.pace_before_mps == doctest::Approx(1.0));
+    CHECK(a.pace_after_mps == doctest::Approx(1.0));
+    CHECK(a.s1_m == doctest::Approx(0.5 * 0.05 * 2.4 * 2.4));
+    CHECK(a.s2_m == doctest::Approx(5 * 0.75 * 0.4)); // the bridged window walks at the pace and adds nothing
+    CHECK(a.sigma_m == doctest::Approx(std::hypot(a.s1_m, a.s2_m)));
+    REQUIRE(a.step_shares.size() == 3);
+    CHECK(a.step_shares[0].first == 1);
+    CHECK(a.step_shares[0].second == doctest::Approx(2.0 / 6.0));
+    CHECK(a.step_shares[1].second == doctest::Approx(3.0 / 6.0));
+    CHECK(a.step_shares[2].second == doctest::Approx(1.0 / 6.0));
+
+    const LoopOdometryRun &b = out.runs[1];
+    CHECK(b.first_window == 13);
+    CHECK(b.last_window == 13);
+    CHECK(b.axis.isApprox(Eigen::Vector3d::UnitY()));
+    CHECK(b.s1_m == doctest::Approx(0.5 * 0.05 * 0.4 * 0.4));
+    CHECK(b.s2_m == doctest::Approx(0.75 * 0.4));
+    REQUIRE(b.step_shares.size() == 1);
+    CHECK(b.step_shares[0].first == 4);
+    CHECK(b.step_shares[0].second == doctest::Approx(1.0));
+
+    CHECK(out.runs[2].first_window == 19);
+    CHECK(out.runs[2].last_window == 19);
+    CHECK(out.runs[3].first_window == 20);
+    CHECK(out.runs[3].last_window == 20);
+
+    const LoopOdometryRun &e = out.runs[4];
+    CHECK(e.first_window == 26);
+    CHECK(e.last_window == 29);
+    CHECK(e.axis.isApprox(Eigen::Vector3d::UnitX())); // turned to the placed travel
+    CHECK(e.pace_after_mps == doctest::Approx(1.0)); // no window after it: the pace before
+    CHECK(e.s2_m == doctest::Approx(4 * 0.5 * 0.4));
+    REQUIRE(e.step_shares.size() == 1);
+    CHECK(e.step_shares[0].first == 8);
+    CHECK(e.step_shares[0].second == doctest::Approx(0.25));
+    CHECK(e.share_after_last_step == doctest::Approx(0.75));
+
+    // the shares of a run sum to 1, its added variance over the steps to sigma^2 (less the share no step covers)
+    double expected = 0.0;
+    for (const LoopOdometryRun &r : out.runs)
+    {
+        double shares = r.share_after_last_step;
+        for (const auto &[k, share] : r.step_shares)
+            shares += share;
+        CHECK(shares == doctest::Approx(1.0));
+        expected += r.sigma_m * r.sigma_m * (1.0 - r.share_after_last_step);
+    }
+    double added = 0.0;
+    const double base = rule.sigma_m * rule.sigma_m;
+    const double w_r = 1.0 / std::pow(rule.sigma_deg * deg, 2);
+    for (size_t k = 0; k < out.information.size(); k++)
+    {
+        const Eigen::Matrix<double, 6, 6> &omega = out.information[k];
+        CHECK(omega.topRightCorner<3, 3>().isZero());
+        CHECK(omega.bottomRightCorner<3, 3>().isApprox(Eigen::Matrix3d::Identity() * w_r));
+        const Eigen::Matrix3d extra = Eigen::Matrix3d(omega.topLeftCorner<3, 3>().inverse()) - Eigen::Matrix3d::Identity() * base;
+        added += extra.trace();
+        if (k == 0 || k == 5 || k == 7)
+            CHECK(extra.norm() < 1e-12); // no run in segments 0, 5 (windows 15-17) and 7 (21-23)
+    }
+    CHECK(added == doctest::Approx(expected).epsilon(1e-9));
+
+    // along the run's axis in the step's frame: step 2 (segment 2, turned by 60 deg) gets half of run a's variance along
+    // the world's x, which is (cos 60, -sin 60, 0) in its frame
+    const Eigen::Matrix3d extra2 = Eigen::Matrix3d(out.information[2].topLeftCorner<3, 3>().inverse()) - Eigen::Matrix3d::Identity() * base;
+    const Eigen::Vector3d along(std::cos(60.0 * deg), -std::sin(60.0 * deg), 0.0);
+    CHECK((extra2 - a.sigma_m * a.sigma_m * 0.5 * along * along.transpose()).norm() < 1e-9);
+}
+
+TEST_CASE("loop closure odometry steps: the pace line runs from the pace before to the pace after, by the windows' mid times")
+{
+    // windows 3-4 weak and stalled; before 0.5 m/s, after 1.5 m/s: v_ref 0.75 and 1.25 at the two mid times
+    std::vector<WindowReadings> rd(9, seen_window());
+    for (int w = 0; w < 3; w++)
+        rd[w].placed_move = Eigen::Vector3d(0.2, 0.0, 0.0);
+    for (int w = 5; w < 9; w++)
+        rd[w].placed_move = Eigen::Vector3d(0.0, 0.6, 0.0); // a turn after the run: the pace ignores the direction
+    rd[3] = weak_window(Eigen::Vector3d::UnitX(), Eigen::Vector3d::Zero());
+    rd[4] = weak_window(Eigen::Vector3d::UnitX(), Eigen::Vector3d(0.04, 0.0, 0.0));
+    const LoopOdometryInformation out = loop_odometry_step_information(rd, segments_of_three(9), LoopOdometryRule{});
+    REQUIRE(out.runs.size() == 1);
+    const LoopOdometryRun &r = out.runs[0];
+    CHECK(r.pace_before_mps == doctest::Approx(0.5));
+    CHECK(r.pace_after_mps == doctest::Approx(1.5));
+    CHECK(r.s2_m == doctest::Approx((0.75 - 0.0) * 0.4 + (1.25 - 0.1) * 0.4));
+}
+
+TEST_CASE("loop closure odometry steps: the fixed sigmas as information give the fixed-sigma solution")
+{
+    const TwoLaps s;
+    const OdometryConfig c = with_kernel(0.0);
+    const auto loops = s.loops();
+    const auto reference = optimize_loop_pose_graph(s.initial, loops, c);
+    std::vector<WindowReadings> rd(3 * s.initial.size(), seen_window()); // no weak window: every step at the fixed sigmas
+    std::vector<LoopClosureSegment> segments = segments_of_three(static_cast<int>(rd.size()));
+    for (size_t k = 0; k < segments.size(); k++)
+        segments[k].pose = s.initial[k];
+    const LoopOdometryInformation steps = loop_odometry_step_information(rd, segments, loop_odometry_rule(c));
+    REQUIRE(steps.runs.empty());
+    REQUIRE(steps.information.size() + 1 == s.initial.size());
+    const auto solved = optimize_loop_pose_graph(s.initial, loops, c, &steps.information);
+    REQUIRE(solved.size() == reference.size());
+    double largest = 0.0;
+    for (size_t k = 0; k < solved.size(); k++)
+        largest = std::max(largest, (solved[k].matrix() - reference[k].matrix()).cwiseAbs().maxCoeff());
+    MESSAGE("largest difference ", largest);
+    CHECK(largest < 1e-9);
+    CHECK(loop_pose_graph_cost(s.initial, solved, loops, c, &steps.information) ==
+          doctest::Approx(loop_pose_graph_cost(s.initial, reference, loops, c)).epsilon(1e-9));
+}
+
 TEST_CASE("loop closure information edges: a shaft ties the floors horizontally and in tilt, not in height or the turn about its axis")
 {
     // three segments 2 m apart; the odometry turned the last one 2 deg, tilted it 1 deg about y, and drifted it 0.3 m
@@ -960,6 +1133,28 @@ TEST_CASE("loop closure replay: the tries the settings ask for and the capture d
     CHECK(!replay_loop_closure(capture, other, logger).segments_match);
 }
 
+TEST_CASE("loop closure replay: odometry from readings with a window without readings is an error, nothing is registered or applied")
+{
+    OdometryConfig config = loop_closure_config();
+    LoopClosureCapture capture = capture_without_tries(config);
+    for (Window &w : capture.windows)
+        w.readings = WindowReadings{0.5, Eigen::Vector3d::UnitX(), false, Eigen::Vector3d(0.4, 0.0, 0.0), 0.4};
+    capture.windows[3].readings.reset();
+    config.loop_closure_odometry_from_readings = true;
+    NullLogger logger;
+    const LoopClosureReplayResult r = replay_loop_closure(capture, config, logger);
+    CHECK(r.report.outcome == "readings_missing");
+    CHECK(r.loops == 0);
+    CHECK(r.missing.empty()); // no registration was asked for
+    CHECK(r.identical_nodes == r.nodes);
+
+    // with every window's readings it runs (and here asks for the registrations the capture doesn't hold)
+    capture.windows[3].readings = capture.windows[2].readings;
+    const LoopClosureReplayResult all = replay_loop_closure(capture, config, logger);
+    CHECK(all.report.outcome == "no_loops");
+    CHECK(!all.missing.empty());
+}
+
 TEST_CASE("loop closure capture file: written and read back bit for bit; another file is refused")
 {
     const OdometryConfig config = loop_closure_config();
@@ -984,6 +1179,17 @@ TEST_CASE("loop closure capture file: written and read back bit for bit; another
     c.tries = {t, CapturedLoopTry{}};
     c.result_poses.back().back().translation().x() += 1e-3;
     c.loops = 3;
+    for (size_t w = 0; w < c.windows.size(); w++)
+    {
+        WindowReadings r;
+        r.information_ratio = 1.0 / (w + 3.0);
+        r.weak_axis = Eigen::Vector3d(1.0, static_cast<double>(w), -2.0).normalized();
+        r.at_rest = w % 3 == 0;
+        r.placed_move = Eigen::Vector3d(0.1 * w, 1.0 / 7.0, -0.3);
+        r.duration_s = 0.4 + 1e-3 * w;
+        c.windows[w].readings = r;
+    }
+    c.windows[1].readings.reset(); // a window without readings
 
     const auto file = std::filesystem::temp_directory_path() / "lidar_odometry_tests_loop_closure_capture.bin";
     std::string why;
@@ -1021,6 +1227,40 @@ TEST_CASE("loop closure capture file: written and read back bit for bit; another
     REQUIRE(back.result_poses.size() == c.result_poses.size());
     CHECK(same_bits(back.result_poses.back(), c.result_poses.back()));
     CHECK(back.loops == 3);
+    size_t readings_bytes = 8;
+    for (size_t w = 0; w < c.windows.size(); w++)
+    {
+        const auto &a = c.windows[w].readings;
+        const auto &r = back.windows[w].readings;
+        readings_bytes += 1 + (a ? 8 + 24 + 1 + 24 + 8 : 0);
+        REQUIRE(a.has_value() == r.has_value());
+        if (!a)
+            continue;
+        CHECK(r->information_ratio == a->information_ratio);
+        CHECK(r->weak_axis == a->weak_axis);
+        CHECK(r->at_rest == a->at_rest);
+        CHECK(r->placed_move == a->placed_move);
+        CHECK(r->duration_s == a->duration_s);
+    }
+
+    // format 1 (written before the readings: format 2 without the readings block at the end) is read without readings
+    {
+        std::string bytes;
+        {
+            std::ifstream in(file, std::ios::binary);
+            bytes.assign(std::istreambuf_iterator<char>(in), {});
+        }
+        REQUIRE(bytes.size() > readings_bytes + 12);
+        bytes.resize(bytes.size() - readings_bytes);
+        const std::uint32_t version = 1;
+        std::memcpy(&bytes[8], &version, sizeof(version));
+        std::ofstream out(file, std::ios::binary | std::ios::trunc);
+        out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+    }
+    REQUIRE(read_loop_closure_capture(file, back, settings, why));
+    CHECK(back.loops == 3);
+    for (const Window &w : back.windows)
+        CHECK_FALSE(w.readings.has_value());
 
     // another file (here the start of a window capture) is not a loop closure capture
     {

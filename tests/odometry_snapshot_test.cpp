@@ -4,8 +4,11 @@
 #include "odometry_pipeline.h"
 #include "odometry_snapshot_file.h"
 #include "synthetic_recording.h"
+#include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
+#include <optional>
 #include <random>
 
 // The odometry snapshot (save_odometry_snapshot, dMapper ... --from-snapshot): written and read back bit for bit, refused
@@ -51,7 +54,15 @@ namespace
             w.velocity.end_covariance(0, 1) = w.velocity.end_covariance(1, 0) = u(rng) * 1e-3;
             w.imu_acc.assign(w.poses.size(), Eigen::Vector3d(u(rng), u(rng), 1.0 + u(rng) * 0.01));
             w.imu_angles.assign(w.poses.size(), Eigen::Vector3d(u(rng), u(rng), u(rng)));
+            WindowReadings r;
+            r.information_ratio = 0.5 + 0.5 * u(rng);
+            r.weak_axis = Eigen::Vector3d(u(rng), u(rng), u(rng)).normalized();
+            r.at_rest = u(rng) > 0.5;
+            r.placed_move = Eigen::Vector3d(u(rng), u(rng), u(rng));
+            r.duration_s = 0.4 + 0.01 * u(rng);
+            w.readings = r;
         }
+        s.windows.front().readings.reset(); // a window without readings
         s.m_g = s.windows.front().poses.front();
         s.total_length_of_calculated_trajectory = 44.4 + u(rng);
         s.consecutive_distance = 12.3 + u(rng);
@@ -59,6 +70,14 @@ namespace
     }
 
     bool same(const Eigen::Affine3d &a, const Eigen::Affine3d &b) { return a.matrix() == b.matrix(); }
+
+    bool same(const std::optional<WindowReadings> &a, const std::optional<WindowReadings> &b)
+    {
+        if (a.has_value() != b.has_value())
+            return false;
+        return !a || (a->information_ratio == b->information_ratio && a->weak_axis == b->weak_axis && a->at_rest == b->at_rest &&
+                      a->placed_move == b->placed_move && a->duration_s == b->duration_s);
+    }
 
     bool same(const Window &a, const Window &b)
     {
@@ -72,7 +91,8 @@ namespace
             if (!same(a.motion_model_poses[k], b.motion_model_poses[k]))
                 return false;
         return a.gyro_bias.mean == b.gyro_bias.mean && a.gyro_bias.covariance == b.gyro_bias.covariance &&
-               a.velocity.start == b.velocity.start && a.velocity.end == b.velocity.end && a.velocity.end_covariance == b.velocity.end_covariance;
+               a.velocity.start == b.velocity.start && a.velocity.end == b.velocity.end && a.velocity.end_covariance == b.velocity.end_covariance &&
+               same(a.readings, b.readings);
     }
 
     bool same(const std::vector<Window> &a, const std::vector<Window> &b)
@@ -101,6 +121,44 @@ TEST_CASE("odometry snapshot: written and read back bit for bit")
     CHECK(read.consecutive_distance == written.consecutive_distance);
 }
 
+TEST_CASE("odometry snapshot: a format 1 file (before the readings) is read with the windows' readings absent")
+{
+    const OdometrySnapshot written = sample_snapshot();
+    const OdometryConfig config;
+    TempFile file("dmapper_snapshot_format1.bin");
+    std::string why;
+    REQUIRE(write_odometry_snapshot(file.path, written, config, why));
+    // format 1 is format 2 without the readings block at the end
+    std::string bytes;
+    {
+        std::ifstream in(file.path, std::ios::binary);
+        bytes.assign(std::istreambuf_iterator<char>(in), {});
+    }
+    size_t block = 8;
+    for (const Window &w : written.windows)
+        block += 1 + (w.readings ? 8 + 24 + 1 + 24 + 8 : 0);
+    REQUIRE(bytes.size() > block + 12);
+    bytes.resize(bytes.size() - block);
+    const std::uint32_t version = 1;
+    std::memcpy(&bytes[8], &version, sizeof(version));
+    {
+        std::ofstream out(file.path, std::ios::binary | std::ios::trunc);
+        out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+    }
+    OdometrySnapshot read;
+    REQUIRE(read_odometry_snapshot(file.path, config, read, why));
+    REQUIRE(read.windows.size() == written.windows.size());
+    for (const Window &w : read.windows)
+        CHECK_FALSE(w.readings.has_value());
+    CHECK(read.consecutive_distance == written.consecutive_distance);
+
+    // format 2 with its readings block cut short is damaged
+    REQUIRE(write_odometry_snapshot(file.path, written, config, why));
+    std::filesystem::resize_file(file.path, std::filesystem::file_size(file.path) - 3);
+    CHECK_FALSE(read_odometry_snapshot(file.path, config, read, why));
+    CHECK(why.find("window readings") != std::string::npos);
+}
+
 TEST_CASE("odometry snapshot: refused for other odometry settings, accepted for other post-processing settings")
 {
     const OdometryConfig config;
@@ -126,6 +184,8 @@ TEST_CASE("odometry snapshot: refused for other odometry settings, accepted for 
     post.use_consistency = !post.use_consistency;
     post.log_window_diagnostics = !post.log_window_diagnostics;
     post.save_odometry_snapshot = !post.save_odometry_snapshot;
+    post.loop_closure_odometry_from_readings = !post.loop_closure_odometry_from_readings;
+    post.loop_closure_odometry_weak_ratio = 0.1;
     CHECK(read_odometry_snapshot(file.path, post, read, why));
 }
 

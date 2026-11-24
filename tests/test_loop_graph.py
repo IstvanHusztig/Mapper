@@ -1,4 +1,5 @@
 """Tests of tools/loop_graph.py on synthetic captures; no recorded data or mapper runs required."""
+import struct
 import sys
 import tempfile
 import unittest
@@ -40,6 +41,35 @@ def chain_capture(n=5, spacing=1.0, tries=None, settings=None, nodes_per_segment
 def try_of(correction, H=None):
     return dict(C=correction, H=np.eye(6) if H is None else H, center=np.zeros(3), overlap_before=0.5, overlap_after=0.8, shift=0.1,
                 angle=0.0, information_ratio=0.0, accepted=True, asked=True, registered=True)
+
+
+def capture_bytes(version, readings=None):
+    """A capture file as dMapper writes it (loop_closure_capture_file.cpp): one setting, two windows of two nodes, one
+    segment, no tries, the result poses, the loop count and, from format 2 on, the windows' readings (None: absent)."""
+    out = bytearray(b"DMLCCAP1" + struct.pack("<I", version))
+    q = lambda n: struct.pack("<Q", n)  # noqa: E731
+    d = lambda *v: struct.pack("<%dd" % len(v), *v)  # noqa: E731
+    out += q(1) + q(4) + b"name" + q(1) + b"1"
+    out += q(2)
+    for w in range(2):
+        out += q(2) + d(*np.eye(4).T.ravel()) + d(*translation(0.5 + w).T.ravel())  # poses
+        out += q(2) + d(*np.eye(4).T.ravel()) * 2                                    # motion-model poses
+        out += q(2) + d(w * 1.0, 1.7e9, w * 1.0 + 0.4, 1.7e9 + 0.4)                    # stamps
+        out += q(0) + q(0)                                                           # IMU angles, accelerations
+        out += d(*[0.0] * 27)                                                        # gyro bias and velocity states
+    out += q(1) + struct.pack("<ii", 0, 1) + d(*np.eye(4).T.ravel()) + d(0, 0, 0) + d(0, 1, 0, 1.4)
+    out += q(0)
+    out += q(2) + (q(2) + d(*np.eye(4).T.ravel()) * 2) * 2
+    out += struct.pack("<i", 0)
+    if version >= 2:
+        out += q(2)
+        for r in readings:
+            if r is None:
+                out += struct.pack("<B", 0)
+                continue
+            ratio, axis, rest, move, dur = r
+            out += struct.pack("<B", 1) + d(ratio, *axis) + struct.pack("<B", rest) + d(*move, dur)
+    return bytes(out)
 
 
 W_LOOP = np.diag([400.0] * 3 + [1 / np.deg2rad(0.3) ** 2] * 3)
@@ -172,6 +202,26 @@ class LoopGraphTest(unittest.TestCase):
         with self.assertRaises(KeyError):
             lg.LoopGraph(chain_capture(), [(0, 4, False)])
 
+
+    def test_capture_readings_format_2_and_none_in_format_1(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "c.bin"
+            p.write_bytes(capture_bytes(1))
+            self.assertIsNone(lg.read_capture(p).readings)
+            p.write_bytes(capture_bytes(2, [None, (0.01, (0.0, 1.0, 0.0), 1, (0.1, 0.2, 0.3), 0.4)]))
+            r = lg.read_capture(p).readings
+            self.assertEqual(r["W"], 2)
+            self.assertEqual(list(r["present"]), [False, True])
+            self.assertTrue(np.isnan(r["ratio"][0]) and np.isnan(r["move"][0]).all() and not r["rest"][0])
+            self.assertEqual(r["ratio"][1], 0.01)
+            self.assertEqual(list(r["weak"][1]), [0.0, 1.0, 0.0])
+            self.assertTrue(r["rest"][1])
+            self.assertEqual(list(r["move"][1]), [0.1, 0.2, 0.3])
+            self.assertEqual(r["dur"][1], 0.4)
+            self.assertEqual(list(r["t"]), [0.0, 1.0])
+            p.write_bytes(capture_bytes(3, [None, None]))
+            with self.assertRaises(ValueError):
+                lg.read_capture(p)
 
 if __name__ == "__main__":
     unittest.main()

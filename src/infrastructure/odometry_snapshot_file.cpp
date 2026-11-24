@@ -11,7 +11,8 @@
 namespace
 {
     constexpr char MAGIC[8] = {'D', 'M', 'S', 'N', 'A', 'P', '0', '1'};
-    constexpr std::uint32_t FORMAT_VERSION = 1;
+    constexpr std::uint32_t FORMAT_VERSION = 2;          // 2: the windows' readings after the run state
+    constexpr std::uint32_t FIRST_READABLE_VERSION = 1; // 1: without readings
 
     // FNV-1a over raw bytes
     struct Hash
@@ -55,6 +56,53 @@ namespace
     using binary_io::read_window;
     using binary_io::write_window;
 } // namespace
+
+void write_window_readings(Writer &w, const std::vector<Window> &windows)
+{
+    w.list(windows,
+           [&](const Window &win)
+           {
+               w.value(static_cast<std::uint8_t>(win.readings ? 1 : 0));
+               if (!win.readings)
+                   return;
+               const WindowReadings &x = *win.readings;
+               w.value(x.information_ratio);
+               w.matrix(x.weak_axis);
+               w.value(static_cast<std::uint8_t>(x.at_rest ? 1 : 0));
+               w.matrix(x.placed_move);
+               w.value(x.duration_s);
+           });
+}
+
+bool read_window_readings(Reader &r, std::vector<Window> &windows)
+{
+    std::uint64_t n = 0;
+    r.value(n);
+    if (!r.ok() || n != windows.size())
+        return false;
+    for (Window &win : windows)
+    {
+        std::uint8_t present = 0;
+        r.value(present);
+        if (!r.ok() || present > 1)
+            return false;
+        win.readings.reset();
+        if (!present)
+            continue;
+        WindowReadings x;
+        std::uint8_t at_rest = 0;
+        r.value(x.information_ratio);
+        r.matrix(x.weak_axis);
+        r.value(at_rest);
+        r.matrix(x.placed_move);
+        r.value(x.duration_s);
+        if (!r.ok() || at_rest > 1)
+            return false;
+        x.at_rest = at_rest == 1;
+        win.readings = x;
+    }
+    return true;
+}
 
 std::uint64_t odometry_settings_hash(const OdometryConfig &config)
 {
@@ -128,6 +176,7 @@ bool write_odometry_snapshot(const std::filesystem::path &file, const OdometrySn
     w.matrix(snapshot.m_g.matrix());
     w.value(snapshot.total_length_of_calculated_trajectory);
     w.value(snapshot.consecutive_distance);
+    write_window_readings(w, snapshot.windows);
     out.flush();
     if (!out)
     {
@@ -150,9 +199,10 @@ bool read_odometry_snapshot(const std::filesystem::path &file, const OdometryCon
     in.read(magic, sizeof(magic));
     std::uint32_t version = 0;
     r.value(version);
-    if (!in || std::memcmp(magic, MAGIC, sizeof(MAGIC)) != 0 || version != FORMAT_VERSION)
+    if (!in || std::memcmp(magic, MAGIC, sizeof(MAGIC)) != 0 || version < FIRST_READABLE_VERSION || version > FORMAT_VERSION)
     {
-        why = "'" + file.string() + "' is not an odometry snapshot of format " + std::to_string(FORMAT_VERSION);
+        why = "'" + file.string() + "' is not an odometry snapshot of format " + std::to_string(FIRST_READABLE_VERSION) + " to " +
+              std::to_string(FORMAT_VERSION);
         return false;
     }
     std::uint64_t hash = 0;
@@ -175,6 +225,11 @@ bool read_odometry_snapshot(const std::filesystem::path &file, const OdometryCon
     if (!r.ok())
     {
         why = "'" + file.string() + "' is damaged (run state)";
+        return false;
+    }
+    if (version >= 2 && !read_window_readings(r, s.windows))
+    {
+        why = "'" + file.string() + "' is damaged (window readings)";
         return false;
     }
     snapshot = std::move(s);

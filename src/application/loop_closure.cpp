@@ -7,8 +7,11 @@
 #include <python-scripts/constraints/relative_pose_tait_bryan_wc_jacobian.h>
 
 #include <algorithm>
+#include <cmath>
 #include <deque>
 #include <map>
+#include <set>
+#include <optional>
 #include <tuple>
 #include <iomanip>
 #include <limits>
@@ -464,8 +467,207 @@ Eigen::Matrix<double, 6, 1> loop_edge_region_sigmas(const Eigen::Affine3d &pose_
     return s;
 }
 
+LoopOdometryRule loop_odometry_rule(const OdometryConfig &params)
+{
+    LoopOdometryRule r;
+    r.weak_ratio = params.loop_closure_odometry_weak_ratio;
+    r.axis_tolerance_deg = params.loop_closure_odometry_axis_tolerance_deg;
+    r.accelerometer_error_mps2 = params.loop_closure_odometry_accelerometer_error_mps2;
+    r.sigma_m = params.loop_closure_odometry_sigma_m;
+    r.sigma_deg = params.loop_closure_odometry_sigma_deg;
+    return r;
+}
+
+namespace
+{
+    double median_of(std::vector<double> v)
+    {
+        std::sort(v.begin(), v.end());
+        const size_t n = v.size();
+        return n % 2 == 1 ? v[n / 2] : 0.5 * (v[n / 2 - 1] + v[n / 2]);
+    }
+
+    // the weak runs of loop_odometry_step_information (its steps 1 to 3), without the steps' shares
+    std::vector<LoopOdometryRun> weak_runs(const std::vector<WindowReadings> &rd, const LoopOdometryRule &rule)
+    {
+        const int W = static_cast<int>(rd.size());
+        std::vector<char> readable(W), weak(W);
+        for (int k = 0; k < W; k++)
+        {
+            readable[k] = std::isfinite(rd[k].information_ratio) && std::isfinite(rd[k].duration_s) && rd[k].duration_s > 0.0 && !rd[k].at_rest;
+            weak[k] = readable[k] && rd[k].information_ratio < rule.weak_ratio;
+        }
+        const double axis_cos = std::cos(rule.axis_tolerance_deg * DEG);
+        const auto pace = [&](int k) { return rd[k].placed_move.norm() / rd[k].duration_s; };
+
+        std::vector<LoopOdometryRun> runs;
+        int k = 0;
+        while (k < W)
+        {
+            if (!weak[k])
+            {
+                k++;
+                continue;
+            }
+            const Eigen::Vector3d a0 = rd[k].weak_axis;
+            const auto same = [&](int j) { return weak[j] && std::abs(rd[j].weak_axis.dot(a0)) >= axis_cos; };
+            int e = k;
+            for (;;)
+            {
+                if (e + 1 < W && same(e + 1))
+                    e += 1;
+                else if (e + 2 < W && readable[e + 1] && same(e + 2))
+                    e += 2;
+                else
+                    break;
+            }
+            LoopOdometryRun r;
+            r.first_window = k;
+            r.last_window = e;
+            Eigen::Vector3d axis = Eigen::Vector3d::Zero();
+            Eigen::Vector3d placed = Eigen::Vector3d::Zero();
+            for (int j = k; j <= e; j++)
+            {
+                placed += rd[j].placed_move;
+                r.duration_s += rd[j].duration_s;
+                if (!weak[j])
+                    continue;
+                const double d = rd[j].weak_axis.dot(a0);
+                axis += rd[j].weak_axis * static_cast<double>((d > 0.0) - (d < 0.0));
+                r.weak_windows++;
+            }
+            axis /= static_cast<double>(r.weak_windows);
+            axis.normalize();
+            if (placed.dot(axis) < 0.0)
+                axis = -axis;
+            r.axis = axis;
+
+            // the pace before and after: the 3 nearest readable non-weak windows on each side
+            std::vector<double> before, after;
+            for (int j = k - 1; j >= 0 && before.size() < 3; j--)
+                if (readable[j] && !weak[j])
+                    before.push_back(pace(j));
+            for (int j = e + 1; j < W && after.size() < 3; j++)
+                if (readable[j] && !weak[j])
+                    after.push_back(pace(j));
+            double vb = before.empty() ? std::nan("") : median_of(before);
+            double va = after.empty() ? std::nan("") : median_of(after);
+            if (std::isnan(vb))
+                vb = va;
+            if (std::isnan(va))
+                va = vb;
+            const int n = e - k + 1;
+            std::vector<double> v(n);
+            for (int j = 0; j < n; j++)
+                v[j] = rd[k + j].placed_move.dot(axis) / rd[k + j].duration_s;
+            if (std::isnan(vb))
+            {
+                double mean = 0.0;
+                for (double x : v)
+                    mean += x;
+                vb = va = mean / n;
+            }
+            r.pace_before_mps = vb;
+            r.pace_after_mps = va;
+            double elapsed = 0.0;
+            for (int j = 0; j < n; j++)
+            {
+                const double dur = rd[k + j].duration_s;
+                elapsed += dur;
+                const double f = (elapsed - dur / 2.0) / r.duration_s;
+                r.s2_m += std::abs(v[j] - (vb + (va - vb) * f)) * dur;
+            }
+            r.s1_m = 0.5 * rule.accelerometer_error_mps2 * r.duration_s * r.duration_s;
+            r.sigma_m = std::hypot(r.s1_m, r.s2_m);
+            runs.push_back(r);
+            k = e + 1;
+        }
+        return runs;
+    }
+} // namespace
+
+LoopOdometryInformation loop_odometry_step_information(const std::vector<WindowReadings> &readings, const std::vector<LoopClosureSegment> &segments,
+                                                       const LoopOdometryRule &rule)
+{
+    LoopOdometryInformation out;
+    out.runs = weak_runs(readings, rule);
+    const int steps = std::max(0, static_cast<int>(segments.size()) - 1);
+    std::vector<Eigen::Matrix3d> cov(steps, Eigen::Matrix3d::Identity() * rule.sigma_m * rule.sigma_m);
+    for (LoopOdometryRun &r : out.runs)
+    {
+        for (int k = 0; k < static_cast<int>(segments.size()); k++)
+        {
+            const int lo = std::max(r.first_window, segments[k].first_window);
+            const int hi = std::min(r.last_window, segments[k].last_window);
+            if (lo > hi)
+                continue;
+            double in_segment = 0.0;
+            for (int j = lo; j <= hi; j++)
+                in_segment += readings[j].duration_s;
+            const double share = in_segment / r.duration_s;
+            if (k == steps)
+            {
+                r.share_after_last_step += share;
+                continue;
+            }
+            const Eigen::Vector3d along = segments[k].pose.linear().transpose() * r.axis;
+            cov[k] += r.sigma_m * r.sigma_m * share * along * along.transpose();
+            r.step_shares.emplace_back(k, share);
+        }
+    }
+    const double w_r = 1.0 / std::pow(rule.sigma_deg * DEG, 2);
+    for (int k = 0; k < steps; k++)
+    {
+        Eigen::Matrix<double, 6, 6> omega = Eigen::Matrix<double, 6, 6>::Zero();
+        omega.topLeftCorner<3, 3>() = cov[k].inverse();
+        omega.bottomRightCorner<3, 3>() = Eigen::Matrix3d::Identity() * w_r;
+        out.information.push_back(omega);
+    }
+    return out;
+}
+
+namespace
+{
+    // one line per run of loop_odometry_step_information (windows numbered from 0, as the segments; times from the first
+    // window's first node, as time_s of window_features.csv), and a summary
+    void log_loop_odometry_runs(const LoopOdometryInformation &steps, const std::vector<Window> &windows, const OdometryConfig &params, Logger &logger)
+    {
+        const double t0 = windows.front().timestamps.front().first;
+        const LoopOdometryRun *largest = nullptr;
+        int weak = 0;
+        std::set<int> loosened;
+        for (const LoopOdometryRun &r : steps.runs)
+        {
+            weak += r.weak_windows;
+            if (!largest || r.sigma_m > largest->sigma_m)
+                largest = &r;
+            auto line = log_info(logger);
+            line << "loop closure odometry run: windows " << r.first_window << "-" << r.last_window << ", t " << std::fixed << std::setprecision(2)
+                 << windows[r.first_window].timestamps.front().first - t0 << "-" << windows[r.last_window].timestamps.back().first - t0 << " s, T "
+                 << r.duration_s << " s, " << r.weak_windows << " weak, axis " << r.axis.x() << " " << r.axis.y() << " " << r.axis.z()
+                 << ", pace before " << r.pace_before_mps << " / after " << r.pace_after_mps << " m/s, S1 " << r.s1_m << " m, S2 " << r.s2_m
+                 << " m, sigma " << r.sigma_m << " m, steps";
+            for (const auto &[k, share] : r.step_shares)
+            {
+                line << " " << k << " " << share;
+                loosened.insert(k);
+            }
+            if (r.share_after_last_step > 0.0)
+                line << ", after the last step " << r.share_after_last_step << " (not added)";
+        }
+        auto line = log_info(logger);
+        line << "loop closure odometry from readings: " << steps.runs.size() << " run(s), " << weak << " weak window(s) (information ratio below "
+             << params.loop_closure_odometry_weak_ratio << ", axes within " << params.loop_closure_odometry_axis_tolerance_deg
+             << " deg, accelerometer error " << params.loop_closure_odometry_accelerometer_error_mps2 << " m/s^2), " << loosened.size() << " of "
+             << steps.information.size() << " odometry steps loosened";
+        if (largest)
+            line << ", largest sigma " << std::fixed << std::setprecision(2) << largest->sigma_m << " m (windows " << largest->first_window << "-"
+                 << largest->last_window << ")";
+    }
+} // namespace
+
 std::vector<Eigen::Affine3d> optimize_loop_pose_graph(const std::vector<Eigen::Affine3d> &initial, const std::vector<LoopClosureEdge> &loops,
-                                                      const OdometryConfig &params)
+                                                      const OdometryConfig &params, const LoopOdometryEdgeInformation *odometry_information)
 {
     const int n = static_cast<int>(initial.size());
     std::vector<Eigen::Matrix<double, 6, 1>> odo(n > 0 ? n - 1 : 0);
@@ -516,7 +718,13 @@ std::vector<Eigen::Affine3d> optimize_loop_pose_graph(const std::vector<Eigen::A
     {
         double c = 0.0;
         for (int k = 0; k + 1 < n; k++)
-            c += relative_pose_edge_cost(ps, k, k + 1, odo[k], w_odo_t, w_odo_r);
+            if (odometry_information)
+            {
+                const Eigen::Matrix<double, 6, 1> d = information_edge_residual(ps[k], ps[k + 1], odo[k]);
+                c += d.dot((*odometry_information)[k] * d);
+            }
+            else
+                c += relative_pose_edge_cost(ps, k, k + 1, odo[k], w_odo_t, w_odo_r);
         for (size_t e = 0; e < loops.size(); e++)
             c += loop_edge_cost(ps, e);
         return c;
@@ -532,7 +740,10 @@ std::vector<Eigen::Affine3d> optimize_loop_pose_graph(const std::vector<Eigen::A
             std::vector<Eigen::Triplet<double>> A;
             Eigen::VectorXd b = Eigen::VectorXd::Zero(6 * n);
             for (int k = 0; k + 1 < n; k++)
-                add_relative_pose_edge(A, b, poses, k, k + 1, odo[k], w_odo_t, w_odo_r);
+                if (odometry_information)
+                    add_information_edge(A, b, poses, k, k + 1, odo[k], (*odometry_information)[k]);
+                else
+                    add_relative_pose_edge(A, b, poses, k, k + 1, odo[k], w_odo_t, w_odo_r);
             for (size_t e = 0; e < loops.size(); e++)
             {
                 // the kernel's weight at the current poses (1 without the kernel): the reweighted quadratic bounds the robust
@@ -622,7 +833,8 @@ std::vector<LoopEdgeResidual> loop_edge_residuals(const std::vector<Eigen::Affin
 }
 
 double loop_pose_graph_cost(const std::vector<Eigen::Affine3d> &initial, const std::vector<Eigen::Affine3d> &optimized,
-                            const std::vector<LoopClosureEdge> &loops, const OdometryConfig &params)
+                            const std::vector<LoopClosureEdge> &loops, const OdometryConfig &params,
+                            const LoopOdometryEdgeInformation *odometry_information)
 {
     std::vector<TaitBryanPose> ps;
     for (const auto &p : optimized)
@@ -631,8 +843,14 @@ double loop_pose_graph_cost(const std::vector<Eigen::Affine3d> &initial, const s
     const double w_odo_r = 1.0 / std::pow(params.loop_closure_odometry_sigma_deg * DEG, 2);
     double cost = 0.0;
     for (size_t k = 0; k + 1 < initial.size(); k++)
-        cost += relative_pose_edge_cost(ps, static_cast<int>(k), static_cast<int>(k + 1), relative_measurement(initial[k], initial[k + 1]), w_odo_t,
-                                        w_odo_r);
+        if (odometry_information)
+        {
+            const Eigen::Matrix<double, 6, 1> d = information_edge_residual(ps[k], ps[k + 1], relative_measurement(initial[k], initial[k + 1]));
+            cost += d.dot((*odometry_information)[k] * d);
+        }
+        else
+            cost += relative_pose_edge_cost(ps, static_cast<int>(k), static_cast<int>(k + 1), relative_measurement(initial[k], initial[k + 1]), w_odo_t,
+                                            w_odo_r);
     const double w_loop_t = 1.0 / std::pow(params.loop_closure_edge_sigma_m, 2);
     const double w_loop_r = 1.0 / std::pow(params.loop_closure_edge_sigma_deg * DEG, 2);
     for (const auto &e : loops)
@@ -650,7 +868,8 @@ double loop_pose_graph_cost(const std::vector<Eigen::Affine3d> &initial, const s
 }
 
 size_t loop_edge_to_drop(const std::vector<Eigen::Affine3d> &initial, const std::vector<Eigen::Affine3d> &optimized,
-                         const std::vector<LoopClosureEdge> &loops, const OdometryConfig &params)
+                         const std::vector<LoopClosureEdge> &loops, const OdometryConfig &params,
+                         const LoopOdometryEdgeInformation *odometry_information)
 {
     const std::vector<LoopEdgeResidual> residuals = loop_edge_residuals(initial, optimized, loops);
     std::vector<size_t> beyond;
@@ -667,7 +886,8 @@ size_t loop_edge_to_drop(const std::vector<Eigen::Affine3d> &initial, const std:
     {
         std::vector<LoopClosureEdge> without = loops;
         without.erase(without.begin() + static_cast<std::ptrdiff_t>(e));
-        const double cost = loop_pose_graph_cost(initial, optimize_loop_pose_graph(initial, without, params), without, params);
+        const double cost = loop_pose_graph_cost(initial, optimize_loop_pose_graph(initial, without, params, odometry_information), without, params,
+                                                 odometry_information);
         if (cost < best_cost) // ties keep the earlier edge (deterministic)
         {
             best_cost = cost;
@@ -936,6 +1156,28 @@ int close_loops(std::vector<Window> &windows, const std::vector<LoopClosureSegme
         return 0;
     log_info(logger) << "loop closure START";
 
+    // the odometry steps' information from the windows' readings (loop_closure_odometry_from_readings)
+    std::optional<LoopOdometryInformation> odometry_steps;
+    if (params.loop_closure_odometry_from_readings)
+    {
+        std::vector<WindowReadings> readings;
+        for (const Window &w : windows)
+            if (w.readings)
+                readings.push_back(*w.readings);
+        if (readings.size() != windows.size())
+        {
+            rep.outcome = "readings_missing";
+            log_error(logger) << "loop closure: loop_closure_odometry_from_readings is on, but " << windows.size() - readings.size() << " of "
+                              << windows.size() << " windows have no readings (a snapshot or capture written before they were kept, or "
+                              << "windows the odometry did not solve); loop closure not run, trajectory unchanged";
+            return 0;
+        }
+        odometry_steps = loop_odometry_step_information(readings, segments, loop_odometry_rule(params));
+        log_loop_odometry_runs(*odometry_steps, windows, params, logger);
+        rep.odometry_runs = odometry_steps->runs;
+    }
+    const LoopOdometryEdgeInformation *odometry_information = odometry_steps ? &odometry_steps->information : nullptr;
+
     // 2.+3. revisit candidates and their registration
     std::vector<LoopClosureEdge> loops;
     const bool use_cross_floor = params.loop_closure_cross_floor_max_vertical_m > params.loop_closure_max_vertical_offset_m;
@@ -1087,14 +1329,14 @@ int close_loops(std::vector<Window> &windows, const std::vector<LoopClosureSegme
     std::vector<LoopEdgeResidual> residuals;
     for (;;)
     {
-        optimized = optimize_loop_pose_graph(initial, loops, params);
+        optimized = optimize_loop_pose_graph(initial, loops, params, odometry_information);
         residuals = loop_edge_residuals(initial, optimized, loops);
         if (rep.first_solve.empty())
         {
             rep.first_solve = loops;
             rep.first_solve_residuals = residuals;
         }
-        const size_t worst = loop_edge_to_drop(initial, optimized, loops, params);
+        const size_t worst = loop_edge_to_drop(initial, optimized, loops, params, odometry_information);
         if (worst == loops.size())
         {
             auto line = log_info(logger);

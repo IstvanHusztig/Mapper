@@ -170,6 +170,15 @@ struct OdometryConfig
     double loop_closure_min_fitness = 0.5;
     double loop_closure_odometry_sigma_m = 0.1;
     double loop_closure_odometry_sigma_deg = 0.5;
+    // the odometry steps' translation uncertainty from the windows' readings (loop_odometry_step_information in
+    // loop_closure.h): a run of weak windows (information ratio below loop_closure_odometry_weak_ratio, not at rest, weak axes
+    // within loop_closure_odometry_axis_tolerance_deg) gets one uncertainty along its axis from the accelerometer error
+    // loop_closure_odometry_accelerometer_error_mps2 and the placed speed, shared among its steps; needs windows with
+    // readings (a snapshot or capture written before them is refused)
+    bool loop_closure_odometry_from_readings = false;
+    double loop_closure_odometry_weak_ratio = 0.05;
+    double loop_closure_odometry_axis_tolerance_deg = 30.0;
+    double loop_closure_odometry_accelerometer_error_mps2 = 0.05;
     double loop_closure_edge_sigma_m = 0.05;
     double loop_closure_edge_sigma_deg = 0.3;
     // same-floor registrations per segment (revisit_tries in loop_closure.h), and the largest disagreement between the
