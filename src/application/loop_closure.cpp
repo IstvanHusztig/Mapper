@@ -489,17 +489,21 @@ namespace
     }
 
     // the weak runs of loop_odometry_step_information (its steps 1 to 3), without the steps' shares
-    std::vector<LoopOdometryRun> weak_runs(const std::vector<WindowReadings> &rd, const LoopOdometryRule &rule)
+    // (a window without readings is not readable: never weak, never bridged, never a pace reference; only readable windows
+    // are read below)
+    std::vector<LoopOdometryRun> weak_runs(const std::vector<std::optional<WindowReadings>> &readings, const LoopOdometryRule &rule)
     {
-        const int W = static_cast<int>(rd.size());
+        const int W = static_cast<int>(readings.size());
         std::vector<char> readable(W), weak(W);
         for (int k = 0; k < W; k++)
         {
-            readable[k] = std::isfinite(rd[k].information_ratio) && std::isfinite(rd[k].duration_s) && rd[k].duration_s > 0.0 && !rd[k].at_rest;
-            weak[k] = readable[k] && rd[k].information_ratio < rule.weak_ratio;
+            const std::optional<WindowReadings> &x = readings[k];
+            readable[k] = x && std::isfinite(x->information_ratio) && std::isfinite(x->duration_s) && x->duration_s > 0.0 && !x->at_rest;
+            weak[k] = readable[k] && x->information_ratio < rule.weak_ratio;
         }
+        const auto rd = [&](int k) -> const WindowReadings & { return *readings[k]; };
         const double axis_cos = std::cos(rule.axis_tolerance_deg * DEG);
-        const auto pace = [&](int k) { return rd[k].placed_move.norm() / rd[k].duration_s; };
+        const auto pace = [&](int k) { return rd(k).placed_move.norm() / rd(k).duration_s; };
 
         std::vector<LoopOdometryRun> runs;
         int k = 0;
@@ -510,8 +514,8 @@ namespace
                 k++;
                 continue;
             }
-            const Eigen::Vector3d a0 = rd[k].weak_axis;
-            const auto same = [&](int j) { return weak[j] && std::abs(rd[j].weak_axis.dot(a0)) >= axis_cos; };
+            const Eigen::Vector3d a0 = rd(k).weak_axis;
+            const auto same = [&](int j) { return weak[j] && std::abs(rd(j).weak_axis.dot(a0)) >= axis_cos; };
             int e = k;
             for (;;)
             {
@@ -529,12 +533,12 @@ namespace
             Eigen::Vector3d placed = Eigen::Vector3d::Zero();
             for (int j = k; j <= e; j++)
             {
-                placed += rd[j].placed_move;
-                r.duration_s += rd[j].duration_s;
+                placed += rd(j).placed_move;
+                r.duration_s += rd(j).duration_s;
                 if (!weak[j])
                     continue;
-                const double d = rd[j].weak_axis.dot(a0);
-                axis += rd[j].weak_axis * static_cast<double>((d > 0.0) - (d < 0.0));
+                const double d = rd(j).weak_axis.dot(a0);
+                axis += rd(j).weak_axis * static_cast<double>((d > 0.0) - (d < 0.0));
                 r.weak_windows++;
             }
             axis /= static_cast<double>(r.weak_windows);
@@ -560,7 +564,7 @@ namespace
             const int n = e - k + 1;
             std::vector<double> v(n);
             for (int j = 0; j < n; j++)
-                v[j] = rd[k + j].placed_move.dot(axis) / rd[k + j].duration_s;
+                v[j] = rd(k + j).placed_move.dot(axis) / rd(k + j).duration_s;
             if (std::isnan(vb))
             {
                 double mean = 0.0;
@@ -573,7 +577,7 @@ namespace
             double elapsed = 0.0;
             for (int j = 0; j < n; j++)
             {
-                const double dur = rd[k + j].duration_s;
+                const double dur = rd(k + j).duration_s;
                 elapsed += dur;
                 const double f = (elapsed - dur / 2.0) / r.duration_s;
                 r.s2_m += std::abs(v[j] - (vb + (va - vb) * f)) * dur;
@@ -587,8 +591,8 @@ namespace
     }
 } // namespace
 
-LoopOdometryInformation loop_odometry_step_information(const std::vector<WindowReadings> &readings, const std::vector<LoopClosureSegment> &segments,
-                                                       const LoopOdometryRule &rule)
+LoopOdometryInformation loop_odometry_step_information(const std::vector<std::optional<WindowReadings>> &readings,
+                                                       const std::vector<LoopClosureSegment> &segments, const LoopOdometryRule &rule)
 {
     LoopOdometryInformation out;
     out.runs = weak_runs(readings, rule);
@@ -604,7 +608,7 @@ LoopOdometryInformation loop_odometry_step_information(const std::vector<WindowR
                 continue;
             double in_segment = 0.0;
             for (int j = lo; j <= hi; j++)
-                in_segment += readings[j].duration_s;
+                in_segment += readings[j]->duration_s; // a run's windows all have readings
             const double share = in_segment / r.duration_s;
             if (k == steps)
             {
@@ -1385,17 +1389,37 @@ int close_loops(std::vector<Window> &windows, const std::vector<LoopClosureSegme
     std::optional<LoopOdometryInformation> odometry_steps;
     if (params.loop_closure_odometry_from_readings)
     {
-        std::vector<WindowReadings> readings;
-        for (const Window &w : windows)
-            if (w.readings)
-                readings.push_back(*w.readings);
-        if (readings.size() != windows.size())
+        std::vector<std::optional<WindowReadings>> readings;
+        std::vector<std::pair<int, int>> without; // ranges of windows without readings
+        for (int w = 0; w < n_windows; w++)
+        {
+            readings.push_back(windows[w].readings);
+            if (windows[w].readings)
+                continue;
+            if (!without.empty() && without.back().second == w - 1)
+                without.back().second = w;
+            else
+                without.emplace_back(w, w);
+        }
+        int missing = 0;
+        for (const auto &[a, b] : without)
+            missing += b - a + 1;
+        rep.windows_without_readings = missing;
+        if (missing == n_windows)
         {
             rep.outcome = "readings_missing";
-            log_error(logger) << "loop closure: loop_closure_odometry_from_readings is on, but " << windows.size() - readings.size() << " of "
-                              << windows.size() << " windows have no readings (a snapshot or capture written before they were kept, or "
-                              << "windows the odometry did not solve); loop closure not run, trajectory unchanged";
+            log_error(logger) << "loop closure: loop_closure_odometry_from_readings is on, but none of the " << n_windows
+                              << " windows has readings (a snapshot or capture written before they were kept); loop closure not run, "
+                              << "trajectory unchanged";
             return 0;
+        }
+        if (missing > 0)
+        {
+            auto line = log_warning(logger);
+            line << "loop closure: " << missing << " of " << n_windows << " windows have no readings (not solved by the odometry): windows";
+            for (size_t k = 0; k < without.size(); k++)
+                line << (k ? ", " : " ") << without[k].first << "-" << without[k].second;
+            line << " (from 0); the rule doesn't read them, their steps keep the fixed sigmas unless a run's time lies in them";
         }
         odometry_steps = loop_odometry_step_information(readings, segments, loop_odometry_rule(params));
         log_loop_odometry_runs(*odometry_steps, windows, params, logger);
