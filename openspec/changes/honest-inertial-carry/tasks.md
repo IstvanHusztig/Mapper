@@ -103,7 +103,7 @@ and the two guards.
   (backwards). Full runs with layer 1 in a copy of the shipped Livox file (`livox4_lever/layer1/`): Livox 4 largest loop
   correction 1.08 m (5.83 m before), ghost wall gone, the frozen checks equal or better; Livox 3 within 0.40 m of its
   baseline (214-218 s). The user's look on both: "it's just wow"; layer 1 is ON in `settings/livox-vertical.toml` since
-  07c0ae4 (2026-11-25; the user: no L2 test needed now). Layer 2 off; L2 not tested; 6.1-6.3 and 7.1 stay open for the L2
+  07c0ae4 (2026-11-24; the user: no L2 test needed now). Layer 2 off; L2 not tested; 6.1-6.3 and 7.1 stay open for the L2
   and for the decision on layer 2.
 
 ## 7. After the decision

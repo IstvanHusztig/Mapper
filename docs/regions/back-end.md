@@ -140,10 +140,14 @@ From `python tools/function_sizes.py src --min 80` (2026-11-18):
 
 ## Experiments
 
-- **2026-11-25, partial readings** (master-reviewer finding on 07c0ae4): with `loop_closure_odometry_from_readings`,
+- **2026-11-24, stop-window readings** (master-reviewer finding on 30524b4): the rule reads a window only if its ratio,
+  duration, placed move and weak axis are all finite; the stop window of a run the odometry ended early can carry a NaN
+  placed move from a discarded solve, and is now treated like a window without readings. Full, finite readings unchanged
+  (step checks all hold; Livox 4 replay byte-identical).
+- **2026-11-24, partial readings** (master-reviewer finding on 07c0ae4): with `loop_closure_odometry_from_readings`,
   windows without readings (a run the odometry stopped early) are unreadable for the rule (never weak, bridged or a pace
   reference; their steps keep the fixed sigmas) instead of the whole loop closure being refused; a warning gives their
-  count and ranges, the report and the replay JSON count them (`windows_without_readings`). Refused only when no window
+  count and ranges, and the replay JSON counts them (`windows_without_readings`, also in the in-memory report). Refused only when no window
   has readings. Full-readings results unchanged: step checks all hold; Livox 4 replay byte-identical (24 → 63 at T 35.99,
   81 kept). The new path is checked in doctests only (the capture cannot hold partial readings).
 - **2026-11-24, match check (held-out innovation), built, off by default** (`loop_closure_match_check`, needs the
