@@ -167,8 +167,8 @@ std::vector<LoopClosureEdge> revisit_slots(const std::vector<AcceptedRevisit> &a
 // The odometry steps' information from the windows' readings (loop_closure_odometry_from_readings; the rule frozen on
 // 2026-11-24, ported from the prototype odo_step_cov.py, mode "readings"). Step k joins segment k to segment k + 1 and
 // covers segment k's windows.
-//  1. A window is weak when its information ratio is below weak_ratio and it is not at rest (and its ratio and a positive
-//     duration are finite numbers: "readable").
+//  1. A window is weak when its information ratio is below weak_ratio and it is not at rest (and it is "readable": it has
+//     readings, every value the rule reads is finite, and its duration is positive).
 //  2. A run starts at a weak window and takes the next window while it is weak with a weak axis within axis_tolerance_deg of
 //     the run's first window's axis (sign ignored); one readable window between two such windows is bridged (it belongs to
 //     the run; its axis counts only if it is weak). Axis: the mean of the weak windows' axes (signs aligned with the first), unit,
