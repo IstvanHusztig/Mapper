@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Eigen/Dense>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -78,7 +79,9 @@ struct LoopClosureReport;
 // Steps 2, 4 and 5 on the segments: the tries chosen and accepted, the edges, the pose graph with its pruning, and the
 // correction of every node of `windows` (from which `segments` were made). Returns the number of loop edges applied.
 // With loop_closure_odometry_from_readings every window must have its readings: otherwise an error is logged and nothing
-// is registered or applied (outcome readings_missing), never the fixed sigmas instead.
+// is registered or applied (outcome readings_missing), never the fixed sigmas instead. loop_closure_match_check without
+// loop_closure_odometry_from_readings is refused the same way (outcome match_check_without_readings): on uniform steps the
+// match check rates true edges across a blind stretch as false.
 int close_loops(std::vector<Window> &windows, const std::vector<LoopClosureSegment> &segments, LoopClosureRegistrations &registrations,
                 const OdometryConfig &params, Logger &logger, LoopClosureReport *report = nullptr);
 
@@ -251,6 +254,41 @@ size_t loop_edge_to_drop(const std::vector<Eigen::Affine3d> &initial, const std:
                          const std::vector<LoopClosureEdge> &loops, const OdometryConfig &params,
                          const LoopOdometryEdgeInformation *odometry_information = nullptr);
 
+// The match check (loop_closure_match_check, the rule frozen on 2026-11-24, ported from the prototype match_check.py).
+// Two loop edges share scans when they reuse a segment's points in either role: the same source segment (j' = j), a target
+// within 2 segments (a target cloud is segments i-1..i+1), or one's source within 1 segment of the other's target
+// (|j' - i| <= 1 or |j - i'| <= 1).
+bool loop_edges_share_scans(const LoopClosureEdge &e, const LoopClosureEdge &f);
+
+// the rank of the edge's information (its omega for an information edge, rank 1e-6 of its largest entry; 6 for the fixed
+// sigmas): the degrees of freedom of its test value
+int loop_edge_dof(const LoopClosureEdge &e);
+
+// One edge's test: T = cost(graph without the edge and those sharing its scans, plus the edge) - cost(that graph without
+// it), each solved to its own minimum (optimize_loop_pose_graph, loop_pose_graph_cost), with the odometry information
+// given; limit = the chi-square quantile loop_closure_match_check_quantile for dof; innovation_m = the translation of the
+// edge's residual in the graph without it.
+struct LoopMatchTest
+{
+    double t = 0.0;
+    double limit = 0.0;
+    int dof = 0;
+    int held_out = 0; // the edges sharing its scans, left out with it
+    double innovation_m = 0.0;
+};
+// one test per loop edge, in the order of `loops`
+std::vector<LoopMatchTest> loop_match_tests(const std::vector<Eigen::Affine3d> &initial, const std::vector<LoopClosureEdge> &loops,
+                                            const OdometryConfig &params, const LoopOdometryEdgeInformation *odometry_information);
+
+struct LoopClosureReport;
+// Step 4 of close_loops on the segment poses `initial`: the pose graph solved, the loop edge loop_edge_to_drop names dropped
+// and the graph solved again until none is beyond the limits; then, with loop_closure_match_check, while the largest
+// loop_match_tests value is beyond its limit (largest T / limit), that edge dropped and the pruning run again. `loops` keeps
+// the edges left; optimized and residuals are the last solve's. false: no edge left (outcome all_dropped).
+bool solve_and_prune_loop_pose_graph(const std::vector<Eigen::Affine3d> &initial, std::vector<LoopClosureEdge> &loops, const OdometryConfig &params,
+                                     const LoopOdometryEdgeInformation *odometry_information, Logger &logger, LoopClosureReport &rep,
+                                     std::vector<Eigen::Affine3d> &optimized, std::vector<LoopEdgeResidual> &residuals);
+
 // The optimized poses may be applied: all finite, and no segment moved further than loop_closure_max_correction_m plus
 // the largest accepted loop correction (a pose graph that ran away). max_shift_m receives the largest segment correction.
 bool loop_pose_graph_plausible(const std::vector<Eigen::Affine3d> &initial, const std::vector<Eigen::Affine3d> &optimized,
@@ -259,13 +297,16 @@ bool loop_pose_graph_plausible(const std::vector<Eigen::Affine3d> &initial, cons
 struct LoopClosureReport
 {
     // too_few_windows, readings_missing (loop_closure_odometry_from_readings with a window without readings: nothing
-    // registered or applied), no_loops, all_dropped, implausible, applied
+    // registered or applied), match_check_without_readings (loop_closure_match_check without
+    // loop_closure_odometry_from_readings: nothing registered or applied), no_loops, all_dropped, implausible, applied
     std::string outcome = "too_few_windows";
     std::vector<LoopOdometryRun> odometry_runs; // loop_closure_odometry_from_readings: the runs found
     std::vector<LoopClosureEdge> kept;
     std::vector<LoopEdgeResidual> kept_residuals;
     std::vector<LoopClosureEdge> dropped; // in the order dropped
     std::vector<LoopEdgeResidual> dropped_residuals;
+    std::vector<std::optional<LoopMatchTest>> dropped_match_tests; // per dropped edge: its test if the match check dropped it
+    std::vector<LoopMatchTest> kept_match_tests;                    // the match check's last tests of the kept edges (else empty)
     std::vector<LoopClosureEdge> first_solve; // every edge of the first solve, before any was dropped, with its residual there
     std::vector<LoopEdgeResidual> first_solve_residuals;
     double largest_segment_correction_m = 0.0; // of the last solve (also when implausible)

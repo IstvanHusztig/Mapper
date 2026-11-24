@@ -179,6 +179,12 @@ struct OdometryConfig
     double loop_closure_odometry_weak_ratio = 0.05;
     double loop_closure_odometry_axis_tolerance_deg = 30.0;
     double loop_closure_odometry_accelerometer_error_mps2 = 0.05;
+    // after the pruning, each loop edge is tested against the graph solved without it and the edges that reuse its scans
+    // (loop_match_tests in loop_closure.h); while the largest test value is beyond the chi-square quantile
+    // loop_closure_match_check_quantile for the rank of the edge's information, that edge is dropped and the pruning runs
+    // again. Needs loop_closure_odometry_from_readings (refused without it)
+    bool loop_closure_match_check = false;
+    double loop_closure_match_check_quantile = 0.999;
     double loop_closure_edge_sigma_m = 0.05;
     double loop_closure_edge_sigma_deg = 0.3;
     // same-floor registrations per segment (revisit_tries in loop_closure.h), and the largest disagreement between the

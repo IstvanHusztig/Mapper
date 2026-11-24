@@ -8,6 +8,7 @@
 #include "loop_closure_replay.h"
 #include "memory_point_store.h"
 #include "synthetic_recording.h"
+#include "chi_square.h"
 #include <transformations.h>
 
 #include <algorithm>
@@ -890,6 +891,209 @@ TEST_CASE("loop closure odometry steps: the fixed sigmas as information give the
           doctest::Approx(loop_pose_graph_cost(s.initial, reference, loops, c)).epsilon(1e-9));
 }
 
+namespace
+{
+    // out along x and back 2 m to the side: segments 0..n-1 at x = k, segments n..2n-1 at x = 2n-1-k, y = 2, turned by 180 deg.
+    // stall: the odometry placed steps from..to-1 of the way out `short_m` shorter each (a blind stretch)
+    struct OutAndBack
+    {
+        std::vector<Eigen::Affine3d> truth, initial;
+        OutAndBack(int n, int stall_from = 0, int stall_to = 0, double short_m = 0.0)
+        {
+            double lag = 0.0;
+            for (int k = 0; k < 2 * n; k++)
+            {
+                const bool out = k < n;
+                const double x = out ? k : 2 * n - 1 - k;
+                truth.push_back(segment_pose(x, out ? 0.0 : 2.0, out ? 0.0 : 180.0));
+                if (k > stall_from && k <= stall_to)
+                    lag += short_m;
+                Eigen::Affine3d p = truth.back();
+                p.translation().x() -= lag; // every pose after the stall stays behind
+                initial.push_back(p);
+            }
+        }
+        // the revisit of segment i from segment j as measured, its translation off by `error` [m] along x
+        LoopClosureEdge edge(int i, int j, double error = 0.0, double sigma_m = 0.05) const
+        {
+            LoopClosureEdge e;
+            e.i = i;
+            e.j = j;
+            e.correction = (initial[i] * truth[i].inverse() * truth[j]) * initial[j].inverse();
+            e.correction.translation().x() += error;
+            e.information = true;
+            e.omega.setZero();
+            const double wt = 1.0 / (sigma_m * sigma_m), wr = 1.0 / std::pow(0.3 * DEG_TO_RAD, 2);
+            e.omega.diagonal() << wt, wt, wt, wr, wr, wr;
+            return e;
+        }
+        // one window per segment, 1 s each, walking at 1 m/s; the windows of segments from..to-1 weak along x, placed as the
+        // odometry placed them
+        std::vector<LoopClosureSegment> segments() const
+        {
+            std::vector<LoopClosureSegment> out;
+            for (size_t k = 0; k < initial.size(); k++)
+            {
+                LoopClosureSegment s;
+                s.first_window = s.last_window = static_cast<int>(k);
+                s.pose = initial[k];
+                out.push_back(s);
+            }
+            return out;
+        }
+        std::vector<WindowReadings> readings(int weak_from, int weak_to) const
+        {
+            std::vector<WindowReadings> rd;
+            for (size_t k = 0; k < initial.size(); k++)
+            {
+                const Eigen::Vector3d move = k + 1 < initial.size() ? Eigen::Vector3d(initial[k + 1].translation() - initial[k].translation())
+                                                                     : Eigen::Vector3d(-1.0, 0.0, 0.0);
+                const bool weak = static_cast<int>(k) >= weak_from && static_cast<int>(k) < weak_to;
+                rd.push_back(WindowReadings{weak ? 0.01 : 0.5, Eigen::Vector3d::UnitX(), false, move, 1.0});
+            }
+            return rd;
+        }
+    };
+
+    LoopOdometryEdgeInformation uniform_steps(size_t segments, const OdometryConfig &c)
+    {
+        Eigen::Matrix<double, 6, 6> omega = Eigen::Matrix<double, 6, 6>::Zero();
+        const double wt = 1.0 / std::pow(c.loop_closure_odometry_sigma_m, 2), wr = 1.0 / std::pow(c.loop_closure_odometry_sigma_deg * DEG_TO_RAD, 2);
+        omega.diagonal() << wt, wt, wt, wr, wr, wr;
+        return LoopOdometryEdgeInformation(segments - 1, omega);
+    }
+}
+
+TEST_CASE("loop closure match check: the chi-square quantile")
+{
+    const double expected[6] = {10.828, 13.816, 16.266, 18.467, 20.515, 22.458};
+    for (int dof = 1; dof <= 6; dof++)
+        CHECK(chi_square_quantile(0.999, dof) == doctest::Approx(expected[dof - 1]).epsilon(5e-5));
+    CHECK(chi_square_quantile(0.5, 2) == doctest::Approx(2.0 * std::log(2.0)));
+    CHECK(chi_square_quantile(0.95, 1) == doctest::Approx(3.841459).epsilon(1e-6));
+    CHECK(std::isnan(chi_square_quantile(1.0, 6)));
+    CHECK(std::isnan(chi_square_quantile(0.999, 0)));
+}
+
+TEST_CASE("loop closure match check: edges share scans in either role, the degrees of freedom are the information's rank")
+{
+    LoopClosureEdge e;
+    e.i = 10;
+    e.j = 40;
+    const auto with = [](int i, int j)
+    {
+        LoopClosureEdge f;
+        f.i = i;
+        f.j = j;
+        return f;
+    };
+    CHECK(loop_edges_share_scans(e, with(20, 40))); // the same source
+    CHECK(loop_edges_share_scans(e, with(12, 30))); // a target within 2 segments
+    CHECK(loop_edges_share_scans(e, with(25, 11))); // its source within 1 segment of e's target
+    CHECK(loop_edges_share_scans(e, with(39, 60))); // e's source within 1 segment of its target
+    CHECK_FALSE(loop_edges_share_scans(e, with(13, 30)));
+    CHECK_FALSE(loop_edges_share_scans(e, with(38, 60)));
+    CHECK(loop_edge_dof(e) == 6); // the fixed sigmas
+    e.information = true;
+    e.omega = Eigen::Matrix<double, 6, 6>::Identity() * 400.0;
+    CHECK(loop_edge_dof(e) == 6);
+    e.omega(2, 2) = 0.0; // a cross-floor edge: no height
+    CHECK(loop_edge_dof(e) == 5);
+}
+
+TEST_CASE("loop closure match check: an influential false edge inside the pruning limit is dropped, the true ones stay")
+{
+    // true revisits at segments 3, 13, 23, 33 (none shares scans with another); a false one at 8, 2 m off and claimed at 1 cm
+    const OutAndBack g(40);
+    std::vector<LoopClosureEdge> loops;
+    for (int i : {3, 13, 23, 33})
+        loops.push_back(g.edge(i, 79 - i));
+    loops.push_back(g.edge(8, 71, 2.0, 0.01));
+    OdometryConfig c = with_kernel(0.0);
+    const LoopOdometryEdgeInformation steps = uniform_steps(g.initial.size(), c);
+    NullLogger logger;
+
+    // the pruning alone keeps it: it bends the graph towards itself
+    {
+        std::vector<LoopClosureEdge> kept = loops;
+        LoopClosureReport rep;
+        std::vector<Eigen::Affine3d> optimized;
+        std::vector<LoopEdgeResidual> residuals;
+        REQUIRE(solve_and_prune_loop_pose_graph(g.initial, kept, c, &steps, logger, rep, optimized, residuals));
+        REQUIRE(kept.size() == 5);
+        MESSAGE("false edge weighted residual ", residuals[4].weighted * c.loop_closure_edge_sigma_m, " m");
+        CHECK(loop_edge_drop_ratio(kept[4], residuals[4], c) < 1.0);
+    }
+
+    c.loop_closure_match_check = true;
+    std::vector<LoopClosureEdge> kept = loops;
+    LoopClosureReport rep;
+    std::vector<Eigen::Affine3d> optimized;
+    std::vector<LoopEdgeResidual> residuals;
+    REQUIRE(solve_and_prune_loop_pose_graph(g.initial, kept, c, &steps, logger, rep, optimized, residuals));
+    REQUIRE(rep.dropped.size() == 1);
+    CHECK(rep.dropped[0].i == 8);
+    REQUIRE(rep.dropped_match_tests[0].has_value());
+    const LoopMatchTest &t = *rep.dropped_match_tests[0];
+    MESSAGE("T ", t.t, " limit ", t.limit, " innovation ", t.innovation_m, " m");
+    CHECK(t.t > t.limit);
+    CHECK(t.dof == 6);
+    CHECK(t.held_out == 0);
+    CHECK(t.innovation_m == doctest::Approx(2.0).epsilon(0.05));
+    CHECK(kept.size() == 4);
+    REQUIRE(rep.kept_match_tests.size() == 4);
+    for (const LoopMatchTest &k : rep.kept_match_tests)
+        CHECK(k.t < 1.0); // consistent with each other
+    double largest = 0.0;
+    for (size_t k = 0; k < optimized.size(); k++)
+        largest = std::max(largest, (optimized[k].translation() - g.truth[k].translation()).norm());
+    CHECK(largest < 1e-6);
+}
+
+TEST_CASE("loop closure match check: edges across a blind stretch are kept with the readings' steps, rated false on uniform steps")
+{
+    // the way out stalled in segments 5..9 (0.8 m short per step, 4 m in all); revisits at 3 and 12 on either side
+    const OutAndBack g(20, 4, 9, 0.8);
+    const std::vector<LoopClosureEdge> loops{g.edge(3, 36), g.edge(12, 27)};
+    const OdometryConfig c = with_kernel(0.0);
+
+    const LoopOdometryInformation rule = loop_odometry_step_information(g.readings(4, 9), g.segments(), loop_odometry_rule(c));
+    REQUIRE(rule.runs.size() == 1);
+    MESSAGE("run sigma ", rule.runs[0].sigma_m, " m");
+    for (const LoopMatchTest &t : loop_match_tests(g.initial, loops, c, &rule.information))
+    {
+        MESSAGE("rule: T ", t.t, " limit ", t.limit);
+        CHECK(t.t < t.limit);
+    }
+    const LoopOdometryEdgeInformation uniform = uniform_steps(g.initial.size(), c);
+    for (const LoopMatchTest &t : loop_match_tests(g.initial, loops, c, &uniform))
+    {
+        MESSAGE("uniform: T ", t.t, " limit ", t.limit);
+        CHECK(t.t > t.limit);
+    }
+}
+
+TEST_CASE("loop closure match check: an edge no other loop reaches is kept")
+{
+    // the only revisit, 1 m off after 76 steps of odometry: the rest of the graph predicts it only loosely
+    const OutAndBack g(40);
+    std::vector<LoopClosureEdge> loops{g.edge(1, 78, 1.0)};
+    OdometryConfig c = with_kernel(0.0);
+    c.loop_closure_match_check = true;
+    c.loop_closure_max_residual_m = 10.0; // the pruning out of the way
+    const LoopOdometryEdgeInformation steps = uniform_steps(g.initial.size(), c);
+    NullLogger logger;
+    LoopClosureReport rep;
+    std::vector<Eigen::Affine3d> optimized;
+    std::vector<LoopEdgeResidual> residuals;
+    REQUIRE(solve_and_prune_loop_pose_graph(g.initial, loops, c, &steps, logger, rep, optimized, residuals));
+    CHECK(loops.size() == 1);
+    REQUIRE(rep.kept_match_tests.size() == 1);
+    MESSAGE("T ", rep.kept_match_tests[0].t, " limit ", rep.kept_match_tests[0].limit);
+    CHECK(rep.kept_match_tests[0].held_out == 0);
+    CHECK(rep.kept_match_tests[0].t < rep.kept_match_tests[0].limit);
+}
+
 TEST_CASE("loop closure information edges: a shaft ties the floors horizontally and in tilt, not in height or the turn about its axis")
 {
     // three segments 2 m apart; the odometry turned the last one 2 deg, tilted it 1 deg about y, and drifted it 0.3 m
@@ -1153,6 +1357,23 @@ TEST_CASE("loop closure replay: odometry from readings with a window without rea
     const LoopClosureReplayResult all = replay_loop_closure(capture, config, logger);
     CHECK(all.report.outcome == "no_loops");
     CHECK(!all.missing.empty());
+}
+
+TEST_CASE("loop closure replay: the match check without the readings' steps is refused, nothing is registered or applied")
+{
+    OdometryConfig config = loop_closure_config();
+    LoopClosureCapture capture = capture_without_tries(config);
+    for (Window &w : capture.windows)
+        w.readings = WindowReadings{0.5, Eigen::Vector3d::UnitX(), false, Eigen::Vector3d(0.4, 0.0, 0.0), 0.4};
+    config.loop_closure_match_check = true;
+    NullLogger logger;
+    const LoopClosureReplayResult r = replay_loop_closure(capture, config, logger);
+    CHECK(r.report.outcome == "match_check_without_readings");
+    CHECK(r.loops == 0);
+    CHECK(r.missing.empty());
+    CHECK(r.identical_nodes == r.nodes);
+    config.loop_closure_odometry_from_readings = true;
+    CHECK(replay_loop_closure(capture, config, logger).report.outcome == "no_loops");
 }
 
 TEST_CASE("loop closure capture file: written and read back bit for bit; another file is refused")

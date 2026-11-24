@@ -2,6 +2,7 @@
 #include "loop_closure_capture.h"
 #include "holdout.h"
 #include "ndt_map.h"
+#include "chi_square.h"
 #include <transformations.h>
 #include <python-scripts/point-to-point-metrics/point_to_point_source_to_target_tait_bryan_wc_jacobian_simplified.h>
 #include <python-scripts/constraints/relative_pose_tait_bryan_wc_jacobian.h>
@@ -905,6 +906,177 @@ double loop_edge_drop_ratio(const LoopClosureEdge &edge, const LoopEdgeResidual 
                     residual.angle_deg / params.loop_closure_max_residual_deg);
 }
 
+bool loop_edges_share_scans(const LoopClosureEdge &e, const LoopClosureEdge &f)
+{
+    return f.j == e.j || std::abs(f.i - e.i) <= 2 || std::abs(f.j - e.i) <= 1 || std::abs(e.j - f.i) <= 1;
+}
+
+int loop_edge_dof(const LoopClosureEdge &e)
+{
+    if (!e.information)
+        return 6;
+    const double largest = e.omega.cwiseAbs().maxCoeff();
+    if (!(largest > 0.0))
+        return 0;
+    const Eigen::JacobiSVD<Eigen::Matrix<double, 6, 6>> svd(e.omega);
+    int rank = 0;
+    for (int k = 0; k < 6; k++)
+        if (svd.singularValues()(k) > 1e-6 * largest)
+            rank++;
+    return rank;
+}
+
+std::vector<LoopMatchTest> loop_match_tests(const std::vector<Eigen::Affine3d> &initial, const std::vector<LoopClosureEdge> &loops,
+                                            const OdometryConfig &params, const LoopOdometryEdgeInformation *odometry_information)
+{
+    std::vector<LoopMatchTest> out;
+    for (size_t e = 0; e < loops.size(); e++)
+    {
+        LoopMatchTest t;
+        std::vector<LoopClosureEdge> rest;
+        for (size_t f = 0; f < loops.size(); f++)
+        {
+            if (f == e)
+                continue;
+            if (loop_edges_share_scans(loops[e], loops[f]))
+                t.held_out++;
+            else
+                rest.push_back(loops[f]);
+        }
+        const std::vector<Eigen::Affine3d> without = optimize_loop_pose_graph(initial, rest, params, odometry_information);
+        const double c0 = loop_pose_graph_cost(initial, without, rest, params, odometry_information);
+        std::vector<LoopClosureEdge> with = rest;
+        with.push_back(loops[e]);
+        const double c1 = loop_pose_graph_cost(initial, optimize_loop_pose_graph(initial, with, params, odometry_information), with, params,
+                                               odometry_information);
+        t.t = c1 - c0;
+        t.dof = loop_edge_dof(loops[e]);
+        t.limit = chi_square_quantile(params.loop_closure_match_check_quantile, t.dof);
+        const LoopClosureEdge &x = loops[e];
+        const Eigen::Matrix<double, 6, 1> d =
+            information_edge_residual(pose_tait_bryan_from_affine_matrix(without[x.i]), pose_tait_bryan_from_affine_matrix(without[x.j]),
+                                      relative_measurement(initial[x.i], x.correction * initial[x.j]));
+        t.innovation_m = d.head<3>().norm();
+        out.push_back(t);
+    }
+    return out;
+}
+
+namespace
+{
+    std::string edge_name(const LoopClosureEdge &e)
+    {
+        return std::to_string(e.i) + (e.cross_floor ? "=>" : "->") + std::to_string(e.j);
+    }
+
+    // loop_edge_to_drop until no edge is beyond the limits; false: no edge left (outcome all_dropped)
+    bool prune_loop_pose_graph(const std::vector<Eigen::Affine3d> &initial, std::vector<LoopClosureEdge> &loops, const OdometryConfig &params,
+                               const LoopOdometryEdgeInformation *odometry_information, Logger &logger, LoopClosureReport &rep,
+                               std::vector<Eigen::Affine3d> &optimized, std::vector<LoopEdgeResidual> &residuals)
+    {
+        // a loop edge the solution disagrees with by more than loop_closure_max_residual_m / _deg is a false match that bends
+        // the trajectory (a ghost wall at the revisit): the worst one is dropped and the graph solved again
+        for (;;)
+        {
+            optimized = optimize_loop_pose_graph(initial, loops, params, odometry_information);
+            residuals = loop_edge_residuals(initial, optimized, loops);
+            if (rep.first_solve.empty())
+            {
+                rep.first_solve = loops;
+                rep.first_solve_residuals = residuals;
+            }
+            const size_t worst = loop_edge_to_drop(initial, optimized, loops, params, odometry_information);
+            if (worst == loops.size())
+                return true;
+            log_info(logger) << (loops[worst].cross_floor ? "cross-floor " : "") << "loop segments " << loops[worst].i << " -> " << loops[worst].j
+                             << " dropped: residual " << std::fixed
+                             << std::setprecision(2) << residuals[worst].translation_m << " m " << std::setprecision(1) << residuals[worst].angle_deg
+                             << " deg"
+                             << (loops[worst].information ? ", weighted " + std::to_string(residuals[worst].weighted * params.loop_closure_edge_sigma_m) + " m"
+                                                          : std::string());
+            rep.dropped.push_back(loops[worst]);
+            rep.dropped_residuals.push_back(residuals[worst]);
+            rep.dropped_match_tests.push_back(std::nullopt);
+            loops.erase(loops.begin() + static_cast<std::ptrdiff_t>(worst));
+            if (loops.empty())
+            {
+                rep.outcome = "all_dropped";
+                log_info(logger) << "loop closure: no loops left, trajectory unchanged";
+                return false;
+            }
+        }
+    }
+
+    // the edge with the largest T / limit (the earlier one on ties)
+    size_t largest_match_test(const std::vector<LoopMatchTest> &tests)
+    {
+        size_t worst = 0;
+        for (size_t e = 1; e < tests.size(); e++)
+            if (tests[e].t / tests[e].limit > tests[worst].t / tests[worst].limit)
+                worst = e;
+        return worst;
+    }
+} // namespace
+
+bool solve_and_prune_loop_pose_graph(const std::vector<Eigen::Affine3d> &initial, std::vector<LoopClosureEdge> &loops, const OdometryConfig &params,
+                                     const LoopOdometryEdgeInformation *odometry_information, Logger &logger, LoopClosureReport &rep,
+                                     std::vector<Eigen::Affine3d> &optimized, std::vector<LoopEdgeResidual> &residuals)
+{
+    if (!prune_loop_pose_graph(initial, loops, params, odometry_information, logger, rep, optimized, residuals))
+        return false;
+    if (params.loop_closure_match_check)
+    {
+        int rounds = 0, dropped = 0;
+        std::vector<LoopMatchTest> tests;
+        for (;;)
+        {
+            tests = loop_match_tests(initial, loops, params, odometry_information);
+            rounds++;
+            const size_t worst = largest_match_test(tests);
+            const LoopMatchTest &t = tests[worst];
+            if (!(t.t > t.limit))
+                break;
+            log_info(logger) << "loop closure match check drops " << edge_name(loops[worst]) << ": T " << std::fixed << std::setprecision(2) << t.t
+                             << " (limit " << t.limit << ", " << t.dof << " dof), " << t.held_out << " held out, innovation " << t.innovation_m << " m";
+            rep.dropped.push_back(loops[worst]);
+            rep.dropped_residuals.push_back(residuals[worst]);
+            rep.dropped_match_tests.push_back(t);
+            loops.erase(loops.begin() + static_cast<std::ptrdiff_t>(worst));
+            dropped++;
+            if (loops.empty())
+            {
+                rep.outcome = "all_dropped";
+                log_info(logger) << "loop closure: no loops left, trajectory unchanged";
+                return false;
+            }
+            if (!prune_loop_pose_graph(initial, loops, params, odometry_information, logger, rep, optimized, residuals))
+                return false;
+        }
+        rep.kept_match_tests = tests;
+        // the largest values left, by T / limit
+        std::vector<size_t> order(tests.size());
+        for (size_t e = 0; e < order.size(); e++)
+            order[e] = e;
+        std::stable_sort(order.begin(), order.end(),
+                         [&](size_t a, size_t b) { return tests[a].t / tests[a].limit > tests[b].t / tests[b].limit; });
+        auto line = log_info(logger);
+        line << "loop closure match check: " << rounds << " round(s), " << tests.size() << " edges tested in the last, " << dropped
+             << " dropped; largest T left" << std::fixed << std::setprecision(2);
+        for (size_t k = 0; k < std::min<size_t>(4, order.size()); k++)
+            line << " " << edge_name(loops[order[k]]) << " " << tests[order[k]].t << " (limit " << tests[order[k]].limit << ")";
+    }
+    auto line = log_info(logger);
+    line << "loop closure: loop edge residuals [m/deg] (=> cross-floor)" << std::fixed;
+    for (size_t e = 0; e < loops.size(); e++)
+    {
+        line << " " << loops[e].i << (loops[e].cross_floor ? "=>" : "->") << loops[e].j << " " << std::setprecision(2) << residuals[e].translation_m << "/"
+             << std::setprecision(1) << residuals[e].angle_deg;
+        if (loops[e].information)
+            line << "/w" << std::setprecision(2) << residuals[e].weighted * params.loop_closure_edge_sigma_m;
+    }
+    return true;
+}
+
 bool loop_pose_graph_plausible(const std::vector<Eigen::Affine3d> &initial, const std::vector<Eigen::Affine3d> &optimized,
                                const std::vector<LoopClosureEdge> &loops, const OdometryConfig &params, double &max_shift_m)
 {
@@ -1156,6 +1328,14 @@ int close_loops(std::vector<Window> &windows, const std::vector<LoopClosureSegme
         return 0;
     log_info(logger) << "loop closure START";
 
+    if (params.loop_closure_match_check && !params.loop_closure_odometry_from_readings)
+    {
+        rep.outcome = "match_check_without_readings";
+        log_error(logger) << "loop closure: loop_closure_match_check needs loop_closure_odometry_from_readings (on uniform odometry steps it "
+                          << "rates true edges across a blind stretch as false); loop closure not run, trajectory unchanged";
+        return 0;
+    }
+
     // the odometry steps' information from the windows' readings (loop_closure_odometry_from_readings)
     std::optional<LoopOdometryInformation> odometry_steps;
     if (params.loop_closure_odometry_from_readings)
@@ -1323,49 +1503,10 @@ int close_loops(std::vector<Window> &windows, const std::vector<LoopClosureSegme
     std::vector<Eigen::Affine3d> initial;
     for (const auto &s : segments)
         initial.push_back(s.pose);
-    // a loop edge the solution disagrees with by more than loop_closure_max_residual_m / _deg is a false match that bends
-    // the trajectory (a ghost wall at the revisit): the worst one is dropped and the graph solved again
     std::vector<Eigen::Affine3d> optimized;
     std::vector<LoopEdgeResidual> residuals;
-    for (;;)
-    {
-        optimized = optimize_loop_pose_graph(initial, loops, params, odometry_information);
-        residuals = loop_edge_residuals(initial, optimized, loops);
-        if (rep.first_solve.empty())
-        {
-            rep.first_solve = loops;
-            rep.first_solve_residuals = residuals;
-        }
-        const size_t worst = loop_edge_to_drop(initial, optimized, loops, params, odometry_information);
-        if (worst == loops.size())
-        {
-            auto line = log_info(logger);
-            line << "loop closure: loop edge residuals [m/deg] (=> cross-floor)" << std::fixed;
-            for (size_t e = 0; e < loops.size(); e++)
-            {
-                line << " " << loops[e].i << (loops[e].cross_floor ? "=>" : "->") << loops[e].j << " " << std::setprecision(2) << residuals[e].translation_m << "/"
-                     << std::setprecision(1) << residuals[e].angle_deg;
-                if (loops[e].information)
-                    line << "/w" << std::setprecision(2) << residuals[e].weighted * params.loop_closure_edge_sigma_m;
-            }
-            break;
-        }
-        log_info(logger) << (loops[worst].cross_floor ? "cross-floor " : "") << "loop segments " << loops[worst].i << " -> " << loops[worst].j
-                         << " dropped: residual " << std::fixed
-                         << std::setprecision(2) << residuals[worst].translation_m << " m " << std::setprecision(1) << residuals[worst].angle_deg
-                         << " deg"
-                         << (loops[worst].information ? ", weighted " + std::to_string(residuals[worst].weighted * params.loop_closure_edge_sigma_m) + " m"
-                                                      : std::string());
-        rep.dropped.push_back(loops[worst]);
-        rep.dropped_residuals.push_back(residuals[worst]);
-        loops.erase(loops.begin() + static_cast<std::ptrdiff_t>(worst));
-        if (loops.empty())
-        {
-            rep.outcome = "all_dropped";
-            log_info(logger) << "loop closure: no loops left, trajectory unchanged";
-            return 0;
-        }
-    }
+    if (!solve_and_prune_loop_pose_graph(initial, loops, params, odometry_information, logger, rep, optimized, residuals))
+        return 0;
     rep.kept = loops;
     rep.kept_residuals = residuals;
     double max_shift = 0.0;
