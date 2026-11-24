@@ -32,7 +32,7 @@ def load_snapshot(path, with_metadata=False, with_poses=False):
         return [take(str(width) + "d") for _ in range(count)]
 
     magic, version, settings_hash, windows = take("8sIQQ")
-    if magic != b"DMSNAP01" or version != 1:
+    if magic != b"DMSNAP01" or version not in (1, 2):
         raise ValueError("unsupported odometry snapshot format")
     if windows > 1_000_000 or windows > len(data) // 256:
         raise ValueError("invalid snapshot window count")
@@ -54,6 +54,12 @@ def load_snapshot(path, with_metadata=False, with_poses=False):
             poses_out.append(p)
             rows.append((Decimal(str(t[0])) * Decimal(1_000_000_000), p[12], p[13], p[14]))
     tail = take("18d")
+    if version >= 2:  # the windows' readings (odometry_snapshot_file.h): a count, then per window a flag and 65 bytes if set
+        if take("Q")[0] != windows:
+            raise ValueError("invalid snapshot readings count")
+        for _ in range(windows):
+            if take("B")[0]:
+                offset += 65
     if offset != len(data) or not all(math.isfinite(v) for v in tail):
         raise ValueError("invalid snapshot tail or trailing bytes")
     validate(rows)

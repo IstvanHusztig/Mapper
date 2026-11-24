@@ -19,7 +19,8 @@ namespace
     using binary_io::Writer;
 
     constexpr char MAGIC[8] = {'D', 'M', 'L', 'C', 'C', 'A', 'P', '1'};
-    constexpr std::uint32_t FORMAT_VERSION = 1;
+    constexpr std::uint32_t FORMAT_VERSION = 2;          // 2: the windows' readings after the loop count
+    constexpr std::uint32_t FIRST_READABLE_VERSION = 1; // 1: without readings
 
     // the odometry settings hash (odometry_snapshot_file.h) as one more setting: it also covers what the TOML keys don't
     // (the NDT grids), and it counts as an odometry setting
@@ -256,6 +257,7 @@ bool write_loop_closure_capture(const std::filesystem::path &file, const LoopClo
         w.list(poses, [&](const Eigen::Affine3d &p) { w.matrix(p.matrix()); });
     });
     w.value(capture.loops);
+    write_window_readings(w, capture.windows);
     out.flush();
     if (!out)
     {
@@ -279,9 +281,10 @@ bool read_loop_closure_capture(const std::filesystem::path &file, LoopClosureCap
     in.read(magic, sizeof(magic));
     std::uint32_t version = 0;
     r.value(version);
-    if (!in || std::memcmp(magic, MAGIC, sizeof(MAGIC)) != 0 || version != FORMAT_VERSION)
+    if (!in || std::memcmp(magic, MAGIC, sizeof(MAGIC)) != 0 || version < FIRST_READABLE_VERSION || version > FORMAT_VERSION)
     {
-        why = "'" + file.string() + "' is not a loop closure capture of format " + std::to_string(FORMAT_VERSION);
+        why = "'" + file.string() + "' is not a loop closure capture of format " + std::to_string(FIRST_READABLE_VERSION) + " to " +
+              std::to_string(FORMAT_VERSION);
         return false;
     }
     const auto damaged = [&](const char *part)
@@ -315,6 +318,8 @@ bool read_loop_closure_capture(const std::filesystem::path &file, LoopClosureCap
     r.value(c.loops);
     if (!r.ok())
         return damaged("loop count");
+    if (version >= 2 && !read_window_readings(r, c.windows))
+        return damaged("window readings");
     capture = std::move(c);
     settings = std::move(s);
     return true;
@@ -334,10 +339,22 @@ bool write_loop_closure_replay_json(const std::filesystem::path &file, const Loo
     j["rejected_tries_not_asked"] = result.rejected_not_asked;
     j["rejected_tries_not_in_capture"] = result.rejected_not_in_capture;
     nlohmann::json kept = nlohmann::json::array();
+    const auto match_json = [](const LoopMatchTest &t)
+    {
+        nlohmann::json m;
+        m["t"] = t.t;
+        m["limit"] = t.limit;
+        m["dof"] = t.dof;
+        m["held_out"] = t.held_out;
+        m["innovation_m"] = t.innovation_m;
+        return m;
+    };
     for (size_t k = 0; k < result.report.kept.size(); k++)
     {
         kept.push_back(edge_json(result.report.kept[k], result.report.kept_residuals[k], config));
         add_first_solve_residual(kept.back(), result.report.kept[k], result.report, config);
+        if (k < result.report.kept_match_tests.size())
+            kept.back()["match_check"] = match_json(result.report.kept_match_tests[k]); // its last test (loop_closure_match_check)
     }
     j["edges_kept"] = kept;
     nlohmann::json dropped = nlohmann::json::array();
@@ -345,6 +362,10 @@ bool write_loop_closure_replay_json(const std::filesystem::path &file, const Loo
     {
         dropped.push_back(edge_json(result.report.dropped[k], result.report.dropped_residuals[k], config));
         add_first_solve_residual(dropped.back(), result.report.dropped[k], result.report, config);
+        const bool by_match_check = k < result.report.dropped_match_tests.size() && result.report.dropped_match_tests[k];
+        dropped.back()["dropped_by"] = by_match_check ? "match_check" : "pruning";
+        if (by_match_check)
+            dropped.back()["match_check"] = match_json(*result.report.dropped_match_tests[k]);
     }
     j["edges_dropped"] = dropped;
     nlohmann::json against;

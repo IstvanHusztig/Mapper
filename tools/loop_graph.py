@@ -104,6 +104,10 @@ class Capture:
     node_t: np.ndarray      # (N,) seconds
     node_unix_ns: np.ndarray  # (N,) unix seconds (the second stamp column of the capture)
     tries: dict = field(default_factory=dict)  # (i, j, cross) -> dict
+    # the windows' readings (format 2 on; None in a format 1 capture), windows numbered from 0 as in the capture: W, t (first
+    # node from the first window's first node, s), dur, ratio, rest, weak (W, 3), move (W, 3); NaN (rest False) where a window
+    # has none, present (W,) bool
+    readings: dict = None
 
     def setting(self, name, default=None):
         return float(self.settings[name]) if name in self.settings else default
@@ -114,7 +118,7 @@ class Capture:
 
 
 def read_capture(path):
-    """Read a DMLCCAP1 capture (little-endian doubles; matrices stored column-major)."""
+    """Read a DMLCCAP1 capture, format 1 or 2 (little-endian doubles; matrices stored column-major)."""
     with open(path, "rb") as f:
         def val(fmt):
             return struct.unpack("<" + fmt, f.read(struct.calcsize("<" + fmt)))
@@ -129,7 +133,7 @@ def read_capture(path):
             return arr(n * n).reshape(n, n).T
 
         magic, version = val("8sI")
-        if (magic, version) != (b"DMLCCAP1", 1):
+        if magic != b"DMLCCAP1" or version not in (1, 2):
             raise ValueError(f"{path}: not a loop closure capture (magic {magic!r}, version {version})")
         cfg = {}
         for _ in range(count()):
@@ -169,10 +173,28 @@ def read_capture(path):
         for _ in range(count()):  # the poses the capturing run left in the windows (not needed here)
             f.seek(count() * 16 * 8, 1)
         val("i")  # loops accepted
+        readings = None
+        if version >= 2:
+            W = count()
+            if W != len(poses):
+                raise ValueError(f"{path}: {W} window readings for {len(poses)} windows")
+            readings = dict(W=W, present=np.zeros(W, bool), dur=np.full(W, np.nan), ratio=np.full(W, np.nan), rest=np.zeros(W, bool),
+                            weak=np.full((W, 3), np.nan), move=np.full((W, 3), np.nan))
+            for w in range(W):
+                if not val("B")[0]:
+                    continue
+                readings["present"][w] = True
+                readings["ratio"][w] = arr(1)[0]
+                readings["weak"][w] = arr(3)
+                readings["rest"][w] = bool(val("B")[0])
+                readings["move"][w] = arr(3)
+                readings["dur"][w] = arr(1)[0]
         if f.read():
             raise ValueError(f"{path}: trailing bytes, the format has changed")
     st = np.concatenate(stamps)
-    return Capture(cfg, segs, np.array(offsets), np.concatenate(poses), st[:, 0], st[:, 1], tries)
+    if readings is not None:
+        readings["t"] = st[np.array(offsets[:-1]), 0] - st[0, 0]
+    return Capture(cfg, segs, np.array(offsets), np.concatenate(poses), st[:, 0], st[:, 1], tries, readings)
 
 
 # ---- edges -------------------------------------------------------------------------------------------------------------
