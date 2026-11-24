@@ -163,6 +163,17 @@ None: no function of this region is above 80 lines (`python tools/function_sizes
 
 ## Experiments
 
+- **2026-11-24/25, layer 1 shipped for the Livox** (`imu_edges_follow_state = true` in `settings/livox-vertical.toml`,
+  07c0ae4; change `loop-closure-weak-runs-and-match-check` task 4.3a). The Livox 4 lower-corridor stall (173.5-182.5 s)
+  is an inertial one: the placed move equals the guess within 1 mm in the blind half and within 7 cm after, and the
+  carried speed along the corridor falls about 0.18 m/s per second (+0.97 to -0.56 m/s); its source is not identified
+  (the carried gravity vector's horizontal part along the corridor is about +0.03 m/s^2). Replays of the saved stall with
+  master's settings: layer 1 places 9.19-9.21 m in the stall in a family of five (span +-5 %, edge sigma +-10 %), master
+  3.44-3.86 m, about 9.6 m by the scene; layers 1 + 2 9.14 m but -0.61 m in the 3 s after; floor 0.5 4.84 m; offset
+  random walk 0.05 7.32 m. Full runs: Livox 4 largest loop correction 1.08 m (5.83), the ghost wall it drew gone; Livox 3
+  within 0.40 m of its baseline. The user's look on both. L2 not tested; layer 2 stays off. Scripts
+  `experiments/consistency/scripts/stall_windows_table.py`, `stall_inertial_states.py`, `ghost_stall_replays.py`,
+  `ghost_stall_family.py`; results `experiments/consistency/livox4_lever/ghost_wall/`, `layer1/`.
 - **2026-11-21, consistency harness: the loop and the recordings, this region's readings** (`consistency-harness` 6.1-7.3;
   `experiments/consistency/loop.md`, `replays.md`, `summary.md`; reviewed, shown without a verdict). *Synthetic loop*
   (candidate settings, `ahrs_gain` 0.05, world drawn from the settings' own noise claims, 1,800 points per window, 20

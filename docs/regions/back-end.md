@@ -140,6 +140,12 @@ From `python tools/function_sizes.py src --min 80` (2026-11-18):
 
 ## Experiments
 
+- **2026-11-25, partial readings** (master-reviewer finding on 07c0ae4): with `loop_closure_odometry_from_readings`,
+  windows without readings (a run the odometry stopped early) are unreadable for the rule (never weak, bridged or a pace
+  reference; their steps keep the fixed sigmas) instead of the whole loop closure being refused; a warning gives their
+  count and ranges, the report and the replay JSON count them (`windows_without_readings`). Refused only when no window
+  has readings. Full-readings results unchanged: step checks all hold; Livox 4 replay byte-identical (24 → 63 at T 35.99,
+  81 kept). The new path is checked in doctests only (the capture cannot hold partial readings).
 - **2026-11-24, match check (held-out innovation), built, off by default** (`loop_closure_match_check`, needs the
   readings rule; refuses a quantile outside (0, 1) and the robust kernel). On the format 2 Livox 4 capture with both
   switches on: the same 10 edges pruned as the Python prototype, then 24 → 63 dropped (T 35.99, limit 22.46, 2 held out,

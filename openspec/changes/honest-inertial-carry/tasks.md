@@ -96,6 +96,16 @@ and the two guards.
 - [ ] 6.3 Summary without a verdict, the clouds' full paths; conclusion reviewer. **The user's look and decision per
   layer and sensor.**
 
+- 2026-11-24/25, outside this plan (ghost wall diagnosis of change `loop-closure-weak-runs-and-match-check`): layer 1
+  alone on the saved Livox 4 lower-corridor stall with master's settings (`livox4_lever/corridor_capture_lower`): travel
+  placed in 173.5-182.5 s 9.19-9.21 m in a family of five (accelerometer span +-5 %, edge sigma +-10 %), master's settings
+  3.44-3.86 m, about 9.6 m by the scene and the mouth registrations; layers 1 + 2 9.14 m but -0.61 m in the 3 s after
+  (backwards). Full runs with layer 1 in a copy of the shipped Livox file (`livox4_lever/layer1/`): Livox 4 largest loop
+  correction 1.08 m (5.83 m before), ghost wall gone, the frozen checks equal or better; Livox 3 within 0.40 m of its
+  baseline (214-218 s). The user's look on both: "it's just wow"; layer 1 is ON in `settings/livox-vertical.toml` since
+  07c0ae4 (2026-11-25; the user: no L2 test needed now). Layer 2 off; L2 not tested; 6.1-6.3 and 7.1 stay open for the L2
+  and for the decision on layer 2.
+
 ## 7. After the decision
 
 - [ ] 7.1 Accepted: values in `settings/livox-vertical.toml` and `settings/l2-vertical.toml`, golden TOML, new 44 and
