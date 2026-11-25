@@ -214,7 +214,7 @@ None: no function of this region is above 80 lines (`python tools/function_sizes
   carries the three. Memory note `livox-state-2026-11-16.md`.
 - 2026-11-12/13 Phase 0b, NDT information multipliers 1 / 0.3 / 0.1 / 0.03 / 0.01: Livox 2 at 0.3 and 0.1 local visual
   progress (user: 0.1 "no visible double walls"); Livox 1 at 0.1 severe deformation, ~31.24 m largest trajectory
-  difference from control. `openspec/changes/ndt-information-probe/results.md`.
+  difference from control. `openspec/changes/archive/2026-11-25-ndt-information-probe/results.md`.
 - 2026-11-12 β 0.1 with α 0.1: Livox 2 "looks really good" (user), Livox 1 doubled walls (user). Same change,
   `motion-prior-results.md`.
 - 2026-11-10 Yaw hold in a window: gyro ~34 per deg² against NDT 7e3–2e5 per deg². Sweep of k on livox/1 (bends > 3° /
@@ -225,7 +225,7 @@ None: no function of this region is above 80 lines (`python tools/function_sizes
   ~1e-6 of the weight, amplified); six-cut gallery heading mean −4.52° vs −4.31° (range −4.71…−4.02): accepted. Memory
   note `fix-plan-state.md`.
 - 2026-10-09 Synchronized retune on 44 (three runs, IMU +0/+1/+2 ms): k 4 vs 1 vs accelerometer off equal within run
-  noise; loop closure chaotic (largest correction 0.8–6.3 m). `openspec/changes/synchronized-retune/tasks.md` 1.1.
+  noise; loop closure chaotic (largest correction 0.8–6.3 m). `openspec/changes/archive/2026-11-25-synchronized-retune/tasks.md` 1.1.
 - 2026-10-09 Accelerometer weights: density 0.0013 m/s²/√Hz measured on `raw data/43/static`; floor 0.1 kept (the 50 ms
   misfit is 1.37 m/s² rms of walking motion); floor 0.3 similar; offset random walk 0.01 lost half the loops in one run,
   0.0001 kept. `openspec/changes/archive/2026-10-09-imu-always-on/tasks.md` 1.0, 1.1, 3.1.

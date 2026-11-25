@@ -102,7 +102,7 @@ that information calls blind.
   projection's own step at s = 0.5 is at most g / k` (`tests/unit_cases_ndt_test.cpp`, `doctest::should_fail`; the
   oracle is an argued bound, a projection that removes information must not lengthen the step: the weakest of the
   markers). The audit: active in the Livox 3 blind-exit window 602 (s = 0.8); with the shipped 0.1 / 0.2 thresholds 166
-  of 702 windows would lie in the ramp. Order: step 7 of `openspec/changes/consistency-harness/tasks.md` 8.2, after F9,
+  of 702 windows would lie in the ramp. Order: step 7 of `openspec/changes/archive/2026-11-21-consistency-harness/tasks.md` 8.2, after F9,
   each alone.
 - **C18** (reported): the coarse 0.4 m grid adds its point terms at full weight on top of the fine grid
   (`ndt_term.cpp::sum_ndt_point_terms`, `outdoor_ndt_grid`; on through `ablation_study_use_hierarchical_rgd`, default
@@ -166,10 +166,10 @@ None (`python tools/function_sizes.py src --min 80`, 2026-11-18: no function of 
   Memory `livox-state-2026-11-16.md`.
 - **2026-11-13** Livox 2 window 754 (exact isolated replay): leaving out 3 coarse-grid cells changed the window's tilt
   15.19° -> 2.33° and end speed 0.89 -> 0.36 m/s; Huber 3 alone: 15.19° -> 2.15°, 0.37 m/s. Physical accuracy not
-  measured. `openspec/changes/ndt-information-probe/full-livox2-w754-ablation.md`, `full-livox2-huber-results.md`.
+  measured. `openspec/changes/archive/2026-11-25-ndt-information-probe/full-livox2-w754-ablation.md`, `full-livox2-huber-results.md`.
 - **2026-11-12** NDT information multipliers 1 / 0.3 / 0.1 / 0.03 / 0.01 (phase 0b, nine runs): on livox2 0-60 s the
   largest bend 23.7° (1) -> 6.4° (0.1) -> 23.0° (0.01); on Livox 1, 0.1 deformed the result (31 m from the control);
-  44_short bend 2.1 -> 1.9°. `openspec/changes/ndt-information-probe/results.md`.
+  44_short bend 2.1 -> 1.9°. `openspec/changes/archive/2026-11-25-ndt-information-probe/results.md`.
 - **2026-11-10** Livox 1: NDT yaw stiffness 7e3-2e5 per deg² against the gyro edges' ~34 per deg² in a window; on livox/2
   along the weak axis NDT 400-2700x stiffer than the velocity prior and motion model. Memory `fast-turn-fragility-state.md`.
 - **2026-10-14** C18, synthetic room: a perfect guess with walls on 0.4 m cell boundaries costs 1.52 mm, floor and

@@ -131,7 +131,7 @@ a node. It also owns the IMU kinematics helpers that the window loop and consist
   harness's order).
 - **C2** (partly fixed). The heading reset during Fusion's start-up is gone
   (D1, 11bdd55, `fusion_orientation_estimator.cpp::update`), measured on the cuts s0–s5 without a verdict
-  (`openspec/changes/imu-front-end/tasks.md`, task 2.3 open). Still true: the windows (and `m_g`, so the seed map) start
+  (`openspec/changes/archive/2026-11-25-imu-front-end/tasks.md`, task 2.3 open). Still true: the windows (and `m_g`, so the seed map) start
   inside Fusion's 3 s ramp with gain 10 → `ahrs_gain` and acceleration rejection off for the whole run
   (the adapter's `rejectionTimeout` is 0, so Fusion sets the threshold to `FLT_MAX`, `FusionAhrs.c:83–84`).
 - **C19** (reported). `lidar_odometry.cpp::compute_step_1` (point loop after the window's nodes): a point takes the node
@@ -144,7 +144,7 @@ a node. It also owns the IMU kinematics helpers that the window loop and consist
   gravity and the LiDAR (raw gyro 89.6° over 255.86–259.93 s, gravity predicted 29.6° off; raw-scan ICP 0.3–2.9° per
   window against the gyro's 8–11°). Cause unknown; the gyro-bias carry (inertial) swings −0.86 → +0.48 °/s.
   `imu_health.py`'s false-offset check exists for this kind of fault (the user's L2 unit held false rates of 11–32 °/s).
-  Evidence: `openspec/changes/map-precision-leaks/findings.md` F3.
+  Evidence: `openspec/changes/archive/2026-11-25-map-precision-leaks/findings.md` F3.
 - **Crossing findings owned elsewhere:** C14 and C30 (map: `decimate`, which `compute_step_1` calls in the sensor
   frame); C15 (inertial): its front-end parts are done in the code (the hand-off by D5, a203f1c/76e2922; dropped
   windows now warned and counted), and the tracker row says "fixed".
@@ -190,22 +190,22 @@ From `python tools/function_sizes.py src --min 80` (2026-11-18):
   9.7/12.3/16.4 → 7.6/5.4/6.8 cm, railing NN 3.5/5.2/6.5 → 5.1/10.2/9.1 cm, revisit pairs 8/10/11 → 7/6/6 of 11.
   Mixed; parked until a new recording (`openspec/changes/startup-gyro-bias/results.md` on that branch).
 - **2026-10-18** C38 analysis: gyro against gravity and raw-scan ICP at 253–259.7 s on 44
-  (`openspec/changes/map-precision-leaks/findings.md` F3).
+  (`openspec/changes/archive/2026-11-25-map-precision-leaks/findings.md` F3).
 - **2026-10-17** D1 on the cuts `44c95b_s0..s5`: gallery − start A mean −4.30° (master −4.31°); no verdict written.
   D5 test: six chained windows at 1 rad/s lose 0.005 rad before, 1e-16 after; 500 points between windows kept.
   D2 pre-measurement: the ±0.1 g gate would zero the gain for 44.5 % of 44's samples (11.7 % on 45f).
-  `openspec/changes/imu-front-end/tasks.md`.
+  `openspec/changes/archive/2026-11-25-imu-front-end/tasks.md`.
 - **2026-10-17** IMU timestamps shifted ±10 ms on the cuts s0–s2: gallery unchanged (timing ruled out); gyro z ×1.0067:
   +0.21°. Memory `fix-plan-state.md` (change corridor-heading, deleted).
 - **2026-10-16** Hand-eye fit on 44: gyro bias +0.61/+0.46/−0.82 °/s, yaw scale −0.58 ± 0.25 %; the 44 start is
   hand-held (gyro sd ≈ 2 °/s in the first 3 s). Memory `fix-plan-state.md`.
 - **2026-10-16** The start turns ≈ 0.95° between 0.9–5.9 s and 5.9–10.9 s on 44: not the 0.40 s IMU gap, not the start-up
-  heading reset alone. `openspec/changes/odometry-map-model/design.md` ("After phase 2", check d).
+  heading reset alone. `openspec/changes/archive/2026-11-25-odometry-map-model/design.md` ("After phase 2", check d).
 - **2026-10-16** Stable sorts of the points by time (C14, change `deterministic-point-order`): no effect on run-to-run or
   cut-vs-full results; the cut difference came from `cut_recording` dropping points before the first IMU sample.
   `openspec/changes/archive/2026-10-16-deterministic-point-order/`.
 - **2026-10-16** Initial-map size (C21): 10 000 / 120 000 points instead of 60 000, gallery − start A +0.48 / +0.26°
-  against master, not monotone: does not count. `openspec/changes/odometry-map-model/design.md`.
+  against master, not monotone: does not count. `openspec/changes/archive/2026-11-25-odometry-map-model/design.md`.
 - **2026-10-09** Recording 44's IMU lagged the LiDAR by 79 ms at the start and 52 ms at the end (`imu_time_offset.py`);
   restamped with `restamp_imu.py` (79.4 ms − 0.0983 ms/s · t). `tools/README.md`; memory `imu-lidar-time-offset.md`.
 

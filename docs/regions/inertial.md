@@ -126,7 +126,7 @@ orchestrator).
   at 1 / 2 m/s², 0 at rest (the covariance algebra F P F^T + Q is exact to 1e-16). Pinned by `unit case K3 marker: the
   start velocity prior's mean equals the true start velocity` (`doctest::should_fail`, oracle the true start velocity
   within 0.1 mm/s). The audit also found the last node's accelerometer sample used by no term (`accelerometer_term.cpp`),
-  not measured on its own. Order: step 3 of the decision in `openspec/changes/consistency-harness/tasks.md` 8.2.
+  not measured on its own. Order: step 3 of the decision in `openspec/changes/archive/2026-11-21-consistency-harness/tasks.md` 8.2.
 - **F2b** (verified: red unit test; marker K4): `repropagate_window_tail` replaces the tail by a constant-velocity line
   from a finite difference, which lags under acceleration; the next window's fixed first pose comes from it (C32 is the
   rotation half). Measured on p = a t²/2 at 500 Hz, tail 15 / span 10: last node -0.750 mm at 1 m/s², next first pose

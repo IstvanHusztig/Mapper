@@ -1,5 +1,7 @@
 # Proposal
 
+> 2026-11-25: layer 2 of honest-inertial-carry (`imu_carry_joint_covariance`, the joint path named below) was removed from the code; only the plain path remains.
+
 ## Why
 
 The window loop hands each window's end velocity to the next window as the mean of its start-velocity prior. Between the

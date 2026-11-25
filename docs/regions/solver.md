@@ -124,7 +124,7 @@ window verdict. It knows no term's maths; it owns the order in which a window's 
   9-window blind stretch with a 0.10 m boundary error retained, switches off: -11 to -64 mm/s building over the 5
   windows after it (0.04-0.23 e/T, -0.7 to -1.7 claimed sigmas), no jump of e/T = 279 mm/s; the control itself ends
   45 mm/s (5 claimed sigmas) off with nothing injected, and every switches-on run was excluded (under 20 end-wall
-  matches). Order: step 6 of `openspec/changes/consistency-harness/tasks.md` 8.2 (design first; the time-offset run and
+  matches). Order: step 6 of `openspec/changes/archive/2026-11-21-consistency-harness/tasks.md` 8.2 (design first; the time-offset run and
   the window-length sensitivity with it).
 - **F6** (verified on the exact control; not a `should_fail` marker, by decision): the velocity chi-square divides the
   posterior-minus-prior move by P_prior where P_prior - P_post is its covariance; on the linear-Gaussian control it

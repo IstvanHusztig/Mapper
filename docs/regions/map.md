@@ -107,7 +107,7 @@ lidar-matching's.
   inverse covariance exceeds 1e5, which is not rotation-invariant: a plane thinner than 3.162 mm along its normal is
   dropped when axis-aligned, 2.238 mm when turned 45 deg. Pinned by `tests/unit_cases_ndt_test.cpp` "unit case K9 marker"
   (`doctest::should_fail`). The synthetic loops use 1 cm point jitter for this reason. Planned as step 7 of the
-  harness's order (`openspec/changes/consistency-harness/tasks.md` 8.2). Details: `lidar-matching.md`, `verification.md`.
+  harness's order (`openspec/changes/archive/2026-11-21-consistency-harness/tasks.md` 8.2). Details: `lidar-matching.md`, `verification.md`.
 - **C4** (verified). `run_odometry.cpp::add_window_to_map`: the rebuild above. On 44 it fires at window 586 (≈ 237 s),
   together with a −100° yaw correction and the gyro-bias estimate collapsing at 240–260 s; one rebuild on each of
   s0/s1/s2. Planned as F1.
@@ -151,7 +151,7 @@ None (2026-11-18): `update_rgd_legacy` was split in the stage 7 try-out (now 21 
 - **2026-11-13** Livox 2 window 754 (271.08 s): three high-occupancy outdoor-grid cells carry the far-range terms;
   omitting only those three: tilt 15.19 → 2.33°, end speed 0.89 → 0.36 m/s. Their insertion histories (windows
   623–633): no rejected viewpoint updates, thin geometry. Not a filter to ship (hard-coded cells).
-  `openspec/changes/ndt-information-probe/full-livox2-cell-attribution.md`, `full-livox2-w754-ablation.md`.
+  `openspec/changes/archive/2026-11-25-ndt-information-probe/full-livox2-cell-attribution.md`, `full-livox2-w754-ablation.md`.
 - **2026-11-10/12** `decimation` ±1 mm moves Livox 1 by 18.67 m before loop closure (18.46 m final); on the Livox 1
   sweep 0.029 m broke the run at both rotation-sigma scales tried (18.5 m, 24.3 m). `docs/agents/roadmap.md` (phase 0a);
   memory `fast-turn-fragility-state.md`.
@@ -161,7 +161,7 @@ None (2026-11-18): `update_rgd_legacy` was split in the stage 7 try-out (now 21 
   master's −4.31° (+1.26° paired); dose-response F1 0.12/0.32 +0.32, F3 0.08/0.21 +0.89, F4 indoor only +0.57, F5
   outdoor only +0.74. Full 44 s0–s5 with loop closure and consistency: façade −0.11 / 0.00° (fails the 2a rule), jitter
   p99 −1.03°, largest loop correction 0.76–1.21 m (master 1.06–3.00 m). Odometry-only full maps: façade −3.01 / −3.22°
-  against −4.18 / −4.45°. Parked without a verdict. `openspec/changes/odometry-map-model/design.md`.
+  against −4.18 / −4.45°. Parked without a verdict. `openspec/changes/archive/2026-11-25-odometry-map-model/design.md`.
 - **2026-10-16** Screening on the cuts: exact statistics (V3, C20 on top of C10) ran away on s0 and s2 from ≈ 45 s, no
   move on the gallery; 10 000 / 120 000 initial points (V4, C21) do not count. Same design.md.
 - **2026-10-16** Grazing points dropped (α > 70°): no move on 0.10 m cells (+0.08 ± 0.11°), +0.46 ± 0.12° on 0.15 m
@@ -211,6 +211,10 @@ None (2026-11-18): `update_rgd_legacy` was split in the stage 7 try-out (now 21 
   by point count, keeping the initial points.
 - A check before a window enters the map (M6).
 - An incidence-dependent cell covariance (G2) was never run; left for the cave retune (change I).
+- From `livox4-double-walls-cause` (closed 2026-11-25, its fixes shipped elsewhere): whether the odometry's map
+  horizon, the consistency pass (off for the Livox) or the gaps between visits still leave double walls on another
+  recording; its sections 4-6 and the physical check 3a.2b are the record
+  (`openspec/changes/archive/2026-11-25-livox4-double-walls-cause/`).
 
 ## See also
 

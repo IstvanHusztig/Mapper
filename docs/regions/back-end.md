@@ -202,15 +202,15 @@ From `python tools/function_sizes.py src --min 80` (2026-11-18):
 - **2026-11-13, full Livox 2, post-processing from a pinned snapshot:** loop closure moved the trajectory up to 10.47 m
   (5.36 m in z), 54 edges kept after 19 drops; the dense route grew 333.2 m → 408.6 (consistency pass 1) → 674.2 (pass 5)
   → 892.2 m (pass 10) while the stride-50 route stayed 331–338 m; largest position change over the 10 passes 0.331 m,
-  median 0.030 m. `openspec/changes/ndt-information-probe/full-livox2-postprocess-attribution.md`.
+  median 0.030 m. `openspec/changes/archive/2026-11-25-ndt-information-probe/full-livox2-postprocess-attribution.md`.
 - **2026-10-18, consistency gyro term on 44 s0/s1/s2:** gated windows 15/14/24 of 690 (gyro fault windows 629–639
   gated); jitter p50 0.91 → 0.49°, p99 4.44 → 1.40°; held-out wall thickness +1.31 → −1.40 mm against consistency off;
   façade and revisits within the spread; railing spread 3.0 → 4.1 cm; consistency time +10–20 %.
-  `openspec/changes/consistency-gyro-term/results.md`. The term was removed from the code 2026-11-25 (Ideas rejected).
+  `openspec/changes/archive/2026-11-25-consistency-gyro-term/results.md`. The term was removed from the code 2026-11-25 (Ideas rejected).
 - **2026-10-18, post-processing ablation from one 44 snapshot:** visit-pair difference p50/p90 odometry 4.5/12.9 cm,
   loop closure only 2.9/6.4, consistency only 4.7/13.2, both 3.0/6.1; consistency helps only pairs < 10 s apart
   (2.2 → 1.3 cm). Hold-out on 44_short: consistency +1.85 mm on never-fitted points, −2.5 mm on fitted ones.
-  `openspec/changes/map-precision-leaks/findings.md` F1, F2.
+  `openspec/changes/archive/2026-11-25-map-precision-leaks/findings.md` F1, F2.
 - **2026-10-15, G4 diagnosis:** of 411 kept same-floor edges (s0–s5) the weighted residual is p50 0.02, p95 0.07 (limit
   0.15); the start ↔ end edges into segments 112–114 (the fast spin at the end) disagree by 5–9° in yaw and stay under the
   limit; an offline yaw vote would remove one edge per input. `openspec/changes/archive/2026-10-15-loop-closure-fixes/design.md`.
@@ -221,11 +221,11 @@ From `python tools/function_sizes.py src --min 80` (2026-11-18):
 - **2026-10-14, path rule (G1, C22):** gallery out/back ≤ 0.24°, single walls 6 of 6. Same design.md.
 - **2026-10-11, information-weighted cross-floor edges:** stairwell floor −2/−1 on 44 s0/s1/s2 5.8/6.7/24.3 → 1.2/1.3/7.2 cm;
   per-edge sigmas: height free, horizontal 5–8 cm, turn and tilt 0.4–2.7°.
-  `openspec/changes/floor-alignment-diagnosis/findings.md` 1.5.
+  `openspec/changes/archive/2026-11-25-floor-alignment-diagnosis/findings.md` 1.5.
 - **2026-10-11, which cross-floor edges move the gallery:** 6-DoF edges at a round shaft impose its yaw (residuals 1–3°)
   and swing the gallery; keep-height fixed a 0.4–0.86 m vertical slip but not the gallery. Same findings.md 1.2–1.4.
 - **2026-10-10, odometry snapshot:** reprocessing bit-identical with full runs; 44_short 18 s vs 179 s, 44 178 s vs
-  1338 s. `openspec/changes/floor-alignment-diagnosis/tasks.md` 2.1–2.3.
+  1338 s. `openspec/changes/archive/2026-11-25-floor-alignment-diagnosis/tasks.md` 2.1–2.3.
 - **2026-10-09, loop-closure gating:** retrying candidates and dropping the worst edge removed the false edge 6 → 49
   (3.05/3.21 m); loops 23/21/21, largest correction 1.72/1.86/1.92 m. `openspec/changes/archive/2026-10-09-loop-closure-gating/`.
 - **2026-10-08, consistency speed-up:** 10 passes on 44 363.6 → 44.7 s, within 1e-10. `docs/PERFORMANCE.md` fix 11.
@@ -246,7 +246,7 @@ From `python tools/function_sizes.py src --min 80` (2026-11-18):
 - The gyro rotation term in consistency (`consistency_gyro_rotation_term`, `_sigma_scale`, `_gate_deg`; change
   `consistency-gyro-term`, off in every settings file): removed from the code 2026-11-25 on the user's decision ("remove
   it completely and if needed implement from scratch"); the three keys are retired settings (on is refused). The
-  measured results stay in `openspec/changes/consistency-gyro-term/results.md`. The hold-out mode of the same change
+  measured results stay in `openspec/changes/archive/2026-11-25-consistency-gyro-term/results.md`. The hold-out mode of the same change
   (`holdout_block_s`) stays.
 
 ## Open questions

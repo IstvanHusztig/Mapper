@@ -329,3 +329,38 @@ The chunk poses in `session_poses.mrp` and `.mri` SHALL be written with enough d
 #### Scenario: Far from the origin
 - **WHEN** a chunk pose has a translation of 1234.56789 m
 - **THEN** the value read back from the file equals the one written
+
+### Requirement: Hold-out evaluation mode
+With `holdout_block_s` > 0 (section `[evaluation]`, default 0 = off), the points whose timestamps fall into odd blocks
+of `holdout_block_s` seconds (block index = floor(t / holdout_block_s)) SHALL be left out of every map and every point
+term of the odometry, the loop closure and the consistency pass. They SHALL still be placed with the final trajectory
+and written to every output point cloud like all other points. The setting SHALL count as an odometry setting for
+reprocessing from a snapshot. With `holdout_block_s = 0`, every result SHALL be bit-identical to a run without this
+feature.
+
+#### Scenario: Held-out points are saved
+- **WHEN** a recording is processed with `holdout_block_s = 0.01`
+- **THEN** the merged point cloud contains the points of the odd 10 ms blocks, placed with the final trajectory, although no stage fitted them
+
+#### Scenario: Snapshot with another hold-out
+- **WHEN** a snapshot made with one `holdout_block_s` is reprocessed with another
+- **THEN** the reprocessing is refused as made with other odometry settings, and a snapshot made before the mode existed is still accepted with the mode off
+
+#### Scenario: Mode off
+- **WHEN** `holdout_block_s = 0`
+- **THEN** every output file equals the current baselines bit for bit (apart from the parameters file)
+
+### Requirement: Reprocessing from an odometry snapshot
+With `save_odometry_snapshot = true`, a run SHALL write, after the odometry and before the post-processing, a snapshot of everything the later stages read from the odometry: every window's poses, motion-model poses, timestamps, IMU angles and accelerations, gyro bias and velocity state, and the run state the post-processing and saving use. A reprocessing entry point SHALL take a recording folder, a parameters file, an output folder and a snapshot. It SHALL load the recording and cut its windows as a run does, restore the windows and run state from the snapshot instead of running the odometry, then run the post-processing (loop closure, consistency, each as enabled in the parameters) and save the result. Its result SHALL be bit-identical to a full run with the same recording and parameters. It SHALL refuse a snapshot whose recording (window count and window timestamps) or odometry settings differ from the given ones, with a message naming the difference. The setting SHALL default to false, and a run without it SHALL give results bit-identical to before.
+
+#### Scenario: Same result as a full run
+- **WHEN** a recording is processed with `save_odometry_snapshot = true`, and then reprocessed from that snapshot with the same parameters
+- **THEN** every output file except the parameters TOML and the date-stamped names is bit-identical to the full run's
+
+#### Scenario: Different loop-closure settings
+- **WHEN** a snapshot is reprocessed with different loop-closure settings
+- **THEN** the result equals a full run with those settings, without the odometry being run again
+
+#### Scenario: A snapshot from another recording or other odometry settings
+- **WHEN** the snapshot's window count, window timestamps or odometry settings differ from the given recording and parameters
+- **THEN** the reprocessing stops with a message naming what differs and writes no result

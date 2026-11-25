@@ -3,8 +3,8 @@
 ## 1. Decide and implement
 
 - [ ] 1.1 Settle the source of the acceleration over the gap (design decision 1); check the unused last-node sample in `accelerometer_term.cpp` and how the window's acceleration is stored (`imu_acc`, world frame, offset)
-- [ ] 1.2 Advance the prior mean in `prepare_velocity_state` (both the plain and the joint-covariance path), with the gap guard; at rest and without a carried velocity unchanged
-- [ ] 1.3 Remove `doctest::should_fail` from `unit case K3 marker`; add a case for the joint path and for a data gap
+- [ ] 1.2 Advance the prior mean in `prepare_velocity_state` (the start-velocity prior; the joint-covariance path was removed with layer 2 on 2026-11-25), with the gap guard; at rest and without a carried velocity unchanged
+- [ ] 1.3 Remove `doctest::should_fail` from `unit case K3 marker`; add a case for a data gap
 
 ## 2. Measure
 

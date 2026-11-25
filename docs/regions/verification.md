@@ -157,6 +157,8 @@ All of `tools/**`, the verify skills and the test helpers (`docs/regions/owners.
   on absolute times (`array_equal` intended).
 - `map_quality.py`, `evaluate_floors.py`, `facade_check.py` and `plan_fit.py`'s defaults are tied to recording 44 (its
   constants at the top of `map_quality_lib.py`).
+- `map_quality.py`'s revisit check registers all heights together: on 44 it missed a misplaced ground floor in the
+  gallery (s1 / s3). A check per floor was planned and not built (`map-quality-harness` 3.6, archived 2026-11-25).
 
 ## To split in the first job
 
@@ -317,7 +319,7 @@ Not applicable to the Python tools. The region's C++ (`tools/cut_recording/cut_r
   a wrong start-room fit (−2.18°); fixed, gallery − start room is −0.04° (old baseline) and −0.46° (new).
   `tools/README.md`, memory note `corridor-state.md`.
 - **2026-10-18, hold-out sharpness:** sharpness on all points rewarded consistency's overfitting (+1.85 mm on never-fitted
-  points). `openspec/changes/map-precision-leaks/findings.md` F2.
+  points). `openspec/changes/archive/2026-11-25-map-precision-leaks/findings.md` F2.
 - **2026-10-16, cut_recording:** a cut from 0 s drops about 3,900 points before the first IMU sample and shifts every
   window; a cut from −10 s reproduces the full run's trajectory. `tools/README.md`.
 - **2026-10-15, timing dependence:** under memory pressure one window took 10.02 s (limit 10 s) and the odometry diverged
