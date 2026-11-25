@@ -144,6 +144,17 @@ From `python tools/function_sizes.py src --min 80` (2026-11-18):
 
 ## Experiments
 
+- **2026-11-25, the settings hash pinned; `turn_rate_threshold_deg_s` retired at 30, no result changes**
+  (`check-register` 5.1, 5.2). `tests/odometry_snapshot_test.cpp` ("the settings hash of the defaults and of the
+  shipped settings files is pinned") holds `odometry_settings_hash` of `OdometryConfig{}`, `settings/l2-vertical.toml`
+  and `settings/livox-vertical.toml` as literals (0x1ad4c1d5688ff94a, 0xf86ccbfcd39e2f17, 0x6342caaee7fafd53, computed on
+  cd2ce5d); on a mismatch it prints the new value and says that every snapshot, window capture and loop closure capture
+  made with those settings is refused from then on. A literal moves only together with the change that explains it (a
+  shipped setting's value, or a decision that older snapshots and captures are refused); a new setting off by default
+  goes into `added_later` and a removed one into `removed_hashed`, and then all three hold. Tried: a dummy setting in
+  `TomlIO::POINTERS` without `added_later` fails all three (reverted). `turn_rate_threshold_deg_s` in `RETIRED_KEYS`
+  accepts only 30 (the value `removed_hashed` counts), so a file the loader takes never fails later against its own
+  snapshot or capture; 45 is refused naming 30.
 - **2026-11-25, fine-time placement of a blind stretch, built, off by default** (`loop_closure_fine_time_placement`,
   `loop_closure_fine_time_min_sigma_m` 1.0; needs the readings rule; change `loop-closure-fine-time-guard`; frozen rule
   `experiments/consistency/livox4_lever/fine_time/RULE.md`, prototype `tools/loop_fine_time.py`). A last step of

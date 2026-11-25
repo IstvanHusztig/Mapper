@@ -94,7 +94,10 @@ window verdict. It knows no term's maths; it owns the order in which a window's 
 - **Replays:** `python tools/run_replay.py <capture> <settings>`; it prints how many windows stopped at the time limit
   (above 0: the result depended on the machine's load, run it again). `python tools/step_checks.py` for "changes no number".
 - **Readings that are this region's:**
-  - the verdict: `window verdict summary` lines (every run), `window verdict <n>:` per flagged window
+  - the verdict: since 2026-11-25 (`check-register` 4.1) a `window verdict limits: bend 3 deg, severe bend 10 deg,
+    speed 2.5 m/s, gyro bias 0.5 deg/s, bent share 0.01, chi2 median 5, chi2 p95 20, weak ratio 0.45` line first (every
+    run, replay and cancelled run; the `VerdictLimits` it was judged with, shortest round-trip form, so a tool reads them
+    back exactly; another prefix than the summary's), then the `window verdict summary` lines, `window verdict <n>:` per flagged window
     (`log_window_verdict`), the verdict columns of `window_features.csv` (`log_window_terms`): stop cause, iterations,
     damping, rejected steps, steps not applied, big-jump nodes, remaining step.
   - per-term table: the `total` row (remaining step: near 0 when the terms balance, large when the damping froze the
