@@ -115,10 +115,13 @@ verdict.
 - [x] 4.1 The stall case from dMapper (the result of 3.5): the list of design D12.1 beside `readings_run/full_both_fixes`,
       the edge table, verify-map, the before / after images of the stair on every storey. Done when
       `fine_time/results_dmapper.md` holds the table and the image paths.
-- [ ] 4.2 Today's Livox 4: one full run with `settings/livox-vertical.toml`, `save_odometry_snapshot` and
+- [x] 4.2 Today's Livox 4: one full run with `settings/livox-vertical.toml`, `save_odometry_snapshot` and
       `capture_loop_closure` (guard off; about 35 min, background), verify-run; then `--from-snapshot` with the guard on.
       Done when the same list beside the guard-off result is in the results file, with the eligible runs and what the
       guard did with each.
+      (2026-11-25: `fine_time/results_dmapper.md` section 3. One eligible run, windows 481-496, sigma 1.46 m, applied;
+      largest move 0.30 m at 179.8 s; map checks equal; dMapper equals the prototype; verify-run: bends, speed, bias
+      CLEAR, velocity-jump chi-square TRIGGER as on the earlier Livox runs; 0 windows at the time limit.)
 - [ ] 4.3 Livox 3: the same two runs with the shipped file. Done when the eligible runs, the largest position difference
       to its baseline (`tools/trajectory_seams.py`) and the before / after images are in the results file.
 - [ ] 4.4 Switch off: `tools/end_runs.py` (full 44, Livox 3, 44_short against their manifests; about 50 min, background).
@@ -131,16 +134,21 @@ verdict.
 
 ## 5. Close
 
-- [ ] 5.1 The guide, by the `sonetd` agent (the user, 2026-11-25: after the apply, document this with sonetd in the
+- [x] 5.1 The guide, by the `sonetd` agent (the user, 2026-11-25: after the apply, document this with sonetd in the
       dMapper guide). Once groups 1-4 are done, start `sonetd` in the background with: this change's `design.md` and
       `specs/`, the hand-backs, the results files, and the guide's rules (`CLAUDE.md`, Documentation: English only, terms
       defined once in Fundamentals, no names of this workstation's recordings in the guide's text). It writes the step,
       the two settings, the edge classes and the `not timed` report into `docs/index.html` (loop closure and settings; a
       new term in Fundamentals if one is needed) and runs `python tools/build_docs_index.py`. Done when
       `python tools/build_docs_index.py --check` holds and the orchestrator has read the agent's text against the code.
-- [ ] 5.2 `docs/code-review-tracker.md` (C25: what this step covers and what it leaves); the open follow-ups written
+      (2026-11-25: done. New term `#t-weak-run`; loop closure step 5; two settings rows; the replay row and a
+      `loop_fine_time.py` row. Read against `loop_fine_time.cpp` / `loop_closure.cpp`: statuses, the contradicted rule,
+      the held-out condition and the refusal without readings match; "unconfirmed" reworded to the code's rule
+      (informed share below one half). `--check` holds.)
+- [x] 5.2 `docs/code-review-tracker.md` (C25: what this step covers and what it leaves); the open follow-ups written
       into `docs/regions/back-end.md` (edges read at their time support inside the graph, two runs with different axes, the
       target side's time support). Done when both files name them.
+      (2026-11-25: both written in d015829; back-end.md "Fine-time placement, limits and follow-ups".)
 - [ ] 5.3 The new recording (task 4.4 of `loop-closure-weak-runs-and-match-check`): the guard runs unchanged beside the two
       rules; its table goes to the user with that task's numbers. Done when that task's report includes it.
 - [ ] 5.4 Archive this change; task 4.3a of `loop-closure-weak-runs-and-match-check` points here.
