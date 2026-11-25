@@ -122,10 +122,17 @@ verdict.
       (2026-11-25: `fine_time/results_dmapper.md` section 3. One eligible run, windows 481-496, sigma 1.46 m, applied;
       largest move 0.30 m at 179.8 s; map checks equal; dMapper equals the prototype; verify-run: bends, speed, bias
       CLEAR, velocity-jump chi-square TRIGGER as on the earlier Livox runs; 0 windows at the time limit.)
-- [ ] 4.3 Livox 3: the same two runs with the shipped file. Done when the eligible runs, the largest position difference
+- [x] 4.3 Livox 3: the same two runs with the shipped file. Done when the eligible runs, the largest position difference
       to its baseline (`tools/trajectory_seams.py`) and the before / after images are in the results file.
-- [ ] 4.4 Switch off: `tools/end_runs.py` (full 44, Livox 3, 44_short against their manifests; about 50 min, background).
+      (2026-11-25: `fine_time/results_dmapper.md` section 4. Quiet run, 0 windows at the time limit; 0.000 m from the
+      stored baseline with and without the guard. One eligible run, windows 585-601, sigma 2.13 m: not applied, edge
+      91 => 100 contradicted the profile (and 55 -> 98); 91 => 100 is at -0.625 m against its limit 0.363 m without any
+      profile. dMapper equals the prototype; replay bit for bit; step 3.3 s. Picture `livox3_stretch.png`, both panels the
+      same.)
+- [x] 4.4 Switch off: `tools/end_runs.py` (full 44, Livox 3, 44_short against their manifests; about 50 min, background).
       Done when all three are IDENTICAL.
+      (2026-11-25, at d015829: every result file identical; the parameters TOML differed in all three (the two new
+      settings), so the manifests took its new hash in their own commit, bd3ee31; then IDENTICAL 35 / 35 / 11 files.)
 - [ ] 4.5 The conclusion reviewer on the results; numbers and maps to the user. Stop for the user's decision: on in
       `settings/livox-vertical.toml`, off, or wait for the new recording.
 - [ ] 4.6 Only on the user's decision to ship: the setting in `settings/livox-vertical.toml`, new manifests, in their own
