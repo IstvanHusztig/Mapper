@@ -848,6 +848,7 @@ TEST_CASE("loop fine time replay: a capture made with the step on replays bit fo
     MESSAGE("close_loops: ", loops, " loops, fine time: ", report.fine_time.runs[0].status, " (", report.fine_time.runs[0].cause, "), largest offset ",
             report.fine_time.runs[0].largest_offset_m, " m, ", report.fine_time.edges.size(), " edges read, ", report.fine_time.seconds, " s");
     CHECK(contains(logger.infos, "loop closure fine time: run windows 13-27"));
+    CHECK(contains(logger.infos, "loop closure fine time: step ")); // its own wall time
     REQUIRE(report.fine_time.runs[0].status == "applied"); // the replay below must reproduce a move, not only the graph
 
     LoopClosureCapture capture;

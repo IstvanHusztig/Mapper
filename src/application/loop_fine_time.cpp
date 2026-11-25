@@ -818,6 +818,7 @@ bool loop_fine_time_step(std::vector<Window> &windows, const std::vector<std::ve
     if (eligible.empty())
     {
         report.seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - clock_start).count();
+        log_info(logger) << "loop closure fine time: step " << std::fixed << std::setprecision(1) << report.seconds << " s";
         return true;
     }
 
@@ -1125,5 +1126,6 @@ bool loop_fine_time_step(std::vector<Window> &windows, const std::vector<std::ve
             line << " (it contradicted the run's profile and stopped it; read here without that profile)";
     }
     report.seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - clock_start).count();
+    log_info(logger) << "loop closure fine time: step " << std::fixed << std::setprecision(1) << report.seconds << " s";
     return true;
 }
