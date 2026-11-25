@@ -42,6 +42,7 @@
   .meta { color: var(--muted); font-size: 13.5px; }
   .on { color: var(--ok); font-weight: 600; }
   .off { color: var(--warn); font-weight: 600; }
+  .test { color: var(--accent, #6b4fbb); font-weight: 600; }
   .no { color: var(--bad); font-weight: 600; }
   .sug { color: var(--muted); font-style: italic; }
   tr.rej td { background: var(--bad-soft); }
@@ -93,7 +94,6 @@ literature the repo does not cite; nothing in it was used.</p>
 
 <tr><td>2026-10-01</td><td>Automatic loop closure (00b8962)</td><td>Segments of 12 windows, revisits ≥ 30 s apart registered (voxel search, then point-to-distribution), pose graph over segments, interpolated to nodes.</td><td>Claude (Opus); standard practice (pose graph). HDMapping's <code>core</code> had pose-graph loop-closure files; whether any was reused is not recorded.</td><td><span class="on">on</span> in both files (reworked below).</td><td class="sug">Kümmerle et al., "g2o", ICRA 2011.</td></tr>
 
-<tr><td>2026-10-01</td><td>Turn gyro weighting (<code>rotation_sigma_inflation_k_turn</code>)</td><td>Trusts the gyro more in fast turns.</td><td>Claude (Opus).</td><td><span class="off">off</span> by default.</td><td></td></tr>
 
 
 <tr><td>2026-10-03 – 11-18</td><td>Settings tuned on the recordings</td><td>Values, no new method: 2026-10-03: <code>max_prior_velocity_mps</code>; 2026-10-16: Finer NDT cells V5 (<code>odometry-map-model</code>); 2026-10-26/27: Sensor-neutral settings; provisional Livox file (<code>sensor-neutral-settings</code>); 2026-11-12 – 11-16: Huber 3, NDT information scale 0.1, IMU-position scale 0.1 (<code>ndt-information-probe</code>, run G); 2026-11-18: Livox measured gyro noise (<code>livox-measured-gyro-noise</code>); 2026-11-18: Acceleration-offset random walk 0.01.</td><td>The author's decisions on the maps; measured with Claude.</td><td>In <code>l2-vertical.toml</code> / <code>livox-vertical.toml</code>.</td><td></td></tr>
@@ -125,7 +125,7 @@ literature the repo does not cite; nothing in it was used.</p>
 
 
 
-<tr><td>2026-10-18</td><td>Gyro rotation term in consistency, hold-out mode (<code>consistency-gyro-term</code>)</td><td>Gyro term between consecutive nodes in the consistency pass.</td><td>Claude (Opus), from <code>map-precision-leaks</code> F2.</td><td><span class="off">built, off</span>; waits for the user.</td><td></td></tr>
+<tr><td>2026-10-18</td><td>Gyro rotation term in consistency, hold-out mode (<code>consistency-gyro-term</code>)</td><td>Gyro term between consecutive nodes in the consistency pass.</td><td>Claude (Opus), from <code>map-precision-leaks</code> F2.</td><td><span class="off">built, off</span>; kept (the user, 2026-11-25), <span class="test">to test</span>.</td><td></td></tr>
 
 
 
@@ -139,7 +139,7 @@ literature the repo does not cite; nothing in it was used.</p>
 <tr><td>2026-11-18/19</td><td>Gyro scale (<code>gyro-scale-correction</code>)</td><td><code>gyro_scale_x/y/z</code> applied to the raw gyro; z 1.004 for the Livox.</td><td>Claude (Fable / Opus), stage 8 (yaw read about 0.4 % low).</td><td><span class="on">z 1.004</span> in livox-vertical since 11-24; default 1.</td><td></td></tr>
 
 
-<tr><td>2026-11-19 – 11-24</td><td>Honest inertial carry, layer 1 (<code>imu_edges_follow_state</code>); layer 2</td><td>The motion edges' position measurement follows the start velocity and offset; layer 2 carries the joint velocity-offset covariance.</td><td>Claude (Fable design, Opus), stage 8, region agents; the consistency harness.</td><td>layer 1 <span class="on">on</span> in livox-vertical (07c0ae4); layer 2 <span class="off">off</span>; L2 not tested.</td><td></td></tr>
+<tr><td>2026-11-19 – 11-24</td><td>Honest inertial carry, layer 1 (<code>imu_edges_follow_state</code>); layer 2</td><td>The motion edges' position measurement follows the start velocity and offset; layer 2 carries the joint velocity-offset covariance.</td><td>Claude (Fable design, Opus), stage 8, region agents; the consistency harness.</td><td>layer 1 <span class="on">on</span> in livox-vertical (07c0ae4); layer 2 <span class="off">off</span>, <span class="test">to test</span> whether it is needed (the user, 2026-11-25); L2 not tested.</td><td></td></tr>
 
 
 <tr><td>2026-11-24</td><td>Blind-stretch rule and match check (<code>loop-closure-weak-runs-and-match-check</code>)</td><td>Pose-graph odometry steps loosened along a weak run's axis from the windows' readings; each kept edge tested by its held-out innovation against chi-square 99.9 %.</td><td>Claude (Fable design, Opus runs), prototyped in <code>tools/loop_graph.py</code> ("Step A"); Codex's analyses (<code>doubles</code>, <code>loop_pruning</code>, <code>loop_closure_research_review</code>); standard practice (chi-square gating).</td><td><span class="on">on</span> in livox-vertical (d6e8860); <span class="off">off</span> by default and in L2.</td><td></td></tr>
@@ -149,6 +149,15 @@ literature the repo does not cite; nothing in it was used.</p>
 
 <tr><td>2026-10-01 – 11-25</td><td>Verification kit (summary)</td><td>Golden baselines and <code>compare_baseline.py</code>; synthetic tests (scan-to-map, loop closure, consistency); odometry snapshot; window and loop-closure capture and replay; per-term table, window verdict, honesty readings; truth routes R1–R3 and fixtures F-a…F-e, K8; <code>wall_pairs.py</code>, <code>map_quality.py</code>, <code>trajectory_seams.py</code>, plan overlays; step checks and end runs.</td><td>Claude (Opus, Sonnet, Fable), the region agents, Codex reviews of the tools; the user's pass rules.</td><td>tooling; no result change.</td><td></td></tr>
 </table></div>
+
+<h2 id="to-test">To test</h2>
+<p>Features the user marked while going through this list (2026-11-25): kept in the code, to be tested before a
+decision.</p>
+<ul>
+<li><b>Gyro rotation term in consistency</b> (<code>consistency_gyro_rotation_term</code>, off): measured on one recording
+only; test where consistency runs, and with a sensor whose gyro is sound.</li>
+<li><b>Honest inertial carry, layer 2</b> (<code>imu_carry_joint_covariance</code>, off): whether it is needed beside layer 1.</li>
+</ul>
 
 <h2 id="contradictions">Where the record disagrees with itself</h2>
 <ul>
