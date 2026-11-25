@@ -35,6 +35,7 @@ Drafts, research notes and task texts; each says how current it is.
 
 - [Sensor-neutral retune (draft)](sensor-neutral-retune-plan.md): Draft of 2026-11-10: findings and direction for settings grounded in the sensor; its current status is in agents/roadmap.md.
 - [Loop closure research](loop-closure-research.html): Loop closure in dMapper: diagnosis, and how other systems do it. *From the parameters ([loop_closure]).*
+- [Provenance of the changes](provenance.html): Every change that can move the trajectory or the cloud, in date order: where the idea came from (HDMapping, a paper, standard practice, Claude, Codex, the user) and what evidence says it helped, with the rejected ones.
 - [Machine-learning learning guide](ml-research-roadmap.html): Modules M1-M9 to work through before any machine-learning work on dMapper.
 - [dLidar time alignment (task text)](dlidar-timestamp-fix-prompt.md): Historical task text for the recorder (dLidar): the LiDAR-IMU time alignment of L2 recordings. The recorder is outside dMapper's scope.
 
