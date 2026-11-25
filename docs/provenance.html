@@ -65,7 +65,7 @@ knowledge files, the code-review tracker and the commit messages. Written 2026-1
 edges and cross-floor edges, consistency pass (10 passes), <code>max_prior_velocity_mps</code> 5, AHRS gain 0.05.</li>
 <li><b><code>settings/livox-vertical.toml</code></b> (Livox Mid-360S): the same base, plus measured gyro noise (k 1),
 Huber 3 with NDT and IMU-position information scales 0.1, exact NDT cell statistics, degenerate projection 0.02/0.04,
-offset random walk 0.01, AHRS gain 0, gyro scale z 1.004, the corrected lever arm, <code>imu_edges_follow_state</code>,
+offset random walk 0.01, AHRS gain 0, gyro scale z 1.004, <code>imu_edges_follow_state</code>,
 the blind-stretch rule, the match check and the fine-time placement (since 2026-11-25, 89e8047); consistency off.</li>
 <li><b>Still HDMapping's in today's code:</b> the NDT point term and its cell map (<code>update_rgd</code>, the
 bucket statistics used by default), the motion-model edges with the generated
@@ -112,14 +112,13 @@ literature the repo does not cite; nothing in it was used.</p>
 <tr><td>2026-10-09</td><td>Loop-closure gating (<code>loop-closure-gating</code>)</td><td>Tries up to 3 earlier segments; drops the worst loop edge while its residual exceeds 0.15 m / 2°.</td><td>The user's look at a ghost wall; Claude (Opus); standard practice (residual gating).</td><td><span class="on">on</span> in both files.</td><td></td></tr>
 
 
-<tr><td>2026-10-11</td><td>Cross-floor loop edges weighted by information (<code>robust-loop-closure</code>, <code>information-weighted-loop-edges</code>)</td><td>Loop edges between floors, weighted by the registration's NDT information with height marginalized; angle wrap fixed in the pose-graph solve.</td><td>Claude (Opus), from measured stairwell railings (<code>floor-alignment-diagnosis</code>).</td><td><span class="on">on</span> in both files (6 m vertical).</td><td></td></tr>
+<tr><td>2026-10-11</td><td>Cross-floor loop edges weighted by information (<code>robust-loop-closure</code>, <code>information-weighted-loop-edges</code>)</td><td>Loop edges between floors, weighted by the registration's NDT information with height marginalized.</td><td>Claude (Opus), from measured stairwell railings (<code>floor-alignment-diagnosis</code>).</td><td><span class="on">on</span> in both files (6 m vertical).</td><td></td></tr>
 
 
 
 
 
 
-<tr><td>2026-10-14/15</td><td>Loop-closure fixes G1, G2a, G2b, G3b, 2.4 s segments (<code>loop-closure-fixes</code>)</td><td>Revisits by walked path (8 m, ratio 0.5) instead of a 30 s gap; leave-one-out drop order; near/far tries and slots; edges weighted by registration information; segments of 6 windows.</td><td>Code review C22–C25; survey <a href="loop-closure-research.html">loop-closure-research.html</a>: path rule as in LIO-SAM, SC-PGO, hdl_graph_slam, LAMP 2.0 (arXiv:2205.13135), GLIM, KISS-SLAM (arXiv:2503.12660); information weights as MULLS (arXiv:2102.03771), GLIM, HBA (arXiv:2209.11939). Claude (Opus), Sonnet reviews.</td><td><span class="on">on</span> in both files (user, 2026-10-15). G3a <span class="no">removed</span>; 4.8 s segments rejected (twisted the gallery 2.4°).</td><td></td></tr>
 
 
 
@@ -147,7 +146,6 @@ literature the repo does not cite; nothing in it was used.</p>
 
 <tr><td>2026-11-25</td><td>Fine-time placement of a blind stretch (<code>loop-closure-fine-time-guard</code>)</td><td>After the node correction, places a weak run (sigma ≥ 1 m) in time along its axis from surfaces other visits saw; a contradicted edge stops it.</td><td>Codex ("road B", <code>ghost_wall_review/codex/</code>, frozen prototype); the user chose it 2026-11-24; built by Claude (Fable / Opus) with the back-end region agent.</td><td><span class="on">on</span> in livox-vertical (89e8047, "the user's decision on the Livox 4 maps"); <span class="off">off</span> by default and in L2.</td><td></td></tr>
 
-<tr><td>planned</td><td>Start velocity over the gap (F2a); tail re-propagation with acceleration (F2b)</td><td>Two inertial fixes from the harness markers K3, K4.</td><td>Consistency harness; order decided by the user 2026-11-21.</td><td><span class="off">not started</span>.</td><td></td></tr>
 
 <tr><td>2026-10-01 – 11-25</td><td>Verification kit (summary)</td><td>Golden baselines and <code>compare_baseline.py</code>; synthetic tests (scan-to-map, loop closure, consistency); odometry snapshot; window and loop-closure capture and replay; per-term table, window verdict, honesty readings; truth routes R1–R3 and fixtures F-a…F-e, K8; <code>wall_pairs.py</code>, <code>map_quality.py</code>, <code>trajectory_seams.py</code>, plan overlays; step checks and end runs.</td><td>Claude (Opus, Sonnet, Fable), the region agents, Codex reviews of the tools; the user's pass rules.</td><td>tooling; no result change.</td><td></td></tr>
 </table></div>
