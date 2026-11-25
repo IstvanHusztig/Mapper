@@ -123,7 +123,8 @@ from `raw data/43/static`, also in the Livox file); `rotation_sigma_floor_deg` 0
 - **F8** (reported by the audit of 2026-11-20, `experiments/consistency/research.md`; not measured by the harness): the
   accelerometer noise is modelled white only and the offset (random walk 0.01 in the candidate set) is a fast state; the
   handed-on 4.5 mm/s velocity sigma is set by the 0.1 m/s² floor; with layer 2, 78 % of the offset estimate's variance
-  mirrors the velocity move and jitters gravity by 0.024 m/s² per window (Livox 3). A model limit.
+  mirrors the velocity move and jitters gravity by 0.024 m/s² per window (Livox 3). A model limit. (Layer 2 removed
+  2026-11-25.)
 - Fixed: **C5** (the rotation prior × Cauchy 1/π, D4 519b3e8, sigmas ×√π: k 4 → 7.0898, floor ×√π); the tracker still
   says "verified".
 
@@ -175,7 +176,8 @@ None: no function of this region is above 80 lines (`python tools/function_sizes
   `joint_prior*` in `WindowNoiseModel`, helpers `joint_prior_cov` and `joint_prior_cov_over_gap` (transition
   F = [[I, -gap I], [0, I]], then today's growth). An offset-only chain of 15 gaps gives the coherent velocity sigma
   (sigma x N x gap); off: step checks identical. Open: should the offset's random walk during the gap feed the velocity
-  block too (today it grows over the next window's duration only)?
+  block too (today it grows over the next window's duration only)? Removed 2026-11-25 (the user), with layer 2: the fields
+  and both helpers are gone.
 - **2026-11-18** Livox gyro weight (stage 8, change `livox-measured-gyro-noise`): the gyro's measured noise (ARW 0.0094 /
   0.0224 / 0.0144 °/√s, k 1, floor 0.0002°) in place of the L2's values with k 7.09. Full Livox 4: windows bent > 3°
   96 → 0, largest speed 8.5 → 1.62 m/s, end height −78 → −0.7 m, largest bias estimate 5.1 → 0.58 °/s; Livox 3:
