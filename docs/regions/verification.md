@@ -24,7 +24,7 @@ captures and the replays' table files (`*_window_terms.csv`, `*_window_features.
   once, from `end_runs.py`.
 - `run_replay.py`: the replay's summary, its cost, and how many windows stopped at the time limit (above 0: the result
   depended on the machine's load, run again). Exit code: the replay's.
-- Readings with coverage under the agreed contract (`openspec/changes/sensor-neutral-yardstick/criteria-proposal.md`,
+- Readings with coverage under the agreed contract (`openspec/changes/archive/2026-11-25-sensor-neutral-yardstick/criteria-proposal.md`,
   user, 2026-11-12): missing evidence is NOT MEASURED, never PASS; diagnostic triggers are not map verdicts; an
   improvement is resolved only when max(candidate) < min(reference) over the same perturbation family, overlap is
   inconclusive (not "equal"); geometry, revisits and sharpness are never averaged into one score; odometry and final
@@ -308,7 +308,7 @@ Not applicable to the Python tools. The region's C++ (`tools/cut_recording/cut_r
   reader on a Livox 2 snapshot (273,060 nodes, 1517 windows) matched the logged window starts within 0.0005 m; a Codex
   review found missing-window, cancellation, empty-accelerometer and frozen-denominator defects, all corrected with tests.
   No real seven-member sweep had run through the new orchestrator then.
-  `openspec/changes/sensor-neutral-yardstick/tool-validation.md`.
+  `openspec/changes/archive/2026-11-25-sensor-neutral-yardstick/tool-validation.md`.
 - **2026-11-12, recording checks:** `imu_health.py` on Livox 1 and 44_short: exit 0 with WARN (handheld rest gives noise
   upper bounds); Livox 1 501 Hz, 6.5 s initial quiet span, gravity 1.0006 g. `sensor-neutral-yardstick/evidence.md`.
 - **2026-11-10, sensor checks:** `imu_health.py` found the L2's false gyro offsets (11–32 °/s for 2.5–4 s) on 46, before,
@@ -360,7 +360,7 @@ Not applicable to the Python tools. The region's C++ (`tools/cut_recording/cut_r
 
 - [Regions](README.md)
 - [tools/README.md](../../tools/README.md)
-- [The agreed evaluation contract](../../openspec/changes/sensor-neutral-yardstick/criteria-proposal.md)
+- [The agreed evaluation contract](../../openspec/changes/archive/2026-11-25-sensor-neutral-yardstick/criteria-proposal.md)
 - [Code-review tracker](../code-review-tracker.md)
 - [Code-split plan](../code-split-and-region-agents-plan.md) (stage 7: the kit)
 - [All documents](../README.md)

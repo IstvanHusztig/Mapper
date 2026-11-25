@@ -58,7 +58,7 @@ The four verification skills are `$verify-recording`, `$verify-run`,
 `$verify-map`, and `$verify-robustness`. New recording -> recording check;
 result -> run check -> map check; candidate ranking -> robustness/noise floor.
 Their evaluation contract was agreed on 2026-11-12; read
-`openspec/changes/sensor-neutral-yardstick/criteria-proposal.md`. Legacy tool
+`openspec/changes/archive/2026-11-25-sensor-neutral-yardstick/criteria-proposal.md`. Legacy tool
 defaults are not automatically compliant with that contract.
 
 After changing verification skills, update both agent copies and run

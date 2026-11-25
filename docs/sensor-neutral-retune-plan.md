@@ -4,7 +4,7 @@
 > [dMapper docs](README.md) › Plans and research · [All documents](README.md) · [User guide](index.html)
 
 Current evaluation rules: the user agreed on 2026-11-12 to
-[the OpenSpec evaluation contract](../openspec/changes/sensor-neutral-yardstick/criteria-proposal.md).
+[the OpenSpec evaluation contract](../openspec/changes/archive/2026-11-25-sensor-neutral-yardstick/criteria-proposal.md).
 It supersedes the draft numerical limits and verdict rules below. Preserve the
 older readings as historical evidence, not current acceptance decisions. Current
 phase0a inputs are Livox/2 0–60 s, whole Livox/1 and 44_short; the mid-walk cut

@@ -7,7 +7,7 @@ description: Judge the point cloud of a dMapper result - wall thickness, agreeme
 
 ## Agreed evaluation rules (2026-11-12)
 
-Read `openspec/changes/sensor-neutral-yardstick/criteria-proposal.md` before any
+Read `openspec/changes/archive/2026-11-25-sensor-neutral-yardstick/criteria-proposal.md` before any
 verdict. The user agreed this contract; it supersedes legacy tool defaults.
 Report missing evidence as NOT MEASURED. Diagnostic triggers are not map-accuracy
 verdicts. Overlapping empirical envelopes are inconclusive, not proof of equality

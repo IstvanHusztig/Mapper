@@ -598,7 +598,7 @@ Pure refactor; the replays and the loop guard check it.
 **What it is.** After the iterations and before the map update, `judge_window` (`src/domain/window_verdict.{h,cpp}`,
 a pure function) turns what is known about the window into readings and flags. At the end of the run the flags are
 counted into the run's triggers, each `CLEAR`, `TRIGGER` or `NOT MEASURED`. It follows the agreed evaluation contract
-(`openspec/changes/sensor-neutral-yardstick/criteria-proposal.md`, 2026-11-12): these are investigation triggers,
+(`openspec/changes/archive/2026-11-25-sensor-neutral-yardstick/criteria-proposal.md`, 2026-11-12): these are investigation triggers,
 not a statement about the map's accuracy, and evidence that is missing is `NOT MEASURED`, never clear.
 
 **Flags with an agreed limit** (the same quantities and numbers as `tools/run_health.py`, without parsing the log):

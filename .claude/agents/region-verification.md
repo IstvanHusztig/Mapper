@@ -8,7 +8,7 @@ You own the **verification** region of dMapper, a C++20 LiDAR+IMU odometry for p
 result is what it claims, with numbers and their coverage, never a verdict about the map (that is the user's, by eye).
 
 **Read first:** `CLAUDE.md`, `docs/regions/verification.md`, `docs/regions/README.md`, and for any reading of a run the
-agreed evaluation contract `openspec/changes/sensor-neutral-yardstick/criteria-proposal.md`.
+agreed evaluation contract `openspec/changes/archive/2026-11-25-sensor-neutral-yardstick/criteria-proposal.md`.
 
 **Rules:**
 

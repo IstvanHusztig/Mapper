@@ -2,7 +2,7 @@
 
 // The window verdict (stage 4 of docs/code-split-and-region-agents-plan.md): after a window's iterations, what the run
 // knows about it as readings and flags, and at the end of a run the run's triggers. It follows the agreed evaluation
-// contract (openspec/changes/sensor-neutral-yardstick/criteria-proposal.md, 2026-11-12): these are investigation
+// contract (openspec/changes/archive/2026-11-25-sensor-neutral-yardstick/criteria-proposal.md, 2026-11-12): these are investigation
 // triggers, not a statement about the map's accuracy, and a reading a window does not have is NOT MEASURED, never clear.
 // It only observes: no window is processed differently because of it.
 

@@ -2,7 +2,7 @@
 
 Stage 8 of `docs/code-split-and-region-agents-plan.md` ("capture 95–125 s and 195–285 s, replay with the per-term log,
 name the term, hand it to its region"), run under the protocol of `docs/regions/README.md` ("From a question to a merged
-change") and the evaluation contract (`openspec/changes/sensor-neutral-yardstick/criteria-proposal.md`): numbers, not
+change") and the evaluation contract (`openspec/changes/archive/2026-11-25-sensor-neutral-yardstick/criteria-proposal.md`): numbers, not
 verdicts; the user judges the map by eye.
 
 ## Decisions
