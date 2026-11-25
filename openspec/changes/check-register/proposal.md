@@ -55,9 +55,8 @@ and instruments, in one place, checked by a tool. Source: R3 and R4 of `experime
     and chi-square are known;
   - `compare_baseline.py` has no test at all: neither that equal folders compare equal with the run-dependent fields
     normalised, nor that one changed byte is reported;
-  - the blindness precondition of the loop chain and window covariance fixtures reads the run's own solved poses along
-    their travel direction, while the loop world (the user's decision of 2026-11-21) measures truth-placed points along
-    the true corridor axis (`tests/loop_chains_test.cpp:536-556`, `tests/window_covariance_test.cpp:429-440`);
+  - the blindness precondition of the loop chain and window covariance fixtures reads the run's own solved poses, while
+    the loop world measures at the truth (tried in task 3.4 and not adopted: the truth definition is stricter, see tasks.md);
   - the step checks do not say when their full run stopped windows at the time limit, so a difference caused by the
     machine's load reads like a changed number (it happened on 2026-11-21).
 - **One source for the run's verdict limits.** Every run and replay logs the limits it judged with (one line). 

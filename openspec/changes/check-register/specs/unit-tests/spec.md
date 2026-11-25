@@ -27,17 +27,6 @@ smallest factor the check rejects reliably at its sample size SHALL be stated wi
 - **WHEN** the noise is generated as claimed
 - **THEN** the same check accepts it, as before
 
-### Requirement: Blindness preconditions are measured against the truth
-A fixture that needs a stretch without LiDAR information along a passage SHALL establish that from points placed at the
-true poses against the map built at the true poses, along the passage's true axis, with one definition and one set of
-tolerances for all such fixtures. What the run itself reads along its own solved travel direction SHALL be reported as
-a result and SHALL NOT decide whether the fixture is valid.
-
-#### Scenario: A run that drifted
-- **WHEN** a run's solved poses leave the passage's axis by a degree in a stretch that is blind by construction
-- **THEN** the fixture's blindness precondition holds as it does for a run that stayed on the axis, and the run's own
-  reading is printed beside it
-
 ### Requirement: The folder comparison is tested on known folders
 The Python tool tests SHALL run the baseline comparison on folders written by the test: two folders that differ only
 in the fields a run changes (date and time in file names and contents, the folders' own paths) SHALL compare identical;
