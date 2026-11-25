@@ -133,8 +133,11 @@ verdict.
       Done when all three are IDENTICAL.
       (2026-11-25, at d015829: every result file identical; the parameters TOML differed in all three (the two new
       settings), so the manifests took its new hash in their own commit, bd3ee31; then IDENTICAL 35 / 35 / 11 files.)
-- [ ] 4.5 The conclusion reviewer on the results; numbers and maps to the user. Stop for the user's decision: on in
+- [x] 4.5 The conclusion reviewer on the results; numbers and maps to the user. Stop for the user's decision: on in
       `settings/livox-vertical.toml`, off, or wait for the new recording.
+      (2026-11-25: reviewed; corrections taken into the report: positions identical to the mm (not bit for bit) on
+      Livox 3; on the stall case two other ghost bands change too; equality with the prototype checks the port, not the
+      rule. Numbers and maps given to the user; the decision is the user's. Suggested: off until the user's look.)
 - [ ] 4.6 Only on the user's decision to ship: the setting in `settings/livox-vertical.toml`, new manifests, in their own
       commit, after the user's look at the before / after maps. Done when `tools/end_runs.py` is IDENTICAL against the new
       manifests.
