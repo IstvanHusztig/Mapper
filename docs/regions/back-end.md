@@ -282,7 +282,7 @@ From `python tools/function_sizes.py src --min 80` (2026-11-18):
   - The reference shares the map's errors and the held-out patches are not independent of the fit; repeating structure
     can give a wrong but smooth profile. A run's axis is the mean of weak axes up to 30 degrees apart.
   - Not built: a truth case on the synthetic route R2 (the prototype's corridor stands in). A Debug test run of the loop
-    closure and fine-time cases is advised by the agent (new index and label vectors) and waits for the user's OK.
+    closure and fine-time cases, advised by the agent, was declined by the user (2026-11-25).
   - The edge table in the log and the JSON is the last round's of the apply rule (`stopped_run` marks an edge that stopped
     a run).
   - Master-reviewer on the push a7cb653..89e8047 (2026-11-25), no defect, four design points to test:
