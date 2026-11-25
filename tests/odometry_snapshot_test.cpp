@@ -226,7 +226,7 @@ TEST_CASE("odometry snapshot: the settings hash of the defaults and of the shipp
     // computed on cd2ce5d (2026-11-25, openspec change check-register)
     pin("the built-in defaults", odometry_settings_hash(OdometryConfig{}), 0x1ad4c1d5688ff94aull);
     pin("settings/l2-vertical.toml", file_hash("l2-vertical.toml"), 0xf86ccbfcd39e2f17ull);
-    pin("settings/livox-vertical.toml", file_hash("livox-vertical.toml"), 0x6342caaee7fafd53ull);
+    pin("settings/livox-vertical.toml", file_hash("livox-vertical.toml"), 0xf0a7bd2da34ca441ull);
 }
 
 TEST_CASE("odometry snapshot: a file that isn't a snapshot is refused")

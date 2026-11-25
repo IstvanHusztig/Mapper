@@ -29,8 +29,9 @@ holdout_block_s = 0.0
 # TODO: check for 200k pts/s (about 3x the L2)
 decimation = 0.03
 filter_threshold_xy_inner = 0.35
-# Mid-360S: 40 m at 10 % reflectivity; points without a return come as (0, 0, 0) and are dropped by the inner filter
-filter_threshold_xy_outer = 40.0
+# Mid-360S: range 100 m (40 m was the L2's limit, kept by mistake until 2026-11-25; the user); points without a return
+# come as (0, 0, 0) and are dropped by the inner filter
+filter_threshold_xy_outer = 100.0
 min_counter_concatenated_trajectory_nodes = 0
 # also write scan_lio_merged.laz: all chunks in one file, world coordinates
 export_merged_laz = true
@@ -139,8 +140,8 @@ resolution_Y = 0.4
 resolution_Z = 0.4
 
 [lidar_odometry_control]
-# the sensor's range at 10 % reflectivity, as filter_threshold_xy_outer. TODO: compare with 25 on the first recording
-max_distance_lidar = 40.0
+# the sensor's range, as filter_threshold_xy_outer (100 m since 2026-11-25; 40 m was the L2's)
+max_distance_lidar = 100.0
 min_distance_lidar = 0.15
 min_distance_lidar_outdoor_grid = 1.0
 nr_iter = 100
