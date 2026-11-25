@@ -848,6 +848,7 @@ TEST_CASE("loop fine time replay: a capture made with the step on replays bit fo
     MESSAGE("close_loops: ", loops, " loops, fine time: ", report.fine_time.runs[0].status, " (", report.fine_time.runs[0].cause, "), largest offset ",
             report.fine_time.runs[0].largest_offset_m, " m, ", report.fine_time.edges.size(), " edges read, ", report.fine_time.seconds, " s");
     CHECK(contains(logger.infos, "loop closure fine time: run windows 13-27"));
+    REQUIRE(report.fine_time.runs[0].status == "applied"); // the replay below must reproduce a move, not only the graph
 
     LoopClosureCapture capture;
     capture.windows = c.odometry;
@@ -927,6 +928,26 @@ TEST_CASE("loop fine time replay: a capture made with the step on replays bit fo
     CHECK(switched_off.report.outcome == "applied");
     CHECK(!switched_off.report.fine_time.ran);
     CHECK(same_bits(without.windows, switched_off.windows));
+    CHECK(!same_bits(own.windows, switched_off.windows)); // the step moved nodes, and the replay reproduces that move
+
+    // captured curves that don't fit what the run's sigma gives: refused as unavailable, never applied
+    const auto refused_with = [&](const std::function<void(LoopFineTimeCurves &)> &damage, const std::string &cause)
+    {
+        LoopClosureCapture bad = capture;
+        damage(bad.fine_time->curves[0]);
+        QuietLogger bad_logger;
+        const LoopClosureReplayResult r = replay_loop_closure(bad, c.config, bad_logger);
+        CHECK_MESSAGE(r.report.outcome == "fine_time_curves_unavailable", cause);
+        CHECK(same_bits(r.windows, capture.windows));
+        CHECK_MESSAGE(contains(bad_logger.errors, cause), cause);
+    };
+    refused_with([](LoopFineTimeCurves &x) { x.grid[1] += 1e-15; }, "another offset grid");
+    refused_with([](LoopFineTimeCurves &x) { x.bound_m = std::nextafter(x.bound_m, 100.0); }, "another offset grid");
+    refused_with([](LoopFineTimeCurves &x) { x.grid.pop_back(); }, "another offset grid");
+    refused_with([](LoopFineTimeCurves &x) { x.windows[3].training.pop_back(); }, "of another length than the grid");
+    refused_with([](LoopFineTimeCurves &x) { x.windows[3].training_matched.clear(); }, "of another length than the grid");
+    refused_with([](LoopFineTimeCurves &x) { x.windows[5].held_out.push_back(0.0); }, "of another length than the grid");
+    refused_with([](LoopFineTimeCurves &x) { x.windows.pop_back(); }, "don't cover its support");
 
     // a capture without curves (an older format, or made with the step off) and the step on: refused
     LoopClosureCapture older = capture;
@@ -985,6 +1006,12 @@ TEST_CASE("loop fine time capture file: format 4 keeps the curves bit for bit; f
     curves.windows = {a, b};
     f.curves = {curves};
     capture.fine_time = f;
+    CapturedLoopTry tried; // one try with a block per window of its 6-window source segment
+    tried.registration.i = 0;
+    tried.registration.j = 2;
+    tried.registration.registered = true;
+    tried.registration.window_information.assign(6, Eigen::Matrix3d::Identity());
+    capture.tries = {tried};
 
     const auto file = std::filesystem::temp_directory_path() / "lidar_odometry_tests_loop_fine_time_format.bin";
     std::string why;
@@ -1042,5 +1069,90 @@ TEST_CASE("loop fine time capture file: format 4 keeps the curves bit for bit; f
     REQUIRE(read_loop_closure_capture(file, back, settings, why));
     CHECK(!back.fine_time.has_value());
     CHECK(back.windows.size() == capture.windows.size());
+
+    // damaged counts are a damaged file (refused, nothing thrown): offsets from the fine-time flag at the end of the format 3 part
+    const size_t flag = short_bytes.size();
+    const size_t S = capture.segments.size();
+    const size_t grid_count = flag + 1 + (8 + S * 128) + (8 + 93) + 8 + 4 + 4 + 8;
+    const size_t windows_count = grid_count + 8 + 3 * 8 + 4;
+    const size_t try_blocks = flag - 6 * 72 - 8;
+    const auto damaged = [&](size_t at, std::uint64_t count, const char *what)
+    {
+        std::string d = bytes;
+        std::memcpy(&d[at], &count, sizeof(count));
+        {
+            std::ofstream out(file, std::ios::binary | std::ios::trunc);
+            out.write(d.data(), static_cast<std::streamsize>(d.size()));
+        }
+        LoopClosureCapture r;
+        bool read = true;
+        CHECK_NOTHROW(read = read_loop_closure_capture(file, r, settings, why));
+        CHECK_MESSAGE(!read, what);
+        MESSAGE(what, ": ", why);
+    };
+    {
+        std::uint64_t stored = 0;
+        std::memcpy(&stored, &bytes[windows_count], sizeof(stored));
+        REQUIRE(stored == 2); // the offsets are right
+        std::memcpy(&stored, &bytes[grid_count], sizeof(stored));
+        REQUIRE(stored == 3);
+        std::memcpy(&stored, &bytes[try_blocks], sizeof(stored));
+        REQUIRE(stored == 6);
+    }
+    damaged(windows_count, 50000000ULL, "a curve's window count of 5e7");
+    damaged(windows_count, capture.windows.size() + 1, "more curve windows than the capture has");
+    damaged(grid_count, 1000000000ULL, "a grid of 1e9 offsets");
+    damaged(grid_count, 200, "a grid longer than the rule makes");
+    damaged(try_blocks, 7, "7 blocks for a 6-window segment");
+    damaged(try_blocks, 50000000ULL, "5e7 blocks of a try");
     std::filesystem::remove(file);
+}
+
+TEST_CASE("loop fine time replay: a pose graph result with another number of segment poses is another one, also with none")
+{
+    LoopFineTimeCapture captured;
+    captured.segment_poses = {Eigen::Affine3d::Identity(), Eigen::Affine3d::Identity()};
+    CapturedFineTimeScores scores(&captured);
+    const std::vector<Window> windows;
+    const std::vector<std::vector<Eigen::Affine3d>> odometry;
+    const std::vector<LoopFineTimeRun> eligible; // the same (none) in both
+    for (const size_t n : {size_t(0), size_t(1), size_t(3)})
+    {
+        const std::vector<Eigen::Affine3d> poses(n, Eigen::Affine3d::Identity());
+        std::vector<LoopFineTimeCurves> out;
+        std::string why;
+        CHECK_MESSAGE(!scores.curves({windows, odometry, poses, eligible}, out, why), n, " poses");
+        CHECK(why.find("another pose graph result") != std::string::npos);
+    }
+    const std::vector<Eigen::Affine3d> same(2, Eigen::Affine3d::Identity());
+    std::vector<LoopFineTimeCurves> out;
+    std::string why;
+    CHECK(scores.curves({windows, odometry, same, eligible}, out, why));
+}
+
+TEST_CASE("loop fine time edges: a source window is blind in any eligible run's support, and every window of a run without scores is")
+{
+    // run A (13-27, support 7-33) is scored; runs B (40-46, support 34-52) and C (55-60, support 49-66) overlap, so neither
+    // has scores and every window of their supports is blind. The edge's source segment 5 (windows 30-35) spans A's support
+    // (30-33) and B's (34, 35); its information along x lies in windows 34 and 35 only.
+    Corridor c;
+    build_corridor(c, {3.0, 6.5, 9.0, 13.0, 17.0}, nullptr, bump, {{13, 27}, {40, 46}, {55, 60}});
+    REQUIRE(c.runs.size() == 3);
+    for (const LoopOdometryRun &r : c.runs)
+        REQUIRE(r.sigma_m >= 1.0);
+    const ConstructedEdge edge = constructed_edge(c, 12, 5, Eigen::Affine3d::Identity(), {34, 35});
+    std::vector<Window> windows = c.corrected;
+    const LoopFineTimeReport report = step(c, windows, {edge.edge}, {&edge.registration});
+    REQUIRE(report.runs.size() == 3);
+    CHECK(report.runs[0].scored);
+    CHECK(report.runs[1].cause == "supports overlap");
+    CHECK(report.runs[2].cause == "supports overlap");
+    const LoopFineTimeEdgeRow *along_a = nullptr;
+    for (const LoopFineTimeEdgeRow &row : report.edges)
+        if (row.run == 0)
+            along_a = &row;
+    REQUIRE(along_a);
+    MESSAGE("edge 12 -> 5 along run A: informed ", along_a->informed_share, ", ", std::string(fine_time_edge_class_name(along_a->cls)));
+    CHECK(along_a->informed_share == 0.0); // windows 34 and 35 are blind (run B has no scores), the others carry nothing
+    CHECK(along_a->cls == FineTimeEdgeClass::unconfirmed);
 }
