@@ -1,4 +1,5 @@
 #include "toml_io.h"
+#include <charconv>
 #include <iostream>
 #include <optional>
 #include <sstream>
@@ -164,7 +165,9 @@ namespace
         {"rgd_sf_sigma_ka_deg", std::nullopt},
         // 2026-11-25: the turn gyro weighting (off in every settings file, never measured to help)
         {"rotation_sigma_inflation_k_turn", 0.0},
-        {"turn_rate_threshold_deg_s", std::nullopt},
+        // only tuned the removed weighting, but odometry_settings_hash still counts it at 30 (removed_hashed in
+        // odometry_snapshot_file.cpp): another value would load and then refuse every snapshot and capture made with it
+        {"turn_rate_threshold_deg_s", 30.0},
         // 2026-11-25: layer 2 of honest-inertial-carry, the joint velocity-offset carry (tested worse on the Livox 4 stall
         // replays, the user's decision), and the window sigma meant for it (never read by the code)
         {"imu_carry_joint_covariance", 0.0},
@@ -178,6 +181,14 @@ namespace
         {"loop_closure_kernel_scale", 0.0}};
     // sections whose every key was retired
     const std::set<std::string> RETIRED_SECTIONS = {"robust_lidar_odometry"};
+
+    // the shortest text that reads back as the same double (30, not 30.000000)
+    std::string shortest_text(double value)
+    {
+        char text[32];
+        const auto end = std::to_chars(text, text + sizeof(text), value).ptr;
+        return std::string(text, end);
+    }
 
     // a retired key: true if handled (an error or an ignored entry added), false if `name` is not retired
     bool check_retired(const std::string &name, const toml::node &v, const std::string &section, std::vector<std::string> &errors,
@@ -198,7 +209,7 @@ namespace
         }
         else
             errors.push_back("'" + name + "' in [" + section + "]: setting removed from dMapper; only " +
-                             (*it->second == 0.0 ? std::string("false / 0") : std::to_string(*it->second)) +
+                             (*it->second == 0.0 ? std::string("false / 0") : shortest_text(*it->second)) +
                              " (the behaviour that remains) is accepted");
         return true;
     }
