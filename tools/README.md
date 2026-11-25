@@ -414,7 +414,11 @@ not come through the gate.
 
 ```
 python tools/run_replay.py <capture.bin> <settings.toml> [--log <file>] [--label <text>]
+python tools/run_replay.py <loop_closure_capture.bin> <settings.toml> --out <folder> [--reject-tries i-j,...]
 ```
+
+With `--out` the capture is a loop closure capture: the gate runs `dMapper --replay-loop-closure` into that folder (a few
+seconds and about 0.1 GB on a Livox capture) and prints its summary line in the same way.
 
 Starts a replay when the workstation has room for it, and reports what it cost. A replay's peak memory is about three
 times its capture file (0.2 GB for the 44_short capture, 1.6 GB and 5.5 cores for the Livox 3 one), and several jobs

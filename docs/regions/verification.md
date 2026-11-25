@@ -354,7 +354,7 @@ Not applicable to the Python tools. The region's C++ (`tools/cut_recording/cut_r
 - The two reviewer findings in `wall_precision.py` and `holdout_sharpness.py` (above) are unfixed.
 - A general map-quality report without recording 44's constants (planned feature `map-quality-report`, tracker
   preamble); no absolute cave-wall limit is agreed until there is cave data.
-- `run_replay.py` gates only `--replay`. A `--from-snapshot` run (the back-end's reprocessing) counts as a full run and
+- `run_replay.py` gates `--replay` and, with `--out`, `--replay-loop-closure` (2026-11-25). A `--from-snapshot` run (the back-end's reprocessing) counts as a full run and
   is started by the orchestrator; a gated command for it is to be added with the back-end's first job.
 - Whether the trace tools of the Livox 4 investigation are still needed, or can go once its evidence is archived.
 

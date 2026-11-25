@@ -1,6 +1,9 @@
-"""Runs a window-capture replay through the gate, and reports what it cost.
+"""Runs a window-capture or loop closure replay through the gate, and reports what it cost.
 
     python tools/run_replay.py <capture.bin> <settings.toml> [--log <file>] [--label <text>]
+    python tools/run_replay.py <loop_closure_capture.bin> <settings.toml> --out <folder> [--reject-tries i-j,...]
+
+With --out the capture is a loop closure capture and the replay is `dMapper --replay-loop-closure` into that folder.
 
 Several jobs share the workstation (the region agents' worktrees, the step checks, a full run), and a replay costs
 memory (about three times its capture file) and most cores. Every replay is started through this command: it waits
@@ -25,6 +28,8 @@ def main():
     ap.add_argument("settings", help="settings TOML of the replay")
     ap.add_argument("--log", help="file for the replay's output")
     ap.add_argument("--label", help="name of the job in the gate's messages (default: worktree and settings name)")
+    ap.add_argument("--out", help="loop closure replay: the output folder (the capture is a loop closure capture)")
+    ap.add_argument("--reject-tries", help="loop closure replay: tries counted as rejected, i-j[,i-j...]")
     args = ap.parse_args()
     capture, settings = Path(args.capture).resolve(), Path(args.settings).resolve()
     for f in (capture, settings):
@@ -34,7 +39,14 @@ def main():
         sys.exit(f"no build in this worktree: {kit.BIN / 'dMapper.exe'}")
     log = Path(args.log) if args.log else settings.with_name(settings.stem + "_replay.log")
     label = args.label or f"{kit.WORKTREE}:{settings.stem}"
-    cost = kit.gated_replay(kit.load_paths(), capture, settings, log, label)
+    if args.reject_tries and not args.out:
+        sys.exit("--reject-tries needs --out (a loop closure replay)")
+    loop_out, extra = None, []
+    if args.out:
+        loop_out = Path(args.out).resolve()
+        loop_out.mkdir(parents=True, exist_ok=True)
+        extra = ["--reject-tries", args.reject_tries] if args.reject_tries else []
+    cost = kit.gated_replay(kit.load_paths(), capture, settings, log, label, loop_out=loop_out, extra=extra)
     for line in cost["summary"]:
         print("replay:", line)
     limit = cost["time_limit"]

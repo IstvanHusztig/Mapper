@@ -27,15 +27,6 @@ of returns frozen beforehand:
 - **WHEN** a trajectory with other node times is given
 - **THEN** the tool refuses it with the reason
 
-### Requirement: Short Livox reference dataset
-The repository's baselines SHALL include a short Livox dataset: a cut of a Livox recording that contains revisits and
-accepted loop closures, with its manifest under `tools/baseline/` and a run in `tools/end_runs.py`. Its comparison SHALL
-follow the rules of the other manifests (bit-identical for a change that alters no number).
-
-#### Scenario: A refactor is checked on Livox in minutes
-- **WHEN** `tools/end_runs.py` runs after a change that alters no number
-- **THEN** the short Livox dataset is run and reported IDENTICAL against its manifest
-
 ### Requirement: A run's check reports its timing and the time-limit count
 Every run SHALL log the duration of each stage and the number of windows whose iterations stopped at the time limit.
 `tools/run_health.py` SHALL report both; a count of zero SHALL be reported as "result independent of the machine's load",

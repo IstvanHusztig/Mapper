@@ -1,5 +1,7 @@
 # Tasks
 
+> **Closed 2026-11-25 (housekeeping; the user: "all as suggested"). The short Livox dataset (3.1-3.2) and the parallel-run measurement on it (4.3) are dropped, and its requirement removed from the spec delta. 1.6 done (run_replay.py gates loop closure replays with --out; checked on the Livox 3 capture: 126,360 of 126,360 nodes identical). 5.1: step checks and end runs ran on master after each merge today; 5.2 (capturing the double-walls odometries) is obsolete with that change closed; 5.3 docs: CLAUDE.md, tools/README.md and the knowledge files describe the tools.**
+
 ## 1. Loop closure capture and replay (back-end region, its branch and worktree)
 
 - [x] 1.1 Split `run_loop_closure` at the registrations: a first part that makes the try records, a second part that consumes them (choice of tries and edges, weighting, pose graph, pruning, correction of the nodes); no result changes; unit tests and 44_short bit-identical
@@ -7,7 +9,7 @@
 - [x] 1.3 `dMapper --replay-loop-closure <capture> <params.toml> <output_folder>`: the second part on the records; trajectory files, loop log, a JSON of the edges used and pruned; bit for bit with the capture's own settings, exit non-zero otherwise; missing tries named; settings that change segments or registrations refused by name
 - [x] 1.4 Option to record all qualifying tries up to a cap, for replays with stricter rules
 - [x] 1.5 Tests on the synthetic loop recording (capture, replay with own settings, a stricter acceptance, a missing try, a refused setting); the cases that take long as `doctest::skip` like the other loop closure cases
-- [ ] 1.6 `tools/run_replay.py` gates loop closure replays as well; `tools/step_checks.py` unchanged in time
+- [x] 1.6 `tools/run_replay.py` gates loop closure replays as well; `tools/step_checks.py` unchanged in time
 
 ## 2. Wall pairs from poses (tools, pure Python)
 

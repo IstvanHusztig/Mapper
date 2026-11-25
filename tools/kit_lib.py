@@ -261,12 +261,16 @@ def time_limit_windows(log_text):
     return None
 
 
-def gated_replay(paths, capture, settings, log_path, label, say=print):
-    """A replay through the gate. Returns the cost of run_dmapper plus the replay's summary lines and time-limit count."""
+def gated_replay(paths, capture, settings, log_path, label, say=print, loop_out=None, extra=()):
+    """A replay through the gate. Returns the cost of run_dmapper plus the replay's summary lines and time-limit count.
+    loop_out: a loop closure capture, replayed with --replay-loop-closure into that folder (extra: its further options)."""
     gate = Gate(paths, say)
     lock = gate.acquire("replay", label, gate.need_bytes(capture))
     try:
-        cost = run_dmapper(["--replay", capture, settings], log_path)
+        if loop_out is not None:
+            cost = run_dmapper(["--replay-loop-closure", capture, settings, loop_out, *extra], log_path)
+        else:
+            cost = run_dmapper(["--replay", capture, settings], log_path)
     finally:
         gate.release(lock)
     text = Path(log_path).read_text(errors="replace")
