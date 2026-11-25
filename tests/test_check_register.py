@@ -238,7 +238,8 @@ class ReaderTest(unittest.TestCase):
             "tests/u_test.cpp": 'TEST_CASE("u") { shared(0.5); local_only(0.5); }\n',
         }
         reg = self.build(files)
-        self.assertEqual(self.case(reg, "u").lines, [("call", "shared(0.5)")])
+        # local_only is no helper in this file's neighbour; its call holds a literal, so it is a number line (D11)
+        self.assertEqual(self.case(reg, "u").lines, [("call", "shared(0.5)"), ("number", "local_only(0.5)")])
 
     def test_values_outside_bodies_members_and_tables(self):
         reg = self.build({A: BASE})
@@ -263,10 +264,11 @@ class ReaderTest(unittest.TestCase):
         values = [t for k, t in self.file_block(reg, A).lines if k == "value"]
         self.assertIn("generate() :: const double sigma = 0.02", values)
 
-    def test_a_non_const_local_with_a_literal_is_a_value_and_a_plain_assignment_is_not(self):
+    def test_a_non_const_local_with_a_literal_is_a_value_and_a_plain_assignment_with_one_is_a_number_line(self):
         src = 'TEST_CASE("n") { double x = 0.5; double y = x; x = 2.0; list.at = 3; for (const auto &v : list) { CHECK(v < x); } }\n'
         reg = self.build({A: src})
-        self.assertEqual(self.case(reg, "n").lines, [("value", "double x = 0.5"), ("assert", "CHECK(v < x)")])
+        self.assertEqual(self.case(reg, "n").lines, [("value", "double x = 0.5"), ("number", "x = 2.0"), ("number", "list.at = 3"),
+                                                      ("assert", "CHECK(v < x)")])
 
     def test_if_zero_is_removed_like_a_comment_and_its_else_stays(self):
         src = 'TEST_CASE("z")\n{\n#if 0\n    CHECK(false);\n#else\n    CHECK(true);\n#endif\n    CHECK(1);\n}\n'
@@ -943,7 +945,7 @@ class HolesTest(unittest.TestCase):
     def test_a_lambda_that_does_not_assert_is_no_helper_and_a_plain_auto_lambda_that_does_is(self):
         src = 'void h(int x) { CHECK(x); }\nauto via = [](int x) { h(x); };\nauto sq = [](int x) { return x * x; };\nTEST_CASE("t") { via(1); sq(2); }\n'
         reg = self.build({A: src})
-        self.assertEqual([b for b in reg.blocks if b.name == "t"][0].lines, [("call", "via(1)")])
+        self.assertEqual([b for b in reg.blocks if b.name == "t"][0].lines, [("call", "via(1)"), ("number", "sq(2)")])
 
     # -- 3: any difference in an assertion's text is a change
 
@@ -1124,12 +1126,423 @@ class HolesTest(unittest.TestCase):
         self.trial([(H, "    CHECK(a < b);", "    CHECK(  a\n   <   b ); // now with a comment")], expect=0)
 
 
+R2 = "tests/r2_test.cpp"
+R2H = "tests/r2.h"
+R2O = "tests/other_test.cpp"
+R2P = "tests/test_r2.py"
+R2C = "tests/CMakeLists.txt"
+
+R2_H = '''#pragma once
+struct Gate
+{
+    void must_hold(bool b) const { CHECK(b); }
+};
+'''
+
+R2_CPP = r'''#include "doctest.h"
+#include "r2.h"
+
+namespace
+{
+    enum class Mode { matched = 1, noise_free };
+    struct Config { double max_distance = 0.0; double ratio = 0.0; };
+    struct Corridor
+    {
+        void must_hold(bool b) const { CHECK(b); }
+    };
+
+    Config build_corridor(Config c)
+    {
+        c.max_distance = 40.0;
+        CHECK(c.max_distance > 0.0);
+        return c;
+    }
+
+    bool rests_at_tilt(double tilt, int axis, double threshold = 0.3)
+    {
+        return window_rests(tilt, axis, 1.0, threshold, 3.0 * DEG_TO_RAD);
+    }
+
+    double envelope(double ramp, double tau)
+    {
+        return 0.5 * ramp + (tau - ramp);
+    }
+
+    void run(const Flags &f = kFlags, int n = -1) { CHECK(n < 3); }
+
+    void leg(double length)
+    {
+        if (length < 0.5 || stopped())
+            throw 1;
+        CHECK(length > 0.0);
+    }
+}
+
+TEST_CASE("r2 numbers")
+{
+    auto base = [&](double scale = 1.5) {
+        Config c;
+        c.ratio = 0.2;
+        return c;
+    };
+    const Config c = base();
+    CHECK(c.ratio > 0.0);
+    CHECK(build_corridor(c).max_distance > 1.0);
+    CHECK(rests_at_tilt(1.0, 1));
+    CHECK(envelope(1.0, 2.0) > 0.0);
+    leg(2.0);
+    run();
+    Gate g;
+    g.must_hold(true);
+    Corridor{}.must_hold(true);
+    std::vector<double> v;
+    v.at(2);
+    for (int i = 0; i < 3; ++i)
+    {
+        CHECK(i < 4);
+    }
+    switch (c.mode)
+    {
+    case 3:
+        break;
+    default:
+        break;
+    }
+}
+'''
+
+R2_OTHER = 'TEST_CASE("r2 other") { CHECK(1 < 2); }\n'
+
+R2_CMAKE = '''add_executable(lidar_odometry_tests
+  main.cpp
+  r2_test.cpp   # the cases
+  other_test.cpp)
+'''
+
+R2_PY = '''import unittest
+import numpy as np
+
+import patcher
+
+LIMIT = 0.5
+
+
+def corridor(jambs=(3.0, 6.5), error=None):
+    g = np.arange(0.0, 2.4, 0.06)
+    return g
+
+
+class Graph(unittest.TestCase):
+    ns = 1
+
+    def moved(self, name, shift_after=None, ns_offset=0):
+        return ns_offset
+
+    def shifted(self, pos):
+        pos[self.ns >= 30.0, 1] += 1
+
+    def test_a(self):
+        q = rng.uniform(-20, 20, (5000, 3))
+        for y0 in (-1.0, 0.4):
+            self.assertLess(y0, 1)
+        with self.assertRaises(KeyError):
+            graph.build(chain, [(0, 4, False)])
+        chk = lambda v: self.assertTrue(v)
+        chk(True)
+        self.assertEqual(1, 1)
+
+    def test_b(self):
+        self.assertTrue(True)
+'''
+
+ROUND2_FILES = {R2: R2_CPP, R2H: R2_H, R2O: R2_OTHER, R2C: R2_CMAKE, R2P: R2_PY}
+
+
+class RoundTwoTest(unittest.TestCase):
+    """The second round of holes (design D11): every edit that weakened a test and still read IDENTICAL is a CHANGE."""
+
+    trial = HolesTest.trial
+    each = HolesTest.each
+    build = HolesTest.build
+
+    def trial_r2(self, edits, expect=1, kinds=()):
+        return self.trial(edits, expect, kinds, files=ROUND2_FILES)
+
+    def trial_r2_raw(self, edits):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_tree(root, ROUND2_FILES)
+            write_tree(root, {cr.REGISTER_PATH: register_text(root)})
+            for rel, old, new in edits:
+                text = (root / rel).read_text(encoding="utf-8")
+                self.assertIn(old, text)
+                write_tree(root, {rel: text.replace(old, new, 1)})
+            return run_main(root)
+
+    def each_r2(self, cases, expect=1):
+        for label, edits, kinds in cases:
+            with self.subTest(label):
+                self.trial_r2(edits, expect, kinds)
+
+    # -- 1 number lines
+
+    def test_the_reviewers_literal_edits_in_cpp_are_changes(self):
+        self.each_r2([
+            ("assignment in a helper", [(R2, "c.max_distance = 40.0;", "c.max_distance = 4.0;")], ("CHANGE number changed",)),
+            ("argument of a non-asserting call", [(R2, "3.0 * DEG_TO_RAD", "30.0 * DEG_TO_RAD")], ("CHANGE number changed",)),
+            ("assignment in a named lambda that does not assert", [(R2, "c.ratio = 0.2;", "c.ratio = 0.9;")], ("CHANGE number changed", "[base]")),
+            ("expression of a fixture", [(R2, "0.5 * ramp", "0.0 * ramp")], ("CHANGE number changed",)),
+            ("condition of an if", [(R2, "if (length < 0.5 ||", "if (length < 50.0 ||")], ("CHANGE number changed",)),
+            ("a call of a helper", [(R2, "    leg(2.0);", "    leg(20.0);")], ("CHANGE call changed",)),
+            ("an expression statement", [(R2, "    v.at(2);", "    v.at(9);")], ("CHANGE number changed",)),
+            ("case label", [(R2, "    case 3:", "    case 4:")], ("CHANGE number changed",)),
+            ("increment of a for", [(R2, "i < 3; ++i", "i < 3; i += 2")], ("CHANGE loop changed",)),
+        ])
+
+    def test_number_lines_have_the_function_the_lambda_and_the_statement_text(self):
+        reg = self.build(ROUND2_FILES)
+        fb = [b for b in reg.blocks if b.file == R2 and b.name is None][0].lines
+        self.assertIn(("number", "build_corridor() :: c.max_distance = 40.0"), fb)
+        self.assertIn(("number", "rests_at_tilt() :: return window_rests(tilt, axis, 1.0, threshold, 3.0 * DEG_TO_RAD)"), fb)
+        self.assertIn(("number", "envelope() :: return 0.5 * ramp + (tau - ramp)"), fb)
+        self.assertIn(("number", "leg() :: if (length < 0.5 || stopped())"), fb)
+        case = [b for b in reg.blocks if b.name == "r2 numbers"][0].lines
+        self.assertIn(("number", "[base] c.ratio = 0.2"), case)
+        self.assertIn(("number", "case 3"), case)
+        self.assertNotIn(("number", "CHECK(c.ratio > 0.0)"), case)         # an assertion is recorded as one, not twice
+
+    def test_a_statement_already_recorded_is_not_a_number_line_too(self):
+        reg = self.build({A: 'TEST_CASE("t") { double x = 0.5; CHECK(x < 2.0); for (int i = 0; i < 3; ++i) { CHECK(i < 4); } }\n'})
+        kinds = [k for k, _ in [b for b in reg.blocks if b.name == "t"][0].lines]
+        self.assertEqual(kinds, ["value", "assert", "loop", "assert"])
+
+    # -- 2 default arguments
+
+    def test_default_arguments_are_part_of_the_function(self):
+        reg = self.build(ROUND2_FILES)
+        fb = [b for b in reg.blocks if b.file == R2 and b.name is None][0].lines
+        self.assertIn(("default", "rests_at_tilt() :: defaults of (double tilt, int axis, double threshold = 0.3)"), fb)
+        self.assertIn(("default", "run() :: defaults of (const Flags &f = kFlags, int n = -1)"), fb)
+        case = [b for b in reg.blocks if b.name == "r2 numbers"][0].lines
+        self.assertIn(("default", "lambda base defaults of (double scale = 1.5)"), case)
+        self.each_r2([
+            ("number default", [(R2, "double threshold = 0.3)", "double threshold = 0.5)")], ("CHANGE default changed",)),
+            ("identifier default", [(R2, "const Flags &f = kFlags", "const Flags &f = kOther")], ("CHANGE default changed",)),
+            ("lambda default", [(R2, "double scale = 1.5", "double scale = 2.5")], ("CHANGE default changed",)),
+            ("default removed", [(R2, "int n = -1) {", "int n) {")], ("CHANGE default changed",)),
+        ])
+
+    def test_defaults_of_declarations_and_of_python_functions_and_lambdas(self):
+        decl = {A: "void f(double x = 0.5);\nTEST_CASE(\"t\") { CHECK(1); }\n"}
+        self.trial([(A, "double x = 0.5", "double x = 0.9")], 1, ("CHANGE default changed",), files=decl)
+        self.each_r2([
+            ("python function default", [(R2P, "jambs=(3.0, 6.5)", "jambs=(3.0,)")], ("CHANGE default changed",)),
+            ("python method default", [(R2P, "ns_offset=0)", "ns_offset=5)")], ("CHANGE default changed",)),
+        ])
+
+    # -- 3 Python parity
+
+    def test_python_statements_with_numbers_are_lines(self):
+        reg = self.build(ROUND2_FILES)
+        a = [b for b in reg.blocks if b.name == "Graph.test_a"][0].lines
+        self.assertIn(("number", "q = rng.uniform(-20, 20, (5000, 3))"), a)
+        self.assertIn(("loop", "for y0 in (-1.0, 0.4)"), a)
+        fb = [b for b in reg.blocks if b.file == R2P and b.name is None][0].lines
+        self.assertIn(("number", "corridor() :: g = np.arange(0.0, 2.4, 0.06)"), fb)
+        self.assertIn(("number", "Graph.shifted() :: pos[self.ns >= 30.0, 1] += 1"), fb)
+        self.assertIn(("value", "LIMIT = 0.5"), fb)
+        self.assertIn(("value", "Graph :: ns = 1"), fb)
+        self.each_r2([
+            ("local call", [(R2P, "(5000, 3)", "(50, 3)")], ("CHANGE number changed",)),
+            ("for iterable", [(R2P, "for y0 in (-1.0, 0.4):", "for y0 in (-1.0,):")], ("CHANGE loop changed",)),
+            ("module function", [(R2P, "np.arange(0.0, 2.4, 0.06)", "np.arange(0.0, 2.4, 0.6)")], ("CHANGE number changed",)),
+            ("non-asserting method", [(R2P, "self.ns >= 30.0", "self.ns >= 300.0")], ("CHANGE number changed",)),
+            ("class body", [(R2P, "    ns = 1", "    ns = 2")], ("CHANGE value changed",)),
+            ("module constant", [(R2P, "LIMIT = 0.5", "LIMIT = 5.0")], ("CHANGE value changed",)),
+        ])
+
+    def test_python_subtest_headers_and_module_statements_with_numbers(self):
+        src = "import unittest\nfor k in (1, 2):\n    print(k)\nprint(3)\n\n\nclass T(unittest.TestCase):\n    def test_x(self):\n        for a, b in [(1, 2), (3, 4)]:\n            with self.subTest(a=a, n=7):\n                self.assertLess(a, b)\n"
+        lines = [b for b in self.build({"tests/test_s.py": src}).blocks if b.name is None][0].lines
+        self.assertIn(("loop", "for k in (1, 2)"), lines)
+        self.assertIn(("number", "print(3)"), lines)
+        case = [b for b in self.build({"tests/test_s.py": src}).blocks if b.name == "T.test_x"][0].lines
+        self.assertIn(("loop", "for (a, b) in [(1, 2), (3, 4)]"), case)
+        self.assertIn(("number", "with self.subTest(a=a, n=7)"), case)
+
+    def test_a_for_over_a_written_out_list_is_a_loop_line_strings_too(self):
+        src = 'TEST_CASE("t") { for (const char *name : {"a", "b"}) { CHECK(name); } }\n'
+        self.assertIn(("loop", 'for (const char *name : {"a", "b"})'), [b for b in self.build({A: src}).blocks if b.name == "t"][0].lines)
+        self.trial([(A, '{"a", "b"}', '{"a"}')], 1, ("CHANGE loop changed",), files={A: src})
+        py = "import unittest\n\n\nclass T(unittest.TestCase):\n    def test_x(self):\n        for name in ('a.laz', 'b.csv'):\n            self.assertTrue(name)\n"
+        self.trial([("tests/test_t.py", "('a.laz', 'b.csv')", "('a.laz',)")], 1, ("CHANGE loop changed",), files={"tests/test_t.py": py})
+
+    # -- 4 Python neutralisers
+
+    def test_python_neutralisers_are_conditionals(self):
+        self.each_r2([
+            ("setUpModule", [(R2P, "class Graph(", "def setUpModule():\n    raise unittest.SkipTest('x')\n\n\nclass Graph(")], ("CHANGE conditional added", "module hook setUpModule")),
+            ("tearDownModule", [(R2P, "class Graph(", "def tearDownModule():\n    pass\n\n\nclass Graph(")], ("CHANGE conditional added", "module hook tearDownModule")),
+            ("load_tests", [(R2P, "class Graph(", "def load_tests(loader, tests, pattern):\n    return unittest.TestSuite()\n\n\nclass Graph(")], ("CHANGE conditional added", "module hook load_tests")),
+            ("patched assertEqual", [(R2P, "LIMIT = 0.5\n", "LIMIT = 0.5\nunittest.TestCase.assertEqual = lambda self, *a, **k: None\n")], ("CHANGE conditional added", "assertEqual")),
+            ("class attribute assertEqual", [(R2P, "    ns = 1\n", "    ns = 1\n    assertEqual = lambda self, *a, **k: None\n")], ("CHANGE conditional added",)),
+            ("assertion name rebound", [(R2P, "    ns = 1\n", "    ns = 1\n    assertTrue = None\n")], ("CHANGE conditional added",)),
+            ("deleted class", [(R2P, "class Graph(", "class Graph(unittest.TestCase):\n    pass\n\n\ndel Graph\n\n\nclass Graph(")], ("CHANGE conditional added", "delete of a name")),
+            ("attribute of a class replaced", [(R2P, "LIMIT = 0.5\n", "LIMIT = 0.5\n\n\ndef _later():\n    Graph.test_b = None\n")], ("CHANGE conditional added",)),
+            ("setattr naming an assertion", [(R2P, "LIMIT = 0.5\n", "LIMIT = 0.5\nsetattr(unittest.TestCase, 'assertEqual', None)\n")], ("CHANGE conditional added",)),
+        ])
+
+    def test_a_try_except_round_an_assertion_is_a_conditional_in_that_test(self):
+        wrapped = "        try:\n            self.assertEqual(1, 1)\n        except AssertionError:\n            pass\n"
+        self.each_r2([
+            ("except AssertionError", [(R2P, "        self.assertEqual(1, 1)\n", wrapped)], ("CHANGE conditional added: tests/test_r2.py :: Graph.test_a", "try/except round asserts")),
+            ("bare except", [(R2P, "        self.assertEqual(1, 1)\n", wrapped.replace("except AssertionError", "except"))], ("CHANGE conditional added",)),
+            ("except Exception", [(R2P, "        self.assertEqual(1, 1)\n", wrapped.replace("AssertionError", "Exception"))], ("CHANGE conditional added",)),
+            ("tuple with AssertionError", [(R2P, "        self.assertEqual(1, 1)\n", wrapped.replace("AssertionError", "(KeyError, AssertionError)"))], ("CHANGE conditional added",)),
+            ("suppress", [(R2P, "        self.assertEqual(1, 1)\n", "        with contextlib.suppress(AssertionError):\n            self.assertEqual(1, 1)\n")], ("CHANGE conditional added",)),
+        ])
+        # a handler of another exception, or one that re-raises, swallows nothing
+        self.trial_r2([(R2P, "        self.assertEqual(1, 1)\n", wrapped.replace("AssertionError", "KeyError"))], expect=0)
+        self.trial_r2([(R2P, "        self.assertEqual(1, 1)\n", wrapped.replace("pass", "raise"))], expect=0)
+
+    def test_every_python_decorator_of_a_test_is_a_marker(self):
+        self.each_r2([
+            ("custom decorator", [(R2P, "    def test_b(self):", "    @quiet\n    def test_b(self):")], ("CHANGE marker added", "+ quiet")),
+            ("decorator with arguments", [(R2P, "    def test_b(self):", "    @patch('x', 3)\n    def test_b(self):")], ("CHANGE marker added", "+ patch('x', 3)")),
+            ("class decorator", [(R2P, "class Graph(", "@quiet\nclass Graph(")], ("CHANGE marker added", "+ class:quiet")),
+        ])
+
+    def test_a_python_lambda_that_asserts_is_a_helper_and_its_call_a_line(self):
+        a = [b for b in self.build(ROUND2_FILES).blocks if b.name == "Graph.test_a"][0].lines
+        self.assertIn(("call", "chk(True)"), a)
+        self.each_r2([("call removed", [(R2P, "        chk(True)\n", "")], ("CHANGE call removed",))])
+
+    def test_the_body_of_an_assert_raises_block_is_recorded(self):
+        a = [b for b in self.build(ROUND2_FILES).blocks if b.name == "Graph.test_a"][0].lines
+        self.assertIn(("guarded", "graph.build(chain, [(0, 4, False)])"), a)
+        self.each_r2([
+            ("body replaced by a raise", [(R2P, "            graph.build(chain, [(0, 4, False)])", "            raise KeyError()")], ("CHANGE guarded changed",)),
+            ("body removed", [(R2P, "            graph.build(chain, [(0, 4, False)])", "            pass")], ("CHANGE guarded changed",)),
+        ])
+
+    # -- 5 the build list
+
+    def test_the_build_list_is_part_of_the_register(self):
+        reg = self.build(ROUND2_FILES)
+        block = [b for b in reg.blocks if b.file == R2C][0]
+        self.assertEqual([t for _, t in block.lines], ["main.cpp", "r2_test.cpp", "other_test.cpp"])
+        self.each_r2([("a file without cases removed from the list", [(R2C, "  main.cpp\n", "")], ("CHANGE built removed",))])
+        code, out, err = self.trial_r2_raw([(R2C, "  other_test.cpp)", "  )")])
+        self.assertEqual(code, 2)                       # a file with cases that is not in the list stops the reader
+        self.trial_r2([(R2C, "  other_test.cpp)", "  other_test.cpp\n  extra.cpp)")], expect=3)
+
+    def test_a_test_file_with_cases_that_is_not_in_the_list_stops_the_reader(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write_tree(tmp, ROUND2_FILES)
+            write_tree(tmp, {"tests/new_test.cpp": 'TEST_CASE("n") { CHECK(1); }\n'})
+            code, out, err = run_main(tmp)
+            self.assertEqual(code, 2)
+            self.assertIn("tests/new_test.cpp has test cases but is not in the lidar_odometry_tests source list", err)
+
+    def test_a_source_list_that_cannot_be_read_stops_the_reader(self):
+        for text, what in (("add_executable(lidar_odometry_tests ${TEST_SOURCES})\n", "no plain file name"), ("add_executable(other a.cpp)\n", "no add_executable")):
+            with tempfile.TemporaryDirectory() as tmp:
+                write_tree(tmp, {R2: 'TEST_CASE("n") { CHECK(1); }\n', R2C: text})
+                code, _, err = run_main(tmp)
+                self.assertEqual(code, 2)
+                self.assertIn(what, err)
+
+    # -- 7 smaller C++ ones
+
+    def test_calls_of_asserting_member_functions_are_lines(self):
+        case = [b for b in self.build(ROUND2_FILES).blocks if b.name == "r2 numbers"][0].lines
+        self.assertIn(("call", "g.must_hold(true)"), case)
+        self.assertIn(("call", "Corridor{}.must_hold(true)"), case)
+        self.each_r2([
+            ("header struct, call removed", [(R2, "    g.must_hold(true);\n", "")], ("CHANGE call removed",)),
+            ("local struct, call removed", [(R2, "    Corridor{}.must_hold(true);\n", "")], ("CHANGE call removed",)),
+            ("call argument weakened", [(R2, "g.must_hold(true)", "g.must_hold(false || true)")], ("CHANGE call changed",)),
+        ])
+
+    def test_enumerators_with_a_literal_are_values(self):
+        fb = [b for b in self.build(ROUND2_FILES).blocks if b.file == R2 and b.name is None][0].lines
+        self.assertIn(("value", "Mode :: matched = 1"), fb)
+        self.each_r2([("enumerator value changed", [(R2, "matched = 1", "matched = 2")], ("CHANGE value changed",))])
+        self.trial_r2([(R2, "noise_free }", "noise_free = 5 }")], expect=3)
+
+    def test_any_plain_identifier_that_wraps_an_assertion_gets_the_macro_prefix(self):
+        self.each_r2([
+            ("macro defined nowhere under tests/", [(R2, "        CHECK(i < 4);", "        OFF(CHECK(i < 4));")], ("CHANGE assertion changed", "[macro OFF] CHECK(i < 4)")),
+            ("macro with a nested call", [(R2, "        CHECK(i < 4);", "        QUIET(1, [&] { CHECK(i < 4); });")], ("[macro QUIET]",)),
+        ])
+        src = 'void each_item(int n);\nTEST_CASE("t") { each_item(2); run_all([&] { CHECK(1); }); std::for_each(a, b, [&](int x) { CHECK(x); }); }\n'
+        reg = self.build({A: src})
+        lines = [t for k, t in [b for b in reg.blocks if b.name == "t"][0].lines if k == "assert"]
+        self.assertEqual(lines, ["[macro run_all] CHECK(1)", "CHECK(x)"])      # a method or a qualified name is a function, not a macro
+
+    def test_a_function_defined_under_tests_that_takes_a_lambda_is_no_macro(self):
+        src = 'void run_all(int n);\nTEST_CASE("t") { run_all([&] { CHECK(1); }); }\n'
+        lines = [t for k, t in [b for b in self.build({A: src}).blocks if b.name == "t"][0].lines if k == "assert"]
+        self.assertEqual(lines, ["CHECK(1)"])
+
+
+KNOWN_BLIND_SPOT_NOTE = "Each case below documents an edit that still reads IDENTICAL; when a later round closes it the case flips."
+
+
+class KnownBlindSpots(unittest.TestCase):
+    """What the register does NOT see (the header says so in the same words). Each case asserts exit 0 on the edit; a fix
+    makes it fail and the case then moves to RoundTwoTest."""
+
+    trial = HolesTest.trial
+
+    def blind(self, edits, files=None):
+        out = self.trial(edits, 0, (), (), files or ROUND2_FILES)
+        self.assertEqual(out.strip().splitlines()[-1], "IDENTICAL")
+
+    def test_an_assertion_in_a_branch_that_is_never_taken(self):
+        self.blind([(R2, "        CHECK(i < 4);", "        if (false) CHECK(i < 4);")])
+        self.blind([(R2P, "        self.assertEqual(1, 1)\n", "        if False:\n            self.assertEqual(1, 1)\n")])
+
+    def test_a_return_or_a_continue_before_an_assertion(self):
+        self.blind([(R2, "    CHECK(c.ratio > 0.0);", "    return;\n    CHECK(c.ratio > 0.0);")])
+        self.blind([(R2, "        CHECK(i < 4);", "        continue;\n        CHECK(i < 4);")])
+        self.blind([(R2P, "        self.assertEqual(1, 1)\n", "        return\n        self.assertEqual(1, 1)\n")])
+
+    def test_a_lambda_or_a_nested_def_that_is_never_called(self):
+        self.blind([(R2, "        CHECK(i < 4);", "        [&] { CHECK(i < 4); };")])
+        self.blind([(R2P, "        self.assertEqual(1, 1)\n", "        def _never():\n            self.assertEqual(1, 1)\n")])
+
+    def test_a_limit_computed_at_run_time_from_data(self):
+        files = dict(ROUND2_FILES)
+        files[R2] = R2_CPP.replace("CHECK(c.ratio > 0.0);", "CHECK(c.ratio > read_limit(\"limits.txt\"));")
+        files["tests/limits.txt"] = "0.1\n"
+        self.blind([("tests/limits.txt", "0.1", "9.9")], files)
+        files[R2] = R2_CPP.replace("CHECK(c.ratio > 0.0);", "const double limit = std::stod(\"0.5\");\n    CHECK(c.ratio > limit);")
+        self.blind([(R2, 'std::stod("0.5")', 'std::stod("0.9")')], files)
+        files = dict(ROUND2_FILES)
+        files[R2P] = R2_PY.replace("self.assertEqual(1, 1)", "lim = float('0.5')\n        self.assertLess(0.1, lim)")
+        self.blind([(R2P, "float('0.5')", "float('0.05')")], files)
+
+    def test_a_macro_or_a_monkey_patch_defined_outside_tests(self):
+        files = dict(ROUND2_FILES)
+        files["src/macros.h"] = "#define CHECK_LIMIT 0.5\n"
+        self.blind([("src/macros.h", "0.5", "0.0")], files)
+        files = dict(ROUND2_FILES)
+        files["tools/patcher.py"] = "import unittest\n"
+        self.blind([("tools/patcher.py", "import unittest\n", "import unittest\nunittest.TestCase.assertEqual = lambda *a, **k: None\n")], files)
+
+    def test_limits_in_src(self):
+        files = dict(ROUND2_FILES)
+        files["src/limits.h"] = "constexpr double kRatio = 0.1;\n"
+        self.blind([("src/limits.h", "0.1", "9.9")], files)
+
+
 class RealTreeTest(unittest.TestCase):
     def test_the_reader_reads_every_real_test_file_with_the_cross_count_holding(self):
         reg = cr.build_register(ROOT)
         files = {b.file for b in reg.blocks}
         cpp, py = cr.test_files(ROOT)
-        self.assertEqual(files, {p.relative_to(ROOT).as_posix() for p in cpp + py})
+        self.assertEqual(files - {cr.BUILD_PATH}, {p.relative_to(ROOT).as_posix() for p in cpp + py})
         cases = [b for b in reg.blocks if b.name is not None and b.file.endswith((".cpp", ".h"))]
         independent = sum(len(__import__("re").findall(r"^TEST_CASE\(", p.read_text(encoding="utf-8"), __import__("re").M))
                           for p in cpp)

@@ -872,6 +872,64 @@ class StepChecksRegisterLineTest(unittest.TestCase):
     def test_an_unknown_exit_code_fails(self):
         self.assertFalse(self.sc.register_verdict(7, "x", False)[0])
 
+    # -- the executed counts (round 2 of check-register, fix 6)
+
+    EXPECTED = {"cpp_cases": 300, "cpp_skip_always": 27, "cpp_skip_maybe": 1, "py_runs": 220, "py_skip_always": 1, "py_skip_maybe": 2}
+    DOCTEST = "[doctest] test cases: 273 | 273 passed | 0 failed | 27 skipped\n[doctest] assertions: 1 | 1 passed | 0 failed |"
+    UNITTEST = "Ran 220 tests in 1.0s\n\nOK (skipped=2)"
+
+    def test_executed_counts_that_agree_hold_and_say_both_numbers(self):
+        ok, text = self.sc.executed_verdict(self.EXPECTED, self.DOCTEST, self.UNITTEST)
+        self.assertTrue(ok, text)
+        self.assertIn("C++ 273 run + 27 skipped = 300 (register 300; skipped 27..28)", text)
+        self.assertIn("python 220 ran, 2 skipped (register 220; skipped 1..3)", text)
+
+    def test_a_c_plus_plus_case_that_did_not_run_fails_with_both_numbers(self):
+        ok, text = self.sc.executed_verdict(self.EXPECTED, self.DOCTEST.replace("273 | 273 passed", "272 | 272 passed"), self.UNITTEST)
+        self.assertFalse(ok)
+        self.assertIn("C++ cases run + skipped 299 != register 300", text)
+
+    def test_a_case_skipped_that_no_marker_skips_fails(self):
+        ok, text = self.sc.executed_verdict(self.EXPECTED, self.DOCTEST.replace("273 | 273 passed", "272 | 272 passed").replace("27 skipped", "28 skipped"), self.UNITTEST)
+        self.assertTrue(ok, text)                      # one conditional skip may skip in this configuration
+        ok, text = self.sc.executed_verdict(self.EXPECTED, self.DOCTEST.replace("273 | 273 passed", "271 | 271 passed").replace("27 skipped", "29 skipped"), self.UNITTEST)
+        self.assertFalse(ok)
+        self.assertIn("C++ skipped 29 outside the register's 27..28", text)
+        ok, text = self.sc.executed_verdict(self.EXPECTED, self.DOCTEST.replace("273 | 273 passed", "274 | 274 passed").replace("27 skipped", "26 skipped"), self.UNITTEST)
+        self.assertFalse(ok)
+        self.assertIn("outside the register's 27..28", text)
+
+    def test_python_tests_that_ran_fewer_or_skipped_more_fail(self):
+        ok, text = self.sc.executed_verdict(self.EXPECTED, self.DOCTEST, "Ran 219 tests in 1s\n\nOK (skipped=2)")
+        self.assertFalse(ok)
+        self.assertIn("python tests ran 219 != register 220", text)
+        ok, text = self.sc.executed_verdict(self.EXPECTED, self.DOCTEST, "Ran 220 tests in 1s\n\nOK (skipped=4)")
+        self.assertFalse(ok)
+        self.assertIn("python skipped 4 outside the register's 1..3", text)
+        ok, text = self.sc.executed_verdict(self.EXPECTED, self.DOCTEST, "Ran 220 tests in 1s\n\nOK")
+        self.assertFalse(ok)                           # no skipped= means 0, and the register says at least 1
+
+    def test_a_missing_count_is_a_mismatch(self):
+        ok, text = self.sc.executed_verdict(self.EXPECTED, "", self.UNITTEST)
+        self.assertFalse(ok)
+        self.assertIn("no doctest 'test cases:' summary", text)
+        ok, text = self.sc.executed_verdict(self.EXPECTED, self.DOCTEST, "")
+        self.assertFalse(ok)
+        self.assertIn("no unittest 'Ran N tests' line", text)
+
+    def test_the_register_line_fails_when_the_counts_differ_and_quotes_them(self):
+        with patch.object(self.sc.kit, "ROOT", Path(__file__).resolve().parents[1]), patch.object(self.sc, "in_main_tree", return_value=False):
+            with tempfile.TemporaryDirectory() as tmp:
+                ok, text = self.sc.register_line(Path(tmp), (False, "executed MISMATCH: x"))
+        self.assertFalse(ok)
+        self.assertIn("executed MISMATCH: x", text)
+
+    def test_the_counts_of_the_real_tree_come_from_the_register_tool(self):
+        with patch.object(self.sc.kit, "ROOT", Path(__file__).resolve().parents[1]):
+            ok, text = self.sc.executed_line("[doctest] test cases: 1 | 1 passed | 0 failed | 0 skipped", "Ran 1 test in 0.1s\n\nOK")
+        self.assertFalse(ok)                           # one case cannot be all of them
+        self.assertIn("register", text)
+
     def test_instruments_summary_is_split_from_the_register_summary(self):
         out = "ADD case added: f :: c\ninstruments: review section s: its case differs ('c')\ninstruments: ok (3 instruments, 2 items not established or only stated)\nto record: +1 case\n"
         summary, inst = self.sc.parse_register_output(out)
