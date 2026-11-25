@@ -113,6 +113,8 @@ files = [
     "src/application/loop_closure.cpp",
     "src/application/loop_closure_replay.h",
     "src/application/loop_closure_replay.cpp",
+    "src/application/loop_fine_time.h",
+    "src/application/loop_fine_time.cpp",
     "src/application/consistency.h",
     "src/application/consistency.cpp",
     "src/domain/odometry_snapshot.h",
@@ -120,6 +122,7 @@ files = [
     "src/infrastructure/odometry_snapshot_file.h",
     "src/infrastructure/odometry_snapshot_file.cpp",
     "tests/loop_closure_test.cpp",
+    "tests/loop_fine_time_test.cpp",
     "tests/consistency_test.cpp",
     "tests/odometry_snapshot_test.cpp",
 ]

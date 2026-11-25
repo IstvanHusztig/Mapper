@@ -5,6 +5,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <fstream>
 #include <iomanip>
@@ -19,8 +21,9 @@ namespace
     using binary_io::Writer;
 
     constexpr char MAGIC[8] = {'D', 'M', 'L', 'C', 'C', 'A', 'P', '1'};
-    constexpr std::uint32_t FORMAT_VERSION = 3;          // 2: the windows' readings after the loop count; 3: then each try's
-                                                         // information per source window (LoopClosureTry::window_information)
+    constexpr std::uint32_t FORMAT_VERSION = 4;          // 2: the windows' readings after the loop count; 3: then each try's
+                                                         // information per source window (LoopClosureTry::window_information);
+                                                         // 4: then the fine-time step's curves (LoopClosureCapture::fine_time)
     constexpr std::uint32_t FIRST_READABLE_VERSION = 1; // 1: without readings
 
     // the odometry settings hash (odometry_snapshot_file.h) as one more setting: it also covers what the TOML keys don't
@@ -127,6 +130,173 @@ namespace
         c.accepted = flag != 0;
         r.value(flag);
         c.requested_by_run = flag != 0;
+    }
+
+    void write_fine_time_run(Writer &w, const LoopFineTimeRun &r)
+    {
+        w.value(r.run);
+        w.value(r.first_window);
+        w.value(r.last_window);
+        w.value(r.support_first);
+        w.value(r.support_last);
+        w.value(static_cast<std::uint8_t>(r.overlap));
+        w.value(r.sigma_m);
+        w.value(r.pin_begin_s);
+        w.value(r.pin_end_s);
+        w.matrix(r.axis_odometry);
+        w.matrix(r.axis);
+    }
+
+    void read_fine_time_run(Reader &r, LoopFineTimeRun &f)
+    {
+        std::uint8_t flag = 0;
+        r.value(f.run);
+        r.value(f.first_window);
+        r.value(f.last_window);
+        r.value(f.support_first);
+        r.value(f.support_last);
+        r.value(flag);
+        f.overlap = flag != 0;
+        r.value(f.sigma_m);
+        r.value(f.pin_begin_s);
+        r.value(f.pin_end_s);
+        r.matrix(f.axis_odometry);
+        r.matrix(f.axis);
+    }
+
+    // format 4: a flag, then the segment poses, the eligible runs and the curves
+    void write_fine_time(Writer &w, const std::optional<LoopFineTimeCapture> &f)
+    {
+        w.value(static_cast<std::uint8_t>(f ? 1 : 0));
+        if (!f)
+            return;
+        w.list(f->segment_poses, [&](const Eigen::Affine3d &p) { w.matrix(p.matrix()); });
+        w.list(f->eligible, [&](const LoopFineTimeRun &r) { write_fine_time_run(w, r); });
+        w.list(f->curves, [&](const LoopFineTimeCurves &c) {
+            w.value(c.support_first);
+            w.value(c.support_last);
+            w.value(c.bound_m);
+            w.list(c.grid, [&](double v) { w.value(v); });
+            w.value(c.reference_patches);
+            w.list(c.windows, [&](const LoopFineTimeWindowCurves &x) {
+                w.value(x.training_patches);
+                w.value(x.held_out_patches);
+                w.list(x.training, [&](double v) { w.value(v); });
+                w.list(x.training_matched, [&](int v) { w.value(v); });
+                w.list(x.held_out, [&](double v) { w.value(v); });
+                w.list(x.held_out_matched, [&](int v) { w.value(v); });
+            });
+        });
+    }
+
+    bool read_fine_time(Reader &r, std::optional<LoopFineTimeCapture> &f)
+    {
+        f.reset();
+        std::uint8_t present = 0;
+        r.value(present);
+        if (!r.ok() || present > 1)
+            return false;
+        if (!present)
+            return true;
+        LoopFineTimeCapture c;
+        const std::uint64_t many = 100000000ULL;
+        bool inner = true; // the lists inside the curves
+        const bool outer =
+            r.list(c.segment_poses, [&](Eigen::Affine3d &p) { r.matrix(p.matrix()); }, many) &&
+            r.list(c.eligible, [&](LoopFineTimeRun &run) { read_fine_time_run(r, run); }, many) &&
+            r.list(c.curves, [&](LoopFineTimeCurves &x) {
+                r.value(x.support_first);
+                r.value(x.support_last);
+                r.value(x.bound_m);
+                inner = inner && r.list(x.grid, [&](double &v) { r.value(v); }, many);
+                r.value(x.reference_patches);
+                inner = inner && r.list(x.windows, [&](LoopFineTimeWindowCurves &y) {
+                    r.value(y.training_patches);
+                    r.value(y.held_out_patches);
+                    inner = inner && r.list(y.training, [&](double &v) { r.value(v); }, many) &&
+                            r.list(y.training_matched, [&](int &v) { r.value(v); }, many) &&
+                            r.list(y.held_out, [&](double &v) { r.value(v); }, many) &&
+                            r.list(y.held_out_matched, [&](int &v) { r.value(v); }, many);
+                }, many);
+            }, many);
+        if (!outer || !inner || !r.ok())
+            return false;
+        f = std::move(c);
+        return true;
+    }
+
+    // NaN and infinities as null
+    nlohmann::json number(double v)
+    {
+        return std::isfinite(v) ? nlohmann::json(v) : nlohmann::json(nullptr);
+    }
+
+    // the fine-time step's report (design D8): per eligible run what was done and why, and rule 7's edge table
+    nlohmann::json fine_time_json(const LoopClosureReport &report)
+    {
+        const LoopFineTimeReport &f = report.fine_time;
+        const double t0 = f.time_origin_s;
+        nlohmann::json j;
+        j["seconds"] = f.seconds;
+        nlohmann::json runs = nlohmann::json::array();
+        for (const LoopFineTimeRunReport &rr : f.runs)
+        {
+            nlohmann::json r;
+            const LoopFineTimeRun &run = rr.run;
+            r["windows"] = {run.first_window, run.last_window};
+            r["support"] = {run.support_first, run.support_last};
+            r["t_s"] = {run.pin_begin_s - t0, run.pin_end_s - t0};
+            r["sigma_m"] = run.sigma_m;
+            r["axis"] = {run.axis.x(), run.axis.y(), run.axis.z()};
+            r["axis_odometry"] = {run.axis_odometry.x(), run.axis_odometry.y(), run.axis_odometry.z()};
+            r["largest_axis_angle_deg"] = rr.largest_axis_angle_deg;
+            r["status"] = rr.status;
+            r["cause"] = rr.cause;
+            if (rr.scored)
+            {
+                r["bound_m"] = rr.curves.bound_m;
+                r["reference_patches"] = rr.curves.reference_patches;
+                r["supported_in_run"] = rr.supported_in_run;
+                r["run_windows"] = rr.run_windows;
+                r["longest_unsupported_s"] = rr.longest_unsupported_s;
+                r["largest_offset_m"] = rr.largest_offset_m;
+                r["unsupported_moved"] = rr.unsupported_moved;
+                r["unsupported_largest_m"] = rr.unsupported_largest_m;
+                r["held_out_windows"] = rr.held_out_windows;
+                r["held_out_before_m"] = number(std::sqrt(rr.held_out_before)); // RMS
+                r["held_out_after_m"] = number(std::sqrt(rr.held_out_after));
+                r["offsets_m"] = rr.offsets_m;
+                std::vector<int> supported(rr.supported.begin(), rr.supported.end());
+                r["supported"] = supported;
+            }
+            runs.push_back(r);
+        }
+        j["runs"] = runs;
+        nlohmann::json edges = nlohmann::json::array();
+        for (const LoopFineTimeEdgeRow &row : f.edges)
+        {
+            nlohmann::json e;
+            e["i"] = row.i;
+            e["j"] = row.j;
+            e["cross_floor"] = row.cross_floor;
+            const LoopOdometryRun &run = report.odometry_runs[row.run];
+            e["run_windows"] = {run.first_window, run.last_window};
+            e["eligible"] = row.eligible;
+            e["side"] = row.target ? "target" : "source";
+            e["source_windows"] = {row.first_window, row.last_window};
+            e["first_pose_m"] = row.first_pose_m;
+            e["rho_before_m"] = number(row.rho_before_m);
+            e["rho_after_m"] = number(row.rho_after_m);
+            e["limit_m"] = number(row.limit_m);
+            e["sigma_a_m"] = number(row.sigma_a_m);
+            e["informed_share"] = number(row.informed_share);
+            e["class"] = fine_time_edge_class_name(row.cls);
+            e["stopped_run"] = row.stopped_run;
+            e["shares"] = row.shares;
+            edges.push_back(e);
+        }
+        j["edges"] = edges;
+        return j;
     }
 
     nlohmann::json edge_json(const LoopClosureEdge &e, const LoopEdgeResidual &r, const OdometryConfig &config)
@@ -262,6 +432,7 @@ bool write_loop_closure_capture(const std::filesystem::path &file, const LoopClo
     w.list(capture.tries, [&](const CapturedLoopTry &t) {
         w.list(t.registration.window_information, [&](const Eigen::Matrix3d &m) { w.matrix(m); });
     });
+    write_fine_time(w, capture.fine_time);
     out.flush();
     if (!out)
     {
@@ -334,6 +505,8 @@ bool read_loop_closure_capture(const std::filesystem::path &file, LoopClosureCap
         for (size_t k = 0; k < blocks.size(); k++)
             c.tries[k].registration.window_information = std::move(blocks[k]);
     }
+    if (version >= 4 && !read_fine_time(r, c.fine_time))
+        return damaged("fine-time curves");
     capture = std::move(c);
     settings = std::move(s);
     return true;
@@ -411,6 +584,8 @@ bool write_loop_closure_replay_json(const std::filesystem::path &file, const Loo
         time_support.push_back(e);
     }
     j["edge_time_support"] = time_support;
+    if (result.report.fine_time.ran)
+        j["fine_time"] = fine_time_json(result.report);
     nlohmann::json against;
     against["nodes"] = result.nodes;
     against["identical_nodes"] = result.identical_nodes;
@@ -424,6 +599,56 @@ bool write_loop_closure_replay_json(const std::filesystem::path &file, const Loo
         return false;
     }
     out << j.dump(2) << "\n";
+    if (!out)
+    {
+        why = "writing '" + file.string() + "' failed";
+        return false;
+    }
+    return true;
+}
+
+bool write_loop_fine_time_csv(const std::filesystem::path &file, const LoopFineTimeReport &report, std::string &why)
+{
+    std::ofstream out(file);
+    if (!out)
+    {
+        why = "cannot open '" + file.string() + "' for writing";
+        return false;
+    }
+    const LoopFineTimeRule rule;
+    const auto fixed = [](double v, int digits)
+    {
+        std::ostringstream s;
+        if (std::isfinite(v))
+            s << std::fixed << std::setprecision(digits) << v;
+        return s.str();
+    };
+    const auto rms = [&](const std::vector<double> &score, int k) { return score.empty() ? std::string() : fixed(std::sqrt(score[k]), 4); };
+    out << "run,window,in_run,start_s,mid_s,offset_m,supported,train_patches,held_patches,matched_most,train_before_m,train_after_m,"
+           "held_before_m,held_after_m,alone_m\n";
+    for (const LoopFineTimeRunReport &rr : report.runs)
+    {
+        if (!rr.scored)
+            continue;
+        const LoopFineTimeCurves &c = rr.curves;
+        int zero = 0;
+        for (int k = 1; k < static_cast<int>(c.grid.size()); k++)
+            if (std::abs(c.grid[k]) < std::abs(c.grid[zero]))
+                zero = k;
+        for (size_t j = 0; j < c.windows.size(); j++)
+        {
+            const LoopFineTimeWindowCurves &wc = c.windows[j];
+            const int w = rr.run.support_first + static_cast<int>(j);
+            const int k = rr.offset_index[j];
+            const int matched = wc.training_matched.empty() ? 0 : *std::max_element(wc.training_matched.begin(), wc.training_matched.end());
+            out << rr.run.first_window << "-" << rr.run.last_window << "," << w << "," << (w >= rr.run.first_window && w <= rr.run.last_window)
+                << "," << fixed(rr.start_s[j] - report.time_origin_s, 4) << "," << fixed(rr.middle_s[j] - report.time_origin_s, 4) << ","
+                << fixed(rr.offsets_m[j], 3) << "," << static_cast<int>(rr.supported[j] != 0) << "," << wc.training_patches << ","
+                << wc.held_out_patches << "," << matched << "," << rms(wc.training, zero) << "," << rms(wc.training, k) << ","
+                << rms(wc.held_out, zero) << "," << rms(wc.held_out, k) << ","
+                << (wc.training.empty() ? std::string() : fixed(fine_time_own_offset(wc.training, c.grid, rule), 3)) << "\n";
+        }
+    }
     if (!out)
     {
         why = "writing '" + file.string() + "' failed";

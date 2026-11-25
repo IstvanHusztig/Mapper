@@ -113,7 +113,8 @@ LoopClosureReplayResult replay_loop_closure(const LoopClosureCapture &capture, c
         return result;
 
     CapturedRegistrations registrations(capture, reject);
-    result.loops = close_loops(result.windows, segments, registrations, params, logger, &result.report);
+    CapturedFineTimeScores fine_time(capture.fine_time ? &*capture.fine_time : nullptr);
+    result.loops = close_loops(result.windows, segments, registrations, params, logger, &result.report, &fine_time);
     result.missing = registrations.missing;
     for (const auto &t : std::set<std::pair<int, int>>(reject.begin(), reject.end()))
         (registrations.asked.count(t) ? result.rejected : result.rejected_not_asked).push_back(loop_try_name(t));

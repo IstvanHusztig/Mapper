@@ -183,6 +183,7 @@ add_library(lo_application STATIC
   src/application/run_odometry.cpp
   src/application/loop_closure.cpp
   src/application/loop_closure_replay.cpp
+  src/application/loop_fine_time.cpp
   src/application/consistency.cpp
   src/application/window_replay.cpp)
 target_include_directories(lo_application PUBLIC src/application)

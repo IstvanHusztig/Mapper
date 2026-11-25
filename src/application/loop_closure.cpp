@@ -574,6 +574,10 @@ namespace
             if (placed.dot(axis) < 0.0)
                 axis = -axis;
             r.axis = axis;
+            for (int j = k; j <= e; j++)
+                if (weak[j])
+                    r.largest_axis_angle_deg =
+                        std::max(r.largest_axis_angle_deg, std::acos(std::clamp(std::abs(rd(j).weak_axis.dot(axis)), 0.0, 1.0)) / DEG);
 
             // the pace before and after: the 3 nearest readable non-weak windows on each side
             std::vector<double> before, after;
@@ -1504,7 +1508,7 @@ namespace
 } // namespace
 
 int close_loops(std::vector<Window> &windows, const std::vector<LoopClosureSegment> &segments, LoopClosureRegistrations &registrations,
-                const OdometryConfig &params, Logger &logger, LoopClosureReport *report)
+                const OdometryConfig &params, Logger &logger, LoopClosureReport *report, LoopFineTimeScores *fine_time_scores)
 {
     LoopClosureReport local;
     LoopClosureReport &rep = report ? *report : local;
@@ -1515,12 +1519,13 @@ int close_loops(std::vector<Window> &windows, const std::vector<LoopClosureSegme
         return 0;
     log_info(logger) << "loop closure START";
 
-    if (const auto refused = loop_match_check_refusal(params))
-    {
-        rep.outcome = refused->first;
-        log_error(logger) << "loop closure: " << refused->second << "; loop closure not run, trajectory unchanged";
-        return 0;
-    }
+    for (const auto &refused : {loop_match_check_refusal(params), loop_fine_time_refusal(params)})
+        if (refused)
+        {
+            rep.outcome = refused->first;
+            log_error(logger) << "loop closure: " << refused->second << "; loop closure not run, trajectory unchanged";
+            return 0;
+        }
 
     // the odometry steps' information from the windows' readings (loop_closure_odometry_from_readings)
     std::optional<LoopOdometryInformation> odometry_steps;
@@ -1729,10 +1734,13 @@ int close_loops(std::vector<Window> &windows, const std::vector<LoopClosureSegme
     }
 
     // 5. interpolate the per-segment correction onto every node (the poses before it kept for the time-support readings)
-    std::vector<std::vector<Eigen::Affine3d>> odometry_poses;
-    if (!rep.odometry_runs.empty())
+    std::vector<std::vector<Eigen::Affine3d>> odometry_poses, odometry_model_poses;
+    if (!rep.odometry_runs.empty() || params.loop_closure_fine_time_placement)
         for (const Window &w : windows)
             odometry_poses.push_back(w.poses);
+    if (params.loop_closure_fine_time_placement) // restored if the fine-time step can't run
+        for (const Window &w : windows)
+            odometry_model_poses.push_back(w.motion_model_poses);
     std::vector<Eigen::Affine3d> correction(segments.size());
     for (size_t k = 0; k < segments.size(); k++)
         correction[k] = optimized[k] * initial[k].inverse();
@@ -1754,68 +1762,101 @@ int close_loops(std::vector<Window> &windows, const std::vector<LoopClosureSegme
             windows[w].motion_model_poses = tr;
         }
     }
-    rep.outcome = "applied";
     if (!rep.odometry_runs.empty())
         rep.edge_time_support = edge_time_support_readings(odometry_poses, windows, segments, loops, edge_tries, rep.odometry_runs);
+
+    // 6. the fine-time placement of the eligible weak runs (loop_closure_fine_time_placement)
+    if (params.loop_closure_fine_time_placement)
+    {
+        std::vector<const LoopClosureTry *> kept_tries;
+        for (const LoopClosureEdge &e : loops)
+        {
+            const auto it = edge_tries.find(std::make_tuple(e.i, e.j, e.cross_floor));
+            kept_tries.push_back(it != edge_tries.end() ? it->second : nullptr);
+        }
+        std::string why = "no source of score curves";
+        if (!fine_time_scores || !loop_fine_time_step(windows, odometry_poses, segments, rep.odometry_runs, loops, kept_tries, optimized, params,
+                                                      *fine_time_scores, logger, rep.fine_time, why))
+        {
+            for (size_t w = 0; w < windows.size(); w++)
+            {
+                windows[w].poses = odometry_poses[w];
+                windows[w].motion_model_poses = odometry_model_poses[w];
+            }
+            rep.outcome = "fine_time_curves_unavailable";
+            log_error(logger) << "loop closure: the fine-time step can't run: " << why << "; loop closure not applied, trajectory unchanged";
+            return 0;
+        }
+    }
+    rep.outcome = "applied";
     log_info(logger) << "loop closure: " << loops.size() << " loop(s) accepted, largest segment correction " << std::fixed << std::setprecision(2)
                      << max_shift << " m";
     return static_cast<int>(loops.size());
 }
 
+void loop_window_points(const Window &window, int w, const OdometryConfig &params, PointStore &point_store, std::vector<Eigen::Vector3d> &local,
+                        std::vector<int> &node)
+{
+    local.clear();
+    node.clear();
+    std::vector<Point3Di> window_points;
+    if (!point_store.load(PointSet::WindowIntermediate, w, window_points))
+        return;
+    remove_held_out(window_points, params.holdout_block_s);
+    const int nodes = static_cast<int>(window.poses.size());
+    for (const auto &p : window_points)
+    {
+        const double r = p.point.norm();
+        if (r < params.min_distance_lidar || r > params.max_distance_lidar || p.index_pose < 0 || p.index_pose >= nodes)
+            continue;
+        local.push_back(p.point);
+        node.push_back(p.index_pose);
+    }
+}
+
+LoopSegmentPoints loop_segment_points(const std::vector<Window> &windows, const LoopClosureSegment &s, const OdometryConfig &params,
+                                      PointStore &point_store, bool keep_local)
+{
+    std::vector<Eigen::Vector3d> points, local;
+    std::vector<int> window, node;
+    std::vector<Eigen::Vector3d> window_local;
+    std::vector<int> window_node;
+    for (int w = s.first_window; w <= s.last_window; w++)
+    {
+        const auto &tr = windows[w].poses;
+        loop_window_points(windows[w], w, params, point_store, window_local, window_node);
+        for (size_t k = 0; k < window_local.size(); k++)
+        {
+            points.push_back(tr[window_node[k]] * window_local[k]);
+            if (keep_local)
+                local.push_back(window_local[k]);
+            window.push_back(w);
+            node.push_back(window_node[k]);
+        }
+    }
+    std::unordered_set<uint64_t> seen;
+    std::vector<size_t> kept;
+    for (size_t k = 0; k < points.size(); k++)
+        if (seen.insert(voxel_key(points[k], 0.1)).second)
+            kept.push_back(k);
+    LoopSegmentPoints out;
+    out.points = take(points, kept);
+    if (keep_local)
+        out.local = take(local, kept);
+    out.window = take(window, kept);
+    out.node = take(node, kept);
+    out.first_window = s.first_window;
+    out.windows = s.last_window - s.first_window + 1;
+    return out;
+}
+
 namespace
 {
-    // a segment's points in world coordinates (as the odometry placed them), 0.1 m voxel-decimated (the first point of each
-    // voxel kept, in input order), each with the window it came from and its node in that window
-    struct SegmentPoints
-    {
-        std::vector<Eigen::Vector3d> points;
-        std::vector<int> window; // absolute window index
-        std::vector<int> node;   // node index in its window (index_pose)
-        int first_window = 0;
-        int windows = 0; // the segment's window count
-    };
-
-    SegmentPoints segment_points(const std::vector<Window> &windows, const LoopClosureSegment &s, const OdometryConfig &params,
-                                 PointStore &point_store)
-    {
-        std::vector<Eigen::Vector3d> points;
-        std::vector<int> window, node;
-        for (int w = s.first_window; w <= s.last_window; w++)
-        {
-            const auto &tr = windows[w].poses;
-            std::vector<Point3Di> window_points;
-            if (!point_store.load(PointSet::WindowIntermediate, w, window_points))
-                continue;
-            remove_held_out(window_points, params.holdout_block_s);
-            for (const auto &p : window_points)
-            {
-                const double r = p.point.norm();
-                if (r < params.min_distance_lidar || r > params.max_distance_lidar || p.index_pose < 0 || p.index_pose >= static_cast<int>(tr.size()))
-                    continue;
-                points.push_back(tr[p.index_pose] * p.point);
-                window.push_back(w);
-                node.push_back(p.index_pose);
-            }
-        }
-        std::unordered_set<uint64_t> seen;
-        std::vector<size_t> kept;
-        for (size_t k = 0; k < points.size(); k++)
-            if (seen.insert(voxel_key(points[k], 0.1)).second)
-                kept.push_back(k);
-        SegmentPoints out;
-        out.points = take(points, kept);
-        out.window = take(window, kept);
-        out.node = take(node, kept);
-        out.first_window = s.first_window;
-        out.windows = s.last_window - s.first_window + 1;
-        return out;
-    }
-
     // step 3 on the points: each pair registered once, kept in the order registered
     class PointRegistrations : public LoopClosureRegistrations
     {
     public:
-        PointRegistrations(std::vector<SegmentPoints> points, const OdometryConfig &params) : points_(std::move(points)), params_(params) {}
+        PointRegistrations(const std::vector<LoopSegmentPoints> &points, const OdometryConfig &params) : points_(points), params_(params) {}
 
         const LoopClosureTry *registration(int i, int j, bool cross_floor) override
         {
@@ -1887,7 +1928,7 @@ namespace
             return t;
         }
 
-        std::vector<SegmentPoints> points_;
+        const std::vector<LoopSegmentPoints> &points_;
         const OdometryConfig &params_;
         std::deque<LoopClosureTry> tries_; // a deque: the pointers handed out stay valid while it grows
         std::map<std::tuple<int, int, bool>, size_t> index_;
@@ -1931,16 +1972,18 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
     // 1. the segments' world points (the only step besides the registrations that reads points)
     // (none with too few windows: close_loops then registers nothing)
     const bool enough_windows = static_cast<int>(windows.size()) >= 2 * std::max(1, params.loop_closure_segment_windows);
-    std::vector<SegmentPoints> points;
+    // (with the fine-time step also in their nodes' frames: its reference)
+    std::vector<LoopSegmentPoints> points;
     if (enough_windows)
         for (const auto &s : segments)
-            points.push_back(segment_points(windows, s, params, point_store));
-    PointRegistrations registrations(std::move(points), params);
+            points.push_back(loop_segment_points(windows, s, params, point_store, params.loop_closure_fine_time_placement));
+    PointRegistrations registrations(points, params);
+    PointFineTimeScores fine_time(points, segments, point_store, params);
 
     LoopClosureCapture captured;
     if (capture)
         captured.windows = windows;
-    const int loops = close_loops(windows, segments, registrations, params, logger);
+    const int loops = close_loops(windows, segments, registrations, params, logger, nullptr, &fine_time);
     if (!capture)
         return loops;
 
@@ -1955,6 +1998,7 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
     for (const auto &w : windows)
         captured.result_poses.push_back(w.poses);
     captured.loops = loops;
+    captured.fine_time = fine_time.captured();
     std::string why;
     if (capture->write(captured, why))
         log_info(logger) << "loop closure capture: " << captured.segments.size() << " segments, " << captured.tries.size() << " registrations ("
