@@ -46,12 +46,21 @@ namespace
     {
         inside(x, 0.5);
     }
+
+    double generate()
+    {
+        const double sigma = 0.02;
+        const auto &first = table[k];
+        return sigma * first.tol;
+    }
 }
 
 TEST_CASE("alpha: plain")
 {
     const double tol = 0.05;
     const double measured = 0.1;
+    const auto &ref = table[k];
+    CHECK(ref.tol > 0);
     CHECK(1.0 < 2.0);
     CHECK_FALSE(false);
     REQUIRE(tol == doctest::Approx(0.05).epsilon(1e-6));
@@ -187,7 +196,7 @@ class ReaderTest(unittest.TestCase):
     def test_assertions_as_one_line_each_in_source_order(self):
         reg = self.build({A: BASE})
         lines = [t for k, t in self.case(reg, "alpha: plain").lines if k == "assert"]
-        self.assertEqual(lines, ["CHECK(1.0 < 2.0)", "CHECK_FALSE(false)", "REQUIRE(tol == doctest::Approx(0.05).epsilon(1e-6))",
+        self.assertEqual(lines, ["CHECK(ref.tol > 0)", "CHECK(1.0 < 2.0)", "CHECK_FALSE(false)", "REQUIRE(tol == doctest::Approx(0.05).epsilon(1e-6))",
                                  "CHECK(measured < 0.25)"])
 
     def test_multiline_assertion_collapsed(self):
@@ -243,6 +252,16 @@ class ReaderTest(unittest.TestCase):
         reg = self.build({A: BASE})
         values = [t for k, t in self.case(reg, "alpha: plain").lines if k == "value"]
         self.assertEqual(values, ["const double tol = 0.05", "const double measured = 0.1"])
+
+    def test_a_reference_binding_without_a_literal_is_not_a_value(self):
+        reg = self.build({A: BASE})
+        for b in reg.blocks:
+            self.assertFalse([t for k, t in b.lines if k == "value" and ("ref =" in t or "first =" in t)])
+
+    def test_constants_of_any_function_body_are_listed_under_the_file_with_the_function_name(self):
+        reg = self.build({A: BASE})
+        values = [t for k, t in self.file_block(reg, A).lines if k == "value"]
+        self.assertIn("generate() :: const double sigma = 0.02", values)
 
     def test_non_const_local_is_not_a_value(self):
         src = 'TEST_CASE("n") { double x = 0.5; for (const auto &v : list) { CHECK(v < x); } }\n'
@@ -322,7 +341,7 @@ class ReaderTest(unittest.TestCase):
     def test_totals_line(self):
         reg = self.build({A: BASE, "tests/test_py.py": PY_BASE})
         line = cr.totals_line(cr.totals(reg))
-        self.assertEqual(line, "# totals: 5 cases (1 should_fail, 1 skip), 10 assertions, 2 python tests (1 expectedFailure)")
+        self.assertEqual(line, "# totals: 5 cases (1 should_fail, 1 skip), 11 assertions, 2 python tests (1 expectedFailure)")
 
 
 class UnreadableSourceTest(unittest.TestCase):
@@ -417,6 +436,17 @@ class ComparisonTest(TreeCase):
     def test_tolerance_loosened_in_a_helpers_own_call(self):
         self.edit("inside(x, 0.5)", "inside(x, 5.0)")
         self.assertKinds(1, "CHANGE call changed: tests/a_test.cpp\n")
+
+    def test_a_renamed_reference_binding_is_no_difference(self):
+        self.edit("const auto &ref = table[k];", "const auto &renamed = table[k];")
+        self.edit("CHECK(ref.tol > 0);", "CHECK(ref.tol > 0);  // same")
+        self.edit("const auto &first = table[k];", "const auto &other = table[k];")
+        self.assertKinds(0)
+
+    def test_a_changed_generator_constant_is_a_value_changed(self):
+        self.edit("const double sigma = 0.02;", "const double sigma = 0.03;")
+        out = self.assertKinds(1, "CHANGE value changed: tests/a_test.cpp"+chr(10))
+        self.assertIn("  + generate() :: const double sigma = 0.03", out)
 
     def test_assertion_deleted(self):
         self.edit("    CHECK_FALSE(false);\n", "")

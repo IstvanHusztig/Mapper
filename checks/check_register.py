@@ -20,8 +20,10 @@ instruments fault), 2 a source cannot be read (file:line on stderr). --record re
 
 What it does NOT see (also in the register's header): a limit computed while a test runs from data; an assertion in a
 branch that is never taken or a loop that runs zero times; limits in src/ (the verdict limits, the settings hash); the
-meaning of a test; constants inside the bodies of functions that are neither cases nor asserting helpers; a value
-constructed with a constructor call that has no numeric literal in its arguments.
+meaning of a test; const declarations whose initialiser holds no numeric literal (reference bindings); a value built
+with a constructor call that has no numeric literal in its arguments. Values listed: file-scope declarations with a
+numeric literal, and const/constexpr declarations with a numeric literal in the initialiser inside cases, asserting
+helpers (prefixed `<helper>() ::`) and every other function body under tests/ (prefixed `<function>() ::`, under the file).
 
 Pure standard library; imports nothing from tools/.
 """
@@ -45,7 +47,7 @@ EXIT_SAME, EXIT_CHANGE, EXIT_UNREADABLE, EXIT_ADDITIONS, EXIT_REFUSED = 0, 1, 2,
 NOT_SEEN = [
     "# Not seen: limits computed while a test runs from data, assertions the flow never reaches (a branch not taken,",
     "# a loop that runs zero times), limits in src/ (the verdict limits, the settings hash), the meaning of a test,",
-    "# constants inside functions that are not cases or asserting helpers.",
+    "# constants without a numeric literal in their initialiser (reference bindings), constructor-style declarations.",
 ]
 
 
@@ -702,7 +704,11 @@ def walk_body(scan, lo, hi, helpers):
                 last = toks[k - 1].t if k - 1 > i else ""
                 brace_init = last in ("}", ")") and k - 1 > i + 2 and match[k - 1] > 0 and toks[match[k - 1] - 1].k == "id"
                 if has_assign or brace_init:
-                    items.append((i, "value", prefix + render(lx, i, k, True)))
+                    init = next((q for q in depth0 if toks[q].t == "=" and not (q > 0 and toks[q - 1].t == "operator")), None)
+                    if init is None:
+                        init = match[k - 1]
+                    if has_number(lx, init, k):
+                        items.append((i, "value", prefix + render(lx, i, k, True)))
         i += 1
     return items, macro_counts, subcases
 
@@ -776,6 +782,8 @@ def cpp_blocks(scan, helpers):
             case_items[id(f)] = [(pos, 1, kind, text) for pos, kind, text in items]
         elif f.name in helpers:
             file_items += [(pos, 1, kind, f"{f.name}() :: {text}") for pos, kind, text in items]
+        else:
+            file_items += [(pos, 1, kind, f"{f.name}() :: {text}") for pos, kind, text in items if kind == "value"]
     for pos, ln, text in lx.conds:
         f = owner(pos)
         if f is None or not (f.is_case or f.name in helpers):
