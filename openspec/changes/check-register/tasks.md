@@ -166,15 +166,21 @@ and goes to the user.
       (2026-11-25: back-end.md entry from the agent (merged), the guide's settings text on retired settings; --check holds.)
 ## 5b. After the master reviewer (design D11)
 
-- [ ] 5b.1 The reader's holes closed (verification's agent): FAIL and FAIL_CHECK, asserting function objects and
+- [x] 5b.1 The reader's holes closed (verification's agent): FAIL and FAIL_CHECK, asserting function objects and
       their calls, suite and class markers and `skipTest`, Python helper bodies, `#define` lines, more values and
       loops, a moved case as a change, a missing register as a failure, no "reworded" class; the weak ratio of the
       window diagnostics from `VerdictLimits`. Done when each of the reviewer's planted edits is a test that requires a
       change, the cross-count holds on the real tree, and the step checks hold apart from the register's own line.
-- [ ] 5b.2 The orchestrator records the register again and reads the block of the settings-hash pins (the three
+      (2026-11-25, merged: every planted edit of the reviewer is a test in HolesTest that requires a change (110 tests in
+      tests/test_check_register.py); the cross-count holds; step checks on the branch identical everywhere but the register's
+      line (the recorded register predated the new line kinds).)
+- [x] 5b.2 The orchestrator records the register again and reads the block of the settings-hash pins (the three
       literals must be in it); the rule's wording in the spec deltas, `docs/regions/README.md` and `tools/README.md`
       follows. Done when `python checks/check_register.py` exits 0 and a hand-changed pin literal is reported as a
       change (tried once, reverted).
+      (2026-11-25: recorded: 299 cases (7 should_fail, 28 skip), 1,955 assertions incl. FAIL_CHECK 1, 166 helper calls,
+      1,390 values, 584 loop lines, 206 Python tests; the pins' block holds the three literals as `call: pin(...)` lines.
+      Trial: the defaults' literal set to 0x0ull gives `CHANGE call changed`, exit 1; reverted, IDENTICAL.)
 
 ## 6. Close
 
