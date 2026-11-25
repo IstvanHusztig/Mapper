@@ -6,7 +6,7 @@
 Status: **agreed 2026-11-16** (decisions below). Branch `honest-degeneracy-measure`, nothing pushed.
 
 Progress:
-- Stage 0 done 2026-11-16 (43748c7 .. c365fdd): three switches, robust mode and Consistency2 removed (retired settings
+- Stage 0 done 2026-11-16 (43748c7 .. c365fdd): three switches and robust mode removed (retired settings
   still load), build identity in the results JSON, `tools/function_sizes.py`; 44, 44_short and Livox 3 bit-identical.
 - Stage 1 done 2026-11-16 (46c56b2 .. 133f63a): `process_windows`, capture (`capture_windows_from_s` / `_to_s`),
   `dMapper --replay`; replays identical: 44_short 21 of 21 windows in 35 s, Livox 3 84 of 84 in 93 s.
@@ -867,7 +867,6 @@ Measured today (lines):
 | 1 | `optimize_lidar_odometry` | 1064 | stage 2 |
 | 1 | `optimize_windows` (179), `run_lm_iterations` (about 115) | | stage 4 |
 | 2 | `Consistency` (311) | | before the back-end region's first job |
-| 4 | `Consistency2` (483): only with `use_mutliple_gaussian`, off in both sensor settings | | decision 4: remove, or split with tier 2 |
 | 2 | `run_loop_closure` (336), `optimize_loop_pose_graph` (134) | | same |
 | 3 | `compute_step_1` (180), `calculate_trajectory` (143), `load_imu` (110) | | before the front-end region's first job |
 | 4 | `optimize_sf2` (275), `optimize_rigid_sf` (272) | | decision 4: remove, or split with tier 2 |
@@ -1238,7 +1237,7 @@ hand it to its region.
 2. **Order:** the per-term log comes after the term split (stage 3).
 3. **Regions:** the eight listed in stage 7.
 4. **Code the sensor settings never reach:** robust mode (`optimize_sf2`, `optimize_rigid_sf`,
-   `use_robust_and_accurate_lidar_odometry`) and `Consistency2` (`use_mutliple_gaussian`) are removed in stage 0.
+   `use_robust_and_accurate_lidar_odometry`) is removed in stage 0.
 
 ## See also
 

@@ -23,7 +23,7 @@ on never-fitted points against odometry only, s = 1 0.00, s = 0.1 much worse.
 **Goals:** consistency follows the gyro between nodes and stops overfitting single nodes; an honest, ground-truth-free
 judge (hold-out) usable on caves too; the evaluation tools measure what they claim.
 
-**Non-Goals:** cross-chunk registration in consistency (C35), Consistency2 (off; its defects C36 stay tracked), the
+**Non-Goals:** cross-chunk registration in consistency (C35), the
 velocity anchor (C34), the gyro fault itself (C38) beyond gating it, loop-closure changes.
 
 ## Decisions

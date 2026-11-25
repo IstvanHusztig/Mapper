@@ -183,9 +183,7 @@ Steps 8–11 were added on 2026-10-03. They cover the goals that steps 0–7 sti
      by 32 mm / 0.09°: each aligned revisit still registers a 1–3 cm "correction", and the pose graph spreads it.
      With points only within 6 m it accepted a false loop (1.5 m). Its scenarios take about 20 s each in Release and
      more than 15 minutes in Debug, so they are skipped in the regular run and run with `--no-skip` (user decision).
-   - **Consistency** reduces window seams in both variants, but moves the truth by 6.4 mm (`Consistency`, even
-     NDT-fit noise) and 16 mm / 0.46° (`Consistency2`, whose 0.01° rotation smoothness pulls against every change of
-     turn rate, so the error sits at the corners; `Consistency2` was removed on 2026-11-16).
+   - **Consistency** reduces window seams, but moves the truth by 6.4 mm (even NDT-fit noise).
 9. ✅ **Remaining ports** (done 2026-10-04, `remaining-ports`): `OrientationEstimator` (Fusion AHRS)
    and `ParallelExecutor` (TBB) in `src/application/service_ports.h`, with their adapters
    (`FusionOrientationEstimator`, `TbbExecutor`) in infrastructure, passed to the pipeline as

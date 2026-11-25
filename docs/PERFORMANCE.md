@@ -341,8 +341,7 @@ Result-changing levers come later, each judged with `eval_odometry.py`: a conver
   - log the preview's point count;
   - a switch to turn the preview off;
   - a 0.2 m voxel if the 3-million-point cap is reached.
-- **Two suspected bugs found in the 2026-10-05 review** (not fixed; each changes results, so each is its own change with an evaluation):
-  - `Consistency2` sets `index_end_exclusive = i` (`src/application/consistency.cpp`), which looks like it drops the last point of every cell;
+- **A suspected bug found in the 2026-10-05 review** (it changes results, so it is its own change with an evaluation):
   - `ndt_cell_index` uses `static_cast<int16_t>(p / b)`, which truncates toward zero, so cell 0 is twice as wide on every axis (`src/domain/ndt_map.cpp`).
 - **Results depend on machine load through `real_time_threshold_seconds`** (2026-10-02). One slow GUI run differed by 1–2 mm; a repeat was identical. The value was not changed. A higher limit in `settings/l2-vertical.toml` would make runs reproducible under load, but it is a decision still to be made.
 

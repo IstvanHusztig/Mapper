@@ -133,7 +133,7 @@ orchestrator's):
 - Accepted as they are: C9 (shift and plausibility now measured as anchor and source-centre movement, `:697-715`,
   `:984-988`; the cross-floor 1.0 m limit is still a constant, `:994`), C22 (path rule instead of the 30 s gap), C23
   (same-floor edges weighted by registration information, fixed sigmas only as fallback; odometry edges by length
-  rejected). C36 is moot (`Consistency2` removed 2026-11-16).
+  rejected).
 - Also hard-coded (not in the tracker): the same-floor acceptance limits `shift ≤ loop_closure_max_correction_m + 1.0`
   and `angle ≤ 15°` (`:998-999`).
 
@@ -245,7 +245,6 @@ From `python tools/function_sizes.py src --min 80` (2026-11-18):
 - I1b, 2° rotation noise added to each cross-floor edge: s2's lowest floor fell back to 19.2 cm; removed. Findings 1.5.
 - I2, same-floor edges weighted by information in the setup of 2026-10-11: rejected then (turned floor 0 about 3°,
   gallery −52 cm, memory note); same-floor information edges shipped later as G3b, with 2.4 s segments and two slots.
-- `Consistency2` (multiple-Gaussian variant): removed 2026-11-16 (tracker C36).
 
 ## Open questions
 

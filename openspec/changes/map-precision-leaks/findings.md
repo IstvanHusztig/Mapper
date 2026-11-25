@@ -67,8 +67,6 @@ physical units, tested in the experiment, doesn't remove the dependence (and wou
 - Consistency's chunk-local maps (F1).
 - LM damping is absolute (λ·I) on the poses only and grows ×10 per 10 iterations; the comment calls ~1e10 negligible
   against ~1e8 (`scan_to_map.cpp:997-1009`). Extends tracker C13.
-- Consistency2 (off): `index_end_exclusive = i` instead of `i + 1` (`consistency.cpp:581,585`), dropping each cell's
-  last point.
 - Already tracked: C1 (consistency jitter), C13 (100 iterations), C4 (map rebuild at window 586/587).
 
 ## F6. The suspect walls (weakest part: few pieces, few pairs)

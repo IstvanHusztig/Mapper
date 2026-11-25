@@ -307,11 +307,7 @@
 </ol>
 A napló felsorolja az összes jelöltet az átfedésükkel a korrekció előtt és után, valamint a korrekcióval, minden elvetett élt, és a megtartott élek eltéréseit. A keresési tartománynál nagyobb hibákat (például egy 20°-os irányszöghibát) szándékosan elutasítja; ezek az odometriából erednek, és ott kell javítani őket.</div>
 
-<div class="warn"><b>Opcionális: konzisztencia-menet (a 8. és 9. lépés között)</b>A <code>use_consistency = true</code> beállítással a futás (parancssorból és GUI-ból egyaránt) az odometria és a hurokzárás után, az export előtt meghívja a <code>run_consistency</code>-t. Ez <b>az egész trajektóriát egyszerre</b> újraoptimalizálja <code>num_constistency_iter</code> alkalommal: minden csomópontot egy sima trajektória felé húz (relatívpóz-a priori információ az egymást követő csomópontok között), és <b>az összes</b> ablak pontjainak egyezniük kell egyetlen, a teljes felvételből épített NDT-térképpel. Ez eltávolíthatja az ablakok közötti maradék eltérést, például egy falét, amelyet az elején és a végén is látunk, de lassú, és ha a simasági a priori információ túl erős, el is moshatja a trajektóriát. Két változat (<code>use_mutliple_gaussian</code>):
-<ul>
-<li><b>Consistency</b> (false): egy Gauss-eloszlás beltéri rács-kockánként, forgatási simaság 0.1°, a fixen kódolt 1 m-nél közelebbi pontokat figyelmen kívül hagyja.</li>
-<li><b>Consistency2</b> (true): több Gauss-eloszlás kockánként, mindegyik egy 1M pontos időszegmensre (egy kockának legalább 5 pontra van szüksége a szegmensben), így az ugyanazon a helyen való különböző áthaladásokat egymással illeszti. Forgatási simaság 0.01°, a <code>consistency_min_distance</code>-nél közelebbi pontokat figyelmen kívül hagyja.</li>
-</ul>
+<div class="warn"><b>Opcionális: konzisztencia-menet (a 8. és 9. lépés között)</b>A <code>use_consistency = true</code> beállítással a futás (parancssorból és GUI-ból egyaránt) az odometria és a hurokzárás után, az export előtt meghívja a <code>run_consistency</code>-t. Ez <b>az egész trajektóriát egyszerre</b> újraoptimalizálja <code>num_constistency_iter</code> alkalommal: minden csomópontot egy sima trajektória felé húz (relatívpóz-a priori információ az egymást követő csomópontok között), és <b>az összes</b> ablak pontjainak egyezniük kell egyetlen, a teljes felvételből épített NDT-térképpel. Ez eltávolíthatja az ablakok közötti maradék eltérést, például egy falét, amelyet az elején és a végén is látunk, de lassú, és ha a simasági a priori információ túl erős, el is moshatja a trajektóriát. Egy Gauss-eloszlás beltéri rács-kockánként, forgatási simaság 0.1°, a fixen kódolt 1 m-nél közelebbi pontokat figyelmen kívül hagyja.
 A mért hatásokat lásd: <a href="#fixes">Javítások és a térkép élessége</a>.</div>
 
 <h2 id="params">Paraméter-referencia</h2>
@@ -457,13 +453,11 @@ A mért hatásokat lásd: <a href="#fixes">Javítások és a térkép élessége
 
 
 <h3 id="p-cons">[consistency]</h3>
-<p>Opcionális, az egész trajektóriára kiterjedő finomítás az odometria után, a <a href="#pipeline">feldolgozási lánc</a> 8. lépése utáni megjegyzésben leírva. A kulcsnevek megtartják az eredeti írásmódot (<code>constistency</code>, <code>mutliple</code>).</p>
+<p>Opcionális, az egész trajektóriára kiterjedő finomítás az odometria után, a <a href="#pipeline">feldolgozási lánc</a> 8. lépése utáni megjegyzésben leírva. A kulcsnevek megtartják az eredeti írásmódot (<code>constistency</code>).</p>
 <div class="table-wrap"><table>
 <tr><th>Paraméter</th><th>Érték</th><th>Jelentés</th></tr>
 <tr><td>use_consistency</td><td class="val">true</td><td>A konzisztencia-menet futtatása az odometria és a hurokzárás után, az export előtt (parancssor és GUI).</td></tr>
 <tr><td>num_constistency_iter</td><td class="val">10</td><td>Menetek száma. Minden menet újraoptimalizálja az összes csomópontot és újraépíti a teljes felvétel NDT-térképét, ezért a futási idő lineárisan nő vele. A 0 még akkor is kikapcsolja a menetet, ha a <code>use_consistency</code> true.</td></tr>
-<tr><td>use_mutliple_gaussian</td><td class="val">false</td><td>false: <b>Consistency</b> (egy Gauss-eloszlás kockánként, simaság 0.1°, fixen kódolt 1 m minimális távolság). true: <b>Consistency2</b> (egy Gauss-eloszlás kockánként és 1M pontos időszegmensenként, simaság 0.01°).</td></tr>
-<tr><td>consistency_min_distance</td><td class="val">0.4 m</td><td>Csak a Consistency2-nél: az érzékelőhöz ennél közelebbi pontokat figyelmen kívül hagyja (kitakarja a kezelőt).</td></tr>
 </table></div>
 
 <h3 id="p-perf">[performance]</h3>
@@ -546,7 +540,7 @@ A mért hatásokat lásd: <a href="#fixes">Javítások és a térkép élessége
 </table></div>
 
 <h3>A konzisztencia-menet</h3>
-<p>A <code>use_consistency</code> (a mellékelt beállításokban bekapcsolva) az odometria után minden ablakot a teljes felvétel egyetlen térképe felé húz, ami eltávolítja az ablakok között maradt kis eltolásokat és vékonyítja a falakat, egy további menet árán. A Consistency (az alapértelmezett változat) adja a legélesebb térképet; gyengébb simasági a priori információja (0.1°) érdesíti a trajektóriát, ami nem mossa el a térképet, mert minden csomópontot újra illeszt a pontokhoz. A Consistency2 a trajektóriát majdnem olyan simán tartja (0.01°-os a priori információ): hosszabb, hurkokat vagy újralátogatásokat tartalmazó sétáknál használd, vagy ha magát a trajektóriát használják tovább. Állítsd a <code>use_consistency</code>-t false-ra, ha a futási idő fontosabb a térkép minőségénél.</p>
+<p>A <code>use_consistency</code> (a mellékelt beállításokban bekapcsolva) az odometria után minden ablakot a teljes felvétel egyetlen térképe felé húz, ami eltávolítja az ablakok között maradt kis eltolásokat és vékonyítja a falakat, egy további menet árán. A Consistency (az alapértelmezett változat) adja a legélesebb térképet; gyengébb simasági a priori információja (0.1°) érdesíti a trajektóriát, ami nem mossa el a térképet, mert minden csomópontot újra illeszt a pontokhoz. Állítsd a <code>use_consistency</code>-t false-ra, ha a futási idő fontosabb a térkép minőségénél.</p>
 
 <h2 id="limits">Ismert korlátok</h2>
 <ul>
@@ -557,7 +551,7 @@ A mért hatásokat lásd: <a href="#fixes">Javítások és a térkép élessége
 <li><b>NDT-cellanormálisok.</b> Alapértelmezés szerint egy térképcella normálisa az első 3 pontjából rögzített, az átlaga pedig az első pontja; egyiket sem frissíti később. Sok normális hibás (60 % egy szintetikus folyosón), ami zajossá teszi a degeneráltsági tesztet, és kb. 1 mm-be kerül a scan-to-map illesztésben. A <code>use_exact_ndt_bucket_statistics = true</code> kijavítja a statisztikát, de ki van kapcsolva: az aktuális küszöbbel egy valódi felvétel ablakai közül többszörös számút jelölt degeneráltnak, és a térkép kevésbé volt éles. Lásd: <a href="degeneracy-information.html">Degeneráltsági információ</a>.</li>
 <li><b>A hurokzárás</b> csak azokat az újralátogatásokat korrigálja, amelyeket regisztrálni tud (≥ 50% átfedés, ≤ 6 m, ≤ 15°).</li>
 <li><b>A hurokzárás egy helyes trajektóriát is megmozgat.</b> Az egységtesztek szintetikus kétkörös felvételén (<code>tests/loop_closure_test.cpp</code>) felezi a második kör driftjét, de egy már pontos trajektóriát akár 3 cm-rel és 0.1°-kal megmozgat: minden újralátogatás 1–3 cm maradékkal regisztrál, és a póz-gráf 5 cm-re bízza a hurokéleket. Csak a 6 m-en belüli pontokkal elfogadott egy hibás regisztrációt, és 1.5 m-rel megmozgatta a trajektóriát; az átfedési küszöb önmagában ezt nem fogja meg.</li>
-<li><b>A konzisztencia-menet is megmozgat egy helyes trajektóriát</b>, ugyanazon a szintetikus felvételen (<code>tests/consistency_test.cpp</code>): a Consistency akár 6 mm-rel (egyenletesen elosztva, az NDT-illesztés zaja), a Consistency2 akár 16 mm-rel és 0.5°-kal, többnyire ott, ahol a fordulási sebesség változik, mert a 0.01°-os forgatási simasága ellenáll a fordulási sebesség bármilyen változásának. Mindkettő eltávolítja az ablakok közötti eltolásokat.</li>
+<li><b>A konzisztencia-menet is megmozgat egy helyes trajektóriát</b>, ugyanazon a szintetikus felvételen (<code>tests/consistency_test.cpp</code>): a Consistency akár 6 mm-rel (egyenletesen elosztva, az NDT-illesztés zaja). Eltávolítja az ablakok közötti eltolásokat.</li>
 </ul>
 </main>
 </div>
