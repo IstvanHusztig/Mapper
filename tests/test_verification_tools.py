@@ -830,5 +830,66 @@ class LandmarkCheckTests(_WalkMixin, unittest.TestCase):
         self.assertAlmostEqual(rows[0][1], 0.03, places=5)
 
 
+class StepChecksRegisterLineTest(unittest.TestCase):
+    """The decisions of step_checks.py's `check register` and 44_short lines (design D5 of check-register)."""
+
+    def setUp(self):
+        import step_checks
+        self.sc = step_checks
+
+    def test_identical_holds_everywhere(self):
+        for main_tree in (False, True):
+            self.assertEqual(self.sc.register_verdict(0, "IDENTICAL", main_tree), (True, "IDENTICAL"))
+
+    def test_additions_hold_in_a_worktree_and_fail_in_the_main_tree(self):
+        ok, text = self.sc.register_verdict(3, "to record: +1 case", False, "run/check_register.txt")
+        self.assertTrue(ok)
+        self.assertTrue(text.startswith("HOLDS, to record: +1 case"))
+        self.assertIn("run/check_register.txt", text)
+        ok, text = self.sc.register_verdict(3, "to record: +1 case", True, "run/check_register.txt")
+        self.assertFalse(ok)
+        self.assertTrue(text.startswith("FAILED, to record: +1 case"))
+
+    def test_a_change_fails_everywhere_with_the_summary(self):
+        for main_tree in (False, True):
+            ok, text = self.sc.register_verdict(1, "1 assertion changed", main_tree, "l.txt")
+            self.assertFalse(ok)
+            self.assertTrue(text.startswith("FAILED: 1 assertion changed"))
+
+    def test_unreadable_fails_with_the_tools_message(self):
+        ok, text = self.sc.register_verdict(2, "", False, "l.txt", "tests/a.cpp:4: unmatched '('\n")
+        self.assertFalse(ok)
+        self.assertIn("unreadable: tests/a.cpp:4: unmatched '('", text)
+
+    def test_an_unknown_exit_code_fails(self):
+        self.assertFalse(self.sc.register_verdict(7, "x", False)[0])
+
+    def test_instruments_summary_is_split_from_the_register_summary(self):
+        out = "ADD case added: f :: c\ninstruments: review section s: its case differs ('c')\ninstruments: ok (3 instruments, 2 items not established or only stated)\nto record: +1 case\n"
+        summary, inst = self.sc.parse_register_output(out)
+        self.assertEqual(summary, "to record: +1 case")
+        self.assertEqual(inst, "instruments: ok (3 instruments, 2 items not established or only stated)")
+        self.assertEqual(self.sc.parse_register_output("IDENTICAL\n"), ("IDENTICAL", None))
+
+    def test_the_main_tree_is_told_from_a_linked_worktree_by_the_git_dirs(self):
+        with patch.object(self.sc.kit, "git", side_effect=lambda *a: {"--absolute-git-dir": "C:/r/.git", "--git-common-dir": ".git"}[a[1]]),                 patch.object(self.sc.kit, "ROOT", Path("C:/r")):
+            self.assertTrue(self.sc.in_main_tree())
+        with patch.object(self.sc.kit, "git", side_effect=lambda *a: {"--absolute-git-dir": "C:/r/.git/worktrees/w", "--git-common-dir": "C:/r/.git"}[a[1]]),                 patch.object(self.sc.kit, "ROOT", Path("C:/w")):
+            self.assertFalse(self.sc.in_main_tree())
+
+    def test_a_different_run_with_windows_at_the_time_limit_says_the_load_decided(self):
+        text = self.sc.short_run_detail(True, False, "exit 0 | DIFFERENT", "5 min", 3)
+        self.assertTrue(text.startswith("DIFFERENT (3 windows at the time limit: the result depended on the machine's load; run again)"))
+
+    def test_a_different_run_without_windows_at_the_limit_is_plain(self):
+        text = self.sc.short_run_detail(True, False, "exit 0 | DIFFERENT", "5 min", 0)
+        self.assertNotIn("depended on the machine", text)
+        self.assertIn("time-limit windows 0", text)
+
+    def test_an_identical_run_reports_the_count_and_a_missing_one_says_so(self):
+        self.assertIn("time-limit windows 0", self.sc.short_run_detail(True, True, "IDENTICAL", "5 min", 0))
+        self.assertIn("time limit: not reported", self.sc.short_run_detail(True, True, "IDENTICAL", "5 min", None))
+
+
 if __name__=='__main__':
     unittest.main()
