@@ -138,9 +138,13 @@ verdict.
       (2026-11-25: reviewed; corrections taken into the report: positions identical to the mm (not bit for bit) on
       Livox 3; on the stall case two other ghost bands change too; equality with the prototype checks the port, not the
       rule. Numbers and maps given to the user; the decision is the user's. Suggested: off until the user's look.)
-- [ ] 4.6 Only on the user's decision to ship: the setting in `settings/livox-vertical.toml`, new manifests, in their own
+- [x] 4.6 Only on the user's decision to ship: the setting in `settings/livox-vertical.toml`, new manifests, in their own
       commit, after the user's look at the before / after maps. Done when `tools/end_runs.py` is IDENTICAL against the new
       manifests.
+      (2026-11-25: the user judged the Livox 4 clouds ("fine tune made it even better") and gave the go. On in
+      `settings/livox-vertical.toml`; Livox 3 end run with it: the guard stands down (edge 91 => 100), every result file
+      identical, the parameters TOML's new hash in `livox3.manifest.json`, then IDENTICAL 35 files. No new Livox 4
+      baseline: the user asked for the needed runs only.)
 
 ## 5. Close
 
