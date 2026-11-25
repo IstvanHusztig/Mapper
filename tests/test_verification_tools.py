@@ -861,6 +861,14 @@ class StepChecksRegisterLineTest(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("unreadable: tests/a.cpp:4: unmatched '('", text)
 
+    def test_a_missing_register_fails_everywhere_and_says_so(self):
+        msg = "no register: cannot compare (checks/tests.register is absent; --record writes it)\n"
+        for main_tree in (False, True):
+            ok, text = self.sc.register_verdict(2, "", main_tree, "l.txt", msg)
+            self.assertFalse(ok)
+            self.assertTrue(text.startswith("FAILED, no register: cannot compare"), text)
+            self.assertNotIn("unreadable", text)
+
     def test_an_unknown_exit_code_fails(self):
         self.assertFalse(self.sc.register_verdict(7, "x", False)[0])
 
