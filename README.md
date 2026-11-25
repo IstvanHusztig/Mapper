@@ -137,6 +137,32 @@ IMU samples ──> AHRS orientation ──> initial trajectory ───┤
 | `docs/` | the user guide (`docs/index.html`) and the other documentation |
 | `openspec/` | specifications and changes, with their design decisions and measurements |
 
+## Sources
+
+Where the methods in dMapper came from. Each change, its origin and the evidence recorded for it are in
+[docs/provenance.html](docs/provenance.html).
+
+- [HDMapping](https://github.com/MapsHD/HDMapping) (Janusz Będkowski and co-authors): the base of the odometry (NDT
+  scan-to-map, motion model, observation equations, the consistency pass). No HDMapping paper is cited in this repo.
+- Zhang, Kaess, Singh, "On Degeneracy of Optimization-based State Estimation Problems", ICRA 2016.
+- Hatleskog & Alexis, probabilistic degeneracy detection, RA-L 2025, arXiv:2410.10784.
+- X-ICP, Tuna et al., T-RO 2024, arXiv:2211.16335; "Informed, Constrained, Aligned", Tuna et al., arXiv:2408.11809.
+- Segal, Haehnel, Thrun, Generalized-ICP, RSS 2009.
+- Wildcat, Ramezani et al., arXiv:2205.12595.
+- Loop closure survey ([docs/loop-closure-research.html](docs/loop-closure-research.html)): KISS-SLAM arXiv:2503.12660,
+  MULLS arXiv:2102.03771, HBA arXiv:2209.11939, LAMP 2.0 arXiv:2205.13135; also LIO-SAM, SC-PGO, hdl_graph_slam, GLIM.
+- Odometry map model: Laconte et al., ICRA 2019; Gupta et al., ECMR 2023.
+- Further reading from the Codex notes: FAST-LIO2 arXiv:2107.06829, KISS-ICP arXiv:2209.15397, ICP covariance
+  arXiv:1410.7632 and arXiv:1909.05722, CT-ICP arXiv:2109.12979.
+- The first literature survey in full:
+  [openspec/changes/archive/2026-10-08-odometry-stall-fix/research.md](openspec/changes/archive/2026-10-08-odometry-stall-fix/research.md)
+  (its citations were not checked one by one).
+- Claude (Anthropic): Claude Opus 5.5, Claude Sonnet 5.5 (mostly reviews) and Claude Fable 5.2, as named in the commit
+  trailers, and the region agents.
+- Codex (OpenAI): design notes and experiments, e.g. the fine-time placement of a blind stretch.
+- The author: the recordings and sensors, the static IMU measurement, the building plan and wall marks, every decision to
+  ship or reject a change, and the look at the clouds.
+
 ## Acknowledgements
 
 Janusz Będkowski, the author of [HDMapping](https://github.com/MapsHD/HDMapping), helped a lot with getting this project
