@@ -25,7 +25,13 @@ information per source window (`H_w`) is rebuilt here from the points, at the re
 `update_rgd` makes them with exact statistics; dMapper's own will be the last refinement pass's.
 
   loop_fine_time.py <capture> <trajectory folder> <edges> <cache folder> <out folder>
-                    [--coupling C] [--min-matched N] [--min-sigma M]
+                    [--coupling C] [--min-matched N] [--min-sigma M] [--straight-gaps] [--fit-total]
+
+`--straight-gaps` is the form of `experiments/consistency/livox4_lever/zigzag/RULE.md` section A (OpenSpec change
+`blind-stretch-zigzag`): the total of the correction and the offset runs straight between the supported windows; `--fit-total`
+is its section B (the profile's coupling on that total; implies `--straight-gaps`). Without them the rule is today's, and every
+old column, file and key of the outputs is unchanged. With or without them the fall of every weak run (section A7) is in
+`summary.json` and `windows.csv` ends with the correction, the effective offset and the total of each window.
 """
 import argparse
 import csv
@@ -178,6 +184,26 @@ def profile(E, grid, rule=Rule()):
         back.append(arg)
         val = best + e
     _, last = _best((val + trans[:, zero])[:, None], pref, rule.cost_tolerance)
+    path = [int(last[0])]
+    for arg in back[::-1]:
+        path.append(int(arg[path[-1]]))
+    return np.array(path[::-1])
+
+
+def profile_total(E, grid, c, c_pin0, c_pin1, rule=Rule()):
+    """RULE (zigzag) section B: the profile with the coupling on the total t_w = c_w + d_w instead of on d_w. E: (windows,
+    offsets); c: the correction at each window's middle node; c_pin0, c_pin1: the correction at the two pins. -> the offset
+    index of every window. Same grid, order of preference and tolerance as `profile`."""
+    pref = preference(grid)
+    k = rule.coupling
+    val = k * (c[0] + grid - c_pin0) ** 2 + E[0]
+    back = []
+    for w in range(1, len(E)):
+        trans = k * ((c[w] + grid[None, :]) - (c[w - 1] + grid[:, None])) ** 2
+        best, arg = _best(val[:, None] + trans, pref, rule.cost_tolerance)
+        back.append(arg)
+        val = best + E[w]
+    _, last = _best((val + k * (c_pin1 - (c[-1] + grid)) ** 2)[:, None], pref, rule.cost_tolerance)
     path = [int(last[0])]
     for arg in back[::-1]:
         path.append(int(arg[path[-1]]))
@@ -404,10 +430,13 @@ def score_stretch(data, run, runs):
     return out
 
 
-def solve_stretch(sc, rule):
-    """Rule 5's supported windows and rule 6's profile for given curves. -> (supported (windows,), grid index per window)."""
+def solve_stretch(sc, rule, total=None):
+    """Rule 5's supported windows and rule 6's profile for given curves. -> (supported (windows,), grid index per window).
+    total = (c per window, c at the first pin, c at the last pin): the coupling on the total (zigzag RULE section B)."""
     supported = np.isfinite(sc["E"][:, 0]) & (sc["matched"].max(axis=1) >= rule.min_matched)
     E = np.where(supported[:, None], np.nan_to_num(sc["E"]), 0.0)
+    if total is not None:
+        return supported, profile_total(E, sc["grid"], *total, rule)
     return supported, profile(E, sc["grid"], rule)
 
 
@@ -425,6 +454,75 @@ def node_offsets(data, run, windows, offsets):
     """Rule 6: the profile on every node [m] (0 outside the support)."""
     t = np.r_[run["pin0"], data.mid[windows], run["pin1"]]
     return np.interp(data.cap.node_t, t, np.r_[0.0, offsets, 0.0], left=0.0, right=0.0)
+
+
+# ---- zigzag RULE section A: the total runs straight between the supported windows -------------------------------------------
+def corrected_axis(data, run):
+    """Rule 2's axis a for any weak run (an eligible run has it as run["a"])."""
+    tm = (data.start[run["first"]] + data.end[run["last"]]) / 2
+    n = min(int(np.searchsorted(data.cap.node_t, tm, side="left")), len(data.cap.node_t) - 1)
+    return (data.P1[n] @ lg.inv(data.P0[n]))[:3, :3] @ run["a0"]
+
+
+def correction(data, a, P=None):
+    """A1: c(n) = a . (position after the loop closure - odometry position) of every node (P: other poses than the capture's
+    trajectory after the loop closure)."""
+    P = data.P1 if P is None else P
+    return (P[:, :3, 3] - data.P0[:, :3, 3]) @ a
+
+
+def pin_nodes(data, run):
+    """A1: the nodes whose times are the support's two pins (the first node of the window after the support, or the
+    recording's last node)."""
+    return int(data.first[run["sup_first"]]), int(min(data.first[run["sup_last"] + 1], len(data.cap.node_t) - 1))
+
+
+def fall(c):
+    """A7: max over w of (max over v <= w of s c_v - s c_w), s the sign of c[-1] - c[0] (+1 when equal)."""
+    c = np.asarray(c, float)
+    if len(c) == 0:
+        return 0.0
+    sc = (1.0 if c[-1] >= c[0] else -1.0) * c
+    return float(max(0.0, (np.maximum.accumulate(sc) - sc).max()))
+
+
+def straight_knots(data, run, windows, supported, d, c):
+    """A2: the knots (times, totals): first pin, every supported window at its middle node, last pin."""
+    t = data.cap.node_t
+    n0, n1 = pin_nodes(data, run)
+    mids = data.mid_node[windows][supported]
+    kt = np.r_[t[n0], t[mids], t[n1]]
+    kc = np.r_[c[n0], c[mids] + d[supported], c[n1]]
+    if not np.all(np.diff(kt) > 0):
+        raise ValueError("the knots' times do not strictly increase (RULE zigzag A2)")
+    return kt, kc
+
+
+def round_offsets(e, grid, rule=Rule()):
+    """A4: the grid index of each effective offset: the nearest 0.1 k; a middle between two integers goes to the one nearer 0;
+    held to the grid's ends."""
+    x = np.asarray(e, float) / rule.grid_m
+    fl = np.floor(x)
+    tie = np.abs((x - fl) - 0.5) < 1e-9
+    k = np.where(tie, np.where(fl >= 0, fl, fl + 1), np.floor(x + 0.5))
+    kmax = (len(grid) - 1) // 2
+    return np.clip(k, -kmax, kmax).astype(int) + kmax
+
+
+def straight_shift(data, run, kt, kc, c):
+    """A3: every node of the support moves by (T(t) - c(n)) a; the other nodes stay."""
+    n0, n1 = pin_nodes(data, run)
+    idx = np.arange(n0, n1 + 1)
+    shift = np.zeros((len(data.cap.node_t), 3))
+    shift[idx] = (np.interp(data.cap.node_t[idx], kt, kc) - c[idx])[:, None] * run["a"][None, :]
+    return shift
+
+
+def run_shift(data, run):
+    """The move of every node (N, 3) that a run's profile makes, in the form the run was solved in."""
+    if run.get("straight"):
+        return straight_shift(data, run, run["knots_t"], run["knots_c"], run["c_nodes"])
+    return node_offsets(data, run, run["scores"]["windows"], run["offsets"])[:, None] * run["a"][None, :]
 
 
 # ---- rule 7: the edges ---------------------------------------------------------------------------------------------------
@@ -523,7 +621,8 @@ def read_edge(data, edge, run, wins, H, pos_after, K_after):
 
 
 # ---- the whole rule ------------------------------------------------------------------------------------------------------
-def run_rule(data, edges, rule=None, min_sigma=None, log=print):
+def run_rule(data, edges, rule=None, min_sigma=None, log=print, straight_gaps=False, fit_total=False):
+    straight_gaps = straight_gaps or fit_total  # the total-fitted offsets are read through the straight form (RULE zigzag B)
     rule = rule or data.rule
     c = data.cap
     runs = find_stretches(data, min_sigma)
@@ -536,18 +635,31 @@ def run_rule(data, edges, rule=None, min_sigma=None, log=print):
             r["cause"] = "supports overlap"
             continue
         sc = r["scores"] = score_stretch(data, r, runs)
-        sup, k = solve_stretch(sc, rule)
+        win = sc["windows"]
+        r["c_nodes"] = correction(data, r["a"])
+        n0, n1 = pin_nodes(data, r)
+        r["straight"] = straight_gaps
+        total = (r["c_nodes"][data.mid_node[win]], r["c_nodes"][n0], r["c_nodes"][n1]) if fit_total else None
+        sup, k = solve_stretch(sc, rule, total)
         off = sc["grid"][k]
         r["supported"], r["offsets"], r["k"] = sup, off, k
-        own = (sc["windows"] >= r["first"]) & (sc["windows"] <= r["last"])
         zero = int(np.argmin(np.abs(sc["grid"])))
+        if straight_gaps:
+            r["knots_t"], r["knots_c"] = straight_knots(data, r, win, sup, off, r["c_nodes"])
+            r["eff"] = np.interp(data.cap.node_t[data.mid_node[win]], r["knots_t"], r["knots_c"]) - r["c_nodes"][data.mid_node[win]]
+            r["k_hold"] = round_offsets(r["eff"], sc["grid"], rule)
+            moved_on_grid = np.any(r["k_hold"] != zero)
+        else:
+            r["eff"], r["k_hold"] = off, k
+            moved_on_grid = np.any(off != 0)
+        own = (win >= r["first"]) & (win <= r["last"])
         has = np.isfinite(sc["T"][:, 0])
         r["held_before"] = float(sc["T"][has, zero].mean()) if has.any() else np.nan
-        r["held_after"] = float(sc["T"][has, k[has]].mean()) if has.any() else np.nan
+        r["held_after"] = float(sc["T"][has, r["k_hold"][has]].mean()) if has.any() else np.nan
         if not (sup & own).any():
             r["cause"] = "no surface across the passage seen by another visit"
-        elif not np.any(off != 0):
-            r["status"], r["cause"] = "unchanged", "the profile is zero"
+        elif not moved_on_grid:
+            r["status"], r["cause"] = "unchanged", "the effective offsets are zero" if straight_gaps else "the profile is zero"
         elif not has.any():
             r["cause"] = "no held-out score"
         elif not r["held_after"] < r["held_before"]:
@@ -580,7 +692,7 @@ def run_rule(data, edges, rule=None, min_sigma=None, log=print):
         cand = [r for r in eligible if r["status"] == "candidate"]
         shift = np.zeros((len(c.node_t), 3))
         for r in cand:
-            shift += node_offsets(data, r, r["scores"]["windows"], r["offsets"])[:, None] * r["a"][None, :]
+            shift += run_shift(data, r)
         pos_after = data.P1[:, :3, 3] + shift
 
         def K_after(node):
@@ -619,7 +731,7 @@ def run_rule(data, edges, rule=None, min_sigma=None, log=print):
     shift = np.zeros((len(c.node_t), 3))
     for r in eligible:
         if r["status"] == "applied":
-            shift += node_offsets(data, r, r["scores"]["windows"], r["offsets"])[:, None] * r["a"][None, :]
+            shift += run_shift(data, r)
     P = data.P1.copy()
     P[:, :3, 3] += shift
     return runs, table, P
@@ -651,7 +763,7 @@ def window_rows(data, runs, rule):
             continue
         sc = r["scores"]
         zero = int(np.argmin(np.abs(sc["grid"])))
-        k = r["k"]
+        k = r["k_hold"]
         for j, w in enumerate(sc["windows"]):
             e, t = sc["E"][j], sc["T"][j]
             rows.append(dict(run=f"{r['first']}-{r['last']}", window=int(w), in_run=int(r["first"] <= w <= r["last"]),
@@ -660,7 +772,10 @@ def window_rows(data, runs, rule):
                              train_patches=int(sc["n_train"][j]), held_patches=int(sc["n_test"][j]),
                              matched_most=int(sc["matched"][j].max()),
                              train_before_m=_rms(e[zero]), train_after_m=_rms(e[k[j]]), held_before_m=_rms(t[zero]), held_after_m=_rms(t[k[j]]),
-                             alone_m=round(own_offset(e, sc["grid"], rule), 3) if np.isfinite(e[0]) else ""))
+                             alone_m=round(own_offset(e, sc["grid"], rule), 3) if np.isfinite(e[0]) else "",
+                             correction_m=round(float(r["c_nodes"][data.mid_node[w]]), 6),
+                             effective_offset_m=round(float(r["eff"][j]), 6),
+                             total_m=round(float(r["c_nodes"][data.mid_node[w]] + r["eff"][j]), 6)))
     return rows
 
 
@@ -680,7 +795,7 @@ def edge_rows(table):
     return rows
 
 
-def summary(data, runs, rule):
+def summary(data, runs, rule, P=None):
     t0 = data.cap.node_t[0]
     out = []
     for r in runs:
@@ -696,13 +811,35 @@ def summary(data, runs, rule):
             for j in np.flatnonzero(own):
                 gap = 0.0 if sup[j] else gap + float(data.end[sc["windows"][j]] - data.start[sc["windows"][j]])
                 longest = max(longest, gap)
-            moved = ~sup & (off != 0)
+            eff = r["eff"]
+            moved = ~sup & ((np.abs(eff) > 1e-9) if r["straight"] else (off != 0))  # A8: effective offsets, not rounded
             d.update(reference_patches=sc["reference_patches"], supported_in_run=int((sup & own).sum()), run_windows=int(own.sum()),
-                     longest_unsupported_s=round(longest, 2), largest_offset_m=round(float(np.abs(off).max()), 3),
-                     unsupported_moved=int(moved.sum()), unsupported_largest_m=round(float(np.abs(off[moved]).max()), 3) if moved.any() else 0.0,
+                     longest_unsupported_s=round(longest, 2), largest_offset_m=round(float(np.abs(eff).max()), 3),
+                     unsupported_moved=int(moved.sum()), unsupported_largest_m=round(float(np.abs(eff[moved]).max()), 3) if moved.any() else 0.0,
                      held_before_m=_rms(r["held_before"]), held_after_m=_rms(r["held_after"]))
+        d.update(falls(data, r, P))
         out.append(d)
     return out
+
+
+def falls(data, r, P=None):
+    """A7 for one weak run: its fall after the loop closure, and after the step when its profile was applied (from the poses P of
+    the result); for an eligible run with scores also over its whole support."""
+    a = r["a"] if "a" in r else corrected_axis(data, r)
+    mids = data.mid_node[r["first"]:r["last"] + 1]
+    c = correction(data, a)
+    d = dict(fall_after_loop_closure_m=round(fall(c[mids]), 6),
+             fall_after_step_m=round(fall(correction(data, a, P)[mids]), 6) if P is not None and r.get("status") == "applied" else None)
+    if "scores" in r:
+        sm = data.mid_node[r["sup_first"]:r["sup_last"] + 1]
+        d.update(support_fall_after_loop_closure_m=round(fall(c[sm]), 6),
+                 support_fall_after_step_m=round(fall(correction(data, a, P)[sm]), 6) if P is not None and r["status"] == "applied" else None)
+    return d
+
+
+def weak_run_falls(data, runs, P=None):
+    """A7 for every weak run, eligible or not (reading R4)."""
+    return [dict(windows=[r["first"], r["last"]], eligible=bool(r["eligible"]), sigma_m=round(r["sigma"], 3), **falls(data, r, P)) for r in runs]
 
 
 def _write_csv(path, rows):
@@ -725,6 +862,10 @@ def main(argv=None):
     p.add_argument("--coupling", type=float, help="a reading: the profile's coupling (rule: 0.10)")
     p.add_argument("--min-matched", type=int, help="a reading: matched training patches a supported window needs (rule: 8)")
     p.add_argument("--min-sigma", type=float, help="a reading: the sigma an eligible run needs (rule: 1.0 m)")
+    p.add_argument("--straight-gaps", action="store_true",
+                   help="zigzag RULE section A: the total of the correction and the offset runs straight between the supported windows")
+    p.add_argument("--fit-total", action="store_true",
+                   help="zigzag RULE section B (reading F2): the profile's coupling on the total; implies --straight-gaps")
     p.add_argument("--rebuild-information", action="store_true",
                    help="the edges' information per window from the points even when the capture (format 3) carries dMapper's")
     a = p.parse_args(argv)
@@ -737,20 +878,25 @@ def main(argv=None):
     rule = replace(rule, flank_windows=int(cap.setting("loop_closure_segment_windows", rule.flank_windows)))
     data = Data(cap, a.trajectory, a.cache, rule)
     data.rebuild_information = a.rebuild_information
-    runs, table, P = run_rule(data, lg.load_edges(a.edges), rule, a.min_sigma)
+    runs, table, P = run_rule(data, lg.load_edges(a.edges), rule, a.min_sigma, straight_gaps=a.straight_gaps, fit_total=a.fit_total)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     write_trajectory(data, P, out / "trajectory")
     _write_csv(out / "windows.csv", window_rows(data, runs, rule))
     _write_csv(out / "edges.csv", edge_rows(table))
-    s = summary(data, runs, rule)
-    (out / "summary.json").write_text(json.dumps(dict(rule={k: getattr(rule, k) for k in rule.__dataclass_fields__}, runs=s), indent=1))
+    s = summary(data, runs, rule, P)
+    (out / "summary.json").write_text(json.dumps(dict(rule={k: getattr(rule, k) for k in rule.__dataclass_fields__}, runs=s,
+                                                      options=dict(straight_gaps=bool(a.straight_gaps or a.fit_total), fit_total=bool(a.fit_total)),
+                                                      weak_runs=weak_run_falls(data, runs, P)), indent=1))
     for d in s:
         print(f"run windows {d['windows'][0]}-{d['windows'][1]} (t {d['t_s'][0]}-{d['t_s'][1]} s), sigma {d['sigma_m']} m: {d['status']}"
               + (f" ({d['cause']})" if d["cause"] else "")
               + (f"; supported {d['supported_in_run']} of {d['run_windows']} run windows, longest unsupported {d['longest_unsupported_s']} s, largest "
                  f"offset {d['largest_offset_m']} m, {d['unsupported_moved']} unsupported moved (largest {d['unsupported_largest_m']} m), held-out "
                  f"{d['held_before_m']} -> {d['held_after_m']} m" if "supported_in_run" in d else ""))
+    for d in s:
+        print(f"fall of run {d['windows'][0]}-{d['windows'][1]}: {d['fall_after_loop_closure_m']} m after the loop closure"
+              + (f", {d['fall_after_step_m']} m after the step" if d["fall_after_step_m"] is not None else ""))
     for r in edge_rows(table):
         print(f"edge {r['edge']} ({r['side']}, run {r['run']}): first pose {r['first_pose_m']} m, time support {r['rho_before_m']} -> "
               f"{r['rho_after_m']} m, limit {r['limit_m']} m, informed {r['informed_share']}, {r['cls'] or 'no class (run without scores)'}")
