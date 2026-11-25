@@ -95,7 +95,7 @@ and goes to the user.
       named; a manifest written and compared. Done when the three cases pass.
       (2026-11-25, merged: run-dependent fields normalised, IDENTICAL 5 files; one flipped byte named, 1 of 5, exit 1; a
       changed setting not normalised away; the manifest round trip IDENTICAL.)
-- [ ] 3.4 The fixtures' blindness precondition against the truth (`tests/loop_chains_test.cpp`,
+- [x] 3.4 The fixtures' blindness precondition against the truth (`tests/loop_chains_test.cpp`,
       `tests/window_covariance_test.cpp`, the shared helper beside `tests/synthetic_loop.cpp`'s): the measured sets run
       once before the change (`-tc="loop chain*" --no-skip -s`, `-tc="window covariance*" --no-skip -s`; logs kept in
       the experiment folder), the definition changed with the loop world's tolerances unchanged, the sets run again.
@@ -103,15 +103,25 @@ and goes to the user.
       the experiment folder and summarised here, and no validity verdict differs. **If one differs, or a tolerance would
       have to move: stop, numbers to the user.** The register's difference of this branch (changed assertions, removed
       values) is quoted here; it is the change the user accepted with this proposal.
+      (2026-11-25: STOPPED by its own condition; not adopted, the user chose to keep the old definition (option 1). Measured
+      sets before and after, gate held: the loop chains valid under both (worst old 1.26e-4 against 1e-3); window covariance
+      case (b) invalid runs 26 / 23 of 271 (switches off / on) by the run's own reading, 103 / 106 at the truth: the truth's
+      share over the largest eigenvalue reaches 0.0235 against 0.02, while the old share over the trace stays near 0.013;
+      the fixture's guard (invalid below M/5 = 54) would fail. The design's expectation (no verdict changes) did not hold.
+      No tolerance moved; the diff and the logs are in experiments/regions/verification/2026-11-25-blindness-against-truth/.
+      Recorded as a finding in checks/instruments.toml (fixtures, not_seen). A corridor blind at the truth would be a
+      change of its own.)
 - [x] 3.5 R2's sensor range (`tests/synthetic_routes.cpp`): another range than the documented one is refused with a
       message; a test case shows the refusal. Done when the case passes and the existing route cases are unchanged in
       the register.
       (2026-11-25, merged: ranges 5.9, 8 and 100 refused with "route R2 needs SensorProfile::max_range_m = 6"; the other
       routes unchanged. Step checks on the branch ALL HOLD, register +12 cases, +50 assertions, +24 values, recorded.)
-- [ ] 3.6 After 3.1 to 3.5 are merged: `checks/instruments.toml` updated (the closed items name their new cases, the
+- [x] 3.6 After 3.1 to 3.5 are merged: `checks/instruments.toml` updated (the closed items name their new cases, the
       simulator's resolution carries its measured numbers), the register recorded. Done when
       `python checks/check_register.py` exits 0 and the table shows no `not established` item among those D10 closes.
-
+      (2026-11-25: the closed items name their cases (3.1-3.3, 3.5, run_health's limits); the fixtures' blindness gap is
+      recorded as a finding instead of closed (3.4). Table: 28 items not established or only stated, none of those D10
+      closes except the one 3.4 left as a finding.)
 ## 4. One source for the verdict limits
 
 - [x] 4.1 The limits line in `log_run_verdict` (`src/domain/window_verdict.cpp`, the solver's file), first of its

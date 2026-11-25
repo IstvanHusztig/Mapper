@@ -274,6 +274,8 @@ stored hash equals `odometry_settings_hash` of its `settings.toml`, which the re
    validity differs between the two definitions, or a precondition would need another tolerance, the agent stops and the
    numbers go to the user. The register shows this change as changed assertions and removed values: it is the one
    register change this proposal asks the user to accept in advance.
+   **Outcome (2026-11-25):** the stop condition was met: the truth definition is stricter (window covariance case (b):
+   103 / 106 of 271 runs invalid against 26 / 23); not adopted, the user kept the old definition; see tasks.md 3.4.
 5. **R2's range** (`tests/synthetic_routes.cpp`, verification): the route is documented to need a sensor range of 6 m
    and nothing checks it; the generator refuses another range for R2 with a message.
 6. **The step checks' time-limit count** (D5).
