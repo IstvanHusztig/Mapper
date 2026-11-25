@@ -1,6 +1,7 @@
 #include "window_verdict.h"
 
 #include <algorithm>
+#include <charconv>
 #include <cmath>
 #include <functional>
 #include <iomanip>
@@ -22,6 +23,14 @@ const char *check_name(Check c)
 
 namespace
 {
+    // the shortest text that reads back as the same double (3, 2.5, 0.01, 0.015)
+    std::string round_trip(double value)
+    {
+        char text[32];
+        const auto end = std::to_chars(text, text + sizeof(text), value).ptr;
+        return std::string(text, end);
+    }
+
     Check above(const std::optional<double> &value, double limit)
     {
         if (!value)
@@ -290,6 +299,13 @@ RunVerdict summarize_run(const std::vector<WindowVerdict> &windows, bool complet
 
 void log_run_verdict(const RunVerdict &r, const VerdictLimits &limits, Logger &logger)
 {
+    // the limits this verdict used, first and in a form that reads back exactly, so that a tool judging the log takes the
+    // run's own limits (openspec change check-register, design D8)
+    log_info(logger) << "window verdict limits: bend " << round_trip(limits.bend_deg) << " deg, severe bend "
+                     << round_trip(limits.severe_bend_deg) << " deg, speed " << round_trip(limits.speed_mps) << " m/s, gyro bias "
+                     << round_trip(limits.bias_deg_s) << " deg/s, bent share " << round_trip(limits.bent_share) << ", chi2 median "
+                     << round_trip(limits.chi2_median) << ", chi2 p95 " << round_trip(limits.chi2_p95) << ", weak ratio "
+                     << round_trip(limits.weak_ratio);
     log_info(logger) << "window verdict summary: " << r.windows << " windows" << (r.complete ? "" : " (run cancelled: incomplete)")
                      << "; investigation triggers, not a statement about the map's accuracy";
     for (const FlagSummary &f : r.flags)
