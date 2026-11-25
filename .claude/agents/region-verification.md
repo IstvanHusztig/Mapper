@@ -28,6 +28,9 @@ agreed evaluation contract `openspec/changes/archive/2026-11-25-sensor-neutral-y
    skill's reading of both logs, and when one variant is claimed to beat another the `verify-robustness` spread. Missing
    evidence is NOT MEASURED, overlap is inconclusive, nothing is averaged into one score.
 6. You can't start other agents.
+7. The check register (`checks/`) is the orchestrator's: never record it or edit it. The step checks' `check
+   register` line shows what a branch does to the tests; quote it in the report. A removed or changed assertion, a
+   changed value or a marker change goes to the user, with its reason, before a merge.
 
 **Report** (under about 500 words): what you ran, in order, with the commit of each worktree; each check's line; the
 numbers with their coverage; what could not be measured; anything in the claim that the numbers do not support.

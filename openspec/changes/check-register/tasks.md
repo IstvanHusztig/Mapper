@@ -48,13 +48,16 @@ and goes to the user.
       (2026-11-25: merged; scratch proofs: an added case gives `HOLDS, to record: +1 case, +1 assertion`, a 0.02 loosened
       to 0.2 gives `FAILED: 1 assertion changed`; the main-tree verdict is unit-tested. Full run on the branch: ALL HOLD.
       Added wall time: tool tests 33 s, register 1.4 s. Register recorded after the merge: +10 cases, +21 assertions.)
-- [ ] 1.8 Docs for the register: `tools/README.md` (the tool, its kinds, what it does not see), `docs/regions/README.md`
+- [x] 1.8 Docs for the register: `tools/README.md` (the tool, its kinds, what it does not see), `docs/regions/README.md`
       (the rule for a register difference and who records), the eight region agents' definitions
       (`.claude/agents/region-*.md`: quote the register's line in the hand-back; never record), `CLAUDE.md` (Testing,
       Regions), `docs/regions/verification.md` (the kit's "no unit test" line corrected; the register under Owns and
       How to check). Done when `python tools/build_docs_index.py --check` holds and each named file states the rule in
       the words of the spec.
-
+      (2026-11-25: rule 10 in the seven region agents and rule 7 in the verification agent, the hand-back quotes the register
+      line; docs/regions/README.md, CLAUDE.md (kit, Check register), tools/README.md (the tool, kinds, exit codes, blind
+      spots, reference reading), docs/regions/verification.md (kit, How to check). build_docs_index --check holds;
+      check_agent_setup PASS.)
 ## 2. The instruments' file
 
 - [x] 2.1 The schema and its check (D7): `check_register.py --instruments` and as part of the plain comparison; the

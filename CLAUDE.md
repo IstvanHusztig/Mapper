@@ -61,11 +61,16 @@ merged. `docs/regions/README.md` has the rules and the protocol; in short:
 - **Merge:** the orchestrator checks the branch (ownership, `tools/step_checks.py` in the worktree, the conclusion
   reviewer), then merges a branch that changes no number on its own judgment and one that changes a number only after the
   user's decision on its numbers; after each merge `tools/step_checks.py` runs on the main tree.
-- **Verification kit:** `tools/step_checks.py` (build, tests, both guards, both replays, the per-term table, 44_short;
-  about 7 min; `--record` writes the references), `tools/end_runs.py` (full 44, Livox 3, 44_short against their
+- **Verification kit:** `tools/step_checks.py` (build, tests, the Python tool tests, the check register, both guards,
+  both replays, the per-term table, 44_short with its time-limit count; about 8 min; `--record` writes the references), `tools/end_runs.py` (full 44, Livox 3, 44_short against their
   manifests, `--debug`; about 50 min, background), `tools/run_replay.py` (the gate every replay goes through: memory and a
   slot, its cost, the time-limit count). Paths in `tools/local_paths.toml`; captures and references in
   `C:/Users/User/Downloads/dLidar/experiments/guards/`.
+- **Check register:** `checks/tests.register` (every test case, marker, assertion and the values its limits come from;
+  written only by `checks/check_register.py --record`, by the orchestrator, from a clean tree) and
+  `checks/instruments.toml` (per measuring instrument: known answer, smallest effect, planted fault, range, guards;
+  hand-kept, its cases checked). A difference that only adds needs no decision; a removed or changed check or a
+  marker change goes to the user (`docs/regions/README.md`).
 - **Knowledge files** are written by the orchestrator from the agents' hand-backs, after review and, where a number or a
   contract changes, after the user's decision.
 

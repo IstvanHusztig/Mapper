@@ -54,8 +54,8 @@ captures and the replays' table files (`*_window_terms.csv`, `*_window_features.
 ## Owns
 
 All of `tools/**`, the verify skills and the test helpers (`docs/regions/owners.toml`), grouped by purpose:
-- **The kit:** `step_checks.py` (build, unit tests, characterization guard, loop guard, the two capture replays, the
-  44_short replay's term table, 44_short against its manifest; about 7 min), `end_runs.py` (about 50 min; `--debug`
+- **The kit:** `step_checks.py` (build, unit tests, the Python tool tests, the check register, characterization guard,
+  loop guard, the two capture replays, the 44_short replay's term table, 44_short against its manifest; about 8 min), `end_runs.py` (about 50 min; `--debug`
   adds the Debug build and `ctest`), `run_replay.py` (the gate), `kit_lib.py` (paths, build through `vcvars64.bat`, the
   gate, `run_dmapper` with wall/CPU time and peak memory; Windows only), `local_paths.toml` (the one file to change on
   another machine), `region_owners.py` (the ownership list's check and `--diff`), `function_sizes.py`,
@@ -88,6 +88,10 @@ All of `tools/**`, the verify skills and the test helpers (`docs/regions/owners.
 
 ## How to check your work
 
+- **The check register** (`checks/`, the orchestrator's): the step checks compare the tests with
+  `checks/tests.register` and check `checks/instruments.toml`. A new test of this region shows as `HOLDS, to record`; a
+  changed tolerance or marker in an existing test fails and goes to the user. `python checks/check_register.py
+  --instruments` prints what proves each instrument; the region's instruments are most of its rows.
 - **Python tool tests:** `python -B -m unittest discover -s tests -p test_verification_tools.py -v` (no data, no mapper):
   `trajectory_seams` refuses unequal or non-increasing timestamps and NaN, places chunk rows with `session_poses.mrp`;
   `snapshot_trajectory` reads world positions and refuses truncated, extended or corrupted files; `run_health` never
@@ -96,8 +100,9 @@ All of `tools/**`, the verify skills and the test helpers (`docs/regions/owners.
   whose input, settings, executable or output changed.
 - **Wall pairs and run timing** (change `faster-experiments`): `python tools/wall_pairs.py freeze <result> <wall piece csv> <set.npz>` selects the returns of each wall piece's visits once; `measure <set.npz> <trajectory>...` then gives, for any trajectory of that recording (a result, a loop closure replay, an odometry snapshot), the median, 90th percentile and count above a threshold of the gap between visits, on the same walls and without reading a cloud. The numbers are agreement between visits on a frozen set, not accuracy; a set frozen from one result favours its walls, so freeze before the variants run. `run_health.py` also prints the rows "stage durations" (from the `stage durations:` line every run logs) and "windows stopped at the time limit" (0: the result does not depend on the machine's load; the count is read from the window verdict summary when the dedicated line is missing; NOT MEASURED for logs of older builds); both descriptive, neither changes the exit code.
 - **Loop graph** (`tools/loop_graph.py`, tests `tests/test_loop_graph.py`): the loop closure pose graph of a capture in Python. `solve` writes a trajectory folder for any kept edges and weights (per edge, per odometry step, kernel) that `wall_pairs.py measure` reads; `loo` gives each kept edge's leave-one-out innovation; `check` must match a replay's trajectory (0.005 mm on a real capture). It takes the kept edges as given (no registration, pruning or consistency); a disputed edge is not thereby false.
-- **The kit itself has no unit test**: `step_checks.py`, `kit_lib.py`, `run_replay.py` and `region_owners.py` are checked
-  by the acceptance runs of `openspec/changes/region-agents/tasks.md` 2.1–3.1 (references re-recorded identical with
+- **The kit has few unit tests**: `step_checks.py`'s register line and time-limit detail and `kit_lib`'s build-type check
+  are tested (`tests/test_verification_tools.py`); the rest of `step_checks.py`, `kit_lib.py`, `run_replay.py` and
+  `region_owners.py` are checked by the acceptance runs of `openspec/changes/region-agents/tasks.md` 2.1–3.1 (references re-recorded identical with
   stage 6's, a third replay waits while two run, a dead lock is ignored, a made-up branch outside its region fails).
   `python tools/region_owners.py` must exit 0 on the list.
 - **C++ helpers:** `lidar_odometry_tests -tc="loop recording*"` (the synthetic recording); the back-end's and the

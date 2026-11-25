@@ -387,16 +387,45 @@ python tools/step_checks.py --record   # write the reference files from this com
 python tools/step_checks.py --build-only   # only the Release build of this worktree
 ```
 
-In this order: the Release build, the unit tests, the characterization guard and the loop guard against their reference
-files (exact hexadecimal doubles), the replays of the two captures (44_short 20-40 s, Livox 3 100-130 s: every window
-identical with its capture), the per-term table of the 44_short replay against its reference, and 44_short against its
-manifest. About 7 minutes. "IDENTICAL" everywhere means the change changes no number; that is this command's word, not
+In this order: the Release build, the unit tests, the Python tool tests (`python -m unittest discover -s tests -p
+"test_*.py"`, about 35 s), the check register (below, about 1.5 s), the characterization guard and the loop guard
+against their reference files (exact hexadecimal doubles), the replays of the two captures (44_short 20-40 s, Livox 3
+100-130 s: every window identical with its capture), the per-term table of the 44_short replay against its reference,
+and 44_short against its manifest, with the count of windows stopped at the time limit (above 0 with a difference: the
+result depended on the machine's load, run again). About 8 minutes. "IDENTICAL" everywhere means the change changes no number; that is this command's word, not
 its author's.
 
 - `--record` refuses when `src/`, `tests/` or `CMakeLists.txt` have uncommitted changes, runs each guard twice (they
   must agree), and notes the commit in `<guards>/refs/recorded.json`. Record again only after a change that is meant to
   change the references (a new feature column, a new guard case), from the commit that makes it.
 - The first line prints the worktree and the commit, so a result can't be mistaken for another tree's.
+
+### The check register (checks/check_register.py)
+
+```
+python checks/check_register.py                # compare the tests with checks/tests.register (and checks/instruments.toml)
+python checks/check_register.py --print        # the register the sources give, to stdout
+python checks/check_register.py --instruments  # the table: what proves each measuring instrument
+python checks/check_register.py --record       # write the register (the orchestrator, main tree, clean tests/)
+```
+
+`checks/tests.register` lists every test case of the unit tests and the Python tool tests with its markers (skip,
+should_fail, unittest skip / expectedFailure), every assertion as one line, every call of a test helper that asserts,
+and the values with a number in them (constants, struct member defaults such as the loop world's tolerances, case
+tables, constants in the generators). The comparison names each difference with its kind: case, assertion, call or
+value added, removed or changed; marker added or removed; case moved; assertion reworded (the same numbers and
+operators in other words). Exit 0: identical; 3: additions only (moved and reworded count as additions); 1: a change;
+2: a source it cannot read to its end, or whose macro count disagrees with a plain count. The step checks hold on
+exit 3 in a region's worktree and fail on it in the main tree (an unrecorded addition must not stay); the full
+listing goes to `<guards>/runs/<worktree>/check_register.txt`.
+
+What it does not see: a limit computed while a test runs, an assertion the flow never reaches, limits in `src/`, the
+meaning of a test, constants without a number. It does not say whether a changed number is looser or tighter: it shows
+the old and the new line. `checks/instruments.toml` gives, per measuring instrument, its known-answer check, smallest
+detected effect, planted-fault check, range of validity and guards, each with the test cases that prove it or as not
+established; the comparison checks that every named case exists, is not expected to fail, and, when it is skipped in
+the regular run, names the date and file of its last measured result. Reference reading (2026-11-25, master
+d3eb0cf): 292 cases (7 should_fail, 25 skip), 1,933 assertions, 168 Python tests; 15 instruments.
 
 ### end_runs.py
 

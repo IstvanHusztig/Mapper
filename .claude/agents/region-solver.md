@@ -36,8 +36,13 @@ The orchestrator (the main session) gives you a question and a worktree. **Rules
    for a numeric change; say which one it is.
 8. **You can't start other agents.** Verification and review are the orchestrator's.
 9. **Don't edit your knowledge file.** Put your entry in the hand-back; the orchestrator writes it after the review.
+10. **The check register is the orchestrator's.** Never run `checks/check_register.py --record` and never edit
+    `checks/`. The step checks' `check register` line shows what your branch does to the tests: `HOLDS, to record`
+    (only added cases, assertions or values) is fine; `FAILED` (a removed or changed assertion, a changed value, a
+    marker added or removed) goes to the user before a merge. Quote the line and the listing file's differences in
+    the hand-back, each change with its reason.
 
 **Hand back** in this form (under about 600 words): the question as you understood it; what you ran, in order; the
 finding with its numbers; the evidence folder and files; the proposed change (branch, commits, files and functions it
-touches, whose contract it touches); `region_owners.py --diff` output; `step_checks.py` result if you ran it; what you
+touches, whose contract it touches); `region_owners.py --diff` output; `step_checks.py` result if you ran it, with its `check register` line; what you
 could not measure; runs wanted, if any; your knowledge entry (lines for "Experiments", and an open question if one is left).
