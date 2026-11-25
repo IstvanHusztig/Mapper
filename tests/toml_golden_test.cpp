@@ -7,6 +7,7 @@
 #include <fstream>
 #include <iterator>
 #include <string>
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -135,4 +136,26 @@ TEST_CASE("a retired setting is ignored at the value the code kept and refused o
     CHECK_FALSE(loads("[imu_translation]\nimu_accel_window_sigma_mps2 = 0.05\n"));
     CHECK_FALSE(loads("[loop_closure]\nloop_closure_kernel_scale = 0.5\n"));
     CHECK_FALSE(loads("[robust_lidar_odometry]\nno_such_setting = 1.0\n")); // a retired section accepts only its retired keys
+
+    // a retired parameter that the odometry settings hash still counts at one value (removed_hashed in
+    // odometry_snapshot_file.cpp) is accepted only at that value, so a file the loader takes never fails later against a
+    // snapshot or capture made with that same file
+    const auto check = [](const std::string &body, std::vector<std::string> &ignored)
+    {
+        const toml::table tbl = toml::parse(body);
+        return TomlIO().check_keys(tbl, &ignored);
+    };
+    std::vector<std::string> ignored;
+    CHECK(check("[motion_model_uncertainty]\nturn_rate_threshold_deg_s = 30.0\n", ignored).empty());
+    REQUIRE(ignored.size() == 1);
+    CHECK(ignored[0] == "'turn_rate_threshold_deg_s' in [motion_model_uncertainty]: setting removed from dMapper, ignored");
+    ignored.clear();
+    CHECK(check("[motion_model_uncertainty]\nturn_rate_threshold_deg_s = 30\n", ignored).empty()); // an integer 30 is 30
+    ignored.clear();
+    const std::vector<std::string> refused = check("[motion_model_uncertainty]\nturn_rate_threshold_deg_s = 45.0\n", ignored);
+    REQUIRE(refused.size() == 1);
+    CHECK(refused[0] == "'turn_rate_threshold_deg_s' in [motion_model_uncertainty]: setting removed from dMapper; only 30 (the "
+                        "behaviour that remains) is accepted");
+    CHECK(loads("[motion_model_uncertainty]\nturn_rate_threshold_deg_s = 30.0\n"));
+    CHECK_FALSE(loads("[motion_model_uncertainty]\nturn_rate_threshold_deg_s = 45.0\n"));
 }

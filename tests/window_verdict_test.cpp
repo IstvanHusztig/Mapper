@@ -346,3 +346,30 @@ TEST_CASE("window verdict, normalised moves in the summary: largest, median, p95
     REQUIRE(measured.lines.size() == 1);
     CHECK(measured.lines[0].find("normalised move start velocity 0.500,") != std::string::npos);
 }
+
+TEST_CASE("window verdict: the limits line comes first and reads back exactly, for the defaults and for other limits")
+{
+    const RunVerdict r = summarize_run({judge_window(evidence(1, 0.0))}, true);
+
+    LinesLogger defaults;
+    log_run_verdict(r, VerdictLimits{}, defaults);
+    REQUIRE_FALSE(defaults.lines.empty());
+    CHECK(defaults.lines[0] == "window verdict limits: bend 3 deg, severe bend 10 deg, speed 2.5 m/s, gyro bias 0.5 deg/s, bent share 0.01, "
+                               "chi2 median 5, chi2 p95 20, weak ratio 0.45");
+    CHECK(defaults.lines[1].rfind("window verdict summary: ", 0) == 0);
+
+    VerdictLimits other;
+    other.bend_deg = 2.75;
+    other.severe_bend_deg = 12.0;
+    other.speed_mps = 1.8;
+    other.bias_deg_s = 0.125;
+    other.bent_share = 0.015;
+    other.chi2_median = 4.5;
+    other.chi2_p95 = 30.0;
+    other.weak_ratio = 0.3;
+    LinesLogger changed;
+    log_run_verdict(r, other, changed);
+    REQUIRE_FALSE(changed.lines.empty());
+    CHECK(changed.lines[0] == "window verdict limits: bend 2.75 deg, severe bend 12 deg, speed 1.8 m/s, gyro bias 0.125 deg/s, bent share 0.015, "
+                              "chi2 median 4.5, chi2 p95 30, weak ratio 0.3");
+}
