@@ -863,8 +863,17 @@ def python_blocks(path, src):
                 into.append(("value", collapse(f"{names} = {ast.unparse(value)}")))
 
     values_of(tree.body, file_lines)
-    for cls in [n for n in tree.body if isinstance(n, ast.ClassDef)]:
-        if not any(ast.unparse(b).endswith("TestCase") for b in cls.bases):
+    test_classes = set()
+    classes = [n for n in tree.body if isinstance(n, ast.ClassDef)]
+    changed = True
+    while changed:
+        changed = False
+        for c in classes:
+            if c.name not in test_classes and any(ast.unparse(b).endswith("TestCase") or ast.unparse(b) in test_classes for b in c.bases):
+                test_classes.add(c.name)
+                changed = True
+    for cls in classes:
+        if cls.name not in test_classes:
             continue
         cls_values = []
         values_of(cls.body, cls_values)

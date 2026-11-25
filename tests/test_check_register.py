@@ -290,6 +290,25 @@ class ReaderTest(unittest.TestCase):
         self.assertIn(("value", "PyTests :: TOL = 0.001"), fb.lines)
         self.assertFalse([b for b in reg.blocks if b.name and "helper_not_a_test" in b.name])
 
+    def test_python_tests_of_a_class_derived_from_a_test_base_are_found(self):
+        src = ("import unittest
+
+class Base(unittest.TestCase):
+    def setUp(self):
+        self.x = 1
+
+"
+               "class Derived(Base):
+    def test_a(self):
+        self.assertEqual(self.x, 1)
+
+class NotATest:
+    def test_b(self):
+        pass
+")
+        reg = self.build({"tests/test_d.py": src})
+        self.assertEqual([b.name for b in reg.blocks if b.name], ["Derived.test_a"])
+
     def test_register_text_is_deterministic_and_parses_back(self):
         with tempfile.TemporaryDirectory() as tmp:
             write_tree(tmp, {A: BASE, "tests/test_py.py": PY_BASE})
