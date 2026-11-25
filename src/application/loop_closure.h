@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Eigen/Dense>
+#include <limits>
 #include <optional>
 #include <string>
 #include <utility>
@@ -56,6 +57,10 @@ struct LoopClosureTry
     double angle_deg = 0.0; // the correction's rotation angle
     double information_ratio = 1.0; // cross-floor tries: information_ratio of the target; 1 for same-floor tries (not computed)
     Eigen::Vector3d centre = Eigen::Vector3d::Zero(); // centre of the registered (source) points
+    // the translation block of `information` summed per window of source segment j (first_window .. last_window, in window
+    // order), from the same refinement iteration: where in time the registration's information lies. Their sum is
+    // information's top-left 3 x 3 to rounding. Empty when not registered, and in a capture of format 1 or 2.
+    std::vector<Eigen::Matrix3d> window_information;
 };
 
 // whether a registration passes the acceptance rule of its kind (loop_closure_min_fitness, ..._cross_floor_*)
@@ -304,6 +309,43 @@ bool solve_and_prune_loop_pose_graph(const std::vector<Eigen::Affine3d> &initial
 bool loop_pose_graph_plausible(const std::vector<Eigen::Affine3d> &initial, const std::vector<Eigen::Affine3d> &optimized,
                                const std::vector<LoopClosureEdge> &loops, const OdometryConfig &params, double &max_shift_m);
 
+// A loop edge read at the times of its information along an axis (change loop-closure-fine-time-guard, design D6, rule
+// RULE.md section 7). window_information: the registration's per-window blocks (LoopClosureTry::window_information) of
+// source segment j; axis_odometry: the axis in the odometry's world frame (the blocks' frame), axis: the same axis turned
+// into the corrected frame; target_correction K_i: the correction at target segment i's first node (pose after times the
+// inverse of the pose before); registration C: the try's correction. The residual of a node is
+// axis . (position after - K_i C position before); first: segment j's first node, middle: each source window's middle node
+// (its first node at or after the middle of its start and the next window's start), one per block.
+//  s_w = a0' H_w a0 / sum_w a0' H_w a0 (a0 = axis_odometry); residual_m = sum_w s_w * residual(middle node of w).
+// A sum of 0 (or less): no information along the axis; along_axis false, residual_m NaN, shares empty.
+struct LoopEdgeTimeSupport
+{
+    double first_pose_residual_m = 0.0;
+    bool along_axis = false;
+    double residual_m = std::numeric_limits<double>::quiet_NaN(); // the time-support residual
+    std::vector<double> shares;                                    // s_w, per source window
+};
+LoopEdgeTimeSupport loop_edge_time_support(const std::vector<Eigen::Matrix3d> &window_information, const Eigen::Vector3d &axis_odometry,
+                                           const Eigen::Vector3d &axis, const Eigen::Affine3d &target_correction, const Eigen::Affine3d &registration,
+                                           const Eigen::Vector3d &first_before, const Eigen::Vector3d &first_after,
+                                           const std::vector<Eigen::Vector3d> &middle_before, const std::vector<Eigen::Vector3d> &middle_after);
+
+// One kept loop edge with a source window among the windows of one weak run of the readings rule, read along that run's
+// axis after the node correction (close_loops, a report only: it moves nothing)
+struct LoopEdgeTimeSupportReading
+{
+    int i = 0;
+    int j = 0;
+    bool cross_floor = false;
+    int run = 0;                                     // index into LoopClosureReport::odometry_runs
+    int first_window = 0;                            // segment j's windows (inclusive), the shares' order
+    int last_window = 0;
+    Eigen::Vector3d axis = Eigen::Vector3d::UnitX(); // the run's axis turned into the corrected frame (at the run's middle)
+    bool window_information = false;                // the registration carries per-window blocks (false: a capture of format 1 or 2;
+                                                     // then only the first-pose residual is given)
+    LoopEdgeTimeSupport support;
+};
+
 struct LoopClosureReport
 {
     // too_few_windows, readings_missing (loop_closure_odometry_from_readings with a window without readings: nothing
@@ -321,4 +363,7 @@ struct LoopClosureReport
     std::vector<LoopClosureEdge> first_solve; // every edge of the first solve, before any was dropped, with its residual there
     std::vector<LoopEdgeResidual> first_solve_residuals;
     double largest_segment_correction_m = 0.0; // of the last solve (also when implausible)
+    // outcome applied with loop_closure_odometry_from_readings: every kept edge with a source window in a weak run, per such
+    // run (edges in kept order, runs in order)
+    std::vector<LoopEdgeTimeSupportReading> edge_time_support;
 };

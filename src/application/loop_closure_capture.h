@@ -1,7 +1,8 @@
 #pragma once
 
 // Loop closure capture: what a run's loop closure worked from (capture_loop_closure): the windows as the odometry left them,
-// the segments, every registration it made with its result, and the poses it produced. A replay (loop_closure_replay.h)
+// the segments, every registration it made with its result (from format 3 on with its information per source window), and
+// the poses it produced. A replay (loop_closure_replay.h)
 // runs everything after the registrations again from it, in seconds and without the recording, bit for bit with the same
 // settings, or with other selection, acceptance, weighting and pruning settings to see what they do.
 

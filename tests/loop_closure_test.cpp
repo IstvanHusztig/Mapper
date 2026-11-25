@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <deque>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -1375,6 +1376,35 @@ namespace
         return true;
     }
 
+    // FNV-1a over the bits of every registration's result (overlaps, correction, information, shift, angle, ratio, centre),
+    // in the order registered: equal when every registration is unchanged
+    std::uint64_t registrations_fingerprint(const std::vector<CapturedLoopTry> &tries)
+    {
+        std::uint64_t h = 1469598103934665603ULL;
+        const auto add = [&h](const void *data, size_t n)
+        {
+            const auto *b = static_cast<const unsigned char *>(data);
+            for (size_t k = 0; k < n; k++)
+                h = (h ^ b[k]) * 1099511628211ULL;
+        };
+        for (const auto &c : tries)
+        {
+            const LoopClosureTry &t = c.registration;
+            add(&t.i, sizeof(t.i));
+            add(&t.j, sizeof(t.j));
+            add(&t.registered, sizeof(t.registered));
+            add(&t.overlap_before, sizeof(double));
+            add(&t.overlap_after, sizeof(double));
+            add(t.correction.matrix().data(), 16 * sizeof(double));
+            add(t.information.data(), 36 * sizeof(double));
+            add(&t.shift_m, sizeof(double));
+            add(&t.angle_deg, sizeof(double));
+            add(&t.information_ratio, sizeof(double));
+            add(t.centre.data(), 3 * sizeof(double));
+        }
+        return h;
+    }
+
     bool contains(const std::vector<std::string> &names, const std::string &name)
     {
         return std::find(names.begin(), names.end(), name) != names.end();
@@ -1573,6 +1603,13 @@ TEST_CASE("loop closure capture file: written and read back bit for bit; another
     t.registration.angle_deg = 0.57;
     t.registration.information_ratio = 0.31;
     t.registration.centre = Eigen::Vector3d(1.0 / 3.0, 2.0, -7.0);
+    for (int w = 0; w < 3; w++)
+    {
+        Eigen::Matrix3d m;
+        for (int k = 0; k < 9; k++)
+            m.data()[k] = 1.0 / (k + 7.0 * w + 2.0);
+        t.registration.window_information.push_back(m);
+    }
     t.accepted = true;
     t.requested_by_run = false;
     c.tries = {t, CapturedLoopTry{}};
@@ -1620,6 +1657,10 @@ TEST_CASE("loop closure capture file: written and read back bit for bit; another
     CHECK(b.information == t.registration.information);
     CHECK(b.information_ratio == t.registration.information_ratio);
     CHECK(b.centre == t.registration.centre);
+    REQUIRE(b.window_information.size() == 3);
+    for (int w = 0; w < 3; w++)
+        CHECK(b.window_information[w] == t.registration.window_information[w]);
+    CHECK(back.tries[1].registration.window_information.empty());
     CHECK(back.tries[0].accepted);
     CHECK(!back.tries[0].requested_by_run);
     CHECK(!back.tries[1].registration.registered);
@@ -1642,24 +1683,46 @@ TEST_CASE("loop closure capture file: written and read back bit for bit; another
         CHECK(r->duration_s == a->duration_s);
     }
 
-    // format 1 (written before the readings: format 2 without the readings block at the end) is read without readings
+    // format 2 (written before the per-window information: format 3 without its block at the end) is read without it, and
+    // format 1 (before the readings: format 2 without the readings block) without readings
+    const size_t blocks_bytes = 8 + (8 + 3 * 9 * 8) + 8; // the try count, the first try's 3 blocks, the second try's none
+    const auto older = [&](size_t cut, std::uint32_t version)
     {
         std::string bytes;
         {
             std::ifstream in(file, std::ios::binary);
             bytes.assign(std::istreambuf_iterator<char>(in), {});
         }
-        REQUIRE(bytes.size() > readings_bytes + 12);
-        bytes.resize(bytes.size() - readings_bytes);
-        const std::uint32_t version = 1;
+        REQUIRE(bytes.size() > cut + 12);
+        bytes.resize(bytes.size() - cut);
         std::memcpy(&bytes[8], &version, sizeof(version));
         std::ofstream out(file, std::ios::binary | std::ios::trunc);
         out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
-    }
+    };
+    older(blocks_bytes, 2);
+    REQUIRE(read_loop_closure_capture(file, back, settings, why));
+    CHECK(back.loops == 3);
+    REQUIRE(back.tries.size() == 2);
+    CHECK(back.tries[0].registration.information == t.registration.information);
+    CHECK(back.tries[0].registration.window_information.empty());
+    for (size_t w = 0; w < c.windows.size(); w++)
+        CHECK(back.windows[w].readings.has_value() == c.windows[w].readings.has_value());
+    older(readings_bytes, 1);
     REQUIRE(read_loop_closure_capture(file, back, settings, why));
     CHECK(back.loops == 3);
     for (const Window &w : back.windows)
         CHECK_FALSE(w.readings.has_value());
+
+    // format 3 with a damaged count of blocks is refused
+    REQUIRE(write_loop_closure_capture(file, c, config, why));
+    {
+        std::fstream io(file, std::ios::binary | std::ios::in | std::ios::out);
+        io.seekp(-static_cast<std::streamoff>(blocks_bytes), std::ios::end);
+        const std::uint64_t wrong = 3;
+        io.write(reinterpret_cast<const char *>(&wrong), sizeof(wrong));
+    }
+    CHECK(!read_loop_closure_capture(file, back, settings, why));
+    MESSAGE(why);
 
     // another file (here the start of a window capture) is not a loop closure capture
     {
@@ -1731,6 +1794,28 @@ TEST_CASE("loop closure capture: capturing changes nothing, the own settings rep
         accepted += t.accepted;
     }
     MESSAGE("capture: ", capture.segments.size(), " segments, ", capture.tries.size(), " registrations, ", accepted, " accepted, ", loops, " loops");
+    MESSAGE("registrations fingerprint ", registrations_fingerprint(capture.tries));
+    // each registration's information per source window sums to the translation block of its information
+    double largest_relative = 0.0;
+    for (const auto &t : capture.tries)
+    {
+        const LoopClosureTry &g = t.registration;
+        if (!g.registered)
+        {
+            CHECK(g.window_information.empty());
+            continue;
+        }
+        const LoopClosureSegment &source = capture.segments[g.j];
+        REQUIRE(static_cast<int>(g.window_information.size()) == source.last_window - source.first_window + 1);
+        Eigen::Matrix3d sum = Eigen::Matrix3d::Zero();
+        for (const auto &m : g.window_information)
+            sum += m;
+        const Eigen::Matrix3d total = g.information.topLeftCorner<3, 3>();
+        const double relative = (sum - total).cwiseAbs().maxCoeff() / total.cwiseAbs().maxCoeff();
+        largest_relative = std::max(largest_relative, relative);
+        CHECK(relative < 1e-12);
+    }
+    MESSAGE("per-window information against the translation block: largest difference ", largest_relative, " of the block's largest entry");
     REQUIRE(loops >= 1);
 
     // the own settings, from memory and through the file
@@ -1946,4 +2031,207 @@ TEST_CASE("loop closure replay: the tries to reject are read as i-j[,i-j...]")
     CHECK(!parse_loop_try_names("3:17", tries, why));
     CHECK(!parse_loop_try_names("3-17-2", tries, why));
     CHECK(!parse_loop_try_names("", tries, why));
+}
+
+// ---- loop edges read at the times of their information (change loop-closure-fine-time-guard, task 2.3) ----
+namespace
+{
+    // six source windows along x, each window's middle node 1 m further than the one before; `moved` of them placed 1 m
+    // further along x after the correction, the others where they were
+    struct ConstructedEdge
+    {
+        std::vector<Eigen::Vector3d> before, after;
+        Eigen::Vector3d first_before = Eigen::Vector3d::Zero();
+        Eigen::Vector3d first_after = Eigen::Vector3d::UnitX(); // the first pose 1 m along the axis
+        explicit ConstructedEdge(const std::vector<bool> &moved)
+        {
+            for (size_t w = 0; w < moved.size(); w++)
+            {
+                before.push_back(Eigen::Vector3d(static_cast<double>(w), 0.3, -0.2));
+                after.push_back(before.back() + (moved[w] ? Eigen::Vector3d(1.0, 0.0, 0.0) : Eigen::Vector3d(0.0, 0.0, 0.0)));
+            }
+        }
+    };
+
+    std::vector<Eigen::Matrix3d> blocks(const std::vector<double> &along_x)
+    {
+        std::vector<Eigen::Matrix3d> b;
+        for (const double h : along_x)
+        {
+            Eigen::Matrix3d m = Eigen::Matrix3d::Zero();
+            m(0, 0) = h;
+            m(1, 1) = 40.0; // information across the axis doesn't count
+            b.push_back(m);
+        }
+        return b;
+    }
+}
+
+TEST_CASE("loop closure time support: an edge whose information lies late in its segment is read where its information is")
+{
+    const Eigen::Vector3d x = Eigen::Vector3d::UnitX();
+    const Eigen::Affine3d I = Eigen::Affine3d::Identity();
+
+    // the first five windows moved by 1 m (the first pose among them), the last one, which carries all the information, not
+    const ConstructedEdge late({true, true, true, true, true, false});
+    const LoopEdgeTimeSupport s = loop_edge_time_support(blocks({0, 0, 0, 0, 0, 300}), x, x, I, I, late.first_before, late.first_after, late.before,
+                                                         late.after);
+    CHECK(s.first_pose_residual_m == doctest::Approx(1.0).epsilon(1e-12));
+    REQUIRE(s.along_axis);
+    CHECK(std::abs(s.residual_m) < 1e-12);
+    REQUIRE(s.shares.size() == 6);
+    CHECK(s.shares[5] == 1.0);
+
+    // half the information in the first window (moved), half in the last (not moved)
+    const LoopEdgeTimeSupport half = loop_edge_time_support(blocks({150, 0, 0, 0, 0, 150}), x, x, I, I, late.first_before, late.first_after,
+                                                            late.before, late.after);
+    CHECK(half.residual_m == doctest::Approx(0.5).epsilon(1e-12));
+    CHECK(half.shares[0] == doctest::Approx(0.5));
+    CHECK(half.shares[1] == 0.0);
+
+    // the correction at the target and the registration enter the prediction K_i C x0
+    Eigen::Affine3d K = I, C = I;
+    K.translate(Eigen::Vector3d(0.3, 0.0, 0.0));
+    C.translate(Eigen::Vector3d(-0.1, 0.0, 0.0));
+    const LoopEdgeTimeSupport moved = loop_edge_time_support(blocks({150, 0, 0, 0, 0, 150}), x, x, K, C, late.first_before, late.first_after,
+                                                             late.before, late.after);
+    CHECK(moved.first_pose_residual_m == doctest::Approx(0.8));
+    CHECK(moved.residual_m == doctest::Approx(0.3));
+
+    // the shares come from the odometry-frame axis, the residual is read along the corrected one
+    const Eigen::Vector3d y = Eigen::Vector3d::UnitY();
+    const LoopEdgeTimeSupport turned = loop_edge_time_support(blocks({150, 0, 0, 0, 0, 150}), x, y, I, I, late.first_before, late.first_after,
+                                                              late.before, late.after);
+    CHECK(turned.shares[0] == doctest::Approx(0.5));
+    CHECK(turned.first_pose_residual_m == 0.0);
+    CHECK(turned.residual_m == 0.0);
+
+    // no information along the axis: reported as such, the first-pose residual still given
+    const LoopEdgeTimeSupport none = loop_edge_time_support(blocks({0, 0, 0, 0, 0, 0}), x, x, I, I, late.first_before, late.first_after, late.before,
+                                                            late.after);
+    CHECK(!none.along_axis);
+    CHECK(std::isnan(none.residual_m));
+    CHECK(none.shares.empty());
+    CHECK(none.first_pose_residual_m == doctest::Approx(1.0));
+    // no blocks at all (a capture of format 1 or 2)
+    CHECK(!loop_edge_time_support({}, x, x, I, I, late.first_before, late.first_after, {}, {}).along_axis);
+}
+
+namespace
+{
+    // every pair asked for registered, with no correction and a well-determined information; the per-window blocks
+    // diag(w + 1, 40, 40) for an even source segment, none for an odd one (as from a capture of format 2)
+    class EveryPairRegistered : public LoopClosureRegistrations
+    {
+    public:
+        explicit EveryPairRegistered(const std::vector<LoopClosureSegment> &segments) : segments_(segments) {}
+        const LoopClosureTry *registration(int i, int j, bool cross_floor) override
+        {
+            LoopClosureTry t;
+            t.i = i;
+            t.j = j;
+            t.cross_floor = cross_floor;
+            t.registered = true;
+            t.overlap_before = 0.6;
+            t.overlap_after = 0.9;
+            t.information = Eigen::Matrix<double, 6, 6>::Identity() * 1e4;
+            t.centre = segments_[j].center;
+            if (j % 2 == 0)
+                for (int w = segments_[j].first_window; w <= segments_[j].last_window; w++)
+                {
+                    Eigen::Matrix3d m = Eigen::Matrix3d::Identity() * 40.0;
+                    m(0, 0) = w - segments_[j].first_window + 1.0;
+                    t.window_information.push_back(m);
+                }
+            tries_.push_back(t);
+            return &tries_.back();
+        }
+
+    private:
+        const std::vector<LoopClosureSegment> &segments_;
+        std::deque<LoopClosureTry> tries_;
+    };
+}
+
+TEST_CASE("loop closure time support: every kept edge with a source window in a weak run is read along the run's axis; a report only")
+{
+    OdometryConfig config = loop_closure_config();
+    const Recording r = loop_recording(2);
+    const std::vector<LoopClosureSegment> segments = loop_closure_segments(r.windows, config);
+    std::vector<Window> windows = r.windows;
+    // windows 28-35 (second lap) weak along x, the others well determined
+    for (size_t w = 0; w < windows.size(); w++)
+        windows[w].readings = WindowReadings{w >= 28 && w <= 35 ? 0.01 : 0.5, Eigen::Vector3d::UnitX(), false, Eigen::Vector3d(0.4, 0.0, 0.0), 0.4};
+    NullLogger logger;
+
+    std::vector<Window> fixed = windows;
+    EveryPairRegistered fixed_registrations(segments);
+    LoopClosureReport fixed_report;
+    close_loops(fixed, segments, fixed_registrations, config, logger, &fixed_report);
+    CHECK(fixed_report.edge_time_support.empty()); // the readings rule off: no runs, nothing read
+
+    config.loop_closure_odometry_from_readings = true;
+    EveryPairRegistered registrations(segments);
+    LoopClosureReport report;
+    const int loops = close_loops(windows, segments, registrations, config, logger, &report);
+    REQUIRE(report.outcome == "applied");
+    REQUIRE(loops > 0);
+    REQUIRE(!report.odometry_runs.empty());
+    int with_blocks = 0, without = 0;
+    for (const LoopEdgeTimeSupportReading &t : report.edge_time_support)
+    {
+        const LoopOdometryRun &run = report.odometry_runs[t.run];
+        CHECK(t.first_window == segments[t.j].first_window);
+        CHECK(t.last_window == segments[t.j].last_window);
+        CHECK(t.first_window <= run.last_window);
+        CHECK(run.first_window <= t.last_window);
+        CHECK(std::isfinite(t.support.first_pose_residual_m));
+        CHECK(t.axis.norm() == doctest::Approx(1.0));
+        if (t.window_information)
+        {
+            with_blocks++;
+            REQUIRE(t.support.along_axis);
+            REQUIRE(t.support.shares.size() == 4);
+            // a0' H_w a0 with H_w = diag(w + 1, 40, 40): shares of 40 (axis across x) or rising with w (axis along x)
+            double sum = 0.0;
+            for (const double share : t.support.shares)
+                sum += share;
+            CHECK(sum == doctest::Approx(1.0));
+            CHECK(std::isfinite(t.support.residual_m));
+        }
+        else
+        {
+            without++;
+            CHECK(!t.support.along_axis);
+            CHECK(std::isnan(t.support.residual_m));
+        }
+    }
+    // each kept edge whose source segment meets a run appears once per such run, and no other
+    size_t expected = 0;
+    for (const LoopClosureEdge &e : report.kept)
+        for (const LoopOdometryRun &run : report.odometry_runs)
+            expected += segments[e.j].first_window <= run.last_window && run.first_window <= segments[e.j].last_window;
+    CHECK(report.edge_time_support.size() == expected);
+    MESSAGE(report.odometry_runs.size(), " run(s), ", report.kept.size(), " kept edges, ", report.edge_time_support.size(), " readings (", with_blocks,
+            " with per-window information, ", without, " without)");
+    CHECK(with_blocks > 0);
+    CHECK(without > 0);
+
+    // the replay's JSON lists them
+    LoopClosureReplayResult replayed;
+    replayed.report = report;
+    replayed.loops = loops;
+    const auto file = std::filesystem::temp_directory_path() / "lidar_odometry_tests_loop_closure_time_support.json";
+    std::string why;
+    REQUIRE(write_loop_closure_replay_json(file, replayed, LoopClosureSettingsDifference{}, config, why));
+    std::string text;
+    {
+        std::ifstream in(file);
+        text.assign(std::istreambuf_iterator<char>(in), {});
+    }
+    std::filesystem::remove(file);
+    CHECK(text.find("\"edge_time_support\"") != std::string::npos);
+    CHECK(text.find("\"time_support_residual_m\": null") != std::string::npos); // the edge without per-window information
+    CHECK(text.find("\"shares\"") != std::string::npos);
+    CHECK(text.find("\"first_pose_residual_m\"") != std::string::npos);
 }
