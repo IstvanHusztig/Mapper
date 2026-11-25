@@ -80,7 +80,7 @@ orchestrator's):
 
 - **Unit tests** (Release `lidar_odometry_tests`, from `out/build/x64-Release/bin`):
   - `-tc="loop closure*"`: path walked, revisit rule, tries and slots, leave-one-out drop order, pose graph (drift removed,
-    implausible result refused, false edge stands out, kernel cases), information edges (residual reproduces the
+    implausible result refused, false edge stands out), information edges (residual reproduces the
     registration error, cross-floor edge carries no height, shaft vs box region), plausibility independent of the
     distance from the origin. Three end-to-end cases on the synthetic two-lap recording are `doctest::skip()` (about
     20 s each): add `--no-skip -s`. "a trajectory that is already right stays" is `should_fail` (moves 32 mm / 0.09°).
@@ -116,8 +116,8 @@ orchestrator's):
   by dt (`consistency.cpp:124`: x 1e6, y and z 1e8, rotation 1/(0.1°)²), no prior to the input poses, only node 0 held
   (`:179`), 10 passes (`num_constistency_iter`). Measured on 44: rotation per IMU sample p50 0.041° (odometry) → 0.167°
   (consistency), gyro 0.024°. No fix in the code (the gyro rotation term was removed 2026-11-25, see Ideas rejected).
-- **C24** (partly fixed): robust kernel off (`loop_closure_kernel_scale` 0, `odometry_config.h:169`, not set in the
-  settings files); up to two edges per segment since G2b; coarse-search ties still go to the first candidate in loop
+- **C24** (partly fixed): no robust kernel (the Cauchy kernel `loop_closure_kernel_scale` was removed 2026-11-25, see
+  Ideas rejected); up to two edges per segment since G2b; coarse-search ties still go to the first candidate in loop
   order (strict `>` in `coarse_search`, `loop_closure.cpp:165`, `:189`). G4 (yaw consistency vote, then kernel 3.55)
   designed, not implemented, deferred to the cave retune.
 - **C25** (partly fixed): each loop edge is pinned at its segment's first node (`Segment::pose`, `:855`) and the
@@ -184,7 +184,7 @@ From `python tools/function_sizes.py src --min 80` (2026-11-18):
   has readings. Full-readings results unchanged: step checks all hold; Livox 4 replay byte-identical (24 → 63 at T 35.99,
   81 kept). The new path is checked in doctests only (the capture cannot hold partial readings).
 - **2026-11-24, match check (held-out innovation), built, off by default** (`loop_closure_match_check`, needs the
-  readings rule; refuses a quantile outside (0, 1) and the robust kernel). On the format 2 Livox 4 capture with both
+  readings rule; refuses a quantile outside (0, 1); it also refused the robust kernel until that was removed 2026-11-25). On the format 2 Livox 4 capture with both
   switches on: the same 10 edges pruned as the Python prototype, then 24 → 63 dropped (T 35.99, limit 22.46, 2 held out,
   innovation 2.08 m), 81 kept; largest T left 13.71 / 7.77 / 5.88 / 5.23; trajectory equal to the prototype's within 1 µm;
   loop closure step 1.12 s without the check, 6.71 s with it. On uniform steps the check rejects 12 edges the rule graph
@@ -248,10 +248,15 @@ From `python tools/function_sizes.py src --min 80` (2026-11-18):
   it completely and if needed implement from scratch"); the three keys are retired settings (on is refused). The
   measured results stay in `openspec/changes/archive/2026-11-25-consistency-gyro-term/results.md`. The hold-out mode of the same change
   (`holdout_block_s`) stays.
+- The robust (Cauchy) kernel on the loop edges (`loop_closure_kernel_scale`, change `robust-loop-closure` task 2.1, off in
+  every settings file, never run on real data): removed from the code 2026-11-25 on the user's decision (task 2.4: "otherwise
+  the setting and its code are removed"); the key is a retired setting (above 0 is refused), and a loop closure capture
+  that lists it above 0 is refused by the replay. No result changed. `tools/loop_graph.py` still has a Python-only
+  `--kernel-scale` (default: the capture's key, 0 when absent).
 
 ## Open questions
 
-- The robust kernel on real data (`robust-loop-closure` task 2.4) was never run; G4a (yaw vote) waits for the cave data.
+- G4a (yaw vote) waits for the cave data (the robust kernel it was to precede was removed 2026-11-25).
 - `crop_to_shared_footprint` has no unit test (`robust-loop-closure` task 3.5).
 - Why C* is 0.2–3.3 cm worse than C10 on the stairwell in 6 of 6 inputs (tracker C22).
 - Cross-floor edges correct roll/pitch by up to 6.9° with no gate; a tilt gate or 4-DoF edges deferred (design G4).

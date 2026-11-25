@@ -187,9 +187,6 @@ struct OdometryConfig
     int loop_closure_candidates = 4;
     double loop_closure_max_residual_m = 0.15;
     double loop_closure_max_residual_deg = 2.0;
-    // robust kernel on the loop edges of the pose graph: Cauchy with this scale, in units of the edge's sigmas (a loop
-    // edge s sigmas off keeps the weight 1 / (1 + s^2 / scale^2)); 0 = plain least squares
-    double loop_closure_kernel_scale = 0.0;
     // cross-floor loops: each segment also tries earlier segments between loop_closure_max_vertical_offset_m and this far
     // above or below it (in a stairwell they see the same shaft), as one more edge; accepted with an overlap of at least
     // loop_closure_cross_floor_min_fitness and a correction of at most 1 m and loop_closure_cross_floor_max_angle_deg.

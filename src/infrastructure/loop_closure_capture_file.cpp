@@ -40,6 +40,14 @@ namespace
         return keys;
     }
 
+    // [loop_closure] settings removed from dMapper, with the value (as settings_as_text writes it) whose behaviour remains:
+    // a capture made with another value asked for a behaviour that no longer exists (the robust kernel, removed 2026-11-25)
+    const std::map<std::string, std::string> &removed_settings()
+    {
+        static const std::map<std::string, std::string> keys = {{"loop_closure_kernel_scale", "0"}};
+        return keys;
+    }
+
     // categories whose settings neither the odometry nor the loop closure reads
     const std::set<std::string> &output_only_categories()
     {
@@ -403,6 +411,12 @@ LoopClosureSettingsDifference loop_closure_replay_settings(const std::map<std::s
         if (category == "loop_closure" && !registration_settings().count(name))
             d.changed.push_back(name);
         else
+            d.refused.push_back(name);
+    }
+    for (const auto &[name, kept] : removed_settings())
+    {
+        const auto it = captured.find(name);
+        if (it != captured.end() && it->second != kept)
             d.refused.push_back(name);
     }
     return d;

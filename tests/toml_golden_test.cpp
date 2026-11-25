@@ -126,11 +126,13 @@ TEST_CASE("a retired setting is ignored at the value the code kept and refused o
     CHECK(loads("[imu_translation]\nndt_unmatched_point_cost = 0\n")); // an integer 0 is 0
     CHECK(loads("[robust_lidar_odometry]\nuse_robust_and_accurate_lidar_odometry = false\ndistance_bucket = 0.2\n"));
     CHECK(loads("[imu_translation]\nimu_carry_joint_covariance = false\nimu_accel_window_sigma_mps2 = 0.0\n"));
+    CHECK(loads("[loop_closure]\nloop_closure_kernel_scale = 0.0\n"));
     CHECK_FALSE(loads("[consistency]\nuse_mutliple_gaussian = true\n"));
     CHECK_FALSE(loads("[imu_translation]\ncarried_covariance_normal_information_only = true\n"));
     CHECK_FALSE(loads("[imu_translation]\nndt_unmatched_point_cost = 16.0\n"));
     CHECK_FALSE(loads("[robust_lidar_odometry]\nuse_robust_and_accurate_lidar_odometry = true\n"));
     CHECK_FALSE(loads("[imu_translation]\nimu_carry_joint_covariance = true\n"));
     CHECK_FALSE(loads("[imu_translation]\nimu_accel_window_sigma_mps2 = 0.05\n"));
+    CHECK_FALSE(loads("[loop_closure]\nloop_closure_kernel_scale = 0.5\n"));
     CHECK_FALSE(loads("[robust_lidar_odometry]\nno_such_setting = 1.0\n")); // a retired section accepts only its retired keys
 }

@@ -325,7 +325,6 @@ TEST_CASE("loop closure drop order: leave one out drops the false edge, not the 
     c.loop_closure_edge_sigma_deg = 0.3;
     c.loop_closure_max_residual_m = 0.15;
     c.loop_closure_max_residual_deg = 2.0;
-    c.loop_closure_kernel_scale = 0.0;
     std::vector<Eigen::Affine3d> truth, initial;
     for (int k = 0; k < 14; k++)
     {
@@ -456,9 +455,9 @@ TEST_CASE("loop closure pose graph: a false loop edge stands out by its residual
         CHECK(good.translation_m < 0.02);
 }
 
-// the robust kernel on the loop edges (loop_closure_kernel_scale): two laps of the square, 8 segments each, drifting 3 cm
-// sideways per segment; lap 2 revisits lap 1 segment by segment, so every stretch is covered by several loops and one
-// edge that disagrees with the others can be told apart (with a single loop its error just spreads into the odometry)
+// two laps of the square, 8 segments each, drifting 3 cm sideways per segment; lap 2 revisits lap 1 segment by segment,
+// so every stretch is covered by several loops and one edge that disagrees with the others can be told apart (with a
+// single loop its error just spreads into the odometry)
 namespace
 {
     struct TwoLaps
@@ -491,60 +490,7 @@ namespace
             }
             return out;
         }
-        double largest_error(const std::vector<Eigen::Affine3d> &poses) const
-        {
-            double m = 0.0;
-            for (size_t k = 0; k < poses.size(); k++)
-                m = std::max(m, (poses[k].translation() - truth[k].translation()).norm());
-            return m;
-        }
     };
-
-    OdometryConfig with_kernel(double scale)
-    {
-        OdometryConfig c = loop_closure_config();
-        c.loop_closure_kernel_scale = scale;
-        return c;
-    }
-}
-
-TEST_CASE("loop closure pose graph: the kernel weakens a slightly wrong edge")
-{
-    const TwoLaps s;
-    // one revisit 15 cm off, below the drop limit: without the kernel it counts in full
-    const auto loops = s.loops(3, 0.15);
-    const double e_plain = s.largest_error(optimize_loop_pose_graph(s.initial, loops, with_kernel(0.0)));
-    const double e_robust = s.largest_error(optimize_loop_pose_graph(s.initial, loops, with_kernel(0.5)));
-    const double e_truth = s.largest_error(optimize_loop_pose_graph(s.initial, s.loops(), with_kernel(0.0)));
-    MESSAGE("largest position error: plain ", e_plain, " m, kernel 0.5 ", e_robust, " m, all edges right ", e_truth, " m");
-    CHECK(e_robust < 0.75 * e_plain);
-    CHECK(e_robust < e_truth + 0.005);
-}
-
-TEST_CASE("loop closure pose graph: consistent edges give the same solution with and without the kernel")
-{
-    const TwoLaps s;
-    const auto a = optimize_loop_pose_graph(s.initial, s.loops(), with_kernel(0.0));
-    const auto b = optimize_loop_pose_graph(s.initial, s.loops(), with_kernel(0.5));
-    REQUIRE(a.size() == b.size());
-    double largest = 0.0;
-    for (size_t k = 0; k < a.size(); k++)
-        largest = std::max(largest, (a[k].translation() - b[k].translation()).norm());
-    MESSAGE("largest difference ", largest, " m");
-    CHECK(largest < 2e-3);
-}
-
-TEST_CASE("loop closure pose graph: with the kernel a false edge still stands out by its residual")
-{
-    const TwoLaps s;
-    const OdometryConfig c = with_kernel(0.5);
-    const auto loops = s.loops(3, 1.0);
-    const std::vector<LoopEdgeResidual> r = loop_edge_residuals(s.initial, optimize_loop_pose_graph(s.initial, loops, c), loops);
-    REQUIRE(r.size() == 8);
-    CHECK(r[3].translation_m > c.loop_closure_max_residual_m);
-    for (int k = 0; k < 8; k++)
-        if (k != 3)
-            CHECK(r[3].translation_m > r[k].translation_m);
 }
 
 
@@ -701,7 +647,7 @@ TEST_CASE("loop closure information edges: a cross-floor edge carries no height"
 TEST_CASE("loop closure information edges: with the fixed sigmas as information the solution equals the fixed-sigma edges'")
 {
     const TwoLaps s;
-    const OdometryConfig c = with_kernel(0.0);
+    const OdometryConfig c = loop_closure_config();
     const auto loops = s.loops();
     const auto reference = optimize_loop_pose_graph(s.initial, loops, c);
     auto weighted = loops;
@@ -970,7 +916,7 @@ TEST_CASE("loop closure odometry steps: the pace line runs from the pace before 
 TEST_CASE("loop closure odometry steps: the fixed sigmas as information give the fixed-sigma solution")
 {
     const TwoLaps s;
-    const OdometryConfig c = with_kernel(0.0);
+    const OdometryConfig c = loop_closure_config();
     const auto loops = s.loops();
     const auto reference = optimize_loop_pose_graph(s.initial, loops, c);
     std::vector<WindowReadings> rd(3 * s.initial.size(), seen_window()); // no weak window: every step at the fixed sigmas
@@ -1109,7 +1055,7 @@ TEST_CASE("loop closure match check: an influential false edge inside the prunin
     for (int i : {3, 13, 23, 33})
         loops.push_back(g.edge(i, 79 - i));
     loops.push_back(g.edge(8, 71, 2.0, 0.01));
-    OdometryConfig c = with_kernel(0.0);
+    OdometryConfig c = loop_closure_config();
     const LoopOdometryEdgeInformation steps = uniform_steps(g.initial.size(), c);
     NullLogger logger;
 
@@ -1155,7 +1101,7 @@ TEST_CASE("loop closure match check: edges across a blind stretch are kept with 
     // the way out stalled in segments 5..9 (0.8 m short per step, 4 m in all); revisits at 3 and 12 on either side
     const OutAndBack g(20, 4, 9, 0.8);
     const std::vector<LoopClosureEdge> loops{g.edge(3, 36), g.edge(12, 27)};
-    const OdometryConfig c = with_kernel(0.0);
+    const OdometryConfig c = loop_closure_config();
 
     const LoopOdometryInformation rule = loop_odometry_step_information(all_read(g.readings(4, 9)), g.segments(), loop_odometry_rule(c));
     REQUIRE(rule.runs.size() == 1);
@@ -1183,7 +1129,7 @@ TEST_CASE("loop closure match check: an edge without a degree of freedom is not 
     for (int i : {3, 13, 23, 33})
         loops.push_back(g.edge(i, 79 - i));
     loops.push_back(g.edge(8, 71, 2.0, 0.01));
-    OdometryConfig c = with_kernel(0.0);
+    OdometryConfig c = loop_closure_config();
     c.loop_closure_match_check = true;
     const LoopOdometryEdgeInformation steps = uniform_steps(g.initial.size(), c);
     NullLogger logger;
@@ -1206,7 +1152,7 @@ TEST_CASE("loop closure match check: an edge no other loop reaches is kept")
     // the only revisit, 1 m off after 76 steps of odometry: the rest of the graph predicts it only loosely
     const OutAndBack g(40);
     std::vector<LoopClosureEdge> loops{g.edge(1, 78, 1.0)};
-    OdometryConfig c = with_kernel(0.0);
+    OdometryConfig c = loop_closure_config();
     c.loop_closure_match_check = true;
     c.loop_closure_max_residual_m = 10.0; // the pruning out of the way
     const LoopOdometryEdgeInformation steps = uniform_steps(g.initial.size(), c);
@@ -1226,7 +1172,7 @@ TEST_CASE("loop closure information edges: a shaft ties the floors horizontally 
 {
     // three segments 2 m apart; the odometry turned the last one 2 deg, tilted it 1 deg about y, and drifted it 0.3 m
     // sideways and 0.2 m up. A round shaft 3 m to the side is seen from both segment 0 and segment 2
-    OdometryConfig c = with_kernel(0.0);
+    OdometryConfig c = loop_closure_config();
     const std::vector<Eigen::Affine3d> truth{segment_pose(0, 0, 0), segment_pose(2, 0, 0), segment_pose(4, 0, 0)};
     std::vector<Eigen::Affine3d> initial{truth[0], truth[1], tilted_pose(4, 0.3, 0.2, 2.0, 1.0)};
     const std::vector<SurfacePoint> shaft = cylinder(4.0, 3.0, 1.5, -1.0, 1.5);
@@ -1286,7 +1232,7 @@ TEST_CASE("loop closure information edges: a shaft ties the floors horizontally 
 TEST_CASE("loop closure information edges: a box-shaped region also ties the turn")
 {
     // as above, but the shared region is a box (walls in two directions, floor and ceiling): the turn is tied too
-    OdometryConfig c = with_kernel(0.0);
+    OdometryConfig c = loop_closure_config();
     const std::vector<Eigen::Affine3d> truth{segment_pose(0, 0, 0), segment_pose(2, 0, 0), segment_pose(4, 0, 0)};
     std::vector<Eigen::Affine3d> initial{truth[0], truth[1], tilted_pose(4, 0.3, 0.2, 2.0, 1.0)};
     LoopClosureEdge e;
@@ -1467,11 +1413,21 @@ TEST_CASE("loop closure replay settings: odometry and registration settings are 
 
     // a setting the capture doesn't list counts as at its default
     auto older = text;
-    older.erase("loop_closure_kernel_scale");
+    older.erase("loop_closure_match_check_quantile");
     CHECK(loop_closure_replay_settings(older, captured).changed.empty());
-    OdometryConfig kernel = captured;
-    kernel.loop_closure_kernel_scale = 3.0;
-    CHECK(loop_closure_replay_settings(older, kernel).changed == std::vector<std::string>{"loop_closure_kernel_scale"});
+    OdometryConfig quantile = captured;
+    quantile.loop_closure_match_check_quantile = 0.99;
+    CHECK(loop_closure_replay_settings(older, quantile).changed == std::vector<std::string>{"loop_closure_match_check_quantile"});
+
+    // a removed setting the capture lists (loop_closure_kernel_scale, the robust kernel): at the value whose behaviour
+    // remains it changes nothing, at another the replay is refused
+    auto with_kernel = text;
+    with_kernel["loop_closure_kernel_scale"] = "0";
+    const LoopClosureSettingsDifference kernel_off = loop_closure_replay_settings(with_kernel, captured);
+    CHECK(kernel_off.refused.empty());
+    CHECK(kernel_off.changed.empty());
+    with_kernel["loop_closure_kernel_scale"] = "3";
+    CHECK(loop_closure_replay_settings(with_kernel, captured).refused == std::vector<std::string>{"loop_closure_kernel_scale"});
 }
 
 TEST_CASE("loop closure replay: the tries the settings ask for and the capture doesn't hold are named, and nothing is applied")
@@ -1538,7 +1494,7 @@ TEST_CASE("loop closure replay: the match check without the readings' steps is r
     CHECK(replay_loop_closure(capture, config, logger).report.outcome == "no_loops");
 }
 
-TEST_CASE("loop closure match check: a quantile outside (0, 1) or the robust kernel is refused, nothing is registered or applied")
+TEST_CASE("loop closure match check: a quantile outside (0, 1) is refused, nothing is registered or applied")
 {
     OdometryConfig config = loop_closure_config();
     LoopClosureCapture capture = capture_without_tries(config);
@@ -1556,19 +1512,11 @@ TEST_CASE("loop closure match check: a quantile outside (0, 1) or the robust ker
         CHECK(r.missing.empty()); // nothing was asked for
         CHECK(r.identical_nodes == r.nodes);
     }
-    OdometryConfig kernel = config;
-    kernel.loop_closure_kernel_scale = 3.0;
-    const LoopClosureReplayResult k = replay_loop_closure(capture, kernel, logger);
-    CHECK(k.report.outcome == "match_check_with_kernel");
-    CHECK(k.missing.empty());
-    CHECK(k.identical_nodes == k.nodes);
-    kernel.loop_closure_match_check = false; // the kernel alone runs
-    CHECK(replay_loop_closure(capture, kernel, logger).report.outcome == "no_loops");
 
-    // the pose-graph step refuses them too
+    // the pose-graph step refuses it too
     const OutAndBack g(10);
     std::vector<LoopClosureEdge> loops{g.edge(1, 18)};
-    OdometryConfig c = with_kernel(0.0);
+    OdometryConfig c = loop_closure_config();
     c.loop_closure_match_check = true;
     c.loop_closure_match_check_quantile = 1.0;
     const LoopOdometryEdgeInformation steps = uniform_steps(g.initial.size(), c);
@@ -1577,11 +1525,6 @@ TEST_CASE("loop closure match check: a quantile outside (0, 1) or the robust ker
     std::vector<LoopEdgeResidual> residuals;
     CHECK_FALSE(solve_and_prune_loop_pose_graph(g.initial, loops, c, &steps, logger, rep, optimized, residuals));
     CHECK(rep.outcome == "match_check_bad_quantile");
-    c = with_kernel(0.5);
-    c.loop_closure_match_check = true;
-    rep = LoopClosureReport{};
-    CHECK_FALSE(solve_and_prune_loop_pose_graph(g.initial, loops, c, &steps, logger, rep, optimized, residuals));
-    CHECK(rep.outcome == "match_check_with_kernel");
 }
 
 TEST_CASE("loop closure capture file: written and read back bit for bit; another file is refused")

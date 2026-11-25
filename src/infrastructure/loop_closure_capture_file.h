@@ -21,7 +21,8 @@ std::map<std::string, std::string> settings_as_text(const OdometryConfig &config
 // capture doesn't list counts as at its default). refused: those a replay can't change, because they change the odometry
 // (every setting outside [loop_closure], [consistency], [lidar_odometry_debug_info], [paths], [misc], [version_info]), the
 // segments or a registration (loop_closure_segment_windows; loop_closure_max_correction_m, which is also the same-floor
-// search range; loop_closure_cross_floor_search_m), and the odometry settings hash itself; changed: the other
+// search range; loop_closure_cross_floor_search_m), the odometry settings hash itself, and a removed setting the capture
+// lists at another value than the one whose behaviour remains (loop_closure_kernel_scale above 0); changed: the other
 // [loop_closure] settings that differ. Neither: the replay runs with the capture's own loop closure settings.
 struct LoopClosureSettingsDifference
 {
