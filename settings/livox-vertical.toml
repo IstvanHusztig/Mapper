@@ -21,9 +21,6 @@ build_date = "Mar 28 2026"
 # off since 2026-11-24 with the settings of the Livox 4 run the user judged (see the note at degenerate_projection_ratio)
 use_consistency = false
 num_constistency_iter = 10
-consistency_gyro_rotation_term = false
-consistency_gyro_sigma_scale = 3.0
-consistency_gyro_gate_deg = 3.0
 
 [evaluation]
 holdout_block_s = 0.0

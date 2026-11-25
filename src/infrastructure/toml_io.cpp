@@ -164,7 +164,11 @@ namespace
         {"rgd_sf_sigma_ka_deg", std::nullopt},
         // 2026-11-25: the turn gyro weighting (off in every settings file, never measured to help)
         {"rotation_sigma_inflation_k_turn", 0.0},
-        {"turn_rate_threshold_deg_s", std::nullopt}};
+        {"turn_rate_threshold_deg_s", std::nullopt},
+        // 2026-11-25: the gyro rotation term in consistency (off in every settings file; removed on the user's decision)
+        {"consistency_gyro_rotation_term", 0.0},
+        {"consistency_gyro_sigma_scale", std::nullopt},
+        {"consistency_gyro_gate_deg", std::nullopt}};
     // sections whose every key was retired
     const std::set<std::string> RETIRED_SECTIONS = {"robust_lidar_odometry"};
 
