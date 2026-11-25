@@ -181,6 +181,35 @@ are central differences and the solve a sparse LU, not dMapper's analytic ones a
 edges, not a statement about the map; a rule that survives is built into dMapper and confirmed by the replay and one reprocessing.
 Tests: `LoopGraphTest` in `tests/test_loop_graph.py`.
 
+## loop_fine_time.py
+
+The prototype of the loop closure's fine-time placement (OpenSpec change `loop-closure-fine-time-guard`), written to the frozen rule
+`experiments/consistency/livox4_lever/fine_time/RULE.md`. For each weak run of the readings rule with a sigma of at least 1 m it
+compares the scans of every window of the run, and of 6 windows on either side, with surfaces across the run's axis that windows at
+least 12 s away saw, fits a smooth profile of offsets along the axis (zero at both ends), reads every kept loop edge that touches the
+stretch at the times of its own information, and applies the profile if the held-out points improve and no edge is contradicted.
+
+```
+python tools/loop_fine_time.py <capture> <trajectory folder> <replay folder or edge list> <recording>/cache <out folder>
+                               [--coupling C] [--min-matched N] [--min-sigma M]
+```
+
+- Inputs: a format 2 capture (it carries the readings), the trajectory after dMapper's loop closure (a result or replay folder), the kept
+  edges as `loop_graph.py` takes them, and the recording's `cache` folder (`intermediate_points_<w>.cache`; any run or `--from-snapshot`
+  run on the recording writes it, a GUI run clears it).
+- Outputs: `trajectory/` (read by `wall_pairs.py measure` and `cloud_from_trajectory.py`), `windows.csv` (each window of a stretch: offset,
+  supported or not, patches, scores before and after, the offset its curve prefers alone), `edges.csv` (per edge: residual at the first
+  pose, time-support residual before and after, limit, informed share, class, share of the information per source window),
+  `summary.json` (each eligible run: applied, unchanged, not timed or not applied, with the cause).
+- The three options are readings beside the rule, not settings to tune.
+- Limits: no registration, no pose graph, no pruning (the trajectory and the kept edges are taken as given). The edges' information per
+  source window is rebuilt from the points at the registered pose; dMapper's own will be its last refinement pass's. The reference shares
+  the map's errors: the result is agreement between visits, not accuracy.
+
+Tests: `tests/test_loop_fine_time.py` (the pieces on constructed numbers; a synthetic corridor walked out and back: an error inside the
+blind stretch is taken out to one grid step, a right trajectory stays, a corridor without anything across it is not timed, equal door
+jambs at equal spacing move nothing).
+
 ## spot_check.py
 
 Checks one place of a result for a structure drawn twice (a doubled railing or wall) and tells which passes draw which copy. `eval_odometry.py` and revisit checks that fit walls and floors don't see thin structures. Pure Python, plus CloudCompare for the export.
