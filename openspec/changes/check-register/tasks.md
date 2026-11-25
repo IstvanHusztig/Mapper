@@ -182,6 +182,12 @@ and goes to the user.
       1,390 values, 584 loop lines, 206 Python tests; the pins' block holds the three literals as `call: pin(...)` lines.
       Trial: the defaults' literal set to 0x0ull gives `CHANGE call changed`, exit 1; reverted, IDENTICAL.)
 
+- [x] 5b.3 Round 2 after the master reviewer's second review (2026-11-25, merged): number lines in C++ and Python, default
+      arguments, Python neutralisers, the build list (`tests/CMakeLists.txt`), member helpers, and the executed counts in
+      the step checks (cases run plus skipped must equal the register's totals). The remaining blind spots are tests in
+      `KnownBlindSpots` and stated in the register's header. Recorded: 299 cases, 1,955 assertions, 250 Python tests,
+      9,026 lines.
+
 ## 6. Close
 
 - [x] 6.1 `tools/step_checks.py` on master: every line identical or passed, the register identical. `tools/end_runs.py`
