@@ -14,16 +14,28 @@ helpers that assert, and the constants and tables its limits come from. See open
     python checks/check_register.py --instruments   check checks/instruments.toml against the register, print the table
     --root DIR                                      another tree (default: the repository this file is in)
 
-Exit codes of a comparison: 0 no difference, 3 additions only (cases, assertions, calls, values added; a case moved;
-an assertion reworded), 1 a change (anything removed, changed, a marker or a conditional added or removed, an
-instruments fault), 2 a source cannot be read (file:line on stderr). --record refuses with 4.
+Exit codes of a comparison: 0 no difference, 3 additions only (cases, assertions, calls, values, loops added), 1 a
+change (anything removed; any difference in the normalised text of an assertion, a call or a value; a case moved to
+another file; a marker, a conditional or a #define/#undef added or removed; an instruments fault), 2 a source cannot be
+read (file:line on stderr) or no register is recorded ("no register: cannot compare"). --record refuses with 4.
+
+Assertions are the doctest macros CHECK*, REQUIRE*, WARN*, FAIL and FAIL_CHECK, and in Python assert statements and the
+assert*/fail calls. A helper is a function, a lambda bound to a name (`auto X = [..](..){..};`, at file scope or in a
+body) or, in Python, a method or function that asserts or calls a helper that does; its assertions are lines (of the
+file block, of the case that defines the lambda, prefixed `[X]` like a subcase), and every call of it is a `call:` line
+with its arguments. Markers include those of an enclosing TEST_SUITE / TEST_SUITE_BEGIN (`suite:<decorator>`) and of a
+Python class (`class:<decorator>`, with the decorator's arguments as written), and `skipTest` for a test that skips
+itself. Every #define and #undef is a `conditional:` line; an assertion inside the arguments of a function-like macro
+defined in tests/ carries the prefix `[macro NAME]`.
 
 What it does NOT see (also in the register's header): a limit computed while a test runs from data; an assertion in a
-branch that is never taken or a loop that runs zero times; limits in src/ (the verdict limits, the settings hash); the
-meaning of a test; const declarations whose initialiser holds no numeric literal (reference bindings); a value built
-with a constructor call that has no numeric literal in its arguments. Values listed: file-scope declarations with a
-numeric literal, and const/constexpr declarations with a numeric literal in the initialiser inside cases, asserting
-helpers (prefixed `<helper>() ::`) and every other function body under tests/ (prefixed `<function>() ::`, under the file).
+branch that is never taken, a loop whose bounds depend on data or that runs zero times; limits in src/ (the verdict
+limits, the settings hash); the meaning of a test; declarations whose initialiser holds no numeric literal (reference
+bindings); a lambda handed on without a name. Values listed (`value:`): file-scope declarations with a numeric literal
+and every local declaration, const or not, with a numeric literal in its initialiser (a call, brace or paren
+initialiser too), in cases, helpers (prefixed `<helper>() ::`) and every other function body under tests/ (prefixed
+`<function>() ::`, under the file). Loops (`loop:`): the braced or other list of a range-based for with a numeric
+literal, the header of a classic for whose init or condition holds one.
 
 Pure standard library; imports nothing from tools/.
 """
@@ -46,8 +58,8 @@ EXIT_SAME, EXIT_CHANGE, EXIT_UNREADABLE, EXIT_ADDITIONS, EXIT_REFUSED = 0, 1, 2,
 
 NOT_SEEN = [
     "# Not seen: limits computed while a test runs from data, assertions the flow never reaches (a branch not taken,",
-    "# a loop that runs zero times), limits in src/ (the verdict limits, the settings hash), the meaning of a test,",
-    "# constants without a numeric literal in their initialiser (reference bindings), constructor-style declarations.",
+    "# a loop with data-dependent bounds or that runs zero times), limits in src/ (the verdict limits, the settings hash),",
+    "# the meaning of a test, declarations without a numeric literal in their initialiser, a lambda handed on without a name.",
 ]
 
 
@@ -86,8 +98,9 @@ def collapse(text):
 
 
 class Lexed:
-    def __init__(self, path, src, toks, match, conds, clean):
+    def __init__(self, path, src, toks, match, conds, clean, macros=()):
         self.path, self.src, self.toks, self.match, self.conds, self.clean = path, src, toks, match, conds, clean
+        self.macros = set(macros)        # names of the function-like macros this file defines
 
 
 def lex(src, path):
@@ -102,6 +115,7 @@ class _Lexer:
         self.line = 1
         self.toks = []
         self.conds = []          # (token index, line, text)
+        self.macros = set()
         self.clean = list(src)
         self.ifstack = []        # ("live" | "if0", line)
         self.bstack = []         # token indices of open brackets
@@ -266,7 +280,7 @@ class _Lexer:
         if self.ifstack:
             self.err("unterminated #if", self.ifstack[-1][1])
         match = [self.match.get(k, -1) for k in range(len(self.toks))]
-        return Lexed(self.path, src, self.toks, match, self.conds, "".join(self.clean))
+        return Lexed(self.path, src, self.toks, match, self.conds, "".join(self.clean), self.macros)
 
     def directive(self):
         src, n = self.src, self.n
@@ -330,6 +344,11 @@ class _Lexer:
             kind, _ = self.ifstack.pop()
             if kind == "live":
                 self.conds.append((len(self.toks), ln0, shown))
+        elif name in ("define", "undef"):
+            self.conds.append((len(self.toks), ln0, shown))
+            md = re.match(r"\s*define\s+([A-Za-z_]\w*)\(", text)
+            if md:
+                self.macros.add(md.group(1))
 
     def skip_if0(self, start, end, ln0):
         """`#if 0` removed like a comment up to its #endif; the #else branch of it stays."""
@@ -372,8 +391,8 @@ class _Lexer:
 # C++ structure: scopes, cases, functions, values
 # ---------------------------------------------------------------------------------------------------------------
 
-ASSERT_NAME = re.compile(r"(?:CHECK|REQUIRE|WARN)(?:_[A-Za-z0-9_]+)?\Z")
-ASSERT_WORD = re.compile(r"(?<![A-Za-z0-9_])(?:CHECK|REQUIRE|WARN)(?:_[A-Za-z0-9_]+)?(?![A-Za-z0-9_])")
+ASSERT_NAME = re.compile(r"(?:(?:CHECK|REQUIRE|WARN)(?:_[A-Za-z0-9_]+)?|FAIL(?:_CHECK)?)\Z")
+ASSERT_WORD = re.compile(r"(?<![A-Za-z0-9_])(?:(?:CHECK|REQUIRE|WARN)(?:_[A-Za-z0-9_]+)?|FAIL(?:_CHECK)?)(?![A-Za-z0-9_])")
 
 
 class Func:
@@ -428,8 +447,8 @@ def decode_string(tok_text):
     return re.sub(r"\\(.)", lambda mm: mm.group(1) if mm.group(1) in "\"\\'" else mm.group(0), body)
 
 
-def read_case_head(scan, lp):
-    """TEST_CASE( name [* decorators] ): the name and the markers."""
+def read_case_head(scan, lp, what="TEST_CASE"):
+    """TEST_CASE( name [* decorators] ) (also TEST_SUITE and TEST_SUITE_BEGIN): the name and the markers."""
     lx = scan.lx
     toks = lx.toks
     rp = lx.match[lp]
@@ -450,12 +469,12 @@ def read_case_head(scan, lp):
     parts.append(cur)
     name_toks = parts[0]
     if not name_toks or any(toks[q].k != "str" for q in name_toks):
-        raise ReadError(scan.path, toks[lp].ln, "TEST_CASE name is not made of string literals")
+        raise ReadError(scan.path, toks[lp].ln, f"{what} name is not made of string literals")
     name = collapse("".join(decode_string(toks[q].t) for q in name_toks))
     markers = []
     for part in parts[1:]:
         if not part:
-            raise ReadError(scan.path, toks[lp].ln, "empty decorator in TEST_CASE")
+            raise ReadError(scan.path, toks[lp].ln, f"empty decorator in {what}")
         text = render(lx, part[0], part[-1] + 1)
         text = text.split("::")[-1].strip()
         text = re.sub(r"\(\s*\)$", "", text)
@@ -502,9 +521,16 @@ def has_number(lx, a, b):
     return any(lx.toks[q].k == "num" for q in range(a, b))
 
 
-def walk_scope(scan, lo, hi, cls):
+def walk_scope(scan, lo, hi, cls, suite=()):
+    """suite: the markers (`suite:<decorator>`) of the TEST_SUITE blocks round this scope; the TEST_SUITE_BEGIN of this
+    scope adds its own from there to its TEST_SUITE_END."""
     lx = scan.lx
     toks, match = lx.toks, lx.match
+    begin = []
+
+    def active():
+        return tuple(suite) + tuple("suite:" + m for m in begin)
+
     i = lo
     while i < hi:
         t = toks[i]
@@ -548,6 +574,10 @@ def walk_scope(scan, lo, hi, cls):
             i = k + 1
             continue
         if mode == "semi":
+            if first == "TEST_SUITE_BEGIN" and paren_idx == start + 1:
+                begin[:] = read_case_head(scan, paren_idx, first)[1]
+            elif first == "TEST_SUITE_END":
+                begin[:] = []
             if paren_idx is not None and paren_idx > start and toks[paren_idx - 1].k == "id":
                 scan.declared.add(toks[paren_idx - 1].t)
             if first not in ("using", "typedef", "static_assert", "friend") and paren_idx is not None:
@@ -563,11 +593,14 @@ def walk_scope(scan, lo, hi, cls):
         close = match[j]
         if first == "TEST_CASE" and j == match[start + 1] + 1 and toks[start + 1].t == "(":
             name, markers = read_case_head(scan, start + 1)
-            scan.funcs.append(Func("TEST_CASE", True, toks[start].ln, j + 1, close, cls, name, markers))
+            scan.funcs.append(Func("TEST_CASE", True, toks[start].ln, j + 1, close, cls, name, markers + list(active())))
             i = close + 1
             continue
         if "namespace" in words[:2] or first == "TEST_SUITE" or (first == "extern" and len(words) > 1 and toks[start + 1].k == "str"):
-            walk_scope(scan, j + 1, close, cls)
+            inner = active()
+            if first == "TEST_SUITE" and start + 1 < j and toks[start + 1].t == "(":
+                inner += tuple("suite:" + m for m in read_case_head(scan, start + 1, first)[1])
+            walk_scope(scan, j + 1, close, cls, inner)
             i = close + 1
             continue
         if "enum" in words and paren_idx is None:
@@ -578,7 +611,7 @@ def walk_scope(scan, lo, hi, cls):
             for q in head:
                 if toks[q].t in ("struct", "class", "union") and q + 1 < j and toks[q + 1].k == "id":
                     name = toks[q + 1].t
-            walk_scope(scan, j + 1, close, cls + ((name or "(anonymous)"),))
+            walk_scope(scan, j + 1, close, cls + ((name or "(anonymous)"),), active())
             i = close + 1
             continue
         if paren_idx is not None:
@@ -602,12 +635,120 @@ def scan_cpp(path, src):
     lx = lex(src, path)
     scan = FileScan(lx)
     walk_scope(scan, 0, len(lx.toks), ())
+    find_lambdas(scan)
     return scan
 
 
+class Lam:
+    """A lambda bound to a name inside a function body: `name = [..](..){ body }`; body tokens lo..hi-1."""
+    __slots__ = ("name", "br", "lo", "hi", "owner")
+
+    def __init__(self, name, br, lo, hi, owner):
+        self.name, self.br, self.lo, self.hi, self.owner = name, br, lo, hi, owner
+
+
+def lambda_body(lx, q, hi):
+    """(first body token, index of the closing brace) of the lambda whose introducer `[` is token q, or None."""
+    toks = lx.toks
+    if q >= hi or toks[q].t != "[":
+        return None
+    k = lx.match[q] + 1
+    while k < hi:
+        t = toks[k].t
+        if t == "{":
+            return k + 1, lx.match[k]
+        if t == ";" or t in CLOSERS:
+            return None
+        if t in OPENERS:
+            k = lx.match[k] + 1
+            continue
+        k += 1
+    return None
+
+
+def find_lambdas(scan):
+    """Lambdas bound to a name (`X = [..](..){..}`). One with no enclosing function (file or class scope) becomes a
+    function of its own, named X; one in a body is a Lam of its function (scan.lambdas)."""
+    lx = scan.lx
+    toks = lx.toks
+    scan.lambdas = []
+    for q in range(1, len(toks) - 1):
+        if toks[q].t == "=" and toks[q + 1].t == "[" and toks[q - 1].k == "id":
+            body = lambda_body(lx, q + 1, len(toks))
+            if body is None:
+                continue
+            owner = None
+            for f in scan.funcs:
+                if f.lo <= q + 1 <= f.hi and (owner is None or f.lo > owner.lo):
+                    owner = f
+            if owner is None:
+                scan.funcs.append(Func(toks[q - 1].t, False, toks[q - 1].ln, body[0], body[1], ()))
+            else:
+                scan.lambdas.append(Lam(toks[q - 1].t, q + 1, body[0], body[1], owner))
+
+
+NOT_DECL = {"return", "throw", "delete", "case", "goto", "else", "new", "co_return", "co_yield", "co_await", "using",
+            "typedef", "static_assert", "break", "continue", "do", "sizeof", "struct", "class", "union", "enum",
+            "namespace", "template", "operator", "typename", "default", "if", "for", "while", "switch", "catch", "try"}
+
+
+def decl_value(lx, i, hi):
+    """The end of a local declaration that starts at token i and whose initialiser (after `=`, in braces or in
+    parentheses) holds a numeric literal, else None. `Type name = init`, `Type name{init}`, `Type name(init)`; a plain
+    assignment, a call, a lambda initialiser and a statement that is no declaration give None."""
+    toks, match = lx.toks, lx.match
+    k = stmt_end(lx, i, hi)
+    left = []
+    stop = None
+    q = i
+    while q < k:
+        t = toks[q].t
+        if t in ("=", "(", "{"):
+            stop = q
+            break
+        if t == "[":
+            left.append(q)
+            q = match[q] + 1
+            continue
+        left.append(q)
+        q += 1
+    if stop is None:
+        return None
+    if any(toks[x].t in NOT_DECL or toks[x].t in (".", "->") for x in left):
+        return None
+    core = [x for x in left]
+    while core and toks[core[-1]].t == "[":
+        core.pop()
+    if len(core) < 2 or toks[core[-1]].k != "id":
+        return None
+    before = toks[core[-2]]
+    if before.k == "id":
+        pass
+    elif before.t in (">", ">>"):
+        pass
+    elif before.t in ("*", "&", "&&") and len(core) >= 3 and (toks[core[-3]].k == "id" or toks[core[-3]].t in (">", ">>")):
+        pass
+    else:
+        return None
+    if toks[stop].t == "=":
+        a, b, end = stop + 1, k, k
+        if a < k and toks[a].t == "[":
+            return None
+    else:
+        close = match[stop]
+        if close + 1 != k:
+            return None
+        a, b, end = stop + 1, close, close + 1
+    if not has_number(lx, a, b):
+        return None
+    return end
+
+
 def asserting_helpers(scans):
-    """{file: set of helper names visible in it}. A function defined in a .cpp is visible in its own file only, unless a
-    header declares or defines the name (then it is global). A helper asserts, or calls a helper (closure over calls)."""
+    """({file: names visible in it}, {file: {id(function): names of its asserting lambdas}}, {file: {introducer token:
+    lambda name}}). A function defined in a .cpp is visible in its own file only, unless a header declares or defines the
+    name (then it is global). A lambda is visible in the function that defines it. A helper asserts, or calls a helper
+    (closure over calls)."""
     global_names = set()
     for s in scans:
         if s.path.endswith(".h"):
@@ -617,20 +758,30 @@ def asserting_helpers(scans):
         return ("*", name) if name in global_names else (path, name)
 
     direct, calls = set(), collections.defaultdict(set)
+    lam_node = {}
     for s in scans:
         toks = s.lx.toks
-        for f in s.funcs:
-            if f.is_case or f.name.startswith("operator"):
-                continue
-            me = node(s.path, f.name)
+        owned = collections.defaultdict(dict)
+        for L in s.lambdas:
+            lam_node[(s.path, L.br)] = ((s.path, "lambda", L.lo), L.name)
+            owned[id(L.owner)][L.name] = lam_node[(s.path, L.br)]
+
+        def collect(me, f, lo, hi, s=s, toks=toks, owned=owned):
             calls[me]
-            for q in range(f.lo, f.hi):
+            for q in range(lo, hi):
                 t = toks[q]
                 if t.k == "id" and q + 1 < len(toks) and toks[q + 1].t == "(":
                     if ASSERT_NAME.match(t.t):
                         direct.add(me)
                     else:
-                        calls[me].add(node(s.path, t.t))
+                        calls[me].add(owned[id(f)].get(t.t) or node(s.path, t.t))
+
+        for f in s.funcs:
+            if f.is_case or f.name.startswith("operator"):
+                continue
+            collect(node(s.path, f.name), f, f.lo, f.hi)
+        for L in s.lambdas:
+            collect(lam_node[(s.path, L.br)], L.owner, L.lo, L.hi)
     helpers = set(direct)
     changed = True
     while changed:
@@ -639,21 +790,55 @@ def asserting_helpers(scans):
             if me not in helpers and called & helpers:
                 helpers.add(me)
                 changed = True
-    visible = {}
+    visible, local, starts = {}, {}, {}
     for s in scans:
-        names = {n for (scope, n) in helpers if scope == s.path or scope == "*"}
-        visible[s.path] = names
-    return visible
+        visible[s.path] = {n for (scope, n) in helpers if scope == s.path or scope == "*"}
+        local[s.path] = collections.defaultdict(set)
+        starts[s.path] = {}
+        for L in s.lambdas:
+            if lam_node[(s.path, L.br)] in helpers:
+                local[s.path][id(L.owner)].add(L.name)
+                starts[s.path][L.br] = L.name
+    return visible, local, starts
 
 
-def walk_body(scan, lo, hi, helpers):
+def loop_item(lx, i):
+    """The text of the `for` whose keyword is token i when its header holds a numeric literal in a range-based list,
+    or in the init or the condition of a classic for; else None."""
+    toks, match = lx.toks, lx.match
+    lp = i + 1
+    rp = match[lp]
+    parts, cur, colon = [], [lp + 1], None
+    q = lp + 1
+    while q < rp:
+        t = toks[q].t
+        if t in OPENERS:
+            q = match[q] + 1
+            continue
+        if t == ";":
+            parts.append((cur[0], q))
+            cur = [q + 1]
+        elif t == ":" and colon is None:
+            colon = q
+        q += 1
+    parts.append((cur[0], rp))
+    if len(parts) > 1:
+        hit = any(has_number(lx, a, b) for a, b in parts[:2])
+    elif colon is not None:
+        hit = has_number(lx, colon + 1, rp)
+    else:
+        hit = False
+    return render(lx, i, rp + 1, True) if hit else None
+
+
+def walk_body(scan, lo, hi, helpers, macros=frozenset(), lam_starts=None):
     """Items (pos, kind, text) of one body in source order; also counts per macro name and subcases."""
     lx = scan.lx
     toks, match = lx.toks, lx.match
     items = []
     macro_counts = collections.Counter()
     subcases = 0
-    sub = []                 # (end index, name)
+    sub = []                 # (end index, name): subcases, asserting lambdas, arguments of a function-like macro
     ostack = []
     i = lo
     while i < hi:
@@ -661,6 +846,10 @@ def walk_body(scan, lo, hi, helpers):
             sub.pop()
         t = toks[i]
         if t.k == "p":
+            if lam_starts and t.t == "[" and i in lam_starts:
+                body = lambda_body(lx, i, hi)
+                if body is not None:
+                    sub.append((body[1], lam_starts[i]))
             if t.t in OPENERS:
                 ostack.append(t.t)
             elif t.t in CLOSERS and ostack:
@@ -687,28 +876,18 @@ def walk_body(scan, lo, hi, helpers):
             macro_counts[t.t] += 1
         elif call and t.t in helpers:
             items.append((i, "call", prefix + render(lx, i, match[i + 1] + 1)))
-        elif t.t in ("const", "constexpr"):
-            prev = toks[i - 1].t if i > 0 else "{"
-            if prev in ("{", "}", ";", "static", "constexpr", "const", "inline", "thread_local") and (not ostack or ostack[-1] == "{") \
-                    and not (prev in ("constexpr", "const") and toks[i - 1].t == prev and t.t == prev):
-                k = stmt_end(lx, i, hi)
-                depth0 = []
-                q = i
-                while q < k:
-                    if toks[q].t in OPENERS:
-                        q = match[q] + 1
-                        continue
-                    depth0.append(q)
-                    q += 1
-                has_assign = any(toks[q].t == "=" and not (q > 0 and toks[q - 1].t == "operator") for q in depth0)
-                last = toks[k - 1].t if k - 1 > i else ""
-                brace_init = last in ("}", ")") and k - 1 > i + 2 and match[k - 1] > 0 and toks[match[k - 1] - 1].k == "id"
-                if has_assign or brace_init:
-                    init = next((q for q in depth0 if toks[q].t == "=" and not (q > 0 and toks[q - 1].t == "operator")), None)
-                    if init is None:
-                        init = match[k - 1]
-                    if has_number(lx, init, k):
-                        items.append((i, "value", prefix + render(lx, i, k, True)))
+        elif call and t.t in macros:
+            sub.append((match[i + 1], "macro " + t.t))
+        elif t.t == "for" and call:
+            text = loop_item(lx, i)
+            if text is not None:
+                items.append((i, "loop", prefix + text))
+        else:
+            prev = toks[i - 1].t if i > lo else "{"
+            if prev in ("{", "}", ";") and (not ostack or ostack[-1] == "{") and t.t not in NOT_DECL:
+                end = decl_value(lx, i, hi)
+                if end is not None:
+                    items.append((i, "value", prefix + render(lx, i, end, True)))
         i += 1
     return items, macro_counts, subcases
 
@@ -758,9 +937,10 @@ def cross_check(scan, found_macros, n_cases, n_subcases):
         raise ReadError(scan.path, 1, "cross-count differs: " + "; ".join(problems))
 
 
-def cpp_blocks(scan, helpers):
+def cpp_blocks(scan, helpers, macros=frozenset(), lam_local=None, lam_starts=None):
     """Blocks of one C++ file: its [file] block then its cases in source order; also the per-macro counts."""
     lx = scan.lx
+    lam_local = lam_local if lam_local is not None else {}
     found = collections.Counter()
     n_cases = n_subcases = 0
     funcs = sorted(scan.funcs, key=lambda f: f.lo)
@@ -774,8 +954,9 @@ def cpp_blocks(scan, helpers):
     file_items = [(pos, 1, "value", text) for pos, text in scan.values]
     case_items = {}
     for f in funcs:
-        items, macros, subs = walk_body(scan, f.lo, f.hi, helpers)
-        found.update(macros)
+        visible = helpers | lam_local.get(id(f), set())
+        items, macs, subs = walk_body(scan, f.lo, f.hi, visible, macros, lam_starts)
+        found.update(macs)
         n_subcases += subs
         if f.is_case:
             n_cases += 1
@@ -783,7 +964,7 @@ def cpp_blocks(scan, helpers):
         elif f.name in helpers:
             file_items += [(pos, 1, kind, f"{f.name}() :: {text}") for pos, kind, text in items]
         else:
-            file_items += [(pos, 1, kind, f"{f.name}() :: {text}") for pos, kind, text in items if kind == "value"]
+            file_items += [(pos, 1, kind, f"{f.name}() :: {text}") for pos, kind, text in items if kind in ("value", "loop")]
     for pos, ln, text in lx.conds:
         f = owner(pos)
         if f is None or not (f.is_case or f.name in helpers):
@@ -825,11 +1006,19 @@ def _assign_value(stmt):
 
 
 def _marker_of(dec):
-    text = ast.unparse(dec)
-    base = text.split("(")[0].split(".")[-1]
-    if base.startswith("skip") or base == "expectedFailure":
-        return base
-    return None
+    """A skip / expectedFailure decorator as written: the name and, for a call, its arguments."""
+    base = ast.unparse(dec.func if isinstance(dec, ast.Call) else dec).split(".")[-1]
+    if not (base.startswith("skip") or base == "expectedFailure"):
+        return None
+    if isinstance(dec, ast.Call):
+        args = [ast.unparse(a) for a in dec.args]
+        args += [f"{k.arg}={ast.unparse(k.value)}" if k.arg else "**" + ast.unparse(k.value) for k in dec.keywords]
+        return f"{base}(" + ", ".join(args) + ")"
+    return base
+
+
+def _markers_of(node):
+    return [x for x in (_marker_of(d) for d in node.decorator_list) if x]
 
 
 def _self_call(node):
@@ -838,19 +1027,40 @@ def _self_call(node):
 
 
 def _is_assert_call(node):
+    """The assert*/fail method a call names, on any plain name (self, a test case handed in)."""
     if not isinstance(node, ast.Call):
         return None
-    a = _self_call(node)
+    f = node.func
+    a = f.attr if isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name) else None
     return a if a and (a.startswith("assert") or a == "fail") else None
 
 
-def _ordered(node):
-    out = []
-    for n in ast.walk(node):
-        if isinstance(n, (ast.Call, ast.Assert)):
-            out.append(n)
-    out.sort(key=lambda n: (n.lineno, n.col_offset))
+def _skip_node(n):
+    if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "skipTest":
+        return True
+    if isinstance(n, ast.Raise) and n.exc is not None:
+        e = n.exc.func if isinstance(n.exc, ast.Call) else n.exc
+        return (e.attr if isinstance(e, ast.Attribute) else getattr(e, "id", "")) == "SkipTest"
+    return False
+
+
+def _called_names(fn):
+    out = set()
+    for n in ast.walk(fn):
+        if isinstance(n, ast.Call):
+            s = _self_call(n)
+            if s:
+                out.add(s)
+            elif isinstance(n.func, ast.Name):
+                out.add(n.func.id)
     return out
+
+
+def _asserts_directly(fn):
+    return any(isinstance(n, ast.Assert) or _is_assert_call(n) for n in ast.walk(fn))
+
+
+SET_UPS = {"setUp", "setUpClass", "tearDown", "tearDownClass", "asyncSetUp", "asyncTearDown"}
 
 
 def python_blocks(path, src):
@@ -871,8 +1081,10 @@ def python_blocks(path, src):
                 into.append(("value", collapse(f"{names} = {ast.unparse(value)}")))
 
     values_of(tree.body, file_lines)
-    test_classes = set()
     classes = [n for n in tree.body if isinstance(n, ast.ClassDef)]
+    by_name = {c.name: c for c in classes}
+    funcs = [n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    test_classes = set()
     changed = True
     while changed:
         changed = False
@@ -880,51 +1092,75 @@ def python_blocks(path, src):
             if c.name not in test_classes and any(ast.unparse(b).endswith("TestCase") or ast.unparse(b) in test_classes for b in c.bases):
                 test_classes.add(c.name)
                 changed = True
-    for cls in classes:
-        if cls.name not in test_classes:
-            continue
-        cls_values = []
-        values_of(cls.body, cls_values)
-        file_lines += [(k, f"{cls.name} :: {t}") for k, t in cls_values]
-        methods = [n for n in cls.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
-        asserting = set()
-        for m in methods:
-            if not m.name.startswith("test") and any(_is_assert_call(n) for n in _ordered(m) if isinstance(n, ast.Call)):
+
+    def is_test(cls, m):
+        return cls.name in test_classes and m.name.startswith("test")
+
+    # helpers: methods that are no tests and module-level functions; asserting directly or through a helper they call
+    defs = [(c, m) for c in classes for m in c.body if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef)) and not is_test(c, m)]
+    defs += [(None, f) for f in funcs]
+    asserting = {m.name for _, m in defs if _asserts_directly(m)}
+    changed = True
+    while changed:
+        changed = False
+        for _, m in defs:
+            if m.name not in asserting and _called_names(m) & asserting:
                 asserting.add(m.name)
-        changed = True
-        while changed:
-            changed = False
-            for m in methods:
-                if m.name.startswith("test") or m.name in asserting:
+                changed = True
+
+    def class_markers(cls, seen=()):
+        out = ["class:" + m for m in _markers_of(cls)]
+        for b in cls.bases:
+            base = by_name.get(ast.unparse(b))
+            if base is not None and base.name not in seen:
+                out += class_markers(base, seen + (cls.name,))
+        return out
+
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef):
+            cls_values = []
+            values_of(node.body, cls_values)
+            file_lines += [(k, f"{node.name} :: {t}") for k, t in cls_values]
+            cmarks = class_markers(node)
+            for m in node.body:
+                if not isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     continue
-                if any(isinstance(n, ast.Call) and _self_call(n) in asserting for n in _ordered(m)):
-                    asserting.add(m.name)
-                    changed = True
-        for m in methods:
-            if not m.name.startswith("test"):
-                continue
-            markers = [x for x in (_marker_of(d) for d in m.decorator_list) if x]
-            cases.append((m.lineno, Block(path, f"{cls.name}.{m.name}", markers, _python_lines_sorted(m, asserting))))
+                if is_test(node, m):
+                    lines = _python_lines_sorted(m, asserting)
+                    markers = _markers_of(m) + cmarks + (["skipTest"] if any(k == "skip" for k, _ in lines) else [])
+                    cases.append((m.lineno, Block(path, f"{node.name}.{m.name}", markers, lines)))
+                elif m.name in asserting or m.name in SET_UPS:
+                    file_lines += [(k, f"{node.name}.{m.name}() :: {t}") for k, t in _python_lines_sorted(m, asserting)]
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in asserting:
+            file_lines += [(k, f"{node.name}() :: {t}") for k, t in _python_lines_sorted(node, asserting)]
     blocks = [Block(path, None, (), file_lines)]
     blocks += [b for _, b in sorted(cases, key=lambda x: x[0])]
     return blocks
 
 
 def _python_lines_sorted(method, asserting):
+    """Lines of a test, a helper or a set-up: assertions, calls of asserting helpers (also functions defined inside it),
+    skips and numeric constants."""
+    names = set(asserting)
+    for n in ast.walk(method):
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n is not method and (_asserts_directly(n) or _called_names(n) & names):
+            names.add(n.name)
     items = []
     for n in ast.walk(method):
         if isinstance(n, ast.Assert):
             items.append((n.lineno, n.col_offset, "assert", collapse(ast.unparse(n))))
+        elif _skip_node(n):
+            items.append((n.lineno, n.col_offset, "skip", collapse(ast.unparse(n))))
         elif isinstance(n, ast.Call):
             if _is_assert_call(n):
                 items.append((n.lineno, n.col_offset, "assert", collapse(ast.unparse(n))))
-            elif _self_call(n) in asserting:
+            elif _self_call(n) in names or (isinstance(n.func, ast.Name) and n.func.id in names):
                 items.append((n.lineno, n.col_offset, "call", collapse(ast.unparse(n))))
         else:
             targets, value = _assign_value(n)
             if value is not None and _is_number_literal(value) and all(isinstance(t, ast.Name) for t in targets):
-                names = ", ".join(ast.unparse(t) for t in targets)
-                items.append((n.lineno, n.col_offset, "value", collapse(f"{names} = {ast.unparse(value)}")))
+                names_ = ", ".join(ast.unparse(t) for t in targets)
+                items.append((n.lineno, n.col_offset, "value", collapse(f"{names_} = {ast.unparse(value)}")))
     items.sort(key=lambda x: (x[0], x[1], x[2]))
     return [(k, t) for _, _, k, t in items]
 
@@ -949,10 +1185,13 @@ def build_register(root):
     for p in cpp:
         rel = p.relative_to(root).as_posix()
         scans.append(scan_cpp(rel, read_text(p, rel)))
-    helpers = asserting_helpers(scans)
+    helpers, lam_local, lam_starts = asserting_helpers(scans)
+    macros = set()
+    for s in scans:
+        macros |= s.lx.macros
     per_file = {}
     for s in scans:
-        per_file[s.path] = cpp_blocks(s, helpers[s.path])
+        per_file[s.path] = cpp_blocks(s, helpers[s.path], macros, lam_local[s.path], lam_starts[s.path])
     for p in py:
         rel = p.relative_to(root).as_posix()
         per_file[rel] = python_blocks(rel, read_text(p, rel))
@@ -973,9 +1212,9 @@ def totals(reg):
     cases = [b for b in reg.blocks if b.name is not None and b.file.endswith((".cpp", ".h"))]
     pycases = [b for b in reg.blocks if b.name is not None and b.file.endswith(".py")]
     marker_counts = collections.Counter(m.split("(")[0] for b in cases for m in set(b.markers))
-    py_markers = collections.Counter(m for b in pycases for m in set(b.markers))
+    py_markers = collections.Counter(m.split("(")[0] for b in pycases for m in set(b.markers))
     macros = collections.Counter()
-    n_assert = n_helper = n_calls = n_values = 0
+    n_assert = n_helper = n_calls = n_values = n_loops = 0
     for b in reg.blocks:
         if not b.file.endswith((".cpp", ".h")):
             continue
@@ -989,9 +1228,11 @@ def totals(reg):
                 n_calls += 1
             elif k == "value":
                 n_values += 1
+            elif k == "loop":
+                n_loops += 1
     py_assert = sum(1 for b in pycases for k, _ in b.lines if k == "assert")
     return dict(cases=len(cases), markers=marker_counts, assertions=n_assert, helper_assertions=n_helper, macros=macros,
-                calls=n_calls, values=n_values, py_tests=len(pycases), py_markers=py_markers, py_assertions=py_assert)
+                calls=n_calls, values=n_values, loops=n_loops, py_tests=len(pycases), py_markers=py_markers, py_assertions=py_assert)
 
 
 def totals_line(tot):
@@ -1008,7 +1249,7 @@ def render_register(reg):
     out += NOT_SEEN
     out.append(totals_line(tot))
     out.append("# assertions by macro: " + ", ".join(f"{m} {n}" for m, n in sorted(tot["macros"].items()))
-               + f"; {tot['helper_assertions']} of them in asserting helpers; {tot['calls']} calls of helpers, {tot['values']} values;"
+               + f"; {tot['helper_assertions']} of them in asserting helpers; {tot['calls']} calls of helpers, {tot['values']} values, {tot['loops']} loop lines;"
                + f" {tot['py_assertions']} python assertions")
     for b in reg.blocks:
         out.append("")
@@ -1020,6 +1261,36 @@ def render_register(reg):
         for k, t in b.lines:
             out.append(f"  {k}: {t}")
     return "\n".join(out) + "\n"
+
+
+def split_markers(rest):
+    """The markers of a `markers:` line: separated by ', ' outside parentheses and quotes."""
+    out, cur, depth, quote = [], "", 0, None
+    k = 0
+    while k < len(rest):
+        ch = rest[k]
+        if quote:
+            if ch == "\\" and k + 1 < len(rest):
+                cur += ch + rest[k + 1]
+                k += 2
+                continue
+            if ch == quote:
+                quote = None
+        elif ch in "\"'":
+            quote = ch
+        elif ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth -= 1
+        elif ch == "," and depth == 0 and rest[k + 1:k + 2] == " ":
+            out.append(cur.strip())
+            cur = ""
+            k += 2
+            continue
+        cur += ch
+        k += 1
+    out.append(cur.strip())
+    return out
 
 
 def parse_register(text, path=REGISTER_PATH):
@@ -1043,7 +1314,7 @@ def parse_register(text, path=REGISTER_PATH):
             if not sep:
                 kind, rest = raw[2:].rstrip(":"), ""
             if kind == "markers":
-                cur.markers = [] if rest == "-" else [m.strip() for m in rest.split(", ")]
+                cur.markers = [] if rest == "-" else split_markers(rest)
             else:
                 cur.lines.append((kind, rest))
         else:
@@ -1056,20 +1327,6 @@ def parse_register(text, path=REGISTER_PATH):
 # ---------------------------------------------------------------------------------------------------------------
 
 ADDITION, CHANGE = "addition", "change"
-SIG_RE = re.compile(
-    r"0[xX][0-9a-fA-F']+|(?<![A-Za-z_0-9.])(?:\d[\d']*\.?[\d']*|\.\d+)(?:[eE][+-]?\d+)?[fFlLuU]*"
-    r"|<=|>=|==|!=|&&|\|\||[<>!+\-*/%]|\b(?:Approx|epsilon|margin|scale|CHECK\w*|REQUIRE\w*|WARN\w*)\b")
-
-
-def signature(kind, text):
-    stripped = re.sub(r'"(?:\\.|[^"\\])*"', '""', text)
-    sig = tuple(SIG_RE.findall(stripped))
-    if kind == "call":
-        m = re.match(r"(?:\[[^\]]*\] )?(?:\w+\(\) :: )?(\w+)", text)
-        sig = (m.group(1) if m else "",) + sig
-    return sig
-
-
 def lcs_align(a, b):
     n, m = len(a), len(b)
     dp = [[0] * (m + 1) for _ in range(n + 1)]
@@ -1119,22 +1376,20 @@ def diff_lines(where, old, new, diffs):
             noun = {"assert": "assertion"}.get(kind, kind)
             paired = 0 if kind == "conditional" else min(len(o), len(n))
             for (k, ot), (_, nt) in zip(o[:paired], n[:paired]):
-                if kind in ("assert", "call") and signature(kind, ot) == signature(kind, nt):
-                    diffs.append(Diff(ADDITION, f"{noun} reworded", where, ot, nt))
-                else:
-                    diffs.append(Diff(CHANGE, f"{noun} changed", where, ot, nt))
+                diffs.append(Diff(CHANGE, f"{noun} changed", where, ot, nt))
             for k, ot in o[paired:]:
                 diffs.append(Diff(CHANGE, f"{noun} removed", where, ot, None))
             for k, nt in n[paired:]:
-                diffs.append(Diff(CONDITIONAL_CLASS.get(kind, ADDITION), f"{noun} added", where, None, nt))
+                diffs.append(Diff(CHANGE_KINDS.get(kind, ADDITION), f"{noun} added", where, None, nt))
 
 
-CONDITIONAL_CLASS = {"conditional": CHANGE}
+# line kinds whose addition is a change, not a record-me: they can switch a test off
+CHANGE_KINDS = {"conditional": CHANGE, "skip": CHANGE}
 
 
 def count_kinds(b):
     c = collections.Counter(k for k, _ in b.lines)
-    return f"{c['assert']} assertions, {c['call']} calls, {c['value']} values"
+    return f"{c['assert']} assertions, {c['call']} calls, {c['value']} values, {c['loop']} loops"
 
 
 def compare(old, new):
@@ -1172,7 +1427,7 @@ def compare(old, new):
                     news.remove(nb)
                     break
         if len(olds) == 1 and len(news) == 1 and olds[0].lines == news[0].lines and sorted(olds[0].markers) == sorted(news[0].markers):
-            d = Diff(ADDITION, "case moved", where_of(news[0]), None, None, f"from {olds[0].file}")
+            d = Diff(CHANGE, "case moved", where_of(news[0]), None, None, f"from {olds[0].file}")
             diffs.append(d)
             olds, news = [], []
         for ob in olds:
@@ -1195,7 +1450,7 @@ def compare(old, new):
 
 
 PLURAL = {"case": "cases", "assertion": "assertions", "call": "calls", "value": "values", "marker": "markers",
-          "conditional": "conditionals", "file": "files"}
+          "conditional": "conditionals", "file": "files", "loop": "loops", "skip": "skips"}
 
 
 def kind_phrase(kind, n):
@@ -1226,25 +1481,21 @@ def summarise(diffs):
                 added["assertions"] += counts["assert"]
                 added["calls"] += counts["call"]
                 added["values"] += counts["value"]
+                added["loops"] += counts["loop"]
             elif d.kind == "file added":
                 added["files"] += 1
                 added["values"] += counts["value"]
                 added["assertions"] += counts["assert"]
                 added["calls"] += counts["call"]
-            elif d.kind == "case moved":
-                added["moved"] += 1
-            elif rest == "reworded":
-                added["reworded"] += 1
+                added["loops"] += counts["loop"]
             else:
                 added[PLURAL[noun]] += 1
         singular = {v: k for k, v in PLURAL.items()}
 
         def phrase(k, v):
-            if k in ("moved", "reworded"):
-                return f"{v} {k}"
             return f"+{v} {singular[k] if v == 1 else k}"
 
-        text = ", ".join(phrase(k, added[k]) for k in ("cases", "files", "assertions", "calls", "values", "reworded", "moved") if added[k])
+        text = ", ".join(phrase(k, added[k]) for k in ("cases", "files", "assertions", "calls", "values", "loops") if added[k])
         parts.append("to record: " + text)
     return "; ".join(parts)
 
@@ -1271,8 +1522,17 @@ def format_diffs(diffs):
 # ---------------------------------------------------------------------------------------------------------------
 
 ITEMS = ("known_answer", "smallest_effect", "planted_fault", "valid_for", "guards")
-SKIP_MARKERS = {"skip", "skipIf", "skipUnless"}
+SKIP_MARKERS = {"skip", "skipIf", "skipUnless", "skipTest"}
 FAIL_MARKERS = {"should_fail", "expectedFailure"}
+
+
+def marker_text(m):
+    """A marker without its `suite:` / `class:` origin."""
+    return re.sub(r"^(?:suite|class):", "", m)
+
+
+def marker_name(m):
+    return marker_text(m).split("(")[0]
 
 
 def case_index(reg):
@@ -1328,7 +1588,7 @@ def check_instruments(root, reg):
                     faults.append(f"instrument {inst}: item {item}: case not in the register: {c!r}")
                     bad = True
                     continue
-                markers = {m.split("(")[0] for b in blocks for m in b.markers if m != "skip(false)"}
+                markers = {marker_name(m) for b in blocks for m in b.markers if marker_text(m) != "skip(false)"}
                 if markers & FAIL_MARKERS:
                     faults.append(f"instrument {inst}: item {item}: case is marked {sorted(markers & FAIL_MARKERS)[0]} and cannot be proof: {c!r}")
                     bad = True
@@ -1433,8 +1693,8 @@ def main(argv=None):
                 elif diffs:
                     code = EXIT_ADDITIONS
             else:
-                print(f"no {REGISTER_PATH} recorded yet (--record writes it)")
-                code = EXIT_ADDITIONS
+                print(f"no register: cannot compare ({REGISTER_PATH} is absent; --record writes it)", file=sys.stderr)
+                return EXIT_UNREADABLE
         faults, inst_note = [], ""
         if (root / INSTRUMENTS_PATH).is_file():
             faults, rows = check_instruments(root, new)
@@ -1462,7 +1722,7 @@ def main(argv=None):
             print(inst_note)
         if args.instruments:
             return code
-        summary = summarise(diffs) if recorded else "to record: everything (no register recorded)"
+        summary = summarise(diffs)
         if faults:
             summary += f"; instruments: {len(faults)} fault{'s' if len(faults) != 1 else ''}"
         print(summary)

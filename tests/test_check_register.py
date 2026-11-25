@@ -263,10 +263,10 @@ class ReaderTest(unittest.TestCase):
         values = [t for k, t in self.file_block(reg, A).lines if k == "value"]
         self.assertIn("generate() :: const double sigma = 0.02", values)
 
-    def test_non_const_local_is_not_a_value(self):
-        src = 'TEST_CASE("n") { double x = 0.5; for (const auto &v : list) { CHECK(v < x); } }\n'
+    def test_a_non_const_local_with_a_literal_is_a_value_and_a_plain_assignment_is_not(self):
+        src = 'TEST_CASE("n") { double x = 0.5; double y = x; x = 2.0; list.at = 3; for (const auto &v : list) { CHECK(v < x); } }\n'
         reg = self.build({A: src})
-        self.assertEqual(self.case(reg, "n").lines, [("assert", "CHECK(v < x)")])
+        self.assertEqual(self.case(reg, "n").lines, [("value", "double x = 0.5"), ("assert", "CHECK(v < x)")])
 
     def test_if_zero_is_removed_like_a_comment_and_its_else_stays(self):
         src = 'TEST_CASE("z")\n{\n#if 0\n    CHECK(false);\n#else\n    CHECK(true);\n#endif\n    CHECK(1);\n}\n'
@@ -488,22 +488,22 @@ class ComparisonTest(TreeCase):
         self.assertKinds(1, "CHANGE case removed: tests/a_test.cpp :: gamma: strings and comments",
                          "ADD case added: tests/a_test.cpp :: gamma: strings, renamed")
 
-    def test_case_moved_to_another_file_is_an_addition(self):
+    def test_case_moved_to_another_file_is_a_change(self):
         text = (self.root / A).read_text(encoding="utf-8")
         moved = 'TEST_CASE("epsilon: movable")\n{\n    CHECK(3 > 2);\n}\n'
         self.assertIn(moved, text)
         self.edit(moved, "")
         write_tree(self.root, {"tests/b_test.cpp": moved})
-        out = self.assertKinds(3, "ADD case moved: tests/b_test.cpp :: epsilon: movable", absent=("CHANGE",))
+        out = self.assertKinds(1, "CHANGE case moved: tests/b_test.cpp :: epsilon: movable")
         self.assertIn("from tests/a_test.cpp", out)
-        self.assertEqual(out.strip().splitlines()[-1], "to record: +1 file, 1 moved")
+        self.assertEqual(out.strip().splitlines()[-1], "1 case moved; to record: +1 file")
 
-    def test_assertion_reworded_is_an_addition(self):
+    def test_any_reworded_assertion_is_a_change(self):
         self.edit("CHECK(measured < 0.25)", "CHECK(observed < 0.25)")
-        out = self.assertKinds(3, "ADD assertion reworded: tests/a_test.cpp :: alpha: plain", absent=("CHANGE",))
+        out = self.assertKinds(1, "CHANGE assertion changed: tests/a_test.cpp :: alpha: plain", absent=("reworded", "ADD assertion"))
         self.assertIn("- CHECK(measured < 0.25)", out)
         self.assertIn("+ CHECK(observed < 0.25)", out)
-        self.assertEqual(out.strip().splitlines()[-1], "to record: 1 reworded")
+        self.assertEqual(out.strip().splitlines()[-1], "1 assertion changed")
 
     def test_reworded_with_another_macro_is_a_change(self):
         self.edit("CHECK(measured < 0.25)", "WARN(measured < 0.25)")
@@ -558,11 +558,12 @@ class ComparisonTest(TreeCase):
         self.assertEqual(code, 2)
         self.assertRegex(err, r"tests/a_test\.cpp:\d+: unmatched")
 
-    def test_no_register_recorded_is_said_in_one_line_and_is_additions(self):
+    def test_no_register_recorded_cannot_be_compared_and_exits_2(self):
         (self.root / cr.REGISTER_PATH).unlink()
-        code, out, _ = self.compare()
-        self.assertEqual(code, 3)
-        self.assertIn("no checks/tests.register recorded yet", out)
+        code, out, err = self.compare()
+        self.assertEqual(code, 2)
+        self.assertIn("no register: cannot compare", err)
+        self.assertNotIn("IDENTICAL", out)
 
     def test_print_does_not_touch_the_file(self):
         before = (self.root / cr.REGISTER_PATH).read_bytes()
@@ -756,6 +757,371 @@ class InstrumentsTest(unittest.TestCase):
         code, _, err = self.check("[sim\n")
         self.assertEqual(code, 2)
         self.assertIn("instruments.toml", err)
+
+
+HOLES_CPP = r'''#include "doctest.h"
+#include <sstream>
+
+#define KEEP(...) __VA_ARGS__
+
+namespace
+{
+    void inside(double x, double limit) { CHECK(x < limit); }
+
+    const auto check_all = [](double value)
+    {
+        CHECK(value > 0.0);
+        inside(value, 100.0);
+    };
+
+    auto not_a_helper = [](double x) { return x * 2.0; };
+}
+
+TEST_CASE("pins")
+{
+    const auto pin = [](const char *what, unsigned long long got, unsigned long long want)
+    {
+        if (got != want)
+        {
+            std::ostringstream message;
+            message << what;
+            FAIL_CHECK(message.str());
+        }
+    };
+    pin("defaults", 1ull, 0x1ad4c1d5688ff94aull);
+    pin("file", 2ull, 0x00000002ull);
+}
+
+TEST_CASE("fail macro")
+{
+    if (bad)
+        FAIL("stop");
+    CHECK(true);
+}
+
+TEST_CASE("lambda call")
+{
+    double buckets = 3.0;
+    check_all(buckets);
+    CHECK(not_a_helper(1.0) == 2.0);
+}
+
+TEST_CASE("wrapped")
+{
+    CHECK(1 < 2);
+    CHECK(stamps_ok);
+    CHECK(std::abs(equal.q_mean - 1.0) < 0.05);
+    CHECK(t_begin >= 3.0);
+    CHECK(flag);
+    CHECK(a < b);
+    REQUIRE(cell.ok);
+}
+
+TEST_CASE("loops and values")
+{
+    int n = 3;
+    for (const double factor : {1.5, 1.0 / 1.5}) { CHECK(factor > 0.0); }
+    for (int i = 0; i < 5; ++i) { CHECK(i < n); }
+    for (const auto &v : list) { CHECK(v > 0); }
+    CHECK(n > 0);
+}
+
+TEST_CASE("neutral skip" * doctest::skip(false)) { CHECK(1); }
+TEST_CASE("plain second") { CHECK(1 < 2); }
+'''
+
+PY_HOLES = '''import sys
+import unittest
+
+
+def verify(tc, x):
+    tc.assertLess(x, 2)
+
+
+class Base(unittest.TestCase):
+    def setUp(self):
+        self.assertTrue(self.ready())
+
+    def ready(self):
+        return True
+
+    def check(self, a, b):
+        self.assertEqual(a, b)
+        self.assertIn(a, [b])
+
+    def indirect(self, a):
+        self.check(a, a)
+
+
+class Tests(Base):
+    def test_a(self):
+        self.check(1, 1)
+        self.indirect(2)
+        verify(self, 1)
+        self.assertTrue(ok)
+
+    @unittest.skipIf(sys.platform == "x", "why")
+    def test_b(self):
+        self.assertLess(1, 2)
+
+    def test_c(self):
+        def local(x):
+            self.assertGreaterEqual(x, 0)
+        local(1)
+'''
+
+H = "tests/h_test.cpp"
+HP = "tests/test_h.py"
+
+
+class HolesTest(unittest.TestCase):
+    """Edits that weaken a test and must still not read IDENTICAL or as an addition (the reviewer's holes of check-register)."""
+
+    def trial(self, edits, expect=1, kinds=(), absent=(), files=None):
+        files = files or {H: HOLES_CPP, HP: PY_HOLES}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_tree(root, files)
+            write_tree(root, {cr.REGISTER_PATH: register_text(root)})
+            self.assertEqual(run_main(root)[0], 0)
+            for rel, old, new in edits:
+                text = (root / rel).read_text(encoding="utf-8")
+                self.assertIn(old, text)
+                write_tree(root, {rel: text.replace(old, new, 1)})
+            code, out, err = run_main(root)
+            self.assertEqual(code, expect, out + err)
+            for kind in kinds:
+                self.assertIn(kind, out)
+            for kind in absent:
+                self.assertNotIn(kind, out)
+            return out
+
+    def each(self, cases, expect=1):
+        for label, edits, kinds in cases:
+            with self.subTest(label):
+                self.trial(edits, expect, kinds)
+
+    def build(self, files):
+        with tempfile.TemporaryDirectory() as tmp:
+            write_tree(tmp, files)
+            return cr.build_register(tmp)
+
+    # -- 1 and 2: FAIL and FAIL_CHECK, lambdas that assert
+
+    def test_fail_and_fail_check_are_assertions_and_lambdas_that_assert_are_helpers(self):
+        reg = self.build({H: HOLES_CPP})
+        pins = [b for b in reg.blocks if b.name == "pins"][0].lines
+        self.assertIn(("assert", "[pin] FAIL_CHECK(message.str())"), pins)
+        self.assertIn(("call", 'pin("defaults", 1ull, 0x1ad4c1d5688ff94aull)'), pins)
+        self.assertIn(("assert", "FAIL(\"stop\")"), [b for b in reg.blocks if b.name == "fail macro"][0].lines)
+        calls = [b for b in reg.blocks if b.name == "lambda call"][0].lines
+        self.assertIn(("call", "check_all(buckets)"), calls)
+        self.assertFalse([t for k, t in calls if "not_a_helper" in t and k == "call"])
+        fb = [b for b in reg.blocks if b.name is None][0].lines
+        self.assertIn(("assert", "check_all() :: CHECK(value > 0.0)"), fb)
+        self.assertIn(("call", "check_all() :: inside(value, 100.0)"), fb)
+        tot = cr.totals(reg)
+        self.assertEqual((tot["macros"]["FAIL_CHECK"], tot["macros"]["FAIL"]), (1, 1))
+
+    def test_the_settings_hash_pin_cases(self):
+        self.each([
+            ("pinned literal 0", [(H, "0x1ad4c1d5688ff94aull", "0x0ull")], ("call changed",)),
+            ("FAIL_CHECK line replaced", [(H, "            FAIL_CHECK(message.str());", "            (void)message;")], ("assertion removed",)),
+            ("FAIL replaced", [(H, '        FAIL("stop");', "        (void)bad;")], ("assertion removed",)),
+            ("pin call removed", [(H, '    pin("file", 2ull, 0x00000002ull);', "")], ("call removed",)),
+            ("second pin literal", [(H, "0x00000002ull", "0x0ull")], ("call changed",)),
+        ])
+
+    def test_lambda_helper_cases(self):
+        self.each([
+            ("call removed", [(H, "    check_all(buckets);", "    (void)buckets;")], ("call removed",)),
+            ("lambda body weakened", [(H, "        CHECK(value > 0.0);", "        CHECK(true);")], ("assertion changed",)),
+            ("lambda body call to asserting helper removed", [(H, "        inside(value, 100.0);", "")], ("call removed",)),
+            ("case-scope lambda body weakened", [(H, "            FAIL_CHECK(message.str());", "            FAIL_CHECK(\"\");")], ("assertion changed",)),
+        ])
+
+    def test_a_lambda_that_does_not_assert_is_no_helper_and_a_plain_auto_lambda_that_does_is(self):
+        src = 'void h(int x) { CHECK(x); }\nauto via = [](int x) { h(x); };\nauto sq = [](int x) { return x * x; };\nTEST_CASE("t") { via(1); sq(2); }\n'
+        reg = self.build({A: src})
+        self.assertEqual([b for b in reg.blocks if b.name == "t"][0].lines, [("call", "via(1)")])
+
+    # -- 3: any difference in an assertion's text is a change
+
+    def test_reworded_assertions_are_changes(self):
+        self.each([
+            ("abs removed", [(H, "CHECK(std::abs(equal.q_mean - 1.0) < 0.05)", "CHECK(equal.q_mean - 1.0 < 0.05)")], ("assertion changed",)),
+            ("other variable", [(H, "CHECK(std::abs(equal.q_mean - 1.0) < 0.05)", "CHECK(std::abs(other.q_mean - 1.0) < 0.05)")], ("assertion changed",)),
+            ("condition to true", [(H, "CHECK(stamps_ok)", "CHECK(true)")], ("assertion changed",)),
+            ("operands swapped", [(H, "CHECK(t_begin >= 3.0)", "CHECK(3.0 >= t_begin)")], ("assertion changed",)),
+            ("CHECK to WARN", [(H, "CHECK(t_begin >= 3.0)", "WARN(t_begin >= 3.0)")], ("assertion changed",)),
+            ("REQUIRE to CHECK", [(H, "REQUIRE(cell.ok)", "CHECK(cell.ok)")], ("assertion changed",)),
+            ("|| true", [(H, "CHECK(flag)", "CHECK(flag || true)")], ("assertion changed",)),
+            ("assertion removed", [(H, "    CHECK(a < b);", "")], ("assertion removed",)),
+            ("python assertEqual to assertGreaterEqual", [(HP, "        self.assertEqual(a, b)", "        self.assertGreaterEqual(a, b)")], ("assertion changed",)),
+            ("python assertLess to assertGreater", [(HP, "        self.assertLess(1, 2)", "        self.assertGreater(1, 2)")], ("assertion changed",)),
+            ("python assertIn to assertNotIn", [(HP, "self.assertIn(a, [b])", "self.assertNotIn(a, [b])")], ("assertion changed",)),
+            ("python assertTrue to assertFalse", [(HP, "        self.assertTrue(ok)", "        self.assertFalse(ok)")], ("assertion changed",)),
+        ])
+
+    def test_no_edit_reads_as_reworded_any_more(self):
+        out = self.trial([(H, "CHECK(flag)", "CHECK(flagged)")])
+        self.assertNotIn("reworded", out)
+        self.assertEqual(out.strip().splitlines()[-1], "1 assertion changed")
+
+    # -- 4: markers outside the case head
+
+    def test_suite_decorators_apply_to_every_case_inside(self):
+        src = 'TEST_SUITE("s" * doctest::skip()) {\nTEST_CASE("a") { CHECK(1); }\nTEST_CASE("b" * doctest::should_fail()) { CHECK(2); }\n}\nTEST_CASE("c") { CHECK(3); }\n'
+        reg = self.build({A: src})
+        markers = {b.name: b.markers for b in reg.blocks if b.name}
+        self.assertEqual(markers, {"a": ["suite:skip"], "b": ["should_fail", "suite:skip"], "c": []})
+        src = 'TEST_SUITE_BEGIN("s" * doctest::timeout(5));\nTEST_CASE("a") { CHECK(1); }\nTEST_SUITE_END();\nTEST_CASE("c") { CHECK(3); }\n'
+        markers = {b.name: b.markers for b in self.build({A: src}).blocks if b.name}
+        self.assertEqual(markers, {"a": ["suite:timeout(5)"], "c": []})
+
+    def test_wrapping_cases_in_a_skipped_suite_is_a_change(self):
+        self.each([
+            ("TEST_SUITE skip", [(H, 'TEST_CASE("plain second") { CHECK(1 < 2); }', 'TEST_SUITE("off" * doctest::skip()) {\nTEST_CASE("plain second") { CHECK(1 < 2); }\n}')], ("marker added", "+ suite:skip")),
+            ("TEST_SUITE_BEGIN skip", [(H, 'TEST_CASE("plain second")', 'TEST_SUITE_BEGIN("off" * doctest::skip());\nTEST_CASE("plain second")')], ("marker added", "+ suite:skip")),
+            ("TEST_SUITE should_fail", [(H, 'TEST_CASE("plain second") { CHECK(1 < 2); }', 'TEST_SUITE("off" * doctest::should_fail()) {\nTEST_CASE("plain second") { CHECK(1 < 2); }\n}')], ("marker added", "+ suite:should_fail")),
+        ])
+
+    def test_a_suite_without_decorators_and_a_closed_begin_change_nothing(self):
+        self.trial([(H, 'TEST_CASE("plain second") { CHECK(1 < 2); }', 'TEST_SUITE("plain") {\nTEST_CASE("plain second") { CHECK(1 < 2); }\n}')], expect=0)
+        self.trial([(H, 'TEST_CASE("plain second")', 'TEST_SUITE_BEGIN("off" * doctest::skip());\nTEST_SUITE_END();\nTEST_CASE("plain second")')], expect=0)
+
+    def test_skip_false_and_skip_are_told_apart(self):
+        self.each([
+            ("skip(false) to skip()", [(H, "doctest::skip(false)", "doctest::skip()")], ("marker added", "marker removed")),
+            ("skip(false) to skip(true)", [(H, "doctest::skip(false)", "doctest::skip(true)")], ("marker added", "marker removed")),
+            ("skip(false) removed", [(H, ' * doctest::skip(false)', "")], ("marker removed",)),
+        ])
+
+    def test_python_class_level_skips_and_skip_test_are_markers(self):
+        reg = self.build({HP: PY_HOLES})
+        self.assertEqual([b.markers for b in reg.blocks if b.name == "Tests.test_b"][0], ["skipIf(sys.platform == 'x', 'why')"])
+        self.each([
+            ("class skip", [(HP, "class Tests(Base):", "@unittest.skip('x')\nclass Tests(Base):")], ("marker added", "+ class:skip('x')")),
+            ("base class skip reaches the derived", [(HP, "class Base(unittest.TestCase):", "@unittest.skip('x')\nclass Base(unittest.TestCase):")], ("marker added", "+ class:skip('x')")),
+            ("class expectedFailure", [(HP, "class Tests(Base):", "@unittest.expectedFailure\nclass Tests(Base):")], ("marker added",)),
+            ("skipTest in a test", [(HP, "    def test_a(self):\n", "    def test_a(self):\n        self.skipTest('x')\n")], ("marker added: tests/test_h.py :: Tests.test_a", "+ skipTest", "CHANGE skip added")),
+            ("raise SkipTest in a test", [(HP, "    def test_b(self):\n", "    def test_b(self):\n        raise unittest.SkipTest('x')\n")], ("marker added",)),
+            ("skipTest in setUp", [(HP, "    def setUp(self):\n", "    def setUp(self):\n        self.skipTest('x')\n")], ("CHANGE skip added",)),
+            ("skipIf condition True", [(HP, 'sys.platform == "x"', "True")], ("marker added", "marker removed")),
+            ("skipIf reason", [(HP, '"why"', '"other"')], ("marker added", "marker removed")),
+        ])
+
+    def test_a_marker_with_a_comma_survives_the_register_text(self):
+        reg = self.build({HP: PY_HOLES})
+        back = cr.parse_register(cr.render_register(reg))
+        self.assertEqual(cr.compare(back, reg), [])
+
+    def test_instruments_see_through_suite_and_class_markers(self):
+        files = {"tests/i_test.cpp": 'TEST_SUITE("s" * doctest::skip()) {\nTEST_CASE("proof") { CHECK(1 == 1); }\n}\n'}
+        with tempfile.TemporaryDirectory() as tmp:
+            write_tree(tmp, files)
+            toml = '[sim]\nknown_answer = { cases = ["proof"] }\nsmallest_effect = { not_applicable = "x" }\nplanted_fault = { not_applicable = "x" }\nvalid_for = { not_applicable = "x" }\nguards = { not_applicable = "x" }\n'
+            write_tree(tmp, {cr.INSTRUMENTS_PATH: toml})
+            code, out, _ = run_main(tmp, "--instruments")
+            self.assertEqual(code, 1, out)
+            self.assertIn("case is skipped in the regular run", out)
+
+    # -- 5: helper bodies in Python
+
+    def test_python_helpers_and_set_ups_are_listed_under_the_file(self):
+        reg = self.build({HP: PY_HOLES})
+        fb = [b for b in reg.blocks if b.name is None][0].lines
+        self.assertIn(("assert", "verify() :: tc.assertLess(x, 2)"), fb)
+        self.assertIn(("assert", "Base.setUp() :: self.assertTrue(self.ready())"), fb)
+        self.assertIn(("assert", "Base.check() :: self.assertEqual(a, b)"), fb)
+        self.assertIn(("call", "Base.indirect() :: self.check(a, a)"), fb)
+        self.assertFalse([t for k, t in fb if "ready() ::" in t])
+        a = [b for b in reg.blocks if b.name == "Tests.test_a"][0].lines
+        self.assertIn(("call", "verify(self, 1)"), a)
+        self.assertIn(("call", "self.indirect(2)"), a)
+        c = [b for b in reg.blocks if b.name == "Tests.test_c"][0].lines
+        self.assertIn(("call", "local(1)"), c)
+        self.assertIn(("assert", "self.assertGreaterEqual(x, 0)"), c)
+
+    def test_python_helper_body_cases(self):
+        self.each([
+            ("assertEqual deleted from a helper", [(HP, "        self.assertEqual(a, b)\n", "")], ("assertion removed",)),
+            ("assertIn deleted from a helper", [(HP, "        self.assertIn(a, [b])\n", "")], ("assertion removed",)),
+            ("assertion deleted from setUp", [(HP, "        self.assertTrue(self.ready())", "        pass")], ("assertion removed",)),
+            ("assertion deleted from a module function", [(HP, "    tc.assertLess(x, 2)", "    pass")], ("assertion removed",)),
+            ("call of a helper removed", [(HP, "        self.check(1, 1)\n", "")], ("call removed",)),
+            ("call of an indirect helper removed", [(HP, "        self.indirect(2)\n", "")], ("call removed",)),
+            ("call of a module function removed", [(HP, "        verify(self, 1)\n", "")], ("call removed",)),
+            ("call of a local function removed", [(HP, "        local(1)\n", "")], ("call removed",)),
+            ("assertion in a local function weakened", [(HP, "self.assertGreaterEqual(x, 0)", "self.assertGreaterEqual(x, -9)")], ("assertion changed",)),
+        ])
+
+    # -- 6: #define and #undef, assertions inside macro arguments
+
+    def test_define_and_undef_are_conditionals(self):
+        self.each([
+            ("define added", [(H, '#include "doctest.h"', '#include "doctest.h"\n#define OFF(...)')], ("conditional added", "+ #define OFF(...)")),
+            ("undef added", [(H, "#define KEEP(...) __VA_ARGS__", "#define KEEP(...) __VA_ARGS__\n#undef FLAG")], ("conditional added",)),
+            ("define changed", [(H, "#define KEEP(...) __VA_ARGS__", "#define KEEP(...)")], ("conditional added", "conditional removed")),
+            ("define removed", [(H, "#define KEEP(...) __VA_ARGS__\n", "")], ("conditional removed",)),
+            ("neutraliser with a wrapped assertion", [(H, '#include "doctest.h"', '#include "doctest.h"\n#define OFF(...)'), (H, "    CHECK(a < b);", "    OFF(CHECK(a < b));")], ("conditional added",)),
+        ])
+
+    def test_an_assertion_inside_a_function_like_macros_arguments_is_flagged(self):
+        self.each([("wrapped in an existing macro", [(H, "    CHECK(a < b);", "    KEEP(CHECK(a < b));")], ("assertion changed", "[macro KEEP] CHECK(a < b)"))])
+
+    # -- 7: more values and loops
+
+    def test_values_and_loops_are_lines(self):
+        reg = self.build({H: HOLES_CPP})
+        lines = [b for b in reg.blocks if b.name == "loops and values"][0].lines
+        self.assertIn(("value", "int n = 3"), lines)
+        self.assertIn(("loop", "for (const double factor : {1.5, 1.0 / 1.5})"), lines)
+        self.assertIn(("loop", "for (int i = 0; i < 5; ++i)"), lines)
+        self.assertFalse([t for k, t in lines if k == "loop" and "list" in t])
+
+    def test_value_and_loop_cases(self):
+        self.each([
+            ("range-based list", [(H, "{1.5, 1.0 / 1.5}", "{50.0, 1.0 / 50.0}")], ("loop changed",)),
+            ("classic bound", [(H, "i < 5", "i < 50")], ("loop changed",)),
+            ("local non-const", [(H, "int n = 3;", "int n = 30;")], ("value changed",)),
+            ("local with a call", [(H, "double buckets = 3.0;", "double buckets = 30.0;")], ("value changed",)),
+        ])
+
+    def test_brace_and_paren_initialisers_and_plain_statements(self):
+        src = ('TEST_CASE("v")\n{\n    Foo f{1, 2};\n    Bar b(3.5);\n    std::array<double, 3> a{0.1, 0.2, 0.3};\n    auto g = [](int x) { return x < 7; };\n'
+               '    x = 5;\n    obj.member = 6;\n    call(8);\n    return;\n}\n')
+        lines = [b for b in self.build({A: src}).blocks if b.name == "v"][0].lines
+        self.assertEqual([t for k, t in lines if k == "value"],
+                         ["Foo f{1, 2}", "Bar b(3.5)", "std::array<double, 3> a{0.1, 0.2, 0.3}"])
+
+    # -- 8, 9: a moved case, no register
+
+    def test_a_moved_case_is_a_change(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_tree(root, {H: HOLES_CPP})
+            write_tree(root, {cr.REGISTER_PATH: register_text(root)})
+            moved = 'TEST_CASE("plain second") { CHECK(1 < 2); }\n'
+            text = (root / H).read_text(encoding="utf-8")
+            write_tree(root, {H: text.replace(moved, ""), "tests/other_test.cpp": moved})
+            code, out, _ = run_main(root)
+            self.assertEqual(code, 1, out)
+            self.assertIn("CHANGE case moved", out)
+
+    def test_without_a_register_nothing_can_be_compared(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write_tree(tmp, {H: HOLES_CPP})
+            code, out, err = run_main(tmp)
+            self.assertEqual(code, 2)
+            self.assertIn("no register: cannot compare", err)
+            code, _, _ = run_main(tmp, "--record", "--allow-worktree")
+            self.assertEqual(code, 4)            # not a git tree here; only --record in a clean tree writes it
+
+    # -- what was found correct stays correct
+
+    def test_unchanged_sources_are_identical_and_comment_or_blank_edits_change_nothing(self):
+        self.trial([(H, "    CHECK(a < b);", "    CHECK(  a\n   <   b ); // now with a comment")], expect=0)
 
 
 class RealTreeTest(unittest.TestCase):

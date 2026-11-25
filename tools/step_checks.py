@@ -56,7 +56,8 @@ def in_main_tree():
 def register_verdict(code, summary, main_tree, listing=None, message=""):
     """(ok, text) of the `check register` line from the register tool's exit code (design D5): 0 identical; 3 additions
     only, which hold in a region's worktree and fail in the main tree (an unrecorded addition must not linger there);
-    1 a change, fails everywhere; 2 unreadable, fails with the tool's message."""
+    1 a change, fails everywhere; 2 unreadable, or no register recorded ("no register: cannot compare"), fails with the
+    tool's message (only the orchestrator's --record creates the register)."""
     where = f" (listing: {listing})" if listing else ""
     if code == 0:
         return True, summary
@@ -67,6 +68,8 @@ def register_verdict(code, summary, main_tree, listing=None, message=""):
     if code == 1:
         return False, f"FAILED: {summary}{where}"
     if code == 2:
+        if message.strip().startswith("no register"):
+            return False, f"FAILED, {message.strip()}{where}"
         return False, f"FAILED, unreadable: {message.strip()}{where}"
     return False, f"FAILED, register tool exit {code}: {message.strip() or summary}{where}"
 

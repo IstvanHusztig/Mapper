@@ -12,6 +12,7 @@
 #include "window_steps.h"
 #include "window_problem.h"
 #include "window_term_table.h"
+#include "window_verdict.h"
 #include <point_placement.h>
 
 #include <algorithm>
@@ -316,7 +317,7 @@ namespace
         const Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> eig(lidar_translation_information);
         const double largest = eig.eigenvalues().maxCoeff();
         const double ratio = largest > 0.0 ? eig.eigenvalues().minCoeff() / largest : 0.0;
-        if (!(largest > 0.0) || ratio >= 0.45)
+        if (!(largest > 0.0) || ratio >= VerdictLimits{}.weak_ratio)
             return;
         const Eigen::Vector3d w = eig.eigenvectors().col(0);
         const auto cost_at = [&](const std::vector<Eigen::Affine3d> &poses)
