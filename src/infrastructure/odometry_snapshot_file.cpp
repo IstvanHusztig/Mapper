@@ -4,6 +4,7 @@
 
 #include <cstring>
 #include <fstream>
+#include <map>
 #include <set>
 #include <type_traits>
 #include <variant>
@@ -124,10 +125,24 @@ std::uint64_t odometry_settings_hash(const OdometryConfig &config)
         "gyro_scale_x", "gyro_scale_y", "gyro_scale_z", "imu_edges_follow_state", "imu_carry_joint_covariance",
         "imu_accel_window_sigma_mps2"};
     static const OdometryConfig defaults{};
+    // settings removed later that were always hashed: hashed with the value they always had, in their place by name,
+    // so snapshots and captures made before the removal still match (the turn gyro weighting, removed 2026-11-25)
+    static const std::map<std::string, double> removed_hashed = {{"rotation_sigma_inflation_k_turn", 0.0},
+                                                                 {"turn_rate_threshold_deg_s", 30.0}};
+    auto next_removed = removed_hashed.begin();
 
     Hash h;
+    const auto hash_removed_before = [&](const std::string &name)
+    {
+        for (; next_removed != removed_hashed.end() && next_removed->first < name; ++next_removed)
+        {
+            h.text(next_removed->first);
+            h.value(next_removed->second);
+        }
+    };
     for (const auto &[name, member] : io.POINTERS) // a std::map: always in the same order
     {
+        hash_removed_before(name);
         if (excluded.count(name))
             continue;
         if (added_later.count(name))
@@ -147,6 +162,11 @@ std::uint64_t odometry_settings_hash(const OdometryConfig &config)
                     h.value(v);
             },
             member);
+    }
+    for (; next_removed != removed_hashed.end(); ++next_removed) // removed names after the last current one
+    {
+        h.text(next_removed->first);
+        h.value(next_removed->second);
     }
     hash_grid(h, "in_out_params_indoor", config.in_out_params_indoor);
     hash_grid(h, "in_out_params_outdoor", config.in_out_params_outdoor);

@@ -60,7 +60,6 @@ struct WindowLoopCarry
     double acc_distance = 0.0;                              // trajectory length since the last sliding-window reset [m]
     std::vector<Point3Di> points_global;                    // map points since the last reset
     int stationary_windows = 0;
-    int turn_windows = 0;
     int map_rebuilds = 0;                                   // sliding_window_trajectory_length_threshold reached
     int acc_term_windows = 0;
     int rest_windows = 0;                                        // imu_always_on: windows at rest

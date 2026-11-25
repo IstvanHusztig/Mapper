@@ -731,7 +731,7 @@ window's timestamps and the carried state:
 
 | Weight | Where | Lifetime |
 |---|---|---|
-| Motion edges: translation 1/σ² (× `imu_position_information_scale` with the accelerometer term), rotation 1/σ² constant or time-scaled max(k·ARW·√dt, floor), k for turn windows | `motion_edge_weights` (`motion_model_terms.cpp:95-135`) | constant per window, recomputed per iteration |
+| Motion edges: translation 1/σ² (× `imu_position_information_scale` with the accelerometer term), rotation 1/σ² constant or time-scaled max(k·ARW·√dt, floor) | `motion_edge_weights` (`motion_model_terms.cpp:95-135`) | constant per window, recomputed per iteration |
 | Velocity continuity σ = acc·½(dt₁+dt₂), and the first-step velocity prior σ = acc·dt (path without the accelerometer term); its dt clamped at 1e-4 s, the edges' dt at 0 | `motion_model_terms.cpp:35-68` | constant per window, per node triple, recomputed |
 | Bias coupling of the motion edges: the edge's rotation weight with its dt | `add_edge_bias_coupling` (`motion_model_terms.cpp:207-230`) | per edge, from the edge weights |
 | Gyro-bias prior: covariance grown by the random walk; information = inverse | grown in `apply_gyro_bias_prior`, inverted in `motion_model_terms.cpp:17` | per window; inverse per iteration |

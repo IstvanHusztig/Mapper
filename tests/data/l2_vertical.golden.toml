@@ -201,8 +201,6 @@ max_prior_velocity_mps = 5.0
 prior_velocity_span_nr_samples = 20
 rotation_sigma_floor_deg = 0.0035449077
 rotation_sigma_inflation_k = 7.0898154
-rotation_sigma_inflation_k_turn = 0.0
-turn_rate_threshold_deg_s = 30.0
 use_time_scaled_rotation_sigma = true
 
 [paths]

@@ -202,7 +202,7 @@ elhelyezés felülírja azokat. A ciklus minden lépését végigvéve:</p>
   <tr><th>Lépés (mielőtt az <code>i</code> ablak optimalizálása megtörténik)</th><th>Mit olvas</th></tr>
   <tr><td><code>estimate_previous_velocity</code></td><td>az <code>i − 1</code> ablak végét (már végleges), és csak az <em>időbélyegeket</em> az <code>i</code> ablakból</td></tr>
   <tr><td><code>predict_window_poses</code></td><td>magát az <code>i</code> ablakot helyezi el az <code>i − 1</code> végéből, csak a <em>relatív</em> pózait használva</td></tr>
-  <tr><td><code>apply_gyro_bias_prior</code>, <code>is_turn_window</code>, gyorsulásmérő-tag</td><td>az <code>i</code> ablakot olyan állapotában, amilyen abban a pillanatban</td></tr>
+  <tr><td><code>apply_gyro_bias_prior</code>, gyorsulásmérő-tag</td><td>az <code>i</code> ablakot olyan állapotában, amilyen abban a pillanatban</td></tr>
   <tr><td>Optimalizálás, térképfrissítés, naplók</td><td>csak az <code>i</code> ablakot</td></tr>
   <tr><td>A GUI élő előnézete</td><td>csak a már késznek jelentett ablakokat</td></tr>
 </table></div>

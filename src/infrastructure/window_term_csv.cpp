@@ -200,7 +200,7 @@ void FolderWindowTermSink::write(const WindowTermRecord &r)
     const double ratio = largest > 0.0 ? eig.eigenvalues().minCoeff() / largest : 0.0;
     const Eigen::Vector3d &along = r.result.directions[0];
     features_ << r.window << "," << number(r.time_s) << "," << number(r.duration_s) << "," << r.iterations << "," << number(r.delta) << ","
-              << number(r.lm_factor) << "," << (r.at_rest ? 1 : 0) << "," << (r.turn_window ? 1 : 0) << "," << (r.acc_term ? 1 : 0) << ","
+              << number(r.lm_factor) << "," << (r.at_rest ? 1 : 0) << ",0," << (r.acc_term ? 1 : 0) << ","
               << number(along.x()) << "," << number(along.y()) << "," << vector3(r.guess_move) << "," << vector3(r.result_move) << ","
               << vector3(r.velocity_start) << "," << vector3(r.velocity_end) << "," << vector3(r.gyro_bias_deg_s) << ","
               << vector3(r.acc_offset_mps2) << "," << number(ratio) << "," << vector3(eig.eigenvectors().col(0)) << "," << r.result.ndt_matched

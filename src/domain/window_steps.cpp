@@ -159,26 +159,6 @@ GyroBiasState apply_gyro_bias_prior(Window &window, const GyroBiasState &carried
     return prior;
 }
 
-bool is_turn_window(const Window &window, double threshold_rad_s)
-{
-    const auto &tr = window.poses;
-    const auto &ts = window.timestamps;
-    if (tr.size() > 1 && ts.size() == tr.size())
-    {
-        double yaw = 0.0;
-        for (size_t k = 1; k < tr.size(); k++)
-        {
-            // world-frame rotation increment, its component about the vertical
-            const Eigen::AngleAxisd aa(Eigen::Matrix3d(tr[k].linear() * tr[k - 1].linear().transpose()));
-            yaw += aa.angle() * aa.axis().z();
-        }
-        const double duration = ts.back().first - ts.front().first;
-        if (duration > 0.0 && std::abs(yaw) / duration > threshold_rad_s)
-            return true;
-    }
-    return false;
-}
-
 bool integrate_window_translations(Window &window, const Eigen::Vector3d &start_velocity, const Eigen::Vector3d &gravity, double to_mps2)
 {
     const size_t n = window.poses.size();

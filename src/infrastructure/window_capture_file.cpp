@@ -106,7 +106,8 @@ namespace
         w.matrix(c.acc_offset_cov);
         w.value(c.acc_distance);
         w.list(c.points_global, [&](const Point3Di &p) { write_point(w, p); });
-        for (int v : {c.stationary_windows, c.turn_windows, c.map_rebuilds, c.acc_term_windows, c.rest_windows})
+        // the second count is the retired turn-window count, kept as 0 so the format does not change
+        for (int v : {c.stationary_windows, 0, c.map_rebuilds, c.acc_term_windows, c.rest_windows})
             w.value(v);
         w.value(c.velocity_valid);
         w.matrix(c.velocity_mean);
@@ -126,7 +127,8 @@ namespace
         r.value(c.acc_distance);
         if (!r.list(c.points_global, [&](Point3Di &p) { read_point(r, p); }))
             return false;
-        for (int *v : {&c.stationary_windows, &c.turn_windows, &c.map_rebuilds, &c.acc_term_windows, &c.rest_windows})
+        int retired_turn_windows = 0;
+        for (int *v : {&c.stationary_windows, &retired_turn_windows, &c.map_rebuilds, &c.acc_term_windows, &c.rest_windows})
             r.value(*v);
         r.value(c.velocity_valid);
         r.matrix(c.velocity_mean);

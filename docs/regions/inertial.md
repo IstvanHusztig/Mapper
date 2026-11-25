@@ -69,7 +69,7 @@ residuals and Jacobians of these terms; their weights come from the noise model 
   `add_zero_velocity`, `add_weak_end_velocity_tie`, `add_velocity_priors`, `add_acceleration_offset_prior`.
 - `src/domain/window_steps.{h,cpp}`: `place_window_after`, `place_windows_after`, `estimate_previous_velocity`,
   `window_rests`, `mean_shift_of`, `guess_window_translations`, `predict_window_poses`, `apply_gyro_bias_prior`,
-  `is_turn_window`, `integrate_window_translations`, `repropagate_window_tail`, and `convergence_of` (a solver
+  `integrate_window_translations`, `repropagate_window_tail`, and `convergence_of` (a solver
   diagnostic that lives here).
 - In `src/application/run_odometry.cpp`: `load_and_predict` (previous velocity, the guess), `prepare_acc_term` (offset
   prior grown by its random walk, the term's options), `window_at_rest`, `prepare_velocity_state` (start-velocity prior:
@@ -88,7 +88,7 @@ orchestrator).
 
 ## How to check your work
 
-- Unit tests (Release): `out/build/x64-Release/bin/lidar_odometry_tests.exe -tc="place_window*,place_windows*,estimate_previous*,predict_window_poses*,apply_gyro_bias*,is_turn_window*,repropagate*,integrate_window*,window_rests*,convergence_of*"`
+- Unit tests (Release): `out/build/x64-Release/bin/lidar_odometry_tests.exe -tc="place_window*,place_windows*,estimate_previous*,predict_window_poses*,apply_gyro_bias*,repropagate*,integrate_window*,window_rests*,convergence_of*"`
   for `window_steps_test.cpp` (chaining keeps relative poses; previous velocity and its limit; the mean shift and its
   1 m drop; the chained guess equals `place_window_after`; the four translation branches; bias prior growth and removal;
   turn threshold; tail re-propagation; constant acceleration integrated exactly with uneven spacing; rest still vs

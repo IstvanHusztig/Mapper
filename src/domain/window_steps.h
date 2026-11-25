@@ -74,9 +74,6 @@ void guess_window_translations(std::vector<Eigen::Affine3d> &poses, const std::v
 // returns the prior
 GyroBiasState apply_gyro_bias_prior(Window &window, const GyroBiasState &carried, double bias_rw_rad);
 
-// true if the guess turns about the vertical faster than threshold_rad_s on average over the window
-bool is_turn_window(const Window &window, double threshold_rad_s);
-
 // imu_always_on: the window's guess follows the accelerometer, so that the translation motion model (a velocity prior on every
 // node around the guess) agrees with the accelerometer term instead of holding the window's mean velocity at its start velocity.
 // From the first node, with start_velocity, the translations are integrated with the accelerations (R_k f_k - gravity) * to_mps2

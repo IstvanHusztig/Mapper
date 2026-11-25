@@ -1087,7 +1087,7 @@ policy is proposed, write the hand-made or statistical version next to it and co
 diagnostic model of Phase 3 every column may be used.</p>
 <div class="table-wrap"><table>
 <tr><th>Group</th><th>Features</th><th>Known</th><th>Source today</th></tr>
-<tr><td>Motion (IMU)</td><td>window duration; mean and max angular rate; total turn angle; acceleration std; rest flag; turn-window flag</td><td>before</td><td><code>Window::imu_angles</code>, <code>imu_acc</code> (raw, in g, body frame), <code>is_turn_window</code></td></tr>
+<tr><td>Motion (IMU)</td><td>window duration; mean and max angular rate; total turn angle; acceleration std; rest flag</td><td>before</td><td><code>Window::imu_angles</code>, <code>imu_acc</code> (raw, in g, body frame)</td></tr>
 <tr><td>IMU states</td><td>gyro-bias mean (3) and σ</td><td>prior before, estimate after</td><td><code>Window::gyro_bias</code>; written to the results JSON as <code>gyro_bias_per_window</code>, not to the log</td></tr>
 <tr><td></td><td>velocity start/end magnitude; velocity end σ</td><td>after</td><td><code>Window::velocity</code>; diagnostics line 2, only with <code>imu_always_on</code></td></tr>
 <tr><td></td><td>acceleration-offset σ</td><td>after</td><td>new</td></tr>

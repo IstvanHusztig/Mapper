@@ -579,7 +579,6 @@ namespace
         const Eigen::Vector3d &acc_offset;
         const WindowOptimization &optimization;
         bool at_rest;
-        bool turn_window;
     };
 
     // log_window_terms: the per-term table at the guess and at the result, one log line, and the record for the sink.
@@ -610,7 +609,6 @@ namespace
         r.delta = s.optimization.delta;
         r.lm_factor = s.optimization.lm_factor;
         r.at_rest = s.at_rest;
-        r.turn_window = s.turn_window;
         r.acc_term = s.acc_term.options.enabled;
         if (!window.poses.empty())
         {
@@ -896,8 +894,6 @@ namespace
             log_info(logger) << "accelerometer term: active in " << carry.acc_term_windows << " of " << windows.size() << " windows";
         if (setup.always_on)
             log_info(logger) << "accelerometer always on: " << carry.rest_windows << " of " << windows.size() << " windows at rest";
-        if (params.rotation_sigma_inflation_k_turn > 0.0)
-            log_info(logger) << "turn windows (gyro trusted more): " << carry.turn_windows << " of " << windows.size();
         log_info(logger) << "silent events: map rebuilds " << carry.map_rebuilds << ", solver steps skipped " << workspace.steps_skipped
                          << ", big-jump nodes (their steps not applied) " << workspace.big_jump_nodes;
         if (params.log_iteration_convergence && !carry.convergence.empty())
@@ -948,8 +944,7 @@ namespace
         int i = 0;
         std::vector<Point3Di> intermediate_points;
         PreviousVelocity previous;                   // the previous window's final velocity
-        MotionModelRotationOptions rotation_options; // this window's (bias estimation from the second window on, turn k)
-        bool turn_window = false;
+        MotionModelRotationOptions rotation_options; // this window's (bias estimation from the second window on)
         AccTerm acc_term;
         bool at_rest = false;
         Eigen::Matrix3d lidar_translation_information = Eigen::Matrix3d::Zero();
@@ -1060,14 +1055,6 @@ namespace
         // so the bias is only estimated from the second window on
         w.rotation_options = setup.rotation_options;
         w.rotation_options.estimate_bias = setup.rotation_options.estimate_bias && i > 0;
-
-        // tight turns: trust the gyro more (rotation about the vertical from the IMU-based initial guess)
-        w.turn_window = params.rotation_sigma_inflation_k_turn > 0.0 && is_turn_window(window, params.turn_rate_threshold_deg_s * DEG_TO_RAD);
-        if (w.turn_window)
-        {
-            w.rotation_options.inflation_k = params.rotation_sigma_inflation_k_turn;
-            carry.turn_windows++;
-        }
 
         // accelerometer term (from the second window on, like the bias) and the window's translation sigmas
         w.acc_term = prepare_acc_term(window, i > 0, setup, carry, params);
@@ -1209,7 +1196,7 @@ namespace
         std::optional<WindowTermRecord> record =
             record_window_terms(i, c.windows,
                                 WindowTermSources{w.intermediate_points, w.guess, c.state, setup, w.acc_term, w.rotation_options, w.noise,
-                                                  w.acc_offset, w.optimization, w.at_rest, w.turn_window},
+                                                  w.acc_offset, w.optimization, w.at_rest},
                                 params, c.last_along, c.logger);
 
         if (params.log_window_noise)

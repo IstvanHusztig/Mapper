@@ -287,7 +287,7 @@ placement overwrites them. Going through every step of the loop:</p>
   <tr><th>Step (before window <code>i</code> is optimized)</th><th>What it reads</th></tr>
   <tr><td><code>estimate_previous_velocity</code></td><td>the end of window <code>i − 1</code> (already final) and only the <em>timestamps</em> of window <code>i</code></td></tr>
   <tr><td><code>predict_window_poses</code></td><td>places window <code>i</code> itself from the end of <code>i − 1</code>, using only its <em>relative</em> poses</td></tr>
-  <tr><td><code>apply_gyro_bias_prior</code>, <code>is_turn_window</code>, accelerometer term</td><td>window <code>i</code> as it is at that moment</td></tr>
+  <tr><td><code>apply_gyro_bias_prior</code>, accelerometer term</td><td>window <code>i</code> as it is at that moment</td></tr>
   <tr><td>Optimization, map update, logs</td><td>window <code>i</code> only</td></tr>
   <tr><td>GUI live preview</td><td>only windows already reported done</td></tr>
 </table></div>

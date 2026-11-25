@@ -223,15 +223,6 @@ TEST_CASE("apply_gyro_bias_prior grows the prior and removes the bias from the g
     }
 }
 
-TEST_CASE("is_turn_window compares the mean yaw rate with the threshold")
-{
-    const double threshold = 30.0 * 3.14159265358979323846 / 180.0; // 30 deg/s
-    CHECK(is_turn_window(moving_window(40, 1.0, 1.0), threshold));         // 57 deg/s
-    CHECK(is_turn_window(moving_window(40, 1.0, -1.0), threshold));        // either direction
-    CHECK_FALSE(is_turn_window(moving_window(40, 1.0, 0.2), threshold));   // 11 deg/s
-    CHECK_FALSE(is_turn_window(moving_window(1, 1.0, 1.0), threshold));    // a single node
-}
-
 TEST_CASE("repropagate_window_tail continues the tail with the kept velocity and the IMU rotation")
 {
     const int n = 60;
