@@ -39,12 +39,15 @@ and goes to the user.
       Done when `python checks/check_register.py` exits 0 on that commit and the totals line matches an independent
       count (`grep`) written into this task.
       (2026-11-25: recorded from 92a1c38. Totals: 292 cases (7 should_fail, 25 skip), 1,933 assertions, 158 Python tests, 996 C++ values, 101 helper calls; grep: 292 TEST_CASE, 7 should_fail and 25 skip on code lines, the macro counts equal per macro. The design's 12 should_fail / 1,939 were raw greps that counted comments. LoopTolerances' 17 members and both case tables are values.)
-- [ ] 1.7 `tools/step_checks.py`: the lines `tool tests` and `check register` (D5: additions hold in a region's
+- [x] 1.7 `tools/step_checks.py`: the lines `tool tests` and `check register` (D5: additions hold in a region's
       worktree and fail in the main tree; a change fails everywhere), and the time-limit count on the full run's line.
       Done when, in a scratch branch in a region worktree, an added case gives `HOLDS, to record: +1 case`, a loosened
       literal gives `FAILED: 1 assertion changed`, the same added case fails in the main tree, and the step checks on
       master print both new lines as passed and identical; the added wall time is written here (expected under one
       minute).
+      (2026-11-25: merged; scratch proofs: an added case gives `HOLDS, to record: +1 case, +1 assertion`, a 0.02 loosened
+      to 0.2 gives `FAILED: 1 assertion changed`; the main-tree verdict is unit-tested. Full run on the branch: ALL HOLD.
+      Added wall time: tool tests 33 s, register 1.4 s. Register recorded after the merge: +10 cases, +21 assertions.)
 - [ ] 1.8 Docs for the register: `tools/README.md` (the tool, its kinds, what it does not see), `docs/regions/README.md`
       (the rule for a register difference and who records), the eight region agents' definitions
       (`.claude/agents/region-*.md`: quote the register's line in the hand-back; never record), `CLAUDE.md` (Testing,

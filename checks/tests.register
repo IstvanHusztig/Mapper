@@ -2,8 +2,8 @@
 # Not seen: limits computed while a test runs from data, assertions the flow never reaches (a branch not taken,
 # a loop that runs zero times), limits in src/ (the verdict limits, the settings hash), the meaning of a test,
 # constants without a numeric literal in their initialiser (reference bindings), constructor-style declarations.
-# totals: 292 cases (7 should_fail, 25 skip), 1933 assertions, 158 python tests
-# assertions by macro: CHECK 1489, CHECK_FALSE 104, CHECK_MESSAGE 8, CHECK_NOTHROW 1, REQUIRE 325, REQUIRE_FALSE 3, REQUIRE_MESSAGE 2, WARN_MESSAGE 1; 68 of them in asserting helpers; 101 calls of helpers, 996 values; 456 python assertions
+# totals: 292 cases (7 should_fail, 25 skip), 1933 assertions, 168 python tests
+# assertions by macro: CHECK 1489, CHECK_FALSE 104, CHECK_MESSAGE 8, CHECK_NOTHROW 1, REQUIRE 325, REQUIRE_FALSE 3, REQUIRE_MESSAGE 2, WARN_MESSAGE 1; 68 of them in asserting helpers; 101 calls of helpers, 996 values; 477 python assertions
 
 [file] tests/accelerometer_noise_test.cpp
   value: NoiseWindows :: double D = 0.0
@@ -3876,6 +3876,57 @@
   assert: self.assertEqual(lm.main(['freeze', str(result), str(out2), '--time', '0', '1']), 2)
   assert: self.assertIn('plan_fit.json', lm.Landmark(out2).meta['plan_fit'])
   assert: self.assertAlmostEqual(rows[0][1], 0.03, places=5)
+
+[case] tests/test_verification_tools.py :: StepChecksRegisterLineTest.test_identical_holds_everywhere
+  markers: -
+  assert: self.assertEqual(self.sc.register_verdict(0, 'IDENTICAL', main_tree), (True, 'IDENTICAL'))
+
+[case] tests/test_verification_tools.py :: StepChecksRegisterLineTest.test_additions_hold_in_a_worktree_and_fail_in_the_main_tree
+  markers: -
+  assert: self.assertTrue(ok)
+  assert: self.assertTrue(text.startswith('HOLDS, to record: +1 case'))
+  assert: self.assertIn('run/check_register.txt', text)
+  assert: self.assertFalse(ok)
+  assert: self.assertTrue(text.startswith('FAILED, to record: +1 case'))
+
+[case] tests/test_verification_tools.py :: StepChecksRegisterLineTest.test_a_change_fails_everywhere_with_the_summary
+  markers: -
+  assert: self.assertFalse(ok)
+  assert: self.assertTrue(text.startswith('FAILED: 1 assertion changed'))
+
+[case] tests/test_verification_tools.py :: StepChecksRegisterLineTest.test_unreadable_fails_with_the_tools_message
+  markers: -
+  assert: self.assertFalse(ok)
+  assert: self.assertIn("unreadable: tests/a.cpp:4: unmatched '('", text)
+
+[case] tests/test_verification_tools.py :: StepChecksRegisterLineTest.test_an_unknown_exit_code_fails
+  markers: -
+  assert: self.assertFalse(self.sc.register_verdict(7, 'x', False)[0])
+
+[case] tests/test_verification_tools.py :: StepChecksRegisterLineTest.test_instruments_summary_is_split_from_the_register_summary
+  markers: -
+  assert: self.assertEqual(summary, 'to record: +1 case')
+  assert: self.assertEqual(inst, 'instruments: ok (3 instruments, 2 items not established or only stated)')
+  assert: self.assertEqual(self.sc.parse_register_output('IDENTICAL\n'), ('IDENTICAL', None))
+
+[case] tests/test_verification_tools.py :: StepChecksRegisterLineTest.test_the_main_tree_is_told_from_a_linked_worktree_by_the_git_dirs
+  markers: -
+  assert: self.assertTrue(self.sc.in_main_tree())
+  assert: self.assertFalse(self.sc.in_main_tree())
+
+[case] tests/test_verification_tools.py :: StepChecksRegisterLineTest.test_a_different_run_with_windows_at_the_time_limit_says_the_load_decided
+  markers: -
+  assert: self.assertTrue(text.startswith("DIFFERENT (3 windows at the time limit: the result depended on the machine's load; run again)"))
+
+[case] tests/test_verification_tools.py :: StepChecksRegisterLineTest.test_a_different_run_without_windows_at_the_limit_is_plain
+  markers: -
+  assert: self.assertNotIn('depended on the machine', text)
+  assert: self.assertIn('time-limit windows 0', text)
+
+[case] tests/test_verification_tools.py :: StepChecksRegisterLineTest.test_an_identical_run_reports_the_count_and_a_missing_one_says_so
+  markers: -
+  assert: self.assertIn('time-limit windows 0', self.sc.short_run_detail(True, True, 'IDENTICAL', '5 min', 0))
+  assert: self.assertIn('time limit: not reported', self.sc.short_run_detail(True, True, 'IDENTICAL', '5 min', None))
 
 [file] tests/toml_config_repository_test.cpp
 
