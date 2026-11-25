@@ -4,12 +4,15 @@
 #include "odometry_pipeline.h"
 #include "odometry_snapshot_file.h"
 #include "synthetic_recording.h"
+#include "toml_io.h"
+#include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <optional>
 #include <random>
+#include <sstream>
 
 // The odometry snapshot (save_odometry_snapshot, dMapper ... --from-snapshot): written and read back bit for bit, refused
 // for other odometry settings or another recording, and the post-processing after a restore gives the same windows as
@@ -191,6 +194,39 @@ TEST_CASE("odometry snapshot: refused for other odometry settings, accepted for 
     post.loop_closure_fine_time_placement = !post.loop_closure_fine_time_placement;
     post.loop_closure_fine_time_min_sigma_m = 2.5;
     CHECK(read_odometry_snapshot(file.path, post, read, why));
+}
+
+// The odometry settings hash is pinned: of the built-in defaults and of each shipped settings file. Snapshots, window
+// captures and loop closure captures store it and are refused when it differs, so a hash that moves by accident (a
+// setting removed without its place in removed_hashed, one added without its added_later entry) silently retires every
+// capture made with that file. A literal moves only together with the change that explains it.
+TEST_CASE("odometry snapshot: the settings hash of the defaults and of the shipped settings files is pinned")
+{
+    const auto pin = [](const char *what, std::uint64_t actual, std::uint64_t pinned)
+    {
+        if (actual == pinned)
+            return;
+        std::ostringstream message;
+        message << "the odometry settings hash of " << what << " is now 0x" << std::hex << actual << std::dec << " ("
+                << actual << "), pinned 0x" << std::hex << pinned << std::dec << " (" << pinned
+                << "). Every odometry snapshot, window capture and loop closure capture made with these settings is"
+                   " refused from now on. Change the literal only together with the change that explains it (a shipped"
+                   " setting's value, or a decision that older snapshots and captures are refused).";
+        FAIL_CHECK(message.str());
+    };
+    const auto file_hash = [](const char *file)
+    {
+        OdometryConfig params;
+        RunPaths paths;
+        GuiPreferences gui;
+        REQUIRE(TomlIO().LoadParametersFromTomlFile((std::filesystem::path(LO_REPO_DIR) / "settings" / file).string(), params,
+                                                    paths, gui));
+        return odometry_settings_hash(params);
+    };
+    // computed on cd2ce5d (2026-11-25, openspec change check-register)
+    pin("the built-in defaults", odometry_settings_hash(OdometryConfig{}), 0x1ad4c1d5688ff94aull);
+    pin("settings/l2-vertical.toml", file_hash("l2-vertical.toml"), 0xf86ccbfcd39e2f17ull);
+    pin("settings/livox-vertical.toml", file_hash("livox-vertical.toml"), 0x6342caaee7fafd53ull);
 }
 
 TEST_CASE("odometry snapshot: a file that isn't a snapshot is refused")
