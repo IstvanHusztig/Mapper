@@ -77,15 +77,24 @@ and goes to the user.
 
 ## 3. The gaps that are closed (design D10; each requirement is stated there and is not changed after a run)
 
-- [ ] 3.1 Simulator, planted noise (`tests/synthetic_inertial_test.cpp`): factors 1.5 and 1/1.5 required rejected in
+- [x] 3.1 Simulator, planted noise (`tests/synthetic_inertial_test.cpp`): factors 1.5 and 1/1.5 required rejected in
       every run and axis; 1.05 and 1/1.05 measured; the random walks at 1.5 required rejected in at least 4 of 5 seeds;
       the 90 % power ratio computed. Done when the cases pass in `ctest` (or are `skip` with their measured result
       recorded, if they take more than a few seconds), and the measured counts and the ratio are written here.
-- [ ] 3.2 `run_health.py` on a log with known readings (`tests/test_verification_tools.py`): the planted bend, speed,
+      (2026-11-25, merged: white noise at 1.5 and 1/1.5 rejected on every axis in every run (60 of 60); measured: 1.05 and
+      1/1.05 rejected in 15 of 15 seed-axes, gyro and accelerometer; the 90 % power ratio at 80,000 samples and alpha 1e-4
+      is 1.013 (expected about 1.02); random walks at 1.5 rejected in 5 of 5 seeds, each statistic. Release run times: the
+      smoke case 1.7 s in ctest, the skipped sets 8.4 + 8.4 + 4.2 s (`-tc="synthetic IMU: planted*" --no-skip`).)
+- [x] 3.2 `run_health.py` on a log with known readings (`tests/test_verification_tools.py`): the planted bend, speed,
       bias and chi-square on both sides of each limit. Done when the cases pass and one of them fails when a limit in
       `run_health.py` is changed by hand (tried once, reverted, noted here).
-- [ ] 3.3 `compare_baseline.py` on folders written by the test: equal up to the run-dependent fields; one changed byte
+      (2026-11-25, merged: every reading and verdict exact; just below the limits every row CLEAR. One 4 deg bend in 200
+      windows is 0.5 %, under the 1 % share: CLEAR; the third bent window triggers. Changing the --max-speed default by hand
+      made two tests error (the row label carries the limit), reverted.)
+- [x] 3.3 `compare_baseline.py` on folders written by the test: equal up to the run-dependent fields; one changed byte
       named; a manifest written and compared. Done when the three cases pass.
+      (2026-11-25, merged: run-dependent fields normalised, IDENTICAL 5 files; one flipped byte named, 1 of 5, exit 1; a
+      changed setting not normalised away; the manifest round trip IDENTICAL.)
 - [ ] 3.4 The fixtures' blindness precondition against the truth (`tests/loop_chains_test.cpp`,
       `tests/window_covariance_test.cpp`, the shared helper beside `tests/synthetic_loop.cpp`'s): the measured sets run
       once before the change (`-tc="loop chain*" --no-skip -s`, `-tc="window covariance*" --no-skip -s`; logs kept in
@@ -94,9 +103,11 @@ and goes to the user.
       the experiment folder and summarised here, and no validity verdict differs. **If one differs, or a tolerance would
       have to move: stop, numbers to the user.** The register's difference of this branch (changed assertions, removed
       values) is quoted here; it is the change the user accepted with this proposal.
-- [ ] 3.5 R2's sensor range (`tests/synthetic_routes.cpp`): another range than the documented one is refused with a
+- [x] 3.5 R2's sensor range (`tests/synthetic_routes.cpp`): another range than the documented one is refused with a
       message; a test case shows the refusal. Done when the case passes and the existing route cases are unchanged in
       the register.
+      (2026-11-25, merged: ranges 5.9, 8 and 100 refused with "route R2 needs SensorProfile::max_range_m = 6"; the other
+      routes unchanged. Step checks on the branch ALL HOLD, register +12 cases, +50 assertions, +24 values, recorded.)
 - [ ] 3.6 After 3.1 to 3.5 are merged: `checks/instruments.toml` updated (the closed items name their new cases, the
       simulator's resolution carries its measured numbers), the register recorded. Done when
       `python checks/check_register.py` exits 0 and the table shows no `not established` item among those D10 closes.

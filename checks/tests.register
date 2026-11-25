@@ -2,8 +2,8 @@
 # Not seen: limits computed while a test runs from data, assertions the flow never reaches (a branch not taken,
 # a loop that runs zero times), limits in src/ (the verdict limits, the settings hash), the meaning of a test,
 # constants without a numeric literal in their initialiser (reference bindings), constructor-style declarations.
-# totals: 294 cases (7 should_fail, 25 skip), 1947 assertions, 168 python tests
-# assertions by macro: CHECK 1497, CHECK_FALSE 105, CHECK_MESSAGE 8, CHECK_NOTHROW 1, REQUIRE 328, REQUIRE_FALSE 5, REQUIRE_MESSAGE 2, WARN_MESSAGE 1; 68 of them in asserting helpers; 101 calls of helpers, 997 values; 477 python assertions
+# totals: 299 cases (7 should_fail, 28 skip), 1954 assertions, 175 python tests
+# assertions by macro: CHECK 1499, CHECK_FALSE 105, CHECK_MESSAGE 12, CHECK_NOTHROW 1, CHECK_THROWS_WITH_AS 1, REQUIRE 328, REQUIRE_FALSE 5, REQUIRE_MESSAGE 2, WARN_MESSAGE 1; 68 of them in asserting helpers; 101 calls of helpers, 1019 values; 520 python assertions
 
 [file] tests/accelerometer_noise_test.cpp
   value: NoiseWindows :: double D = 0.0
@@ -2287,10 +2287,27 @@
   value: ImuOptions :: int nodes_per_window = 180
   value: ImuOptions :: int window_origin_node = 0
   value: ImuOptions :: std::uint64_t seed = 1
+  value: ImuOptions :: double white_noise_scale = 1.0
+  value: ImuOptions :: double walk_scale = 1.0
 
 [file] tests/synthetic_inertial_test.cpp
   value: constexpr double pi = 3.14159265358979323846
   value: angle_of() :: const Eigen::Vector3d skew(R(2, 1) - R(1, 2), R(0, 2) - R(2, 0), R(1, 0) - R(0, 1))
+  value: planted_noise_check() :: const double dt = rec.dt_s(), deg = pi / 180.0, g = standard_gravity
+  value: planted_noise_check() :: const double alpha = 1e-4
+  value: planted_noise_check() :: const double sigma = o.noise.gyro_arw_deg_sqrt_s[a] * deg / std::sqrt(dt), count = n - 1
+  value: planted_noise_check() :: const double mean = sum / count, var = (sum2 - count * mean * mean) / (count - 1)
+  value: planted_noise_check() :: const auto interval = truth_stats::chi2_interval(count - 1, alpha)
+  value: planted_noise_check() :: const double stat = (count - 1) * var / (sigma * sigma)
+  value: planted_noise_check() :: const double e = rec.acc_g[k][a] * g - ((a == 2 ? g : 0.0) + rec.accel_offset_mps2[rec.bias_index(k)][a])
+  value: planted_noise_check() :: const double mean_a = sum / count_a, var_a = (sum2 - count_a * mean_a * mean_a) / (count_a - 1)
+  value: planted_noise_check() :: const auto interval_a = truth_stats::chi2_interval(count_a - 1, alpha)
+  value: planted_noise_check() :: const double stat_a = (count_a - 1) * var_a / (sigma_a * sigma_a)
+  value: planted_noise_check() :: const int windows = static_cast<int>(rec.gyro_bias_rad_s.size()) - 2
+  value: planted_noise_check() :: const double var_gyro = std::pow(o.noise.gyro_bias_rw_deg_s_sqrt_s * deg, 2) * T, var_acc = std::pow(o.noise.accel_offset_rw_mps2_sqrt_s, 2) * T
+  value: planted_noise_check() :: const auto interval = truth_stats::chi2_interval(3.0 * windows, alpha)
+  value: sigma_ratio_with_power() :: const double mid = 0.5 * (lo + hi), var_ratio = low ? mid * mid : 1.0 / (mid * mid)
+  value: const int planted_seeds = 5
 
 [case] tests/synthetic_inertial_test.cpp :: synthetic motion: derivatives agree and segments join smoothly
   markers: -
@@ -2378,6 +2395,29 @@
   assert: CHECK(rec.truth_at_node(300).gyro_bias != rec.truth_at_node(100).gyro_bias)
   assert: CHECK(again.gyro_rad_s == rec.gyro_rad_s)
   assert: CHECK(generate_imu(m, o2).gyro_rad_s != rec.gyro_rad_s)
+
+[case] tests/synthetic_inertial_test.cpp :: synthetic IMU: planted white noise at 1.5 is rejected on every axis (smoke, one seed)
+  markers: -
+  value: const PlantedRejections r = planted_noise_check(1.5, 1.0, 1)
+  assert: CHECK_MESSAGE(r.gyro[a], "gyro axis " << a << " not rejected")
+  assert: CHECK_MESSAGE(r.accel[a], "accelerometer axis " << a << " not rejected")
+
+[case] tests/synthetic_inertial_test.cpp :: synthetic IMU: planted white noise at 1.5 and 1/1.5 is rejected on every axis
+  markers: skip
+  value: const PlantedRejections r = planted_noise_check(factor, 1.0, seed)
+  assert: CHECK_MESSAGE(r.gyro[a], "factor " << factor << " seed " << seed << " gyro axis " << a << " not rejected")
+  assert: CHECK_MESSAGE(r.accel[a], "factor " << factor << " seed " << seed << " accelerometer axis " << a << " not rejected")
+
+[case] tests/synthetic_inertial_test.cpp :: synthetic IMU: planted white noise at 1.05 and 1/1.05, rejections counted (measured, not required)
+  markers: skip
+  value: const double n_gyro = 160.0 / (o.dt_ns * 1e-9) - 1, n_acc = 160.0 / (o.dt_ns * 1e-9)
+  value: const PlantedRejections r = planted_noise_check(factor, 1.0, seed)
+
+[case] tests/synthetic_inertial_test.cpp :: synthetic IMU: planted random walks at 1.5 are rejected in at least 4 of 5 seeds
+  markers: skip
+  value: const PlantedRejections r = planted_noise_check(1.0, 1.5, seed)
+  assert: CHECK(gyro_rejected >= 4)
+  assert: CHECK(accel_rejected >= 4)
 
 [file] tests/synthetic_loop.cpp
   value: projected_shift_weight() :: const Eigen::Matrix3d P = ndt_degeneracy_projection(t.translation_information, noise).M.topLeftCorner<3, 3>()
@@ -2736,6 +2776,10 @@
 [case] tests/synthetic_routes_test.cpp :: synthetic routes: R3, rest and walk and rest, is cut as generated
   markers: -
   call: check_cut(r3())
+
+[case] tests/synthetic_routes_test.cpp :: synthetic routes: R2 refuses a sensor range other than 6 m
+  markers: -
+  assert: CHECK_THROWS_WITH_AS(generate_recording(route_r2(), s), doctest::Contains("route R2 needs SensorProfile::max_range_m = 6"), std::invalid_argument)
 
 [case] tests/synthetic_routes_test.cpp :: synthetic routes: R2 has a blind middle and structure at both ends
   markers: -
@@ -3572,6 +3616,8 @@
 
 [file] tests/test_verification_tools.py
   value: ROOT = Path(__file__).resolve().parents[1]
+  value: RunHealthKnownLogTests :: ABOVE = dict(bends={77: -4.0}, speeds={120: 2.6}, biases={150: 0.6}, chi2=chi2_values(8.0, 30.0))
+  value: RunHealthKnownLogTests :: BELOW = dict(bends={77: -2.9}, speeds={120: 2.49}, biases={150: 0.49}, chi2=chi2_values(4.9, 19.4))
 
 [case] tests/test_verification_tools.py :: VerificationTests.test_sparse_shipped_evidence_options
   markers: -
@@ -3931,6 +3977,70 @@
   markers: -
   assert: self.assertIn('time-limit windows 0', self.sc.short_run_detail(True, True, 'IDENTICAL', '5 min', 0))
   assert: self.assertIn('time limit: not reported', self.sc.short_run_detail(True, True, 'IDENTICAL', '5 min', None))
+
+[case] tests/test_verification_tools.py :: RunHealthKnownLogTests.test_the_planted_values_are_read_back_exactly_and_judged
+  markers: -
+  assert: self.assertEqual(r['windows'], 200)
+  assert: self.assertEqual((r['bend_gt3'], r['bend_gt10'], r['bend_max']), (1, 0, 4.0))
+  assert: self.assertEqual(r['speed_max'], 2.6)
+  assert: self.assertEqual(r['bias_max'], [0.6, 0.05, 0.02])
+  assert: self.assertEqual((r['chi2_windows'], r['chi2_p50'], r['chi2_p95']), (41, 8.0, 30.0))
+  assert: self.assertEqual(r['coverage'], {'bend': 200, 'speed': 200, 'bias': 200, 'chi2': 41})
+  assert: self.assertEqual(r['missing_required'], [])
+  assert: self.assertEqual(rows['windows bent > 3 deg against the gyro'], ('1 (0.5 %)', '<= 1 %', 'CLEAR'))
+  assert: self.assertEqual(rows['windows bent > 10 deg'], ('0', '0', 'CLEAR'))
+  assert: self.assertEqual(rows['largest bend'], ('4.0 deg', '', ''))
+  assert: self.assertEqual(rows['windows faster than 2.5 m/s'], ('1 (max 2.60 m/s)', '0', 'TRIGGER'))
+  assert: self.assertEqual(rows['largest gyro bias estimate x / y / z'], ('0.60 / 0.05 / 0.02 deg/s', '<= 0.5', 'TRIGGER'))
+  assert: self.assertEqual(rows['chi2 of the velocity jump, median / p95'], ('8 / 30 (41 windows)', '<= 5 / 20', 'TRIGGER'))
+  assert: self.assertEqual(code, 1)
+  assert: self.assertIn('result: TRIGGERS', out)
+
+[case] tests/test_verification_tools.py :: RunHealthKnownLogTests.test_each_planted_value_just_below_its_limit_is_clear
+  markers: -
+  assert: self.assertEqual((r['bend_gt3'], r['bend_max'], r['speed_max'], r['bias_max'][0]), (0, 2.9, 2.49, 0.49))
+  assert: self.assertEqual((r['chi2_p50'], r['chi2_p95']), (4.9, 19.4))
+  assert: self.assertEqual(rows['windows bent > 3 deg against the gyro'], ('0 (0.0 %)', '<= 1 %', 'CLEAR'))
+  assert: self.assertEqual(rows['largest bend'], ('2.9 deg', '', ''))
+  assert: self.assertEqual(rows['windows faster than 2.5 m/s'], ('0 (max 2.49 m/s)', '0', 'CLEAR'))
+  assert: self.assertEqual(rows['largest gyro bias estimate x / y / z'], ('0.49 / 0.05 / 0.02 deg/s', '<= 0.5', 'CLEAR'))
+  assert: self.assertEqual(rows['chi2 of the velocity jump, median / p95'], ('5 / 19 (41 windows)', '<= 5 / 20', 'CLEAR'))
+  assert: self.assertEqual([k for k, v in rows.items() if v[2] == 'TRIGGER'], [])
+  assert: self.assertEqual(code, 0)
+  assert: self.assertIn('result: DIAGNOSTICS COMPLETE', out)
+
+[case] tests/test_verification_tools.py :: RunHealthKnownLogTests.test_the_bend_share_triggers_from_the_third_window_in_200
+  markers: -
+  assert: self.assertEqual(rows['windows bent > 3 deg against the gyro'], ('2 (1.0 %)', '<= 1 %', 'CLEAR'))
+  assert: self.assertEqual(rows['windows bent > 3 deg against the gyro'], ('3 (1.5 %)', '<= 1 %', 'TRIGGER'))
+  assert: self.assertEqual(self.exit_code()[0], 1)
+  assert: self.assertEqual(rows['windows bent > 10 deg'], ('1', '0', 'TRIGGER'))
+
+[case] tests/test_verification_tools.py :: CompareBaselineTests.test_folders_that_differ_only_in_run_dependent_fields_are_identical
+  markers: -
+  assert: self.assertEqual((code, out.strip()), (0, 'IDENTICAL: 5 files'))
+
+[case] tests/test_verification_tools.py :: CompareBaselineTests.test_a_changed_setting_is_not_normalised_away
+  markers: -
+  assert: self.assertEqual(code, 1)
+  assert: self.assertIn('DIFFERENT: 1 of 5 files', out)
+
+[case] tests/test_verification_tools.py :: CompareBaselineTests.test_one_changed_byte_in_a_data_file_is_reported_by_name
+  markers: -
+  assert: self.assertEqual(code, 1)
+  assert: self.assertIn(f'different {name}', out.splitlines())
+  assert: self.assertEqual(sum((line.startswith('different') for line in out.splitlines())), 1)
+  assert: self.assertIn('DIFFERENT: 1 of 5 files', out)
+
+[case] tests/test_verification_tools.py :: CompareBaselineTests.test_a_manifest_written_from_a_folder_is_identical_to_it_and_to_its_twin
+  markers: -
+  assert: self.assertEqual((code, out.strip()), (0, f'wrote {manifest} (5 files)'))
+  assert: self.assertEqual((written['dataset'], written['params'], len(written['files'])), ('known', 'p.toml', 5))
+  assert: self.assertEqual(self.run_tool(self.a, manifest), (0, 'IDENTICAL: 5 files\n'))
+  assert: self.assertEqual(self.run_tool(self.b, manifest), (0, 'IDENTICAL: 5 files\n'))
+  assert: self.assertEqual(code, 1)
+  assert: self.assertIn('different scan_lio_0.laz', out.splitlines())
+  assert: self.assertIn('DIFFERENT: 1 of 5 files', out)
 
 [file] tests/toml_config_repository_test.cpp
 
