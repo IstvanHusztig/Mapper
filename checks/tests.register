@@ -2743,7 +2743,7 @@
   call: pin("the built-in defaults", odometry_settings_hash(OdometryConfig{}), 0x1ad4c1d5688ff94aull)
   call: pin("settings/l2-vertical.toml", file_hash("l2-vertical.toml"), 0xf86ccbfcd39e2f17ull)
   call: file_hash("l2-vertical.toml")
-  call: pin("settings/livox-vertical.toml", file_hash("livox-vertical.toml"), 0x6342caaee7fafd53ull)
+  call: pin("settings/livox-vertical.toml", file_hash("livox-vertical.toml"), 0xf0a7bd2da34ca441ull)
   call: file_hash("livox-vertical.toml")
 
 [case] tests/odometry_snapshot_test.cpp :: odometry snapshot: a file that isn't a snapshot is refused
