@@ -31,8 +31,8 @@ ghost again. On 2026-11-24 the user decided to keep Codex's fine-time loop closu
   only at its first pose is visible.
 - **A run the scans cannot time is reported.** Run, time, axis and the remaining uncertainty are logged ("not timed"), for
   the passage walked once or without features across it.
-- **Loop closure capture format 3:** the per-window information of each try, and the guard's score curves with the graph
-  result and the set of eligible runs they belong to. A replay with the capture's settings gives the step bit for bit; a
+- **Loop closure capture formats 3 and 4:** the per-window information of each try (3), and the guard's score curves with
+  the graph result and the set of eligible runs they belong to (4). A replay with the capture's settings gives the step bit for bit; a
   replay whose graph or eligible runs differ from the stored ones refuses the guard and names the cause. Variants of the
   rule are screened with the Python tool, which reads the points.
 - **Prototype tool** `tools/loop_fine_time.py`: Codex's prototype rebuilt with operations that port to C++ one to one, and

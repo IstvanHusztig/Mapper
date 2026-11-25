@@ -162,9 +162,10 @@ which is also the learning-data record of this step.
 **D9. Port, capture, replay.** `close_loops` asks a new port (next to `LoopClosureRegistrations`) for the score curves
 of a support, given the corrected poses. The run's adapter computes them from the points (D3, D4); the replay's adapter
 returns the captured curves when the replayed graph gave the capturing run's segment poses bit for bit and the eligible
-runs are the same, and nothing otherwise. Capture format 3 adds `H_w` per try and, per eligible run, the training and
-held-out curves with their patch counts, the segment poses and the set of eligible runs they belong to. Formats 1 and 2
-load; they carry neither.
+runs are the same, and nothing otherwise. Capture format 3 adds `H_w` per try; format 4 (as built: the curves got a
+format of their own, so that group 2's captures stay readable) adds, per eligible run, the training and held-out curves
+with their patch counts, the segment poses and the set of eligible runs they belong to. Formats 1 to 3 load; they carry
+no curves.
 - With the guard on and the curves missing or belonging to another graph result or another set of eligible runs, the loop
   closure does not run, an error names the cause (the remedy: a `--from-snapshot` run), and a replay exits 1. No silent
   fall-back to the graph's result.
@@ -193,9 +194,11 @@ found and reported before any C++.
 2. *Today's Livox 4* (one full run with the shipped file and a capture, then replay): the same list; expected little to
    move; nothing on the list may get worse.
 3. *Livox 3* (shipped file, a capture): eligible runs, largest move against its baseline, the user's look.
-4. *Truth cases* on the synthetic route R2 (out and back through a corridor with a blind middle): an along-axis error that
-   grows inside the blind stretch is recovered to a grid step where the far room's faces are seen; a corridor with nothing
-   across it comes out `not timed` and unchanged; door frames at equal spacing must not move the profile by one spacing.
+4. *Truth cases* on a synthetic corridor walked out and back (the prototype's scene, so that the C++ is checked against
+   the Python window by window; changed 2026-11-25 from the synthetic route R2, which would have needed hand-set readings
+   and an injected error): an along-axis error that grows inside the blind stretch is recovered to a grid step where
+   surfaces across the passage are seen; a corridor with nothing across it comes out `not timed` and unchanged; door
+   frames at equal spacing must not move the profile by one spacing.
 5. *Switch off:* every step check and recording 44 bit-identical.
 6. The conclusion reviewer; the user judges the maps. The new recording (task 4.4 of
    `loop-closure-weak-runs-and-match-check`) is the first independent test, with the rule unchanged.

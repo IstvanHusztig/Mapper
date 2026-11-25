@@ -63,41 +63,56 @@ verdict.
 
 ## 3. C++: the fine-time step
 
-- [ ] 3.1 Settings `loop_closure_fine_time_placement` and `loop_closure_fine_time_min_sigma_m` in `OdometryConfig`,
+- [x] 3.1 Settings `loop_closure_fine_time_placement` and `loop_closure_fine_time_min_sigma_m` in `OdometryConfig`,
       `TomlIO::POINTERS` and `CATEGORIES` (`loop_closure`, outside the odometry settings hash), the golden TOML files
       regenerated in their own commit, the refusal without the readings rule. Done when the TOML tests pass, a snapshot
       written before the settings still loads, and a doctest shows the refusal's outcome.
-- [ ] 3.2 The pure parts, each with doctests: exact nearest neighbours on a grid index (against brute force), patches with
+- [x] 3.2 The pure parts, each with doctests: exact nearest neighbours on a grid index (against brute force), patches with
       normals, the score curve of a window, the profile by dynamic programming (against brute force; ties; pinned ends),
       the edge classes and the apply rule of D7. Constants in one struct with the values of `RULE.md`. Done when
       `-tc="loop fine time*"` passes.
-- [ ] 3.3 The scores port, the run's adapter on the points, the step in `close_loops`, the report and the log lines of
-      D8; capture format 3 with the curves and their graph result; the replay's adapter, the refusal for missing or stale
+- [x] 3.3 The scores port, the run's adapter on the points, the step in `close_loops`, the report and the log lines of
+      D8; capture format 4 with the curves and their graph result (format 3 is group 2's per-window information); the replay's adapter, the refusal for missing or stale
       curves, the replay's JSON and `loop_fine_time.csv`. Done when, on the synthetic loop recording, a replay of a capture
       made with the guard on gives every node bit for bit, a replay with a changed graph or another set of eligible runs
       and the guard on exits 1 naming the cause, and with the guard off every existing loop closure test is unchanged.
-- [ ] 3.4 Truth cases on the synthetic route R2 (`doctest::skip` where they take long, a smoke case in `ctest`): an
-      along-axis error growing inside the blind stretch is recovered to one grid step where the far room is seen; a
-      corridor with nothing across it comes out `not timed` and unchanged, bit for bit; door frames every 2 m with a
-      search range beyond one spacing move no window by more than one grid step; an edge with late information agrees, an
-      edge contradicted by informative scans stops the run, a later visit registered onto a moved part stops the run.
-      Done when they pass with `--no-skip`.
-- [ ] 3.5 Equality with the prototype: the orchestrator runs `--from-snapshot` of `readings_run/run/odometry_snapshot.bin`
+- [x] 3.4 Truth cases on a synthetic scene: an along-axis error growing inside the blind stretch is recovered to one grid
+      step where surfaces across the passage are seen; a corridor with nothing across it comes out `not timed` and
+      unchanged, bit for bit; door frames every 2 m with a search range beyond one spacing move no window by more than one
+      grid step; an edge with late information agrees, an edge contradicted by informative scans stops the run, a later
+      visit registered onto a moved part stops the run. Done when they pass with `--no-skip`.
+      Changed 2026-11-25: the scene is the prototype's corridor (walked out and back, 100 windows), not the synthetic
+      route R2. The agent found that an R2 case needs R2's windows with hand-set readings and truth poses plus an
+      injected error; the corridor has the same parts (a blind stretch, surfaces across it, another visit 20 s later)
+      and lets the C++ be checked against the Python window by window. All six cases pass (`-tc="loop fine time*"`, 22
+      of 22); the offsets of all 27 windows and the held-out means equal the Python bit for bit. An R2 case is listed
+      as a follow-up in `docs/regions/back-end.md`.
+- [x] 3.5 Equality with the prototype: the orchestrator runs `--from-snapshot` of `readings_run/run/odometry_snapshot.bin`
       with that run's settings plus the guard and `capture_loop_closure`. Done when the supported windows and every
       window's offset equal `tools/loop_fine_time.py`'s on that capture (a difference at a limit is named and explained),
       and the replay of the new capture is bit-identical.
-- [ ] 3.6 Cost and checks: the loop closure stage's time with and without the guard on that run, written into the
+      Done 2026-11-25 on the final build 72b75c6 (`fine_time/stall_guard2`, `results_dmapper.md` section 1): the same
+      support and offset in all 37 windows, 22 edge rows with equal classes, 182,880 nodes within 1.0e-9 m, the replay
+      bit for bit. The same on today's Livox 4 (28 windows, 23 edge rows). No difference at a limit appeared.
+- [x] 3.6 Cost and checks: the loop closure stage's time with and without the guard on that run, written into the
       hand-back; `python tools/step_checks.py` in the worktree all hold. The agent states in its hand-back whether a Debug
       test run is advisable (new index and container code); the orchestrator asks the user before any Debug build.
-- [ ] 3.7 Merge: ownership check, the conclusion reviewer on the hand-back, merge (no number changes with the switch off),
+      Done 2026-11-25: the step logs its own time: 8.9 s on the stall case and 7.2 s on today's Livox 4 (one eligible
+      run each) in a loop closure stage of about 600 s. Step checks: everything identical except 44_short's parameters
+      TOML (the two new keys; manifests: task 4.4). A Debug test run is advised by the agent for the new index and
+      label vectors; **not started, the user's decision**.
+- [x] 3.7 Merge: ownership check, the conclusion reviewer on the hand-back, merge (no number changes with the switch off),
       `tools/step_checks.py` on the main tree, master-reviewer on the push.
-- [ ] 3.8 Docs outside the guide: `docs/regions/back-end.md` (the hand-back's entry, the known limits of the design),
+      Done 2026-11-25, locally, nothing pushed: 19e1c45 (the step) and 72b75c6 (review fixes). The master reviewer read
+      both merges before any push: no result change with the switch off, no blocking defect, six minor findings, all
+      fixed in 72b75c6. The push itself, and the master reviewer on it, wait for the user.
+- [x] 3.8 Docs outside the guide: `docs/regions/back-end.md` (the hand-back's entry, the known limits of the design),
       `CLAUDE.md` (Run: the fine-time step and the capture format), `tools/README.md`. Done when the three files describe
       the step as built. (The guide is task 5.1.)
 
 ## 4. Judged on the recordings
 
-- [ ] 4.1 The stall case from dMapper (the result of 3.5): the list of design D12.1 beside `readings_run/full_both_fixes`,
+- [x] 4.1 The stall case from dMapper (the result of 3.5): the list of design D12.1 beside `readings_run/full_both_fixes`,
       the edge table, verify-map, the before / after images of the stair on every storey. Done when
       `fine_time/results_dmapper.md` holds the table and the image paths.
 - [ ] 4.2 Today's Livox 4: one full run with `settings/livox-vertical.toml`, `save_odometry_snapshot` and

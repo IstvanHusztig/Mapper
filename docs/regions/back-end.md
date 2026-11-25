@@ -64,6 +64,9 @@ orchestrator's):
   `optimize_loop_pose_graph`, `loop_edge_residuals`, `loop_pose_graph_cost`, `loop_edge_to_drop`, `loop_edge_drop_ratio`,
   `loop_pose_graph_plausible`); file-local: voxel helpers, `crop_to_shared_footprint`, `information_ratio`,
   `coarse_search` (0.5 m then 0.2 m voxel overlap search), `ndt_refine` (0.5 / 0.25 m NDT, 15 iterations each).
+- `src/application/loop_fine_time.h` / `.cpp`: the fine-time placement (rule constants, patches, score curves, profile,
+  edge classes, `loop_fine_time_step`, the scores port with its point and capture sources); tests
+  `tests/loop_fine_time_test.cpp` (`-tc="loop fine time*"`).
 - `src/application/consistency.h` / `.cpp`: `ConsistencyData` (points with nodes, chunks of 1e6 points, kept Cholesky
   analysis), `Consistency`, file-local `add_gyro_rotation_terms` (`consistency_gyro_rotation_term`, off in both
   shipped settings files).
@@ -87,6 +90,7 @@ orchestrator's):
   - `-tc="odometry snapshot*"`: round trip bit for bit, refused for other odometry settings, damaged file, restore checks,
     post-processing after a restore equal to after the odometry.
 - **Loop closure replay** (the way to test a loop rule): a CLI run (also `--from-snapshot`) with `capture_loop_closure = true` writes `loop_closure_capture.bin`; `dMapper --replay-loop-closure <capture> <params.toml> <output_folder>` runs `close_loops` on the recorded registrations (edge choice, pose graph, pruning, node correction) and writes the trajectory and its loop log, in seconds. With the capture's own settings every node must equal the run's bit for bit (exit 1 otherwise). The capture holds no points, so it only chooses among recorded tries: settings that ask for another try are named as missing and write nothing; odometry settings, `loop_closure_segment_windows`, `loop_closure_max_correction_m` and `loop_closure_cross_floor_search_m` are refused. Measure the replayed trajectory with `wall_pairs.py measure` and `trajectory_seams.py`; a rule that looks better is confirmed by a full run. `capture_loop_closure_max_tries` bounds the tries kept. Files: `loop_closure_capture.h`, `loop_closure_replay.{h,cpp}`, `loop_closure_capture_file.{h,cpp}`, `loop_closure_replay_cli.cpp`.
+- **The fine-time step in a replay**: a capture of a run with `loop_closure_fine_time_placement` (format 4) holds the step's score curves; a replay with the capture's settings must give every node bit for bit and writes `loop_fine_time.csv` and the JSON's `fine_time` (runs, edge table). A replay whose pose graph result or eligible runs differ is refused (exit 1): the curves need the points, so rule variants are screened with `tools/loop_fine_time.py` (it reads the recording's `cache`) and confirmed by a `--from-snapshot` run. The JSON's `edge_time_support` (every kept edge with a source window in a weak run, read at the times of its information) is written with the step on or off, from a format 3 capture on.
 - **Replays do not reach this region**: `dMapper --replay` runs only the window loop. `python tools/step_checks.py` still
   covers it through the unit tests and 44_short against its manifest, but 44_short (30 s) hardly exercises loop
   closure; only the full 44 does (`tools/README.md`).
@@ -120,7 +124,9 @@ orchestrator's):
   designed, not implemented, deferred to the cave retune.
 - **C25** (partly fixed): each loop edge is pinned at its segment's first node (`Segment::pose`, `:855`) and the
   correction is interpolated by time between the segments' first nodes (`:1151-1163`); the last segment takes its own
-  correction unchanged. Segments of 6 windows (2.4 s) since 2026-10-15.
+  correction unchanged. Segments of 6 windows (2.4 s) since 2026-10-15. Since 2026-11-25 the pinning is measured (the
+  time-support residual of every kept edge in a weak run, in the replay's JSON), and the optional fine-time step moves the
+  nodes of a blind stretch where scans of another visit support it; the pinning itself is unchanged.
 - **C35** (reported): each consistency chunk of `ConsistencyData::chunk_points` = 1e6 points gets its own NDT map
   (`compute_chunk`, `consistency.cpp:286-370`), so visits in different chunks never share a term; a chunk of ≤ 10,000
   points (the trailing one) gets no NDT term (`:290`).
@@ -140,6 +146,35 @@ From `python tools/function_sizes.py src --min 80` (2026-11-18):
 
 ## Experiments
 
+- **2026-11-25, fine-time placement of a blind stretch, built, off by default** (`loop_closure_fine_time_placement`,
+  `loop_closure_fine_time_min_sigma_m` 1.0; needs the readings rule; change `loop-closure-fine-time-guard`; frozen rule
+  `experiments/consistency/livox4_lever/fine_time/RULE.md`, prototype `tools/loop_fine_time.py`). A last step of
+  `close_loops` (`src/application/loop_fine_time.{h,cpp}`): for each weak run with sigma >= 1 m, the scans of its windows and
+  of 6 windows on either side are compared with surfaces across the run's axis that windows at least 12 s away saw, a
+  profile of offsets along the axis is fitted (zero at both ends, dynamic programming over a 0.10 m grid), every kept edge
+  touching the stretch is read at the times of its own information and classed (agrees / unconfirmed / contradicted), and
+  the profile is applied if the held-out points improve and no edge is contradicted. Positions along the axis only.
+  - Synthetic corridor (the prototype's): offsets of all 27 windows and the held-out means equal the Python bit for bit;
+    error 1.2 -> 0.1 m; nothing outside the support moves; a replay is bit for bit; a stale graph or other eligible runs are
+    refused (`fine_time_curves_unavailable`).
+  - Livox 4 stall case (before `imu_edges_follow_state`; `fine_time/stall_guard`, `results_dmapper.md`): one eligible run
+    (windows 482-506, sigma 5.04 m), applied; supported 11 of 25 run windows; largest offset 1.8 m; 14 unsupported windows
+    move 1.0-1.7 m; held-out 0.386 -> 0.275 m; equal to the prototype in every window's offset, the 22 edge rows and every
+    node within 1e-9 m; replay of the format 4 capture bit for bit. Ghost line bands -5..-4, -3..-2, -2..-1, 0..+1 m from
+    2,437 / 7,644 / 7,251 / 2,149 returns to below 50 each; the 54 cm double, facade, Wohnen, reference contacts and far
+    faces equal. Mouth edges 71 / 74 -> 84 at their time support 0.13 m (limits 0.22 / 0.21 m); 75 -> 82 +1.31 -> -0.34 m;
+    71 -> 81 -0.90 -> -1.99 m (unconfirmed).
+  - With the switch off every result file is identical (step checks; the parameters TOML gains the two keys).
+  - One stall on one recording, the rule designed knowing it. Evidence `experiments/consistency/livox4_lever/fine_time/`,
+    agent folders `experiments/regions/back-end/2026-11-25-fine-time-step/`, `.../2026-11-25-edge-time-support/`.
+- **2026-11-25, registrations keep the time of their information, no result changes** (group 2 of the same change).
+  `LoopClosureTry::window_information`: the translation block of the refinement's normal matrix per source window, from the
+  iteration whose information is kept; capture format 3. `loop_edge_time_support`: an edge's residual along a weak run's
+  axis weighted over its source windows by that information; in the replay's JSON (`edge_time_support`) for every kept
+  edge with a source window in a weak run. Livox 4 stall case: the blocks sum to the try's block within 1.6e-14; the graph
+  meets 75 -> 82 within 0.03 m at the first pose and misses it by 1.31 m where its information is, 71 -> 81 0.03 against
+  0.90 m; the 14 edges in the smaller weak runs within 0.05 m of their first-pose residual. Today's Livox 4 (prototype):
+  74 -> 83 0.18 m at the first pose, 0.36 m at its time support (limit 0.25 m).
 - **2026-11-24, stop-window readings** (master-reviewer finding on 30524b4): the rule reads a window only if its ratio,
   duration, placed move and weak axis are all finite; the stop window of a run the odometry ended early can carry a NaN
   placed move from a discarded solve, and is now treated like a window without readings. Full, finite readings unchanged
@@ -232,6 +267,24 @@ From `python tools/function_sizes.py src --min 80` (2026-11-18):
   of design D3 if it matters); each test solve starts from the odometry poses, the prototype's from the full solution
   (equal to 0.01 in T on Livox 4); the test is conservative while the steps keep 0.1 m (median T 0.3 where the model
   expects 5.3).
+- Fine-time placement (2026-11-25), limits and follow-ups:
+  - Where no scan speaks, the pose graph's placement inside a blind stretch stays, shifted with its supported neighbours:
+    the non-monotonic corrections (the "zigzag": on the stall case the corrected position rises to +3.25 m and falls back
+    to +1.0 m in windows 482-492) are not repaired. They come from edges read at their source segment's first pose;
+    reading every edge at its time support inside the pose graph, or discounting an edge's information along the axis
+    when its source scans are blind, is a change of its own, to be decided on the time-support table of several recordings.
+  - A window with few patches can point metres away on its own and windows without any follow their neighbours; window
+    481 of the stall case gives -1.0 m with all points and -0.5 m with every third.
+  - Two eligible runs whose supports overlap are both left (a bend in a blind passage); a profile across two axes is not
+    built. The target side of an edge has no per-window information: a later visit registered onto a moved part of a run
+    stops the run. The per-window information shares `segment_points`' first-in-voxel bias (an edge's time support can lie
+    later than the shares say).
+  - The reference shares the map's errors and the held-out patches are not independent of the fit; repeating structure
+    can give a wrong but smooth profile. A run's axis is the mean of weak axes up to 30 degrees apart.
+  - Not built: a truth case on the synthetic route R2 (the prototype's corridor stands in). A Debug test run of the loop
+    closure and fine-time cases is advised by the agent (new index and label vectors) and waits for the user's OK.
+  - The edge table in the log and the JSON is the last round's of the apply rule (`stopped_run` marks an edge that stopped
+    a run).
 - (Settled 2026-11-18: `run_consistency` is this region's, by a function entry in `owners.toml`, although it lies in
   the front-end's file; `--from-snapshot` runs are the orchestrator's until this region's first job.)
 

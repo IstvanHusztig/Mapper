@@ -191,20 +191,25 @@ stretch at the times of its own information, and applies the profile if the held
 
 ```
 python tools/loop_fine_time.py <capture> <trajectory folder> <replay folder or edge list> <recording>/cache <out folder>
-                               [--coupling C] [--min-matched N] [--min-sigma M]
+                               [--coupling C] [--min-matched N] [--min-sigma M] [--rebuild-information]
 ```
 
-- Inputs: a format 2 capture (it carries the readings), the trajectory after dMapper's loop closure (a result or replay folder), the kept
-  edges as `loop_graph.py` takes them, and the recording's `cache` folder (`intermediate_points_<w>.cache`; any run or `--from-snapshot`
-  run on the recording writes it, a GUI run clears it).
+- Inputs: a capture of format 2 or later (it carries the readings), the trajectory after dMapper's loop closure **without** the fine-time
+  step (a result or replay folder; for a capture of a run with the step on, a replay with `loop_closure_fine_time_placement = false`),
+  the kept edges as `loop_graph.py` takes them, and the recording's `cache` folder (`intermediate_points_<w>.cache`; any run or
+  `--from-snapshot` run on the recording writes it, a GUI run clears it; the points do not depend on the odometry's settings).
 - Outputs: `trajectory/` (read by `wall_pairs.py measure` and `cloud_from_trajectory.py`), `windows.csv` (each window of a stretch: offset,
   supported or not, patches, scores before and after, the offset its curve prefers alone), `edges.csv` (per edge: residual at the first
   pose, time-support residual before and after, limit, informed share, class, share of the information per source window),
   `summary.json` (each eligible run: applied, unchanged, not timed or not applied, with the cause).
-- The three options are readings beside the rule, not settings to tune.
-- Limits: no registration, no pose graph, no pruning (the trajectory and the kept edges are taken as given). The edges' information per
-  source window is rebuilt from the points at the registered pose; dMapper's own will be its last refinement pass's. The reference shares
-  the map's errors: the result is agreement between visits, not accuracy.
+- The first three options are readings beside the rule, not settings to tune.
+- The edges' information per source window is dMapper's own when the capture carries it (format 3 on: its last refinement pass's);
+  otherwise, or with `--rebuild-information`, it is rebuilt from the points at the registered pose (on a real capture the two give the
+  same time-support residuals within 0.007 m).
+- Checked against dMapper's step on a real capture (37 windows, 22 edge rows, 182,880 nodes): the same offset in every window, the same
+  classes, node positions within 1e-9 m. About 30 s.
+- Limits: no registration, no pose graph, no pruning (the trajectory and the kept edges are taken as given). The reference shares the
+  map's errors: the result is agreement between visits, not accuracy.
 
 Tests: `tests/test_loop_fine_time.py` (the pieces on constructed numbers; a synthetic corridor walked out and back: an error inside the
 blind stretch is taken out to one grid step, a right trajectory stays, a corridor without anything across it is not timed, equal door
