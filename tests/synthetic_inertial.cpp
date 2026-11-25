@@ -322,8 +322,8 @@ ImuRecording generate_imu(const Motion &motion, const ImuOptions &options)
         Eigen::Vector3d b = r.gyro_bias_rad_s.back(), o = r.accel_offset_mps2.back();
         if (w > 0)
         {
-            b += noise.gyro_bias_rw_deg_s_sqrt_s * deg * std::sqrt(window_s) * bias_rng.normal_vector(3);
-            o += noise.accel_offset_rw_mps2_sqrt_s * std::sqrt(window_s) * offset_rng.normal_vector(3);
+            b += noise.gyro_bias_rw_deg_s_sqrt_s * deg * std::sqrt(window_s) * bias_rng.normal_vector(3) * options.walk_scale;
+            o += noise.accel_offset_rw_mps2_sqrt_s * std::sqrt(window_s) * offset_rng.normal_vector(3) * options.walk_scale;
         }
         r.gyro_bias_rad_s.push_back(b);
         r.accel_offset_mps2.push_back(o);
@@ -344,8 +344,8 @@ ImuRecording generate_imu(const Motion &motion, const ImuOptions &options)
         Eigen::Vector3d acc = motion.mean_specific_force(t, t + dt) + r.accel_offset_mps2[bi];
         for (int a = 0; a < 3; a++)
         {
-            gyro[a] += noise.gyro_arw_deg_sqrt_s[a] * deg / std::sqrt(step) * gyro_rng.normal();
-            acc[a] += noise.accel_density_mps2_sqrt_hz / std::sqrt(dt) * acc_rng.normal();
+            gyro[a] += noise.gyro_arw_deg_sqrt_s[a] * deg / std::sqrt(step) * gyro_rng.normal() * options.white_noise_scale;
+            acc[a] += noise.accel_density_mps2_sqrt_hz / std::sqrt(dt) * acc_rng.normal() * options.white_noise_scale;
         }
         r.gyro_rad_s[k] = gyro;
         r.acc_g[k] = acc / standard_gravity;

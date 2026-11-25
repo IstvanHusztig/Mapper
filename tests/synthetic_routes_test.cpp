@@ -4,6 +4,8 @@
 #include "ndt_map.h"
 #include "synthetic_routes.h"
 
+#include <stdexcept>
+
 #include <algorithm>
 #include <cmath>
 #include <map>
@@ -176,6 +178,17 @@ TEST_CASE("synthetic routes: R2, out and back through a corridor, is cut as gene
 TEST_CASE("synthetic routes: R3, rest and walk and rest, is cut as generated")
 {
     check_cut(r3());
+}
+
+TEST_CASE("synthetic routes: R2 refuses a sensor range other than 6 m")
+{
+    // the refusal comes before any ray is cast: another range is rejected at once, with the reason in the message
+    for (const double range : {5.9, 8.0, 100.0})
+    {
+        SensorProfile s;
+        s.max_range_m = range;
+        CHECK_THROWS_WITH_AS(generate_recording(route_r2(), s), doctest::Contains("route R2 needs SensorProfile::max_range_m = 6"), std::invalid_argument);
+    }
 }
 
 TEST_CASE("synthetic routes: R2 has a blind middle and structure at both ends")

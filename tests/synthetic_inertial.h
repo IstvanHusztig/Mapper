@@ -141,6 +141,10 @@ struct ImuOptions
     int window_origin_node = 0;           // the first node of window 0; before it the bias is the initial one
     std::uint64_t seed = 1;
     ImuNoise noise;
+    // Test-only: the noise actually drawn is the stated one times these (1: as stated, nothing changes). A check that
+    // reads `noise` as the claim is thereby run against a recording that does not keep it (planted-noise tests).
+    double white_noise_scale = 1.0; // the gyro and accelerometer white noise
+    double walk_scale = 1.0;        // the steps of the gyro bias and the acceleration offset between windows
 };
 
 struct Truth
