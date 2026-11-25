@@ -267,6 +267,7 @@ class Data:
         if not np.array_equal(tr.ns, np.rint(c.node_t * 1e9).astype(np.int64)):
             raise ValueError("the trajectory's nodes are not the capture's")
         self.rule = rule
+        self.rebuild_information = False  # True: rule 7's H_w from the points even when the capture carries dMapper's
         self.cache = Path(cache) if cache is not None else None
         self.P0 = c.node_pose
         self.P1 = np.tile(np.eye(4), (len(tr.pos), 1, 1))
@@ -438,11 +439,15 @@ def crop_to_shared_footprint(points, other, cell):
 
 
 def window_information(data, edge):
-    """Rule 7: H_w (per source window of segment j, 3 x 3) of a kept edge, with the windows it belongs to."""
+    """Rule 7: H_w (per source window of segment j, 3 x 3) of a kept edge, with the windows it belongs to. A format 3
+    capture carries dMapper's own (its last refinement pass's); otherwise they are rebuilt here at the registered pose."""
     rule = data.rule
     i, j, cross = edge
     t = data.cap.tries[edge]
     C = t["C"]
+    s = data.cap.segments[j]
+    if not data.rebuild_information and t.get("Hw") is not None and len(t["Hw"]) == s["last"] - s["first"] + 1:
+        return np.arange(s["first"], s["last"] + 1), np.asarray(t["Hw"], float)
     sx, _, _, sw = data.segment(j)
     tx = np.concatenate([data.segment(k)[0] for k in range(max(0, i - 1), min(j - 1, i + 1) + 1)])
     if cross:
@@ -713,6 +718,8 @@ def main(argv=None):
     p.add_argument("--coupling", type=float, help="a reading: the profile's coupling (rule: 0.10)")
     p.add_argument("--min-matched", type=int, help="a reading: matched training patches a supported window needs (rule: 8)")
     p.add_argument("--min-sigma", type=float, help="a reading: the sigma an eligible run needs (rule: 1.0 m)")
+    p.add_argument("--rebuild-information", action="store_true",
+                   help="the edges' information per window from the points even when the capture (format 3) carries dMapper's")
     a = p.parse_args(argv)
     rule = Rule()
     if a.coupling is not None:
@@ -722,6 +729,7 @@ def main(argv=None):
     cap = lg.read_capture(a.capture)
     rule = replace(rule, flank_windows=int(cap.setting("loop_closure_segment_windows", rule.flank_windows)))
     data = Data(cap, a.trajectory, a.cache, rule)
+    data.rebuild_information = a.rebuild_information
     runs, table, P = run_rule(data, lg.load_edges(a.edges), rule, a.min_sigma)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)

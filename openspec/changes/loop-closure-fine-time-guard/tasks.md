@@ -40,18 +40,26 @@ verdict.
 
 ## 2. C++: registrations keep the time of their information (no result changes)
 
-- [ ] 2.1 `segment_points` keeps each point's window and node; `ndt_refine` also sums the translation block of the normal
+- [x] 2.1 `segment_points` keeps each point's window and node; `ndt_refine` also sums the translation block of the normal
       matrix per source window into the try (`LoopClosureTry`). Done when a doctest shows the per-window blocks sum to the
       translation block of `information` and `-tc="loop closure*"` passes with every registration unchanged.
-- [ ] 2.2 Loop closure capture format 3 with the per-window information; formats 1 and 2 still load. `tools/loop_graph.py`
+- [x] 2.2 Loop closure capture format 3 with the per-window information; formats 1 and 2 still load. `tools/loop_graph.py`
       `read_capture` reads format 3. Done when the round-trip doctest, a doctest loading a format 2 file and
       `tests/test_loop_graph.py` pass.
-- [ ] 2.3 The time-support residual as a function of its own (design D6) with a doctest on a constructed edge (information
+- [x] 2.3 The time-support residual as a function of its own (design D6) with a doctest on a constructed edge (information
       late in the segment: first-pose residual 1 m, time-support residual near 0), and in the replay's JSON for every kept
       edge with a source window in a weak run. Done when the doctest passes and a replay of a format 3 capture lists it.
-- [ ] 2.4 `python tools/step_checks.py` in the worktree: all hold (the capture's new content changes no result). Hand-back
+- [x] 2.4 `python tools/step_checks.py` in the worktree: all hold (the capture's new content changes no result). Hand-back
       with the entry for `docs/regions/back-end.md`; the orchestrator checks ownership
       (`tools/region_owners.py --diff`), merges, and runs the step checks on the main tree.
+      Done 2026-11-25: branch `region/back-end/2026-11-25-edge-time-support` (6dc3d9c; 8 registrations bit-identical with
+      the base, blocks sum to the try's block within 2.7e-15; step checks all hold; six files outside the region, all
+      granted), merged as 2d9bdf4, step checks on the main tree all hold. On the real stall case (`fine_time/stall_fmt3`,
+      a `--from-snapshot` run of the merged build): the replay of the format 3 capture gives 182,880 of 182,880 nodes
+      bit for bit; the blocks of the 81 kept edges sum to their try's block within 1.6e-14; dMapper's time-support
+      residuals equal the prototype's with the capture's blocks within 1.5e-9 m and the prototype's own rebuilt blocks
+      within 0.007 m (`fine_time/stall_fmt3_time_support.log`). The agent advises a Debug test run of the loop closure
+      cases (new index and label vectors); not started, the user's to decide.
 
 ## 3. C++: the fine-time step
 
