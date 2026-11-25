@@ -2,8 +2,8 @@
 # Not seen: limits computed while a test runs from data, assertions the flow never reaches (a branch not taken,
 # a loop that runs zero times), limits in src/ (the verdict limits, the settings hash), the meaning of a test,
 # constants without a numeric literal in their initialiser (reference bindings), constructor-style declarations.
-# totals: 292 cases (7 should_fail, 25 skip), 1933 assertions, 168 python tests
-# assertions by macro: CHECK 1489, CHECK_FALSE 104, CHECK_MESSAGE 8, CHECK_NOTHROW 1, REQUIRE 325, REQUIRE_FALSE 3, REQUIRE_MESSAGE 2, WARN_MESSAGE 1; 68 of them in asserting helpers; 101 calls of helpers, 996 values; 477 python assertions
+# totals: 294 cases (7 should_fail, 25 skip), 1947 assertions, 168 python tests
+# assertions by macro: CHECK 1497, CHECK_FALSE 105, CHECK_MESSAGE 8, CHECK_NOTHROW 1, REQUIRE 328, REQUIRE_FALSE 5, REQUIRE_MESSAGE 2, WARN_MESSAGE 1; 68 of them in asserting helpers; 101 calls of helpers, 997 values; 477 python assertions
 
 [file] tests/accelerometer_noise_test.cpp
   value: NoiseWindows :: double D = 0.0
@@ -1670,6 +1670,10 @@
   assert: CHECK_FALSE(read_odometry_snapshot(file.path, grid, read, why))
   assert: CHECK_FALSE(read_odometry_snapshot(file.path, holdout, read, why))
   assert: CHECK(read_odometry_snapshot(file.path, post, read, why))
+
+[case] tests/odometry_snapshot_test.cpp :: odometry snapshot: the settings hash of the defaults and of the shipped settings files is pinned
+  markers: -
+  assert: REQUIRE(TomlIO().LoadParametersFromTomlFile((std::filesystem::path(LO_REPO_DIR) / "settings" / file).string(), params, paths, gui))
 
 [case] tests/odometry_snapshot_test.cpp :: odometry snapshot: a file that isn't a snapshot is refused
   markers: -
@@ -3999,6 +4003,14 @@
   assert: CHECK_FALSE(loads("[imu_translation]\nimu_accel_window_sigma_mps2 = 0.05\n"))
   assert: CHECK_FALSE(loads("[loop_closure]\nloop_closure_kernel_scale = 0.5\n"))
   assert: CHECK_FALSE(loads("[robust_lidar_odometry]\nno_such_setting = 1.0\n"))
+  assert: CHECK(check("[motion_model_uncertainty]\nturn_rate_threshold_deg_s = 30.0\n", ignored).empty())
+  assert: REQUIRE(ignored.size() == 1)
+  assert: CHECK(ignored[0] == "'turn_rate_threshold_deg_s' in [motion_model_uncertainty]: setting removed from dMapper, ignored")
+  assert: CHECK(check("[motion_model_uncertainty]\nturn_rate_threshold_deg_s = 30\n", ignored).empty())
+  assert: REQUIRE(refused.size() == 1)
+  assert: CHECK(refused[0] == "'turn_rate_threshold_deg_s' in [motion_model_uncertainty]: setting removed from dMapper; only 30 (the " "behaviour that remains) is accepted")
+  assert: CHECK(loads("[motion_model_uncertainty]\nturn_rate_threshold_deg_s = 30.0\n"))
+  assert: CHECK_FALSE(loads("[motion_model_uncertainty]\nturn_rate_threshold_deg_s = 45.0\n"))
 
 [file] tests/truth_statistics.cpp
   value: regularised_gamma_p() :: const double eps = 1e-16
@@ -5051,3 +5063,12 @@
   assert: CHECK(flagged.lines[0].find("normalised move start velocity NOT MEASURED (last step above 1 % of prior sigma), start velocity and offset " "NOT MEASURED (absent), gyro bias NOT MEASURED (absent)") != std::string::npos)
   assert: REQUIRE(measured.lines.size() == 1)
   assert: CHECK(measured.lines[0].find("normalised move start velocity 0.500,") != std::string::npos)
+
+[case] tests/window_verdict_test.cpp :: window verdict: the limits line comes first and reads back exactly, for the defaults and for other limits
+  markers: -
+  value: const RunVerdict r = summarize_run({judge_window(evidence(1, 0.0))}, true)
+  assert: REQUIRE_FALSE(defaults.lines.empty())
+  assert: CHECK(defaults.lines[0] == "window verdict limits: bend 3 deg, severe bend 10 deg, speed 2.5 m/s, gyro bias 0.5 deg/s, bent share 0.01, " "chi2 median 5, chi2 p95 20, weak ratio 0.45")
+  assert: CHECK(defaults.lines[1].rfind("window verdict summary: ", 0) == 0)
+  assert: REQUIRE_FALSE(changed.lines.empty())
+  assert: CHECK(changed.lines[0] == "window verdict limits: bend 2.75 deg, severe bend 12 deg, speed 1.8 m/s, gyro bias 0.125 deg/s, bent share 0.015, " "chi2 median 4.5, chi2 p95 30, weak ratio 0.3")

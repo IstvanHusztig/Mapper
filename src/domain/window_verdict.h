@@ -198,7 +198,7 @@ RunVerdict summarize_run(const std::vector<WindowVerdict> &windows, bool complet
 
 double percentile_linear(std::vector<double> values, double p);
 
-// the summary's log lines ("window verdict summary: ...")
+// the limits it was judged with ("window verdict limits: ...", first), then the summary's log lines ("window verdict summary: ...")
 void log_run_verdict(const RunVerdict &run, const VerdictLimits &limits, Logger &logger);
 
 // the per-window line ("window verdict <n>: ..."), for a window with a flag

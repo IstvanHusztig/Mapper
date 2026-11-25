@@ -103,9 +103,12 @@ and goes to the user.
 
 ## 4. One source for the verdict limits
 
-- [ ] 4.1 The limits line in `log_run_verdict` (`src/domain/window_verdict.cpp`, the solver's file), first of its
+- [x] 4.1 The limits line in `log_run_verdict` (`src/domain/window_verdict.cpp`, the solver's file), first of its
       block, in every run, replay and cancelled run; a case in `tests/window_verdict_test.cpp` on the line's text. Done
       when the case passes and the step checks on the branch are identical everywhere (a log line changes no result).
+      (2026-11-25: merged; the line is first of the block in run, cancelled run and replay; quoted from a replay log:
+      `window verdict limits: bend 3 deg, severe bend 10 deg, speed 2.5 m/s, gyro bias 0.5 deg/s, bent share 0.01, chi2 median 5, chi2 p95 20, weak ratio 0.45`.
+      Step checks ALL HOLD; tools parse only `window verdict summary:` lines.)
 - [ ] 4.2 `tools/run_health.py` takes its limits from the line (D8's precedence), prints where they came from, and uses
       them where 3, 10 and 0.45 are literals today. Done when tool tests show the three sources (log, defaults, command
       line) and a log with other limits in the line is judged by those.
@@ -120,13 +123,16 @@ and goes to the user.
 
 ## 5. The settings hash and the retired threshold
 
-- [ ] 5.1 The three pins (`tests/odometry_snapshot_test.cpp`, the back-end's file): the literals computed on master
+- [x] 5.1 The three pins (`tests/odometry_snapshot_test.cpp`, the back-end's file): the literals computed on master
       before any other task of this group; the failure message prints the new value and what a change means. Done when
       the case passes on master, and fails with the message when a setting is added to `TomlIO::POINTERS` without the
       `added_later` entry (tried once in the worktree, reverted, noted here).
-- [ ] 5.2 `turn_rate_threshold_deg_s` retired at 30.0 (`src/infrastructure/toml_io.cpp`), with a line in
+      (2026-11-25: merged; literals defaults 0x1ad4c1d5688ff94a, l2-vertical 0xf86ccbfcd39e2f17, livox-vertical 0x6342caaee7fafd53;
+      a dummy setting without an added_later entry made all three fail with the message, reverted.)
+- [x] 5.2 `turn_rate_threshold_deg_s` retired at 30.0 (`src/infrastructure/toml_io.cpp`), with a line in
       `tests/toml_golden_test.cpp` (30 loads, 45 is refused and the message names 30). Done when the case passes and the
       step checks on the branch are identical everywhere.
+      (2026-11-25: merged; the refusal message prints 30 (shortest form); step checks ALL HOLD.)
 - [ ] 5.3 Docs: `docs/regions/back-end.md` (the pins: when a literal may move), the guide's settings text on retired
       settings. Done when `python tools/build_docs_index.py --check` holds.
 
