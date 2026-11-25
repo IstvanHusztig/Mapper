@@ -164,7 +164,11 @@ namespace
         {"rgd_sf_sigma_ka_deg", std::nullopt},
         // 2026-11-25: the turn gyro weighting (off in every settings file, never measured to help)
         {"rotation_sigma_inflation_k_turn", 0.0},
-        {"turn_rate_threshold_deg_s", std::nullopt}};
+        {"turn_rate_threshold_deg_s", std::nullopt},
+        // 2026-11-25: layer 2 of honest-inertial-carry, the joint velocity-offset carry (tested worse on the Livox 4 stall
+        // replays, the user's decision), and the window sigma meant for it (never read by the code)
+        {"imu_carry_joint_covariance", 0.0},
+        {"imu_accel_window_sigma_mps2", 0.0}};
     // sections whose every key was retired
     const std::set<std::string> RETIRED_SECTIONS = {"robust_lidar_odometry"};
 

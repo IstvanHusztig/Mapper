@@ -1499,11 +1499,11 @@ TEST_CASE("window term table: in a corridor the cells' in-plane information carr
         }
 }
 
-// The joint covariance of end velocity and acceleration offset (honest-inertial-carry, D2): take_covariance keeps the end
-// velocity's, the offset's and their cross block from the columns of the extra unknowns; a step taken back restores them.
+// The covariances of end velocity and acceleration offset: take_covariance keeps the end velocity's and the offset's from
+// the columns of the extra unknowns; a step taken back restores them.
 namespace
 {
-    struct JointCovarianceFixture
+    struct CovarianceFixture
     {
         Options o;
         Maps maps;
@@ -1515,7 +1515,7 @@ namespace
         NullLogger logger;
         ScanToMapWorkspace workspace;
 
-        JointCovarianceFixture()
+        CovarianceFixture()
         {
             OdometryConfig c = test_config();
             c.use_gyro_bias_estimation = true; // the bias columns come before the offset's
@@ -1536,9 +1536,9 @@ namespace
     };
 }
 
-TEST_CASE("scan-to-map: the joint covariance of end velocity and offset is the dense inverse's block")
+TEST_CASE("scan-to-map: the covariances of end velocity and offset are the dense inverse's blocks")
 {
-    JointCovarianceFixture f;
+    CovarianceFixture f;
     const WindowNoiseModel noise = build_window_noise_model(f.w, f.o.scan_to_map, f.o.motion_model, f.o.rotation, f.o.translation_imu, f.o.velocity_prior);
     const WindowUnknowns &u = noise.unknowns;
     REQUIRE(u.acc_term);
@@ -1553,29 +1553,18 @@ TEST_CASE("scan-to-map: the joint covariance of end velocity and offset is the d
 
     const Eigen::Matrix3d v_end = inverse.block<3, 3>(u.ie, u.ie);
     const Eigen::Matrix3d offset = inverse.block<3, 3>(u.io, u.io);
-    const Eigen::Matrix3d cross = inverse.block<3, 3>(u.ie, u.io);
-    const double scale = std::max({v_end.cwiseAbs().maxCoeff(), offset.cwiseAbs().maxCoeff(), cross.cwiseAbs().maxCoeff()});
-    MESSAGE("joint block: v_end ", v_end.diagonal().transpose(), ", offset ", offset.diagonal().transpose(), ", cross ", cross.row(0));
-    REQUIRE(cross.cwiseAbs().maxCoeff() > 1e-6 * scale); // the cross block is not empty, so the check below means something
+    const double scale = std::max(v_end.cwiseAbs().maxCoeff(), offset.cwiseAbs().maxCoeff());
+    MESSAGE("v_end ", v_end.diagonal().transpose(), ", offset ", offset.diagonal().transpose());
     CHECK((f.w.velocity.end_covariance - v_end).cwiseAbs().maxCoeff() <= 1e-6 * scale);
     CHECK((f.acc_offset_cov - offset).cwiseAbs().maxCoeff() <= 1e-6 * scale);
-    CHECK((f.w.velocity.end_offset_covariance - cross).cwiseAbs().maxCoeff() <= 1e-6 * scale);
-    // and the offset's with the end velocity is its transpose
-    CHECK((inverse.block<3, 3>(u.io, u.ie).transpose() - cross).cwiseAbs().maxCoeff() <= 1e-6 * scale);
 
-    // the honesty readings' blocks: the start velocity's, its cross block with the offset, and the bias's
+    // the honesty readings' blocks: the start velocity's and the bias's
     const HonestyInputs h = problem.honesty_inputs();
     REQUIRE(h.covariance_valid);
     const Eigen::Matrix3d v_start = inverse.block<3, 3>(u.iv, u.iv);
-    const Eigen::Matrix3d start_cross = inverse.block<3, 3>(u.iv, u.io);
     const Eigen::Matrix3d bias = inverse.block<3, 3>(u.ib, u.ib);
-    const double start_scale = std::max({v_start.cwiseAbs().maxCoeff(), offset.cwiseAbs().maxCoeff(), start_cross.cwiseAbs().maxCoeff()});
-    MESSAGE("start block: v_start ", v_start.diagonal().transpose(), ", cross ", start_cross.row(0));
-    REQUIRE(start_cross.cwiseAbs().maxCoeff() > 1e-6 * start_scale);
-    CHECK((h.start_posterior.topLeftCorner<3, 3>() - v_start).cwiseAbs().maxCoeff() <= 1e-6 * start_scale);
-    CHECK((h.start_posterior.topRightCorner<3, 3>() - start_cross).cwiseAbs().maxCoeff() <= 1e-6 * start_scale);
-    CHECK((h.start_posterior.bottomLeftCorner<3, 3>() - start_cross.transpose()).cwiseAbs().maxCoeff() <= 1e-6 * start_scale);
-    CHECK((h.start_posterior.bottomRightCorner<3, 3>() - offset).cwiseAbs().maxCoeff() <= 1e-6 * start_scale);
+    MESSAGE("v_start ", v_start.diagonal().transpose());
+    CHECK((h.start_velocity_posterior - v_start).cwiseAbs().maxCoeff() <= 1e-6 * v_start.cwiseAbs().maxCoeff());
     CHECK((h.bias_posterior - bias).cwiseAbs().maxCoeff() <= 1e-6 * bias.cwiseAbs().maxCoeff());
     // no step since the covariance was taken
     CHECK(h.start_velocity_step == Eigen::Vector3d::Zero());
@@ -1584,10 +1573,10 @@ TEST_CASE("scan-to-map: the joint covariance of end velocity and offset is the d
 
 // The honesty readings (consistency-harness, design D10) on the window problem: the iterations as the run does them with
 // the step check off (the covariance of each iteration is taken before its step, so the last step is not zero), with the
-// separate and with the joint prior; a step taken back to a state without a covariance, and a clamped bias.
+// a step taken back to a state without a covariance, and a clamped bias.
 namespace
 {
-    HonestyInputs honesty_after_iterations(JointCovarianceFixture &f, int iterations, const WindowNoiseModel &noise)
+    HonestyInputs honesty_after_iterations(CovarianceFixture &f, int iterations, const WindowNoiseModel &noise)
     {
         WindowProblem problem(f.points, f.w, f.maps.indoor, f.maps.outdoor, f.o.scan_to_map, f.o.motion_model, f.o.rotation, f.o.translation_imu,
                               noise, f.acc_offset, f.acc_offset_cov, f.logger, nullptr, nullptr, f.workspace);
@@ -1601,40 +1590,24 @@ namespace
     }
 }
 
-TEST_CASE("scan-to-map, honesty readings: an informative window with a non-zero last step has a finite reading, separate and joint prior")
+TEST_CASE("scan-to-map, honesty readings: an informative window with a non-zero last step has a finite reading")
 {
-    for (const bool joint : {false, true})
-    {
-        CAPTURE(joint);
-        JointCovarianceFixture f;
-        if (joint)
-        {
-            f.o.translation_imu.joint_covariance = true;
-            f.o.translation_imu.velocity_offset_prior_cov = Eigen::Matrix3d::Identity() * 2e-3;
-        }
-        const WindowNoiseModel noise = build_window_noise_model(f.w, f.o.scan_to_map, f.o.motion_model, f.o.rotation, f.o.translation_imu, f.o.velocity_prior);
-        REQUIRE(noise.joint_prior == joint);
-        const HonestyInputs h = honesty_after_iterations(f, 30, noise);
-        REQUIRE(h.covariance_valid);
-        CHECK(h.start_velocity_step.norm() > 0.0); // the step after the last covariance
-        const HonestyReadings r = honesty_readings(h);
-        MESSAGE("start velocity ", move_text(r.start_velocity), " (reduction ", r.start_velocity.reduction.value_or(-1.0), ", last step ",
-                h.start_velocity_step.cwiseAbs().maxCoeff(), " m/s), joint ", move_text(r.joint), ", gyro bias ", move_text(r.gyro_bias));
-        REQUIRE(r.start_velocity.value);
-        CHECK(std::isfinite(*r.start_velocity.value));
-        if (joint)
-        {
-            REQUIRE(r.joint.value);
-            CHECK(std::isfinite(*r.joint.value));
-        }
-        else
-            CHECK(r.joint.reason == MoveNotMeasured::absent);
-    }
+    CovarianceFixture f;
+    const WindowNoiseModel noise = build_window_noise_model(f.w, f.o.scan_to_map, f.o.motion_model, f.o.rotation, f.o.translation_imu, f.o.velocity_prior);
+    const HonestyInputs h = honesty_after_iterations(f, 30, noise);
+    REQUIRE(h.covariance_valid);
+    CHECK(h.start_velocity_step.norm() > 0.0); // the step after the last covariance
+    const HonestyReadings r = honesty_readings(h);
+    MESSAGE("start velocity ", move_text(r.start_velocity), " (reduction ", r.start_velocity.reduction.value_or(-1.0), ", last step ",
+            h.start_velocity_step.cwiseAbs().maxCoeff(), " m/s), gyro bias ", move_text(r.gyro_bias));
+    REQUIRE(r.start_velocity.value);
+    CHECK(std::isfinite(*r.start_velocity.value));
+    CHECK(r.joint.reason == MoveNotMeasured::absent);
 }
 
 TEST_CASE("scan-to-map, honesty readings: a step taken back restores the covariance's validity, its blocks and the step since it")
 {
-    JointCovarianceFixture f;
+    CovarianceFixture f;
     const WindowNoiseModel noise = build_window_noise_model(f.w, f.o.scan_to_map, f.o.motion_model, f.o.rotation, f.o.translation_imu, f.o.velocity_prior);
     WindowProblem problem(f.points, f.w, f.maps.indoor, f.maps.outdoor, f.o.scan_to_map, f.o.motion_model, f.o.rotation, f.o.translation_imu,
                           noise, f.acc_offset, f.acc_offset_cov, f.logger, nullptr, nullptr, f.workspace);
@@ -1661,11 +1634,11 @@ TEST_CASE("scan-to-map, honesty readings: a step taken back restores the covaria
     const HonestyInputs stepped = problem.honesty_inputs();
     CHECK(stepped.start_velocity_step.norm() > 0.0);
     lm_iteration(problem, 5.0, false, false, false, delta, ws);
-    REQUIRE(problem.honesty_inputs().start_posterior != accepted.start_posterior);
+    REQUIRE(problem.honesty_inputs().start_velocity_posterior != accepted.start_velocity_posterior);
     problem.restore_accepted();
     const HonestyInputs restored = problem.honesty_inputs();
     CHECK(restored.covariance_valid);
-    CHECK(restored.start_posterior == accepted.start_posterior);
+    CHECK(restored.start_velocity_posterior == accepted.start_velocity_posterior);
     CHECK(restored.start_velocity == accepted.start_velocity);
     CHECK(restored.start_velocity_step == Eigen::Vector3d::Zero());
     CHECK(restored.bias_step == Eigen::Vector3d::Zero());
@@ -1673,7 +1646,7 @@ TEST_CASE("scan-to-map, honesty readings: a step taken back restores the covaria
 
 TEST_CASE("scan-to-map, honesty readings: a bias at its clamp is NOT MEASURED")
 {
-    JointCovarianceFixture f;
+    CovarianceFixture f;
     f.o.rotation.bias_max_rad_s = 1e-12; // any estimate that is not exactly zero ends at the clamp
     const WindowNoiseModel noise = build_window_noise_model(f.w, f.o.scan_to_map, f.o.motion_model, f.o.rotation, f.o.translation_imu, f.o.velocity_prior);
     const HonestyInputs h = honesty_after_iterations(f, 5, noise);
@@ -1681,9 +1654,9 @@ TEST_CASE("scan-to-map, honesty readings: a bias at its clamp is NOT MEASURED")
     CHECK(honesty_readings(h).gyro_bias.reason == MoveNotMeasured::clamped);
 }
 
-TEST_CASE("scan-to-map: a step taken back restores the joint covariance of end velocity and offset")
+TEST_CASE("scan-to-map: a step taken back restores the covariances of end velocity and offset")
 {
-    JointCovarianceFixture f;
+    CovarianceFixture f;
     const WindowNoiseModel noise = build_window_noise_model(f.w, f.o.scan_to_map, f.o.motion_model, f.o.rotation, f.o.translation_imu, f.o.velocity_prior);
     REQUIRE(noise.unknowns.acc_term);
     WindowProblem problem(f.points, f.w, f.maps.indoor, f.maps.outdoor, f.o.scan_to_map, f.o.motion_model, f.o.rotation, f.o.translation_imu,
@@ -1693,152 +1666,13 @@ TEST_CASE("scan-to-map: a step taken back restores the joint covariance of end v
     // the accepted state: the guess, with its covariance
     lm_iteration(problem, 5.0, false, true, true, delta, ws);
     problem.accept_snapshot();
-    const Eigen::Matrix3d accepted_cross = f.w.velocity.end_offset_covariance;
     const Eigen::Matrix3d accepted_v_end = f.w.velocity.end_covariance;
     const Eigen::Matrix3d accepted_offset = f.acc_offset_cov;
     // a step, then the covariance at the stepped state
     REQUIRE(lm_iteration(problem, 5.0, true, false, false, delta, ws).applied);
     lm_iteration(problem, 5.0, false, false, false, delta, ws);
-    REQUIRE(f.w.velocity.end_offset_covariance != accepted_cross); // the step changed the block
+    REQUIRE(f.w.velocity.end_covariance != accepted_v_end); // the step changed the block
     problem.restore_accepted();
-    CHECK(f.w.velocity.end_offset_covariance == accepted_cross); // bit for bit
-    CHECK(f.w.velocity.end_covariance == accepted_v_end);
+    CHECK(f.w.velocity.end_covariance == accepted_v_end); // bit for bit
     CHECK(f.acc_offset_cov == accepted_offset);
-}
-
-// imu_carry_joint_covariance (change honest-inertial-carry, design D2): blind windows chained through the joint carry. Each
-// window has no LiDAR point; its covariance is the solve's (one undamped iteration at the guess, as the window problem takes
-// it), and it is carried to the next window as the window loop does (run_odometry.cpp: update_acc_term_after_window keeps
-// the end velocity's covariance, its cross block with the offset and the offset's; prepare_velocity_state moves them over
-// the gap with joint_prior_cov_over_gap). Reduced: the window's estimates stay at the guess (the data are noise-free), so
-// the fold of the offset into the gravity vector is not modelled.
-namespace
-{
-    struct BlindChainNoise
-    {
-        double velocity_sigma0 = 1e-3;       // the first window's start-velocity sigma [m/s]
-        double offset_sigma = 0.02;          // the offset's prior sigma at the start [m/s^2]
-        double offset_rw = 0.0;              // the offset's random walk [m/s^2/sqrt(s)]
-        double density = 1e-5, floor = 1e-3; // accelerometer white noise
-        double rotation_sigma_deg = 1e-4;    // > 0: constant rotation sigmas, else the gyro's (time-scaled ARW)
-        bool edges_follow_state = true;
-    };
-
-    struct BlindChainWindow
-    {
-        double start_sigma = 0.0, end_sigma = 0.0; // along x [m/s]
-    };
-
-    constexpr int blind_nodes = 37; // 0.36 s at 10 ms
-    constexpr double blind_duration_s = (blind_nodes - 1) * node_dt;
-    constexpr double blind_gap_s = node_dt; // from one window's last node to the next one's first
-
-    std::vector<BlindChainWindow> run_blind_chain(int windows, const BlindChainNoise &n)
-    {
-        OdometryConfig c = test_config();
-        if (n.rotation_sigma_deg > 0.0)
-        {
-            c.use_time_scaled_rotation_sigma = false;
-            c.lidar_odometry_motion_model_om_1_sigma_deg = c.lidar_odometry_motion_model_fi_1_sigma_deg =
-                c.lidar_odometry_motion_model_ka_1_sigma_deg = n.rotation_sigma_deg;
-        }
-        Options o = options_from(c);
-        Maps maps; // empty: nothing to see
-        std::vector<Point3Di> points;
-        const Eigen::Vector3d velocity(1.0, 0.0, 0.0);
-        Eigen::Matrix3d velocity_cov = Eigen::Matrix3d::Identity() * (n.velocity_sigma0 * n.velocity_sigma0);
-        Eigen::Matrix3d velocity_offset_cov = Eigen::Matrix3d::Zero();
-        Eigen::Matrix3d offset_cov = Eigen::Matrix3d::Identity() * (n.offset_sigma * n.offset_sigma);
-        std::vector<BlindChainWindow> chain;
-        for (int i = 0; i < windows; i++)
-        {
-            Window w;
-            for (int k = 0; k < blind_nodes; k++)
-            {
-                const double t = i * (blind_duration_s + blind_gap_s) + k * node_dt;
-                w.poses.push_back(pose(Eigen::Vector3d(t, 0.0, 1.5) + grid_offset, 0.0));
-                w.timestamps.push_back({t, t});
-            }
-            w.motion_model_poses = w.poses;
-            AccData acc;
-            make_acc_data(acc, w.poses, Eigen::Vector3d::Zero());
-            MotionModelTranslationImuOptions &imu = o.translation_imu;
-            imu = acc.imu;
-            imu.acc = &acc.acc;
-            imu.span_s = 0.008; // one term per node
-            imu.noise_density_mps2_sqrt_hz = n.density;
-            imu.floor_sigma_mps2 = n.floor;
-            // the prior: the first window's as set, the others carried over the gap
-            const JointPriorCov carried = joint_prior_cov(velocity_cov, velocity_offset_cov, offset_cov);
-            const JointPriorCov p =
-                i == 0 ? carried : joint_prior_cov_over_gap(carried, n.density, n.floor, blind_gap_s, n.offset_rw, blind_duration_s);
-            imu.joint_covariance = true;
-            imu.velocity_prior_mean = velocity;
-            imu.velocity_prior_cov = p.topLeftCorner<3, 3>();
-            imu.velocity_offset_prior_cov = p.topRightCorner<3, 3>();
-            imu.offset_prior_cov = p.bottomRightCorner<3, 3>();
-            imu.edges_follow_state = n.edges_follow_state;
-            imu.velocity_guess = velocity;
-            imu.guess_integrated = true;
-            w.velocity.start = w.velocity.end = velocity;
-
-            const WindowNoiseModel noise = build_window_noise_model(w, o.scan_to_map, o.motion_model, o.rotation, imu, o.velocity_prior);
-            REQUIRE(noise.joint_prior);
-            Eigen::Vector3d acc_offset = Eigen::Vector3d::Zero();
-            Eigen::Matrix3d acc_offset_cov = imu.offset_prior_cov;
-            NullLogger logger;
-            ScanToMapWorkspace workspace;
-            WindowProblem problem(points, w, maps.indoor, maps.outdoor, o.scan_to_map, o.motion_model, o.rotation, imu, noise, acc_offset,
-                                  acc_offset_cov, logger, nullptr, nullptr, workspace);
-            double delta = 0.0;
-            lm_iteration(problem, 5.0, false, false, false, delta, LmWorkspace{workspace.covariance, workspace.damped});
-
-            chain.push_back({std::sqrt(p(0, 0)), std::sqrt(w.velocity.end_covariance(0, 0))});
-            velocity_cov = w.velocity.end_covariance;
-            velocity_offset_cov = w.velocity.end_offset_covariance;
-            offset_cov = acc_offset_cov;
-        }
-        return chain;
-    }
-}
-
-TEST_CASE("scan-to-map, imu carry joint covariance: an offset error adds up over blind windows")
-{
-    // the other noises small: after N windows the velocity's sigma is sigma_e x (the time from the first window's start to
-    // the N-th window's end), plus the first prior in quadrature
-    BlindChainNoise n;
-    const std::vector<BlindChainWindow> chain = run_blind_chain(15, n);
-    for (int i = 0; i < static_cast<int>(chain.size()); i++)
-    {
-        CAPTURE(i);
-        const int windows = i + 1;
-        const double elapsed = windows * blind_duration_s + (windows - 1) * blind_gap_s;
-        const double offset_part = n.offset_sigma * elapsed;
-        const double closed_form = std::sqrt(n.velocity_sigma0 * n.velocity_sigma0 + offset_part * offset_part);
-        CHECK(chain[i].end_sigma == doctest::Approx(closed_form).epsilon(0.01));
-    }
-    MESSAGE("velocity sigma after 1 / 5 / 15 blind windows: ", chain[0].end_sigma, " / ", chain[4].end_sigma, " / ", chain[14].end_sigma,
-            " m/s");
-}
-
-TEST_CASE("scan-to-map, imu carry joint covariance: fifteen blind windows")
-{
-    // the noises of the L2 settings (accelerometer density and floor, the gyro's time-scaled rotation sigmas), offset sigma
-    // 0.02 m/s^2: the start-velocity prior grows in every window, and after fifteen windows of 0.36 s it is at least 0.1 m/s
-    BlindChainNoise n;
-    n.velocity_sigma0 = 0.005;
-    n.density = 0.0013;
-    n.floor = 0.1;
-    n.rotation_sigma_deg = 0.0;
-    const std::vector<BlindChainWindow> chain = run_blind_chain(16, n);
-    for (size_t i = 1; i < chain.size(); i++)
-    {
-        CAPTURE(i);
-        CHECK(chain[i].start_sigma > chain[i - 1].start_sigma);
-    }
-    CHECK(chain.back().start_sigma >= 0.1); // the prior of the window after the fifteenth
-    n.edges_follow_state = false;
-    const std::vector<BlindChainWindow> held = run_blind_chain(16, n);
-    MESSAGE("start-velocity prior sigma after 15 blind windows: ", chain.back().start_sigma, " m/s (edges holding the guess: ",
-            held.back().start_sigma, ")");
 }

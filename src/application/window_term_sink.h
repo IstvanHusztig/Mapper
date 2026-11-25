@@ -21,7 +21,6 @@ struct WindowPreparedState
     std::optional<Eigen::Matrix3d> velocity_prior_cov;      // [(m/s)^2]
     std::optional<Eigen::Vector3d> offset_prior_mean;       // acceleration offset prior [m/s^2] (zero today: the offset is folded into gravity)
     std::optional<Eigen::Matrix3d> offset_prior_cov;        // [(m/s^2)^2]
-    std::optional<Eigen::Matrix3d> velocity_offset_prior_cov; // rows start velocity, columns offset [m/s * m/s^2]; zero unless carried jointly
     std::optional<Eigen::Vector3d> gravity;                 // the gravity vector the window was prepared with [accelerometer units, g]
     std::optional<Eigen::Vector3d> bias_prior_mean_rad_s;   // gyro bias prior [rad/s]
     std::optional<Eigen::Matrix3d> bias_prior_cov;          // [(rad/s)^2]
@@ -50,7 +49,6 @@ struct WindowHandedOnState
     std::optional<Eigen::Vector3d> gravity;             // the carried gravity vector after the fold [accelerometer units, g]
     std::optional<double> to_mps2_before_fold;          // the unit factor the window used, 9.80665 / |gravity before the fold|
     std::optional<Eigen::Matrix3d> offset_cov;          // the offset covariance carried on [(m/s^2)^2]
-    std::optional<Eigen::Matrix3d> velocity_offset_cov; // carried cov(end velocity, offset) [m/s * m/s^2] (joint carry only)
     std::optional<Eigen::Vector3d> bias_mean_rad_s;     // gyro bias carried on [rad/s]
     std::optional<Eigen::Matrix3d> bias_cov;            // [(rad/s)^2]
     std::optional<WindowNode> last_node_solved;         // the last node after the iterations

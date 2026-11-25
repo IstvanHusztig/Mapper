@@ -21,7 +21,7 @@ Eigen::Matrix3d tait_bryan_rotation_jacobian(const Eigen::Affine3d &m);
 bool add_acceleration_terms(WindowEquations &equations, const WindowNoiseModel &noise, const Window &window,
                             const MotionModelTranslationImuOptions &translation_imu_options, const Eigen::Vector3d &acc_offset);
 
-// the start velocity's prior: the previous window's end velocity (not with noise.joint_prior: the joint term holds it)
+// the start velocity's prior: the previous window's end velocity
 void add_start_velocity_prior(WindowEquations &equations, const WindowNoiseModel &noise, const Window &window);
 
 // at rest (noise.at_rest): both velocities zero
@@ -33,12 +33,5 @@ void add_weak_end_velocity_tie(WindowEquations &equations, const WindowNoiseMode
 // the three above, in this order
 void add_velocity_priors(WindowEquations &equations, const WindowNoiseModel &noise, const Window &window, bool end_tied);
 
-// the acceleration offset stays near the prior carried from the previous window (not with noise.joint_prior: the joint
-// term holds it)
+// the acceleration offset stays near the prior carried from the previous window
 void add_acceleration_offset_prior(WindowEquations &equations, const WindowNoiseModel &noise, const Eigen::Vector3d &acc_offset);
-
-// imu_carry_joint_covariance (noise.joint_prior): one prior on (start velocity, acceleration offset) together, with the
-// 6x6 information noise.joint_prior_information on the columns (iv, io), in place of the two priors above. Residual =
-// prior mean - current value for both; six residuals.
-void add_joint_velocity_offset_prior(WindowEquations &equations, const WindowNoiseModel &noise, const Window &window,
-                                     const Eigen::Vector3d &acc_offset);

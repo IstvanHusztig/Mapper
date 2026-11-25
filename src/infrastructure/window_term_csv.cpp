@@ -54,7 +54,7 @@ namespace
              "noise_ndt_information_scale,noise_ndt_huber_cutoff";
         // consistency-harness D9: the state the window was prepared with, what it handed on, and two features (empty where
         // absent). Poses as position and Tait-Bryan angles om, fi, ka; covariances as sigmas (square roots of the
-        // diagonal), the velocity-offset cross block as its diagonal
+        // diagonal), the velocity-offset cross block as its diagonal (retired_velocity_offset_prior_cov)
         const auto xyz = [&h](const std::string &name, const std::string &unit)
         {
             for (const char *axis : {"x", "y", "z"})
@@ -112,6 +112,14 @@ namespace
 
     std::string diagonal_or_empty(const std::optional<Eigen::Matrix3d> &m) { return m ? "," + vector3(m->diagonal()) : empty_fields(3); }
 
+    // the velocity-offset cross block columns (prepared_velocity_offset_cov_*, handed_velocity_offset_cov_*) were filled only
+    // by honest-inertial-carry layer 2, removed 2026-11-25; written as before without it: the prior's block zero where the
+    // window has the accelerometer term (its offset prior), empty otherwise; the handed-on block always empty
+    std::string retired_velocity_offset_prior_cov(const WindowPreparedState &p)
+    {
+        return p.offset_prior_cov ? "," + vector3(Eigen::Vector3d::Zero()) : empty_fields(3);
+    }
+
     std::string pose_or_empty(const std::optional<Eigen::Affine3d> &pose)
     {
         if (!pose)
@@ -144,14 +152,14 @@ namespace
         const WindowPreparedState &p = r.prepared;
         std::string s = pose_or_empty(p.first_pose) + vector3_or_empty(p.velocity_prior_mean) + sigmas_or_empty(p.velocity_prior_cov) +
                         vector3_or_empty(p.offset_prior_mean) + sigmas_or_empty(p.offset_prior_cov) +
-                        diagonal_or_empty(p.velocity_offset_prior_cov) + vector3_or_empty(p.gravity) +
+                        retired_velocity_offset_prior_cov(p) + vector3_or_empty(p.gravity) +
                         vector3_or_empty(p.bias_prior_mean_rad_s, RAD_TO_DEG) + sigmas_or_empty(p.bias_prior_cov, RAD_TO_DEG);
         s += std::string(",") + handoff_name(r.handoff);
         const WindowHandedOnState none{};
         const WindowHandedOnState &h = r.handoff == WindowHandOff::done ? r.handed_on : none;
         s += vector3_or_empty(h.velocity_end) + sigmas_or_empty(h.velocity_end_cov) + vector3_or_empty(h.gravity) + "," +
              (h.to_mps2_before_fold ? number(*h.to_mps2_before_fold) : std::string()) + sigmas_or_empty(h.offset_cov) +
-             diagonal_or_empty(h.velocity_offset_cov) + vector3_or_empty(h.bias_mean_rad_s, RAD_TO_DEG) +
+             empty_fields(3) + vector3_or_empty(h.bias_mean_rad_s, RAD_TO_DEG) +
              sigmas_or_empty(h.bias_cov, RAD_TO_DEG) + node_or_empty(h.last_node_solved) + node_or_empty(h.last_node_handed_on);
         s += "," + (r.rotation_rate_rad_s ? number(*r.rotation_rate_rad_s * RAD_TO_DEG) : std::string()) +
              vector3_or_empty(r.start_acceleration_mps2);

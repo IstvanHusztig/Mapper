@@ -90,13 +90,9 @@ struct MotionModelTranslationImuOptions
     Eigen::Matrix3d velocity_prior_cov = Eigen::Matrix3d::Identity(); // [(m/s)^2]
     bool at_rest = false;
     double zero_velocity_sigma_mps = 0.01;
-    // honest inertial carry (OdometryConfig::imu_edges_follow_state, imu_carry_joint_covariance, imu_accel_window_sigma_mps2)
-    bool edges_follow_state = false;
-    bool joint_covariance = false;
-    double window_sigma_mps2 = 0.0;
+    bool edges_follow_state = false; // honest inertial carry, layer 1 (OdometryConfig::imu_edges_follow_state)
     Eigen::Vector3d velocity_guess = Eigen::Vector3d::Zero();          // the start velocity the guess was integrated from
     bool guess_integrated = false;                                     // the guess was integrated from the accelerometer
-    Eigen::Matrix3d velocity_offset_prior_cov = Eigen::Matrix3d::Zero(); // prior covariance of start velocity with the offset
 };
 
 ScanToMapOptions get_scan_to_map_options(const OdometryConfig &config);

@@ -329,26 +329,21 @@ TEST_CASE("window verdict: the run is the same with log_window_verdict on")
         CHECK(same_poses(plain[i].poses, logged[i].poses));
 }
 
-// change honest-inertial-carry: the three carry settings are in the hash only away from their defaults, so captures and
-// snapshots written before they existed still count as made with the same settings
-TEST_CASE("settings hash: the honest-carry settings change it only away from their defaults")
+// change honest-inertial-carry: the carry setting is in the hash only away from its default, so captures and snapshots
+// written before it existed still count as made with the same settings
+TEST_CASE("settings hash: the honest-carry setting changes it only away from its default")
 {
     const OdometryConfig c = capture_config();
     const std::uint64_t base = odometry_settings_hash(c);
-    OdometryConfig edges = c, joint = c, window = c;
+    OdometryConfig edges = c;
     edges.imu_edges_follow_state = true;
-    joint.imu_carry_joint_covariance = true;
-    window.imu_accel_window_sigma_mps2 = 0.05;
     CHECK(odometry_settings_hash(edges) != base);
-    CHECK(odometry_settings_hash(joint) != base);
-    CHECK(odometry_settings_hash(window) != base);
-    OdometryConfig back = window;
-    back.imu_accel_window_sigma_mps2 = 0.0;
-    CHECK(odometry_settings_hash(back) == base);
+    edges.imu_edges_follow_state = false;
+    CHECK(odometry_settings_hash(edges) == base);
 }
 
-// format 2 added the carry's velocity-offset cross block; a format-1 file (written before it) still reads, with a zero
-// block, and still replays bit for bit with its own settings
+// format 2 added the carry's velocity-offset cross block (written as zeros and dropped on reading since honest-inertial-carry
+// layer 2 was removed); a format-1 file (written before it) still reads, and still replays bit for bit with its own settings
 TEST_CASE("window capture: a file of the previous format reads and replays")
 {
     const Recording r = loop_recording(1);
@@ -367,7 +362,6 @@ TEST_CASE("window capture: a file of the previous format reads and replays")
     REQUIRE(read_window_capture(file, read, hash, why));
     fs::remove(file);
     CHECK(hash == odometry_settings_hash(c));
-    CHECK(read.carry.velocity_offset_cov == Eigen::Matrix3d::Zero());
 
     NullLogger logger;
     const WindowReplayResult same = replay_window_capture(read, c, true, logger);
@@ -491,7 +485,6 @@ namespace
         p.velocity_prior_cov = diag(0.02 * 0.02, 0.03 * 0.03, 0.04 * 0.04);
         p.offset_prior_mean = Eigen::Vector3d::Zero();
         p.offset_prior_cov = diag(0.04 * 0.04, 0.05 * 0.05, 0.06 * 0.06);
-        p.velocity_offset_prior_cov = diag(-1e-4, -2e-4, -3e-4);
         p.gravity = Eigen::Vector3d(0.01, -0.02, 1.01);
         p.bias_prior_mean_rad_s = Eigen::Vector3d(0.0, 0.0, 0.1 * d);
         p.bias_prior_cov = diag(0.2 * d * 0.2 * d, 0.3 * d * 0.3 * d, 0.4 * d * 0.4 * d);
@@ -502,7 +495,6 @@ namespace
         h.gravity = Eigen::Vector3d(0.01, -0.02, 1.0105);
         h.to_mps2_before_fold = 9.80665 / 1.01;
         h.offset_cov = diag(0.03 * 0.03, 0.035 * 0.035, 0.04 * 0.04);
-        h.velocity_offset_cov = diag(-4e-5, -5e-5, -6e-5);
         h.bias_mean_rad_s = Eigen::Vector3d(0.01, -0.02, 0.15) * d;
         h.bias_cov = diag(0.03 * d * 0.03 * d, 0.04 * d * 0.04 * d, 0.05 * d * 0.05 * d);
         h.last_node_solved = WindowNode{pose_at(Eigen::Vector3d(1.3, 2.1, 3.0), 31.0), 12.875};
@@ -511,7 +503,6 @@ namespace
         r.start_acceleration_mps2 = Eigen::Vector3d(0.1, -0.25, 0.05);
         HonestyReadings &m = r.verdict.evidence.moves;
         m.start_velocity = NormalisedMove{1.25, MoveNotMeasured::measured, 2.5};
-        m.joint = NormalisedMove{0.875, MoveNotMeasured::measured, 5.0};
         m.gyro_bias = NormalisedMove{2.0, MoveNotMeasured::measured, 1.0};
         return r;
     }
@@ -595,11 +586,14 @@ TEST_CASE("window term csv: the prepared and handed-on state, every field writte
         REQUIRE_FALSE(v.empty());
         CHECK(std::stod(v) == doctest::Approx(expected).epsilon(1e-8));
     };
-    // every new column of the filled record is written
+    // the columns only honest-inertial-carry layer 2 filled (removed 2026-11-25): always empty
+    const auto retired = [](const std::string &name)
+    { return name.rfind("handed_velocity_offset_cov_", 0) == 0 || name == "move_joint" || name == "move_joint_reduction"; };
+    // every other new column of the filled record is written
     for (size_t k = 93; k < names.size(); k++)
     {
         CAPTURE(names[k]);
-        CHECK_FALSE(values[k].empty());
+        CHECK(values[k].empty() == retired(names[k]));
     }
     near("prepared_first_x_m", 1.0);
     near("prepared_first_y_m", 2.0);
@@ -611,8 +605,8 @@ TEST_CASE("window term csv: the prepared and handed-on state, every field writte
     near("prepared_velocity_prior_sigma_z_mps", 0.04);
     near("prepared_offset_prior_z_mps2", 0.0);
     near("prepared_offset_prior_sigma_y_mps2", 0.05);
-    near("prepared_velocity_offset_cov_xx", -1e-4);
-    near("prepared_velocity_offset_cov_zz", -3e-4);
+    near("prepared_velocity_offset_cov_xx", 0.0); // zero where the window has the offset prior
+    near("prepared_velocity_offset_cov_zz", 0.0);
     near("prepared_gravity_z_g", 1.01);
     near("prepared_bias_prior_z_deg_s", 0.1);
     near("prepared_bias_prior_sigma_x_deg_s", 0.2);
@@ -622,7 +616,6 @@ TEST_CASE("window term csv: the prepared and handed-on state, every field writte
     near("handed_gravity_z_g", 1.0105);
     near("handed_to_mps2_before_fold", 9.80665 / 1.01);
     near("handed_offset_sigma_x_mps2", 0.03);
-    near("handed_velocity_offset_cov_yy", -5e-5);
     near("handed_bias_z_deg_s", 0.15);
     near("handed_bias_sigma_z_deg_s", 0.05);
     near("handed_last_solved_time_s", 12.875);
@@ -635,7 +628,7 @@ TEST_CASE("window term csv: the prepared and handed-on state, every field writte
     near("start_acceleration_y_mps2", -0.25);
     near("move_start_velocity", 1.25);
     CHECK(at("move_start_velocity_reason") == "measured");
-    near("move_joint_reduction", 5.0);
+    CHECK(at("move_joint_reason") == "absent");
     near("move_gyro_bias", 2.0);
 
     // a cancelled hand-off: the handed-on columns are empty, the rest stays
@@ -656,7 +649,7 @@ TEST_CASE("window term csv: the prepared and handed-on state, every field writte
 
     // single values absent: their columns empty, their neighbours written
     WindowTermRecord partial = record;
-    partial.prepared.velocity_offset_prior_cov.reset();
+    partial.prepared.offset_prior_cov.reset();
     partial.handed_on.to_mps2_before_fold.reset();
     partial.handed_on.last_node_handed_on.reset();
     partial.rotation_rate_rad_s.reset();
@@ -665,7 +658,8 @@ TEST_CASE("window term csv: the prepared and handed-on state, every field writte
     for (size_t k = 93; k < names.size(); k++)
     {
         CAPTURE(names[k]);
-        const bool gone = names[k].rfind("prepared_velocity_offset_cov_", 0) == 0 || names[k] == "handed_to_mps2_before_fold" ||
+        const bool gone = retired(names[k]) || names[k].rfind("prepared_offset_prior_sigma_", 0) == 0 ||
+                          names[k].rfind("prepared_velocity_offset_cov_", 0) == 0 || names[k] == "handed_to_mps2_before_fold" ||
                           names[k] == "handed_last_time_s" || names[k].rfind("handed_last_", 0) == 0 && names[k].rfind("handed_last_solved", 0) != 0 ||
                           names[k] == "rotation_rate_mean_deg_s";
         CHECK(p[k].empty() == gone);

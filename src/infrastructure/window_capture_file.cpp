@@ -13,7 +13,8 @@ namespace
     using binary_io::Writer;
 
     constexpr char MAGIC[8] = {'D', 'M', 'C', 'A', 'P', 'T', '0', '1'};
-    // 2: the carry's velocity-offset cross block (change honest-inertial-carry); format 1 is still read, with a zero block
+    // 2: the carry's velocity-offset cross block (change honest-inertial-carry; its layer 2 was removed 2026-11-25, the
+    // block is written as zeros and dropped on reading); format 1 is still read
     constexpr std::uint32_t FORMAT_VERSION = 2;
     constexpr std::uint32_t OLDEST_READ_VERSION = 1;
 
@@ -114,8 +115,11 @@ namespace
         w.matrix(c.velocity_cov);
         w.value(c.velocity_time_s);
         w.value(c.first_window_at_rest);
+        // format 2 on: the retired cross block cov(end velocity, offset) of honest-inertial-carry layer 2 (removed
+        // 2026-11-25), kept as zeros so the format does not change
+        const Eigen::Matrix3d retired_velocity_offset_cov = Eigen::Matrix3d::Zero();
         if (version >= 2)
-            w.matrix(c.velocity_offset_cov);
+            w.matrix(retired_velocity_offset_cov);
     }
 
     bool read_carry(Reader &r, WindowLoopCarry &c, std::uint32_t version)
@@ -135,9 +139,9 @@ namespace
         r.matrix(c.velocity_cov);
         r.value(c.velocity_time_s);
         r.value(c.first_window_at_rest);
-        c.velocity_offset_cov.setZero(); // format 1: the code that wrote it carried no cross block
+        Eigen::Matrix3d retired_velocity_offset_cov; // format 2 on: the retired cross block, read and dropped
         if (version >= 2)
-            r.matrix(c.velocity_offset_cov);
+            r.matrix(retired_velocity_offset_cov);
         return r.ok();
     }
 } // namespace

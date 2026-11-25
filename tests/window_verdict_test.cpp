@@ -242,7 +242,7 @@ TEST_CASE("window verdict, normalised move: each reason it is NOT MEASURED")
     CHECK(reason(normalised_move(m, P, x, P_post, Eigen::Vector3d(-0.0011, 0.0, 0.0))) == MoveNotMeasured::last_step);
 }
 
-TEST_CASE("window verdict, honesty readings: which states are read, the joint one, a clamped bias, no covariance")
+TEST_CASE("window verdict, honesty readings: which states are read, a clamped bias, no covariance")
 {
     HonestyInputs in;
     // no accelerometer term, no bias estimation: every reading absent
@@ -255,41 +255,13 @@ TEST_CASE("window verdict, honesty readings: which states are read, the joint on
     in.velocity = true;
     in.velocity_prior_mean = Eigen::Vector3d(1.0, 0.0, 0.0);
     in.velocity_prior_cov = Eigen::Matrix3d::Identity() * 1e-2;
-    in.offset_prior_mean = Eigen::Vector3d(0.01, 0.0, 0.0);
     in.start_velocity = Eigen::Vector3d(1.02, -0.01, 0.0);
-    in.acc_offset = Eigen::Vector3d(0.0, 0.003, 0.0);
-    in.start_posterior.setZero();
-    in.start_posterior.topLeftCorner<3, 3>() = Eigen::Matrix3d::Identity() * 2e-3;
-    in.start_posterior.bottomRightCorner<3, 3>() = Eigen::Matrix3d::Identity() * 2e-5;
-    in.start_posterior.topRightCorner<3, 3>() = Eigen::Matrix3d::Identity() * 1e-5;
-    in.start_posterior.bottomLeftCorner<3, 3>() = Eigen::Matrix3d::Identity() * 1e-5;
+    in.start_velocity_posterior = Eigen::Matrix3d::Identity() * 2e-3;
     r = honesty_readings(in);
     REQUIRE(r.start_velocity.value);
     // d^T P^-1 d = (0.02^2 + 0.01^2) / 1e-2 = 0.05, reduction 3 - 3 * 0.2 = 2.4
     CHECK(*r.start_velocity.value == doctest::Approx(0.05 / 2.4));
-    CHECK(r.joint.reason == MoveNotMeasured::absent); // the separate prior
-
-    in.joint_prior = true;
-    in.joint_prior_cov.setZero();
-    in.joint_prior_cov.topLeftCorner<3, 3>() = in.velocity_prior_cov;
-    in.joint_prior_cov.bottomRightCorner<3, 3>() = Eigen::Matrix3d::Identity() * 1e-4;
-    in.joint_prior_cov.topRightCorner<3, 3>() = Eigen::Matrix3d::Identity() * 2e-4;
-    in.joint_prior_cov.bottomLeftCorner<3, 3>() = Eigen::Matrix3d::Identity() * 2e-4;
-    r = honesty_readings(in);
-    CHECK(r.start_velocity.value); // the marginal one is kept in joint mode
-    CHECK(r.joint.value);
-    // a step since the covariance above 1 % of the offset's prior sigma (1e-2): only the joint reading is affected
-    in.acc_offset_step = Eigen::Vector3d(2e-4, 0.0, 0.0);
-    r = honesty_readings(in);
-    CHECK(r.start_velocity.value);
-    CHECK(r.joint.reason == MoveNotMeasured::last_step);
-    in.acc_offset_step.setZero();
-    // a failed factorisation of the joint prior (a cross block larger than the variances allow)
-    Eigen::Matrix<double, 6, 6> good_joint = in.joint_prior_cov;
-    in.joint_prior_cov.topRightCorner<3, 3>() = Eigen::Matrix3d::Identity() * 5e-3;
-    in.joint_prior_cov.bottomLeftCorner<3, 3>() = Eigen::Matrix3d::Identity() * 5e-3;
-    CHECK(honesty_readings(in).joint.reason == MoveNotMeasured::factorisation);
-    in.joint_prior_cov = good_joint;
+    CHECK(r.joint.reason == MoveNotMeasured::absent); // never measured (honest-inertial-carry layer 2 removed)
 
     in.bias = true;
     in.bias_prior_cov = Eigen::Matrix3d::Identity() * 1e-4;

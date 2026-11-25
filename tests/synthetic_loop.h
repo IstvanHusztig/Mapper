@@ -37,7 +37,8 @@ namespace synthetic
 // degenerate_projection_ratio 0.02 / _full 0.04, imu_acceleration_offset_rw_mps2_sqrt_s 0.01; the front end's fields of
 // front_end_config(sensor) (the cut must match the generator's prediction); log_window_terms true; and, for the test,
 // real_time_threshold_seconds 1000 (the result must not depend on the machine; a window that still reaches the limit
-// invalidates the run). `switches` sets imu_edges_follow_state and imu_carry_joint_covariance.
+// invalidates the run). `switches` sets imu_edges_follow_state (honest-inertial-carry layer 1; until
+// 2026-11-25 also imu_carry_joint_covariance, layer 2, since removed).
 OdometryConfig loop_candidate_config(const SensorProfile &sensor, bool switches = false);
 
 // ---- one sensor model (task 6.1a (1)) ----

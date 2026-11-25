@@ -282,7 +282,7 @@ namespace
         add_term_row("zero_velocity", u, reduce, rows, [&](WindowEquations &e) { add_zero_velocity(e, noise, w); });
         add_term_row("end_velocity_tie", u, reduce, rows, [&](WindowEquations &e) { add_weak_end_velocity_tie(e, noise, w, end_tied); });
         add_term_row("offset_prior", u, reduce, rows,
-                     [&](WindowEquations &e) { add_acceleration_offset_prior(e, noise, in.acc_offset); add_joint_velocity_offset_prior(e, noise, w, in.acc_offset); });
+                     [&](WindowEquations &e) { add_acceleration_offset_prior(e, noise, in.acc_offset); });
         WindowEquations origin(u);
         fix_origin(origin, noise);
         rows.push_back(reduce.row("origin_fix", origin, 0.0, 6));

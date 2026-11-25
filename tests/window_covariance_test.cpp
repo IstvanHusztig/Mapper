@@ -24,8 +24,9 @@
 // D6): ONE window solved by the real loop steps (process_windows, window 2) from a carried state whose prior error is drawn
 // from the prior's claimed covariance, with model-world inertial data, and the error of what the window hands on compared
 // with the covariance it claims. MEASURED AND REPORTED; nothing is marked doctest::should_fail. The CHECKs are the fixture's
-// validity (the claimed prior as computed here, not at rest, blindness, the exact boundary) and the three controls of the
-// error definitions, never the honesty outcome.
+// validity (the claimed prior as computed here, not at rest, blindness, the exact boundary) and the two controls of the
+// error definitions, never the honesty outcome (a third, of the joint carry's cross block, went with honest-inertial-carry
+// layer 2 on 2026-11-25).
 //
 // The fixture (hand-built windows, as loop_chains_test.cpp, not the generator's front-end cut):
 //  - window 0: a rest window (start_window_loop takes the gravity vector and the gravity norm from it); window 1: the
@@ -54,7 +55,7 @@
 // Active factors and their kinds (D4), primary set:
 //  - accelerometer terms (triples, start, end)          generated raw noise (disjoint supports, as above)
 //  - rotation edges                                      generated raw noise (k = 1, floor 0, gyro at ARW / sqrt(dt))
-//  - gyro-bias prior, velocity prior over the gap, offset prior (joint prior F P F^T with the joint carry)
+//  - gyro-bias prior, velocity prior over the gap, offset prior
 //                                                        propagated claim; the truth is drawn from exactly that claim
 //  - origin fix (node 0)                                 conditional observation: the boundary is exact (verified)
 //  - zero velocity                                       not active: the window is not at rest (verified; constant
@@ -68,15 +69,15 @@
 //
 // Error vectors (D5): velocity = handed-on end velocity - true velocity at the last node; offset = s_before (g_after -
 // g_true,raw) with g_true,raw = prepared gravity + true offset / s_before (raw units), against the handed-on offset
-// covariance (SI); gyro bias = handed-on estimate - generated bias (sensor axes, rad/s); joint = (velocity, offset) along the
-// axis with the handed-on cross block (joint carry only: the cross block is handed on only then). The axis u is world x
+// covariance (SI); gyro bias = handed-on estimate - generated bias (sensor axes, rad/s). The axis u is world x
 // (the travel direction, the corridor's axis), turned with the frame in the rotated control.
 //
 // Primary comparisons (fixed before the runs), each the summed normalised error over M runs against the two-sided
-// chi-square interval at 1 % / 12 (Bonferroni):
-//  case (a), switches off and on: velocity along u (r = 1), offset along u (r = 1), gyro bias (r = 3); switches on also
-//  velocity + offset along u jointly (r = 2)                                                   -> 7
-//  case (b), switches off and on: velocity along u (r = 1), offset along u (r = 1); switches on the joint (r = 2) -> 5
+// chi-square interval at 1 % / 10 (Bonferroni):
+//  case (a), switches off and on: velocity along u (r = 1), offset along u (r = 1), gyro bias (r = 3) -> 6
+//  case (b), switches off and on: velocity along u (r = 1), offset along u (r = 1)                    -> 4
+// (until 2026-11-25 the switches also turned on the joint carry, honest-inertial-carry layer 2, with a joint comparison
+// in each case and 1 % / 12; layer 2 was removed)
 // The window is the only one solved, so no windows are pooled. Numerical tolerances: the prepared prior equals the claim
 // computed here within 1e-9 relative; the boundary within 1e-9 m / 1e-9 rad; the controls' per-run normalised errors within
 // 1e-3 of the reference run's (absolute).
@@ -89,7 +90,7 @@ namespace
     constexpr double g0 = 9.80665;
     constexpr int n_nodes = 181;
     constexpr double t_origin = 100.0;
-    constexpr int primary_comparisons = 12;
+    constexpr int primary_comparisons = 10;
     constexpr double alpha = 0.01;
     const double nan = std::numeric_limits<double>::quiet_NaN();
 
@@ -130,12 +131,11 @@ namespace
     struct Spec
     {
         bool lidar = false;      // case (b): the corridor
-        bool switches = false;   // imu_edges_follow_state and imu_carry_joint_covariance
+        bool switches = false;   // imu_edges_follow_state
         double position_scale = 1e-6;
         double scale_g = 1.0;    // the sensor's reading of 1 g (control 1)
         Eigen::Matrix3d R0 = Eigen::Matrix3d::Identity(); // control 2: the whole problem in a frame turned by R0 (gravity
                                                           // included), the body's readings unchanged
-        double carry_cross_rho = 0.0; // control 3: the carried velocity-offset correlation (joint carry)
         std::uint64_t seed = 1;
     };
 
@@ -174,14 +174,12 @@ namespace
                               c.imu_accel_floor_sigma_mps2 * c.imu_accel_floor_sigma_mps2 * tau0);
         c.imu_accel_noise_density_mps2_sqrt_hz = m.density;
         c.imu_accel_floor_sigma_mps2 = 0.0;
-        c.imu_accel_window_sigma_mps2 = 0.0;
         c.use_time_scaled_rotation_sigma = true;
         c.rotation_sigma_inflation_k = 1.0;
         c.rotation_sigma_floor_deg = 0.0;
         c.imu_acceleration_span_s = 0.0039;
         c.imu_position_information_scale = s.position_scale;
         c.imu_edges_follow_state = s.switches;
-        c.imu_carry_joint_covariance = s.switches;
         return m;
     }
 
@@ -225,11 +223,8 @@ namespace
         std::string why; // why not valid
         double seconds = 0.0;
         // normalised errors along u (signed z = e / sigma) and the full ones
-        double z_v = nan, z_o = nan, joint = nan, bias = nan, velocity3 = nan, offset3 = nan;
+        double z_v = nan, z_o = nan, bias = nan, velocity3 = nan, offset3 = nan;
         double z_v_y = nan, z_v_z = nan;
-        double e_v = nan, e_o = nan;          // errors along u
-        double claim_cross = nan;             // claimed cov(v_end, offset) along u, as a correlation
-        double joint_without_cross = nan;     // the joint statistic with the cross block dropped
         double z_b[3] = {nan, nan, nan};
         // validity readings
         bool at_rest = false;
@@ -257,16 +252,12 @@ namespace
         const Eigen::Matrix3d I = Eigen::Matrix3d::Identity();
         const Eigen::Matrix3d Pv = I * (carry_velocity_sigma * carry_velocity_sigma);
         const Eigen::Matrix3d Po = I * (carry_offset_sigma * carry_offset_sigma);
-        const Eigen::Matrix3d Pvo = s.switches ? Eigen::Matrix3d(I * (s.carry_cross_rho * carry_velocity_sigma * carry_offset_sigma))
-                                               : Eigen::Matrix3d(Eigen::Matrix3d::Zero());
         const double sb = carry_bias_sigma_deg_s * DEG_TO_RAD;
         const Eigen::Matrix3d Pb = I * (sb * sb);
-        JointPriorCov P6 = JointPriorCov::Zero();
-        if (s.switches)
-            P6 = joint_prior_cov_over_gap(joint_prior_cov(Pv, Pvo, Po), mc.density, 0.0, gap, c.imu_acceleration_offset_rw_mps2_sqrt_s, duration);
-        else
-            P6 = joint_prior_cov(velocity_prior_cov_over_gap(Pv, mc.density, 0.0, gap), Eigen::Matrix3d::Zero(),
-                                 random_walk_prior_cov(Po, c.imu_acceleration_offset_rw_mps2_sqrt_s, duration));
+        // (start velocity, offset): two independent priors
+        Eigen::Matrix<double, 6, 6> P6 = Eigen::Matrix<double, 6, 6>::Zero();
+        P6.topLeftCorner<3, 3>() = velocity_prior_cov_over_gap(Pv, mc.density, 0.0, gap);
+        P6.bottomRightCorner<3, 3>() = random_walk_prior_cov(Po, c.imu_acceleration_offset_rw_mps2_sqrt_s, duration);
         const Eigen::Matrix3d Pb_prior = random_walk_prior_cov(Pb, c.gyro_bias_rw_deg_s_sqrt_s * DEG_TO_RAD, duration);
 
         // the draws: prior errors (prior mean - truth) of start velocity and offset, jointly; the gyro bias; in the base frame
@@ -376,7 +367,6 @@ namespace
         loop.carry.velocity_mean = prior_mean_world;
         loop.carry.velocity_cov = Pv;
         loop.carry.velocity_time_s = node_time(1, n_nodes - 1);
-        loop.carry.velocity_offset_cov = Pvo;
         loop.carry.acc_offset_cov = Po;
         loop.carry.bias.mean.setZero();
         loop.carry.bias.covariance = Pb;
@@ -396,7 +386,7 @@ namespace
         const WindowPreparedState &p = r.prepared;
         if (r.handoff != WindowHandOff::done || !h.velocity_end || !h.velocity_end_cov || !h.gravity || !h.to_mps2_before_fold ||
             !h.offset_cov || !h.bias_mean_rad_s || !h.bias_cov || !p.velocity_prior_cov || !p.offset_prior_cov || !p.bias_prior_cov ||
-            !p.first_pose || !p.gravity || !p.velocity_prior_mean || (s.switches && (!h.velocity_offset_cov || !p.velocity_offset_prior_cov)))
+            !p.first_pose || !p.gravity || !p.velocity_prior_mean)
         {
             out.why = "a record field is missing";
             return out;
@@ -407,10 +397,7 @@ namespace
         // validity: the prepared prior is the claim the truth was drawn from; the boundary is exact
         const auto rel = [](const Eigen::MatrixXd &a, const Eigen::MatrixXd &b) { return (a - b).norm() / std::max(b.norm(), 1e-300); };
         out.prior_mismatch = std::max({rel(*p.velocity_prior_cov, P6.topLeftCorner<3, 3>()), rel(*p.offset_prior_cov, P6.bottomRightCorner<3, 3>()),
-                                       rel(*p.bias_prior_cov, Pb_prior), rel(*p.velocity_prior_mean, prior_mean_world),
-                                       s.switches ? (*p.velocity_offset_prior_cov - Eigen::Matrix3d(P6.topRightCorner<3, 3>())).norm() /
-                                                        P6.topLeftCorner<3, 3>().norm()
-                                                  : 0.0});
+                                       rel(*p.bias_prior_cov, Pb_prior), rel(*p.velocity_prior_mean, prior_mean_world)});
         out.boundary_position = (p.first_pose->translation() - R0 * p0).norm();
         out.boundary_rotation = Eigen::AngleAxisd(p.first_pose->linear() * R0.transpose()).angle();
 
@@ -427,8 +414,6 @@ namespace
 
         const auto along = [&](const Eigen::Vector3d &e, const Eigen::Matrix3d &C, const Eigen::Vector3d &axis)
         { return axis.dot(e) / std::sqrt(axis.dot(C * axis)); };
-        out.e_v = u.dot(e_v);
-        out.e_o = u.dot(e_o);
         out.z_v = along(e_v, Cv, u);
         out.z_o = along(e_o, Co, u);
         out.z_v_y = along(e_v, Cv, R0 * Eigen::Vector3d::UnitY());
@@ -438,18 +423,6 @@ namespace
         out.bias = truth_stats::normalised_error(e_b, Cb);
         for (int a = 0; a < 3; a++)
             out.z_b[a] = e_b[a] / std::sqrt(Cb(a, a));
-        if (s.switches)
-        {
-            const Eigen::Matrix3d &Cvo = *h.velocity_offset_cov;
-            Eigen::Matrix2d C2;
-            C2 << u.dot(Cv * u), u.dot(Cvo * u), u.dot(Cvo * u), u.dot(Co * u);
-            const Eigen::Vector2d e2(out.e_v, out.e_o);
-            out.joint = truth_stats::normalised_error(e2, C2);
-            out.claim_cross = C2(0, 1) / std::sqrt(C2(0, 0) * C2(1, 1));
-            Eigen::Matrix2d D2 = C2;
-            D2(0, 1) = D2(1, 0) = 0.0;
-            out.joint_without_cross = truth_stats::normalised_error(e2, D2);
-        }
 
         // validity of case (b): no information along the corridor's axis, information across kept
         if (s.lidar)
@@ -475,7 +448,7 @@ namespace
             why << "prepared prior differs from the claim by " << out.prior_mismatch << "; ";
         if (!(out.boundary_position <= 1e-9) || !(out.boundary_rotation <= 1e-9))
             why << "boundary not exact (" << out.boundary_position << " m, " << out.boundary_rotation << " rad); ";
-        if (!std::isfinite(out.z_v) || !std::isfinite(out.z_o) || !std::isfinite(out.bias) || (s.switches && !std::isfinite(out.joint)))
+        if (!std::isfinite(out.z_v) || !std::isfinite(out.z_o) || !std::isfinite(out.bias))
             why << "a normalised error is not finite; ";
         if (s.lidar && !(out.ndt_along_ratio < 1e-3 && out.ndt_sideways > 0.0 && out.raw_along_share < 0.02))
             why << "not blind along the axis (along/sideways " << out.ndt_along_ratio << ", sideways " << out.ndt_sideways
@@ -568,8 +541,6 @@ namespace
         rows.push_back({"offset along u", 1, primary, {}});
         if (!spec.lidar)
             rows.push_back({"gyro bias", 3, primary, {}});
-        if (spec.switches)
-            rows.push_back({"velocity + offset along u, joint", 2, primary, {}});
         rows.push_back({"velocity, 3 axes", 3, false, {}});
         rows.push_back({"offset, 3 axes", 3, false, {}});
         if (spec.lidar)
@@ -587,8 +558,6 @@ namespace
             rows[i++].values.push_back(r.z_o * r.z_o);
             if (!spec.lidar)
                 rows[i++].values.push_back(r.bias);
-            if (spec.switches)
-                rows[i++].values.push_back(r.joint);
             rows[i++].values.push_back(r.velocity3);
             rows[i++].values.push_back(r.offset3);
             if (spec.lidar)
@@ -641,8 +610,7 @@ namespace
         {
             const RunResult &x = a.runs[j], &y = b.runs[j];
             c.all_valid = c.all_valid && x.valid && y.valid;
-            const double d[] = {std::abs(x.z_v - y.z_v), std::abs(x.z_o - y.z_o), std::abs(x.bias - y.bias),
-                                reference.switches ? std::abs(x.joint - y.joint) : 0.0};
+            const double d[] = {std::abs(x.z_v - y.z_v), std::abs(x.z_o - y.z_o), std::abs(x.bias - y.bias)};
             for (double v : d)
                 c.largest = std::max(c.largest, std::isfinite(v) ? v : 1e300);
             c.runs++;
@@ -746,7 +714,7 @@ TEST_CASE("window covariance: descriptive, the edge position rows at the shipped
     MESSAGE("descriptive set: ", f(total, 1), " s");
 }
 
-TEST_CASE("window covariance: the three controls of the error definitions" * doctest::skip())
+TEST_CASE("window covariance: the two controls of the error definitions" * doctest::skip())
 {
     const int K = 10;
     double total = 0.0;
@@ -773,49 +741,6 @@ TEST_CASE("window covariance: the three controls of the error definitions" * doc
         o << "switches " << (switches ? "ON" : "OFF") << ": control 1 (scale 1.02 g) largest per-run difference " << std::scientific
           << std::setprecision(2) << c1.largest << ", control 2 (rotated start) " << c2.largest << std::fixed << " over " << K
           << " paired runs (tolerance 1e-3)\n";
-    }
-
-    // control 3: a cross covariance of known sign. Joint carry with the carried correlation -0.8: the claimed handed-on
-    // cov(v_end, offset) along u must be negative (v_end = v_start - offset T + ..., and the carried block is negative), the
-    // errors' sample cross moment negative too, and their sample correlation within 3 standard errors (Fisher z) of the
-    // claimed one
-    {
-        const int M3 = 100;
-        Spec s;
-        s.switches = true;
-        s.carry_cross_rho = -0.8;
-        const SetResult set = run_set(s, M3, 800001);
-        total += set.seconds;
-        CHECK(set.invalid == 0);
-        double claim = 0.0, sxy = 0.0, sxx = 0.0, syy = 0.0, j_with = 0.0, j_without = 0.0;
-        bool all_negative = true;
-        int n = 0;
-        for (const RunResult &r : set.runs)
-        {
-            if (!r.valid)
-                continue;
-            n++;
-            claim += r.claim_cross;
-            all_negative = all_negative && r.claim_cross < 0.0;
-            sxy += r.e_v * r.e_o;
-            sxx += r.e_v * r.e_v;
-            syy += r.e_o * r.e_o;
-            j_with += r.joint;
-            j_without += r.joint_without_cross;
-        }
-        REQUIRE(n > 3);
-        claim /= n;
-        const double empirical = sxy / std::sqrt(sxx * syy); // centred at the truth (the errors' mean is 0 if honest)
-        const double fisher = std::abs(std::atanh(empirical) - std::atanh(claim)) * std::sqrt(double(n - 3));
-        CHECK(all_negative);
-        CHECK(sxy < 0.0);
-        CHECK(fisher <= 3.0);
-        const auto interval = truth_stats::chi2_interval(2.0 * n, alpha);
-        o << "control 3 (carried correlation -0.8, joint carry, " << n << " runs): claimed handed-on correlation along u, mean " << f(claim)
-          << (all_negative ? " (negative in every run)" : " (NOT negative in every run)") << "; the errors' sample correlation " << f(empirical)
-          << " (Fisher distance " << f(fisher, 2) << " standard errors); joint sum with the cross block " << f(j_with, 1)
-          << ", without it " << f(j_without, 1) << ", 1 % interval for " << 2 * n << " dof [" << f(interval.first, 1) << ", "
-          << f(interval.second, 1) << "]\n";
     }
     MESSAGE(o.str(), "controls: ", f(total, 1), " s");
 }

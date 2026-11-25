@@ -692,7 +692,6 @@ OdometryConfig loop_candidate_config(const SensorProfile &sensor, bool switches)
     c.degenerate_projection_ratio_full = 0.04;
     c.imu_acceleration_offset_rw_mps2_sqrt_s = 0.01;
     c.imu_edges_follow_state = switches;
-    c.imu_carry_joint_covariance = switches;
     // the front end's fields (front_end_config): the cut must be the generator's
     const OdometryConfig f = front_end_config(sensor);
     c.threshold_initial_points = f.threshold_initial_points;
@@ -962,7 +961,7 @@ LoopRun loop_run(const InertialRecording &rec, const OdometryConfig &config_in, 
     run.world = world;
     run.ahrs_gain = config_in.ahrs_gain;
     run.estimated = estimate;
-    run.switches = config_in.imu_edges_follow_state || config_in.imu_carry_joint_covariance;
+    run.switches = config_in.imu_edges_follow_state;
     Cut cut;
     cut_into_windows(cut, rec, config_in);
     run.windows_cut = static_cast<int>(cut.windows.size());
