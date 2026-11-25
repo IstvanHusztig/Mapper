@@ -187,9 +187,10 @@ def profile(E, grid, rule=Rule()):
 def weak_runs(rd, weak_ratio=0.05, axis_tolerance_deg=30.0, accelerometer_error=0.05):
     """The readings rule's runs (`loop_odometry_step_information`, steps 1-3), from a capture's readings."""
     cos_tol = np.cos(np.radians(axis_tolerance_deg))
+    # readable, as the C++: finite readings and not at rest (a window at rest is never weak, bridged or a pace reference)
     ok = (rd["present"] & np.isfinite(rd["ratio"]) & np.isfinite(rd["dur"]) & (np.nan_to_num(rd["dur"]) > 0)
-          & np.isfinite(rd["weak"]).all(axis=1) & np.isfinite(rd["move"]).all(axis=1))
-    weak = ok & (np.nan_to_num(rd["ratio"], nan=1.0) < weak_ratio) & ~rd["rest"]
+          & np.isfinite(rd["weak"]).all(axis=1) & np.isfinite(rd["move"]).all(axis=1) & ~rd["rest"])
+    weak = ok & (np.nan_to_num(rd["ratio"], nan=1.0) < weak_ratio)
     W = rd["W"]
     runs, k = [], 0
     while k < W:
@@ -566,6 +567,14 @@ def run_rule(data, edges, rule=None, min_sigma=None, log=print):
                 touching.append((e, r, "source" if source else "target"))
                 if e not in info:
                     info[e] = window_information(data, e)
+    # rule 7: a window is blind when it lies in an eligible run's support (any of them) and is unsupported there; a run
+    # without scores (supports overlap) has no supported window
+    blind_window = np.zeros(data.W, bool)
+    for r in eligible:
+        blind_window[r["sup_first"]:r["sup_last"] + 1] = True
+    for r in eligible:
+        if "scores" in r:
+            blind_window[r["scores"]["windows"][r["supported"]]] = False
     table = []
     while True:
         cand = [r for r in eligible if r["status"] == "candidate"]
@@ -593,9 +602,7 @@ def run_rule(data, edges, rule=None, min_sigma=None, log=print):
                 if s is None:
                     row["cls"] = "unconfirmed"
                 else:
-                    sc = r["scores"]
-                    blind = np.array([(sc["windows"][0] <= w <= sc["windows"][-1]) and not r["supported"][w - sc["windows"][0]] for w in wins])
-                    row["informed_share"] = float(s[~blind].sum())
+                    row["informed_share"] = float(s[~blind_window[wins]].sum())
                     row["cls"] = edge_class(row["informed_share"], before, after, limit, rule)
                 if row["cls"] == "contradicted" and r["status"] == "candidate":
                     out.add(id(r))

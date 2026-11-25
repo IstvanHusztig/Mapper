@@ -160,6 +160,8 @@ class Runs(unittest.TestCase):
         self.assertAlmostEqual(r["T"], 2.8)
         self.assertAlmostEqual(r["s1"], 0.5 * 0.05 * 2.8 ** 2)
         self.assertAlmostEqual(r["s2"], 0.5 * 0.4 * 6)  # six windows 0.5 m/s below the pace of 1 m/s
+        rd["rest"][8] = True  # a window at rest is not bridged: two runs
+        self.assertEqual([(r["first"], r["last"]) for r in ft.weak_runs(rd)], [(5, 7), (9, 11)])
         rd["rest"][5:12] = True
         self.assertEqual(ft.weak_runs(rd), [])
 
