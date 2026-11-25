@@ -133,9 +133,9 @@ and goes to the user.
       `tests/toml_golden_test.cpp` (30 loads, 45 is refused and the message names 30). Done when the case passes and the
       step checks on the branch are identical everywhere.
       (2026-11-25: merged; the refusal message prints 30 (shortest form); step checks ALL HOLD.)
-- [ ] 5.3 Docs: `docs/regions/back-end.md` (the pins: when a literal may move), the guide's settings text on retired
+- [x] 5.3 Docs: `docs/regions/back-end.md` (the pins: when a literal may move), the guide's settings text on retired
       settings. Done when `python tools/build_docs_index.py --check` holds.
-
+      (2026-11-25: back-end.md entry from the agent (merged), the guide's settings text on retired settings; --check holds.)
 ## 6. Close
 
 - [ ] 6.1 `tools/step_checks.py` on master: every line identical or passed, the register identical. `tools/end_runs.py`
