@@ -285,6 +285,13 @@ From `python tools/function_sizes.py src --min 80` (2026-11-18):
     closure and fine-time cases is advised by the agent (new index and label vectors) and waits for the user's OK.
   - The edge table in the log and the JSON is the last round's of the apply rule (`stopped_run` marks an edge that stopped
     a run).
+  - Master-reviewer on the push a7cb653..89e8047 (2026-11-25), no defect, four design points to test:
+    the move (up to min(1.5 sigma, 8 m)) has no limit of its own and is accepted on any held-out gain
+    (`loop_fine_time.cpp:897`), while held-out patches neighbour the training ones (1 m hash), so a periodic passage could be
+    shifted by one period (test: corridor with jambs every 2 m and a 2 m bump; log the held-out margin);
+    the eligibility cut (`:790`) and the overlap rule (`:409-413`, `:846`) switch the step on or off whole (test: replays
+    with min sigma 0.95 / 1.0 / 1.05); the offset grid's `floor(bound * 10)` (`:241`) can lose its last 0.1 m step (the
+    prototype does the same); the held-out split and the thinning keys depend on the world origin (`:212`, `:63`).
 - (Settled 2026-11-18: `run_consistency` is this region's, by a function entry in `owners.toml`, although it lies in
   the front-end's file; `--from-snapshot` runs are the orchestrator's until this region's first job.)
 
