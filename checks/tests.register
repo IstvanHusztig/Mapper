@@ -2,8 +2,8 @@
 # Not seen: limits computed while a test runs from data, assertions the flow never reaches (a branch not taken,
 # a loop with data-dependent bounds or that runs zero times), limits in src/ (the verdict limits, the settings hash),
 # the meaning of a test, declarations without a numeric literal in their initialiser, a lambda handed on without a name.
-# totals: 299 cases (7 should_fail, 28 skip), 1955 assertions, 206 python tests
-# assertions by macro: CHECK 1499, CHECK_FALSE 105, CHECK_MESSAGE 12, CHECK_NOTHROW 1, CHECK_THROWS_WITH_AS 1, FAIL_CHECK 1, REQUIRE 328, REQUIRE_FALSE 5, REQUIRE_MESSAGE 2, WARN_MESSAGE 1; 68 of them in asserting helpers; 166 calls of helpers, 1390 values, 584 loop lines; 593 python assertions
+# totals: 299 cases (7 should_fail, 28 skip), 1955 assertions, 217 python tests
+# assertions by macro: CHECK 1499, CHECK_FALSE 105, CHECK_MESSAGE 12, CHECK_NOTHROW 1, CHECK_THROWS_WITH_AS 1, FAIL_CHECK 1, REQUIRE 328, REQUIRE_FALSE 5, REQUIRE_MESSAGE 2, WARN_MESSAGE 1; 68 of them in asserting helpers; 166 calls of helpers, 1390 values, 584 loop lines; 631 python assertions
 
 [file] tests/accelerometer_noise_test.cpp
   value: walking() :: Motion m(Eigen::Vector3d(0.0, 0.0, 1.5), 0.0)
@@ -4309,6 +4309,8 @@
 [file] tests/test_loop_fine_time.py
   value: ROOT = Path(__file__).resolve().parents[1]
   value: X = np.array([1.0, 0.0, 0.0])
+  value: GAP_JAMBS = (3.0, 17.0)
+  value: (T_A, T_B) = (7.0, 13.5)
 
 [case] tests/test_loop_fine_time.py :: Pieces.test_thin_keeps_the_first_point_of_a_voxel_in_input_order
   markers: -
@@ -4420,6 +4422,77 @@
   assert: self.assertGreater(r['scores']['bound'], 2.0)
   assert: self.assertLessEqual(np.abs(r['offsets']).max(), 0.1 + 1e-09)
   assert: self.assertLessEqual(np.abs(P[:, :3, 3] - data.P1[:, :3, 3]).max(), 0.1 + 1e-09)
+
+[case] tests/test_loop_fine_time.py :: StraightGaps.test_a_reversal_inside_the_gap_is_straightened_and_the_supported_offsets_stay
+  markers: -
+  assert: self.assertEqual(sup, list(range(7, 18)) + [33])
+  assert: self.assertEqual(r1['status'], 'applied')
+  assert: self.assertGreater(ft.fall(c[data.mid_node[18:33]]), 1.0)
+  assert: self.assertLessEqual(np.abs(P1[gap, 0, 3] - truth[gap, 0]).max(), 0.1)
+  assert: self.assertLessEqual(ft.fall(ft.correction(data, r1['a'], P1)[data.mid_node[17:34]]), 1e-09)
+  assert: self.assertTrue(np.array_equal(r0['supported'], r1['supported']))
+  assert: self.assertTrue(np.array_equal(r0['offsets'][r0['supported']], r1['offsets'][r1['supported']]))
+  assert: self.assertLessEqual(np.abs(r1['eff'][r1['supported']] - r1['offsets'][r1['supported']]).max(), 1e-09)
+
+[case] tests/test_loop_fine_time.py :: StraightGaps.test_the_error_only_in_the_second_half_is_half_wrong_at_the_middle_and_right_at_the_ends
+  markers: -
+  assert: self.assertEqual(r['status'], 'applied')
+  assert: self.assertAlmostEqual(abs(err[mid]), 1.5, delta=0.1)
+  assert: self.assertLessEqual(abs(err[data.mid_node[17]]), 0.1)
+  assert: self.assertLessEqual(abs(err[data.mid_node[33]]), 0.1)
+
+[case] tests/test_loop_fine_time.py :: StraightGaps.test_a_right_trajectory_moves_no_node_by_more_than_a_grid_step
+  markers: -
+  assert: self.assertEqual(r['status'], 'unchanged')
+  assert: self.assertLessEqual(np.abs(P[:, :3, 3] - data.P1[:, :3, 3]).max(), 0.1)
+
+[case] tests/test_loop_fine_time.py :: StraightGaps.test_equal_jambs_at_equal_spacing_stay
+  markers: -
+  assert: self.assertLessEqual(np.abs(r['eff']).max(), 0.1 + 1e-09)
+  assert: self.assertLessEqual(np.abs(P[:, :3, 3] - data.P1[:, :3, 3]).max(), 0.1 + 1e-09)
+
+[case] tests/test_loop_fine_time.py :: StraightGaps.test_no_supported_window_is_no_candidate
+  markers: -
+  assert: self.assertEqual((r['status'], r['cause']), ('not timed', 'no surface across the passage seen by another visit'))
+  assert: self.assertFalse(r['supported'].any())
+  assert: self.assertTrue(np.array_equal(P, data.P1))
+
+[case] tests/test_loop_fine_time.py :: StraightGaps.test_the_fall
+  markers: -
+  assert: self.assertAlmostEqual(ft.fall([0, 4.2, 2.4, 5.8]), 1.8)
+  assert: self.assertEqual(ft.fall([0, 1, 1, 3]), 0.0)
+  assert: self.assertAlmostEqual(ft.fall([0, -2, -1, -3]), 1.0)
+  assert: self.assertEqual(ft.fall([2.0, 1.0, 2.0]), 1.0)
+  assert: self.assertEqual(ft.fall([]), 0.0)
+
+[case] tests/test_loop_fine_time.py :: StraightGaps.test_rounding_of_the_effective_offsets
+  markers: -
+  assert: self.assertEqual((idx - kmax).tolist(), [0, 1, 2, -2, 3, -3, 0, 15, -15])
+
+[case] tests/test_loop_fine_time.py :: StraightGaps.test_the_knots_and_the_moves
+  markers: -
+  assert: self.assertEqual(len(kt), 4)
+  assert: self.assertTrue(np.all(np.diff(kt) > 0))
+  assert: self.assertAlmostEqual(kc[1], c[data.mid_node[win[0]]] + 0.1)
+  assert: self.assertEqual(float(np.abs(shift[:n0]).max()), 0.0)
+  assert: self.assertEqual(float(np.abs(shift[n1 + 1:]).max()), 0.0)
+  assert: self.assertEqual(float(np.abs(shift[n0]).max()), 0.0)
+  assert: self.assertLessEqual(np.abs(moved_correction(data, r, shift)[idx] - np.interp(data.cap.node_t[idx], kt, kc)).max(), 1e-09)
+
+[case] tests/test_loop_fine_time.py :: StraightGaps.test_the_total_fit_with_no_correction_is_the_profile
+  markers: -
+  assert: self.assertEqual(ft.profile_total(E, grid, np.zeros(5), 0.0, 0.0).tolist(), ft.profile(E, grid).tolist())
+
+[case] tests/test_loop_fine_time.py :: StraightGaps.test_the_total_fit_equals_brute_force
+  markers: -
+  assert: self.assertAlmostEqual(cost(E, c, c0, c1, ft.profile_total(E, grid, c, c0, c1)), best, places=9)
+
+[case] tests/test_loop_fine_time.py :: StraightGaps.test_window_rows_end_with_the_correction_the_effective_offset_and_the_total
+  markers: -
+  assert: self.assertEqual(list(rows[0])[-3:], ['correction_m', 'effective_offset_m', 'total_m'])
+  assert: self.assertAlmostEqual(r['total_m'], r['correction_m'] + r['effective_offset_m'], places=5)
+  assert: self.assertIn('fall_after_loop_closure_m', s[0])
+  assert: self.assertIn('fall_after_step_m', s[0])
 
 [file] tests/test_loop_graph.py
   value: ROOT = Path(__file__).resolve().parents[1]
