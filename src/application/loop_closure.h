@@ -7,6 +7,7 @@
 #include <utility>
 #include <vector>
 #include "input_ports.h"
+#include "loop_fine_time.h"
 #include "odometry_config.h"
 #include "run_reporting.h"
 #include "window.h"
@@ -87,9 +88,13 @@ struct LoopClosureReport;
 // nothing is registered or applied (outcome readings_missing), never the fixed sigmas instead; when only some windows lack
 // them (a run the odometry stopped early) a warning names them and the rule treats them as unreadable. loop_closure_match_check without
 // loop_closure_odometry_from_readings is refused the same way (outcome match_check_without_readings): on uniform steps the
-// match check rates true edges across a blind stretch as false.
+// match check rates true edges across a blind stretch as false. loop_closure_fine_time_placement without
+// loop_closure_odometry_from_readings is refused likewise (outcome fine_time_without_readings). With
+// loop_closure_fine_time_placement, after the node correction the eligible runs are placed by loop_fine_time_step with the
+// curves of fine_time_scores; when that source can't give them (null, or a capture without the curves of this pose graph
+// result and these eligible runs) an error names the cause and nothing is applied (outcome fine_time_curves_unavailable).
 int close_loops(std::vector<Window> &windows, const std::vector<LoopClosureSegment> &segments, LoopClosureRegistrations &registrations,
-                const OdometryConfig &params, Logger &logger, LoopClosureReport *report = nullptr);
+                const OdometryConfig &params, Logger &logger, LoopClosureReport *report = nullptr, LoopFineTimeScores *fine_time_scores = nullptr);
 
 // The earlier segments that qualify as cross-floor revisits of segment j, nearest (horizontally) first: at least
 // loop_closure_cross_floor_min_time_gap_s apart, neither in loop_closure_cross_floor_exclude_segments, a vertical offset
@@ -209,6 +214,7 @@ struct LoopOdometryRun
     double sigma_m = 0.0;
     std::vector<std::pair<int, double>> step_shares; // (step k, the share of T in segment k), steps in order
     double share_after_last_step = 0.0;              // the share of T in the last segment (no step covers it)
+    double largest_axis_angle_deg = 0.0;             // the largest angle between a weak window's weak axis and the run's axis
 };
 
 struct LoopOdometryInformation
@@ -366,4 +372,77 @@ struct LoopClosureReport
     // outcome applied with loop_closure_odometry_from_readings: every kept edge with a source window in a weak run, per such
     // run (edges in kept order, runs in order)
     std::vector<LoopEdgeTimeSupportReading> edge_time_support;
+    // loop_closure_fine_time_placement: what the fine-time step did (loop_fine_time_step)
+    LoopFineTimeReport fine_time;
 };
+
+// ---- the fine-time step (change loop-closure-fine-time-guard; the rule and its pure parts: loop_fine_time.h) ----
+
+// the rule's constants with min_sigma_m = loop_closure_fine_time_min_sigma_m and flank_windows the segments' window count
+LoopFineTimeRule loop_fine_time_rule(const OdometryConfig &params);
+
+// (outcome fine_time_without_readings, message) when loop_closure_fine_time_placement is on without
+// loop_closure_odometry_from_readings; nothing otherwise
+std::optional<std::pair<std::string, std::string>> loop_fine_time_refusal(const OdometryConfig &params);
+
+// A window's points as the loop closure uses them (held-out blocks removed, range within min_distance_lidar ..
+// max_distance_lidar, a valid node index), in file order: each point in its node's frame and its node index
+void loop_window_points(const Window &window, int w, const OdometryConfig &params, PointStore &point_store, std::vector<Eigen::Vector3d> &local,
+                        std::vector<int> &node);
+
+// A segment's points as the loop closure holds them: its windows' points (loop_window_points) placed with the odometry's
+// poses and thinned to 0.1 m voxels (the first point of each voxel kept, in input order), each with its window and node;
+// with keep_local also each kept point in its node's frame (the fine-time step's reference)
+struct LoopSegmentPoints
+{
+    std::vector<Eigen::Vector3d> points;
+    std::vector<Eigen::Vector3d> local; // only with keep_local
+    std::vector<int> window;            // absolute window index
+    std::vector<int> node;              // node index in its window (index_pose)
+    int first_window = 0;
+    int windows = 0; // the segment's window count
+};
+LoopSegmentPoints loop_segment_points(const std::vector<Window> &windows, const LoopClosureSegment &s, const OdometryConfig &params,
+                                      PointStore &point_store, bool keep_local);
+
+// The score curves of every eligible run's support from the points (rules 4 and 5): the reference from the segments'
+// points of the qualifying windows (loop_segment_points with keep_local), placed with the corrected poses; the source
+// windows from the point store (loop_window_points), placed likewise. false (and `why`) if the segments' points lack their
+// local coordinates.
+bool loop_fine_time_curves_from_points(const LoopFineTimeQuery &query, const std::vector<LoopSegmentPoints> &segment_points,
+                                       const std::vector<LoopClosureSegment> &segments, PointStore &point_store, const OdometryConfig &params,
+                                       std::vector<LoopFineTimeCurves> &out, std::string &why);
+
+// the run's source: the curves from the points; it keeps what it computed for the capture
+class PointFineTimeScores : public LoopFineTimeScores
+{
+public:
+    PointFineTimeScores(const std::vector<LoopSegmentPoints> &segment_points, const std::vector<LoopClosureSegment> &segments, PointStore &point_store,
+                        const OdometryConfig &params)
+        : segment_points_(segment_points), segments_(segments), point_store_(point_store), params_(params)
+    {
+    }
+    bool curves(const LoopFineTimeQuery &query, std::vector<LoopFineTimeCurves> &out, std::string &why) override;
+    // the curves of the last call with the pose graph result and the eligible runs they belong to (none before a call)
+    const std::optional<LoopFineTimeCapture> &captured() const { return captured_; }
+
+private:
+    const std::vector<LoopSegmentPoints> &segment_points_;
+    const std::vector<LoopClosureSegment> &segments_;
+    PointStore &point_store_;
+    const OdometryConfig &params_;
+    std::optional<LoopFineTimeCapture> captured_;
+};
+
+// The step on the windows after the node correction (`windows`; odometry_poses: each window's poses before it). runs: the
+// readings rule's runs; kept / kept_tries: the kept loop edges and their registrations (null where none); segment_poses:
+// the pose graph's result. Rule 2 picks the eligible runs; their curves come from `scores`; rules 5 and 6 give each run's
+// profile and rule 8 (with rule 7's reading of every kept edge that touches a run) decides which are applied; the nodes of
+// an applied run's support move along its axis by the profile (positions only), motion_model_poses follow the poses.
+// One log line per eligible run and one per edge of the table. false (and `why`, nothing moved) when `scores` can't give
+// the curves.
+bool loop_fine_time_step(std::vector<Window> &windows, const std::vector<std::vector<Eigen::Affine3d>> &odometry_poses,
+                         const std::vector<LoopClosureSegment> &segments, const std::vector<LoopOdometryRun> &runs,
+                         const std::vector<LoopClosureEdge> &kept, const std::vector<const LoopClosureTry *> &kept_tries,
+                         const std::vector<Eigen::Affine3d> &segment_poses, const OdometryConfig &params, LoopFineTimeScores &scores, Logger &logger,
+                         LoopFineTimeReport &report, std::string &why);

@@ -43,11 +43,11 @@ def try_of(correction, H=None):
                 angle=0.0, information_ratio=0.0, accepted=True, asked=True, registered=True)
 
 
-def capture_bytes(version, readings=None, blocks=None):
+def capture_bytes(version, readings=None, blocks=None, fine_time=False):
     """A capture file as dMapper writes it (loop_closure_capture_file.cpp): one setting, two windows of two nodes, one
     segment, the result poses, the loop count and, from format 2 on, the windows' readings (None: absent). blocks: None for
     no tries, else one try per entry (segment 0 -> k, k from 1), registered when its entry (a list of 3x3 per source window,
-    format 3 only) is not empty."""
+    format 3 only) is not empty. fine_time (format 4): False for no curves, else one eligible run with one window's curves."""
     out = bytearray(b"DMLCCAP1" + struct.pack("<I", version))
     q = lambda n: struct.pack("<Q", n)  # noqa: E731
     d = lambda *v: struct.pack("<%dd" % len(v), *v)  # noqa: E731
@@ -78,6 +78,14 @@ def capture_bytes(version, readings=None, blocks=None):
         out += q(len(blocks or []))
         for b in blocks or []:
             out += q(len(b)) + b"".join(d(*np.asarray(m, float).T.ravel()) for m in b)
+    if version >= 4:
+        out += struct.pack("<B", int(bool(fine_time)))
+        if fine_time:
+            out += q(1) + d(*translation(0.25).T.ravel())                                       # segment poses
+            out += q(1) + struct.pack("<iiiiiB", 0, 1, 1, 0, 1, 0) + d(1.5, 0.0, 1.4) + d(1, 0, 0) + d(0, 1, 0)  # eligible run
+            out += q(1) + struct.pack("<ii", 0, 1) + d(2.25) + q(3) + d(-0.1, 0.0, 0.1) + struct.pack("<i", 42)
+            out += q(1) + struct.pack("<ii", 9, 3) + q(3) + d(0.25, 0.01, 0.25) + q(3) + struct.pack("<3i", 0, 9, 1)
+            out += q(0) + q(0)                                                                  # no held-out score
     return bytes(out)
 
 
@@ -228,7 +236,7 @@ class LoopGraphTest(unittest.TestCase):
             self.assertEqual(list(r["move"][1]), [0.1, 0.2, 0.3])
             self.assertEqual(r["dur"][1], 0.4)
             self.assertEqual(list(r["t"]), [0.0, 1.0])
-            p.write_bytes(capture_bytes(4, [None, None]))
+            p.write_bytes(capture_bytes(5, [None, None]))  # a format not known
             with self.assertRaises(ValueError):
                 lg.read_capture(p)
 
@@ -259,6 +267,35 @@ class LoopGraphTest(unittest.TestCase):
             p.write_bytes(bytes(b))
             with self.assertRaises(ValueError):
                 lg.read_capture(p)
+
+    def test_capture_format_4_fine_time_curves(self):
+        readings = [None, (0.01, (0.0, 1.0, 0.0), 0, (0.1, 0.2, 0.3), 0.4)]
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "c.bin"
+            p.write_bytes(capture_bytes(4, readings, blocks=[[np.eye(3), np.eye(3)]], fine_time=True))
+            c = lg.read_capture(p)
+            f = c.fine_time
+            self.assertEqual(f["segment_poses"].shape, (1, 4, 4))
+            np.testing.assert_array_equal(f["segment_poses"][0], translation(0.25))
+            e = f["eligible"][0]
+            self.assertEqual((e["run"], e["first"], e["last"], e["support_first"], e["support_last"], e["overlap"]), (0, 1, 1, 0, 1, False))
+            self.assertEqual((e["sigma"], e["pin_end"]), (1.5, 1.4))
+            np.testing.assert_array_equal(e["axis"], [0, 1, 0])
+            cu = f["curves"][0]
+            self.assertEqual((cu["bound"], cu["reference_patches"]), (2.25, 42))
+            np.testing.assert_array_equal(cu["grid"], [-0.1, 0.0, 0.1])
+            w = cu["windows"][0]
+            self.assertEqual((w["training_patches"], w["held_out_patches"]), (9, 3))
+            np.testing.assert_array_equal(w["training"], [0.25, 0.01, 0.25])
+            self.assertEqual(list(w["training_matched"]), [0, 9, 1])
+            self.assertEqual(len(w["held_out"]), 0)
+            self.assertIn("Hw", c.tries[(0, 1, False)])
+            # format 4 without curves, and format 3: none
+            p.write_bytes(capture_bytes(4, readings, blocks=[[np.eye(3), np.eye(3)]]))
+            self.assertIsNone(lg.read_capture(p).fine_time)
+            p.write_bytes(capture_bytes(3, readings, blocks=[[np.eye(3), np.eye(3)]]))
+            self.assertIsNone(lg.read_capture(p).fine_time)
+
 
 if __name__ == "__main__":
     unittest.main()

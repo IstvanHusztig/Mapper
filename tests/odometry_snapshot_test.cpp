@@ -186,6 +186,10 @@ TEST_CASE("odometry snapshot: refused for other odometry settings, accepted for 
     post.save_odometry_snapshot = !post.save_odometry_snapshot;
     post.loop_closure_odometry_from_readings = !post.loop_closure_odometry_from_readings;
     post.loop_closure_odometry_weak_ratio = 0.1;
+    // the fine-time step's settings are loop closure settings (category loop_closure, outside the hash): a snapshot written
+    // before they existed carries no trace of them and loads with any value
+    post.loop_closure_fine_time_placement = !post.loop_closure_fine_time_placement;
+    post.loop_closure_fine_time_min_sigma_m = 2.5;
     CHECK(read_odometry_snapshot(file.path, post, read, why));
 }
 

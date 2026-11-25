@@ -42,6 +42,7 @@ add_executable(lidar_odometry_tests
   odometry_snapshot_test.cpp
   folder_result_sink_test.cpp
   loop_closure_test.cpp
+  loop_fine_time_test.cpp
   consistency_test.cpp
   orientation_test.cpp
   fusion_orientation_test.cpp

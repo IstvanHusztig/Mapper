@@ -44,6 +44,12 @@ bool read_loop_closure_capture(const std::filesystem::path &file, LoopClosureCap
 bool write_loop_closure_replay_json(const std::filesystem::path &file, const LoopClosureReplayResult &result,
                                     const LoopClosureSettingsDifference &settings, const OdometryConfig &config, std::string &why);
 
+// the fine-time step's windows (loop_fine_time.csv, the columns of tools/loop_fine_time.py's windows.csv): per window of
+// each scored eligible run its run, window, whether it is a run window, start and middle time from the first window's first
+// node [s], offset [m], supported, training and held-out patches, the most training patches matched at one offset, the
+// training and held-out RMS distance at 0 and at the profile's offset [m], and the offset its training curve prefers alone
+bool write_loop_fine_time_csv(const std::filesystem::path &file, const LoopFineTimeReport &report, std::string &why);
+
 // writes the capture of a CLI run into its output folder (loop_closure_capture.bin)
 class FolderLoopClosureCaptureSink : public LoopClosureCaptureSink
 {

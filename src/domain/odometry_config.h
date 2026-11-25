@@ -185,6 +185,12 @@ struct OdometryConfig
     // again. Needs loop_closure_odometry_from_readings (refused without it)
     bool loop_closure_match_check = false;
     double loop_closure_match_check_quantile = 0.999;
+    // after the node correction, each weak run of the readings rule whose sigma is at least
+    // loop_closure_fine_time_min_sigma_m is placed along its axis from the scans (loop_fine_time_step in loop_closure.h:
+    // a profile of offsets per window against the surfaces across the axis other visits saw, applied only when the held-out
+    // scans agree and no loop edge contradicts it). Needs loop_closure_odometry_from_readings (refused without it)
+    bool loop_closure_fine_time_placement = false;
+    double loop_closure_fine_time_min_sigma_m = 1.0;
     double loop_closure_edge_sigma_m = 0.05;
     double loop_closure_edge_sigma_deg = 0.3;
     // same-floor registrations per segment (revisit_tries in loop_closure.h), and the largest disagreement between the

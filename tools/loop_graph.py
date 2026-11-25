@@ -108,6 +108,11 @@ class Capture:
     # node from the first window's first node, s), dur, ratio, rest, weak (W, 3), move (W, 3); NaN (rest False) where a window
     # has none, present (W,) bool
     readings: dict = None
+    # format 4: the fine-time step's score curves (None when absent): segment_poses (S, 4, 4), eligible (list of dicts: run,
+    # first, last, support_first, support_last, overlap, sigma, pin_begin, pin_end, axis_odometry, axis), curves (list of dicts:
+    # support_first, support_last, bound, grid, reference_patches, windows: training_patches, held_out_patches, training,
+    # training_matched, held_out, held_out_matched; an empty score: no score)
+    fine_time: dict = None
 
     def setting(self, name, default=None):
         return float(self.settings[name]) if name in self.settings else default
@@ -118,9 +123,9 @@ class Capture:
 
 
 def read_capture(path):
-    """Read a DMLCCAP1 capture, format 1, 2 or 3 (little-endian doubles; matrices stored column-major). Format 3 adds each try's
+    """Read a DMLCCAP1 capture, format 1 to 4 (little-endian doubles; matrices stored column-major). Format 3 adds each try's
     information per source window: `Hw` (windows of segment j, 3, 3), the translation block of `H` summed per window (empty for a try
-    that was not registered); a try of format 1 or 2 has no `Hw`."""
+    that was not registered); a try of format 1 or 2 has no `Hw`. Format 4 adds the fine-time step's score curves (Capture.fine_time)."""
     with open(path, "rb") as f:
         def val(fmt):
             return struct.unpack("<" + fmt, f.read(struct.calcsize("<" + fmt)))
@@ -135,7 +140,7 @@ def read_capture(path):
             return arr(n * n).reshape(n, n).T
 
         magic, version = val("8sI")
-        if magic != b"DMLCCAP1" or version not in (1, 2, 3):
+        if magic != b"DMLCCAP1" or version not in (1, 2, 3, 4):
             raise ValueError(f"{path}: not a loop closure capture (magic {magic!r}, version {version})")
         cfg = {}
         for _ in range(count()):
@@ -198,12 +203,38 @@ def read_capture(path):
             for key in order:
                 k = count()
                 tries[key]["Hw"] = arr(9 * k).reshape(k, 3, 3).transpose(0, 2, 1)
+        fine_time = None
+        if version >= 4 and val("B")[0]:
+            seg_poses = np.array([mat(4) for _ in range(count())]).reshape(-1, 4, 4)
+            eligible = []
+            for _ in range(count()):
+                run, first, last, s0, s1, overlap = val("iiiiiB")
+                sigma, pin0, pin1 = arr(3)
+                eligible.append(dict(run=run, first=first, last=last, support_first=s0, support_last=s1, overlap=bool(overlap), sigma=sigma,
+                                     pin_begin=pin0, pin_end=pin1, axis_odometry=arr(3), axis=arr(3)))
+            curves = []
+            for _ in range(count()):
+                s0, s1 = val("ii")
+                bound = arr(1)[0]
+                grid = arr(count())
+                ref = val("i")[0]
+                wins = []
+                for _ in range(count()):
+                    n_train, n_held = val("ii")
+                    training = arr(count())
+                    training_matched = np.array(val("%di" % count()), int)
+                    held_out = arr(count())
+                    held_out_matched = np.array(val("%di" % count()), int)
+                    wins.append(dict(training_patches=n_train, held_out_patches=n_held, training=training, training_matched=training_matched,
+                                     held_out=held_out, held_out_matched=held_out_matched))
+                curves.append(dict(support_first=s0, support_last=s1, bound=bound, grid=grid, reference_patches=ref, windows=wins))
+            fine_time = dict(segment_poses=seg_poses, eligible=eligible, curves=curves)
         if f.read():
             raise ValueError(f"{path}: trailing bytes, the format has changed")
     st = np.concatenate(stamps)
     if readings is not None:
         readings["t"] = st[np.array(offsets[:-1]), 0] - st[0, 0]
-    return Capture(cfg, segs, np.array(offsets), np.concatenate(poses), st[:, 0], st[:, 1], tries, readings)
+    return Capture(cfg, segs, np.array(offsets), np.concatenate(poses), st[:, 0], st[:, 1], tries, readings, fine_time)
 
 
 # ---- edges -------------------------------------------------------------------------------------------------------------

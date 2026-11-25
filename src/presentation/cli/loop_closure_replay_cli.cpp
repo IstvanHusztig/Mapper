@@ -104,7 +104,7 @@ int run_loop_closure_replay(const char *capture_file, const char *params_file, c
         log_error(logger) << "loop closure replay: the capture's windows don't give the capture's segments with these settings";
         return 1;
     }
-    if (r.report.outcome == "readings_missing" || r.report.outcome.rfind("match_check_", 0) == 0)
+    if (r.report.outcome == "readings_missing" || r.report.outcome.rfind("match_check_", 0) == 0 || r.report.outcome.rfind("fine_time_", 0) == 0)
     {
         log_error(logger) << "loop closure replay: loop closure not run (" << r.report.outcome << "), no trajectory written";
         return 1;
@@ -142,6 +142,11 @@ int run_loop_closure_replay(const char *capture_file, const char *params_file, c
     sink.parameters(config, paths, gui);
     const fs::path json = fs::path(output_folder) / "loop_closure_edges.json";
     if (!write_loop_closure_replay_json(json, r, settings, config, why))
+    {
+        log_error(logger) << "loop closure replay: " << why;
+        return 1;
+    }
+    if (r.report.fine_time.ran && !write_loop_fine_time_csv(fs::path(output_folder) / "loop_fine_time.csv", r.report.fine_time, why))
     {
         log_error(logger) << "loop closure replay: " << why;
         return 1;
