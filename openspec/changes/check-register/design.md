@@ -44,7 +44,7 @@ See proposal.md for the motivation. What shapes the approach:
 
 ### D1 The register is generated from the sources, not from the test executable
 
-`tools/check_register.py` reads `tests/*.cpp`, `tests/*.h` and `tests/test_*.py`. It needs no build, runs in seconds, and
+`checks/check_register.py` reads `tests/*.cpp`, `tests/*.h` and `tests/test_*.py`. It needs no build, runs in seconds, and
 sees what the executable cannot tell: the assertions' text and the limits.
 
 - *Alternative: `lidar_odometry_tests --list-test-cases`.* Gives names only, needs the build, and says nothing of
@@ -86,7 +86,7 @@ One text file, `checks/tests.register`, sorted by file and by position in the fi
 diff of it reads without the tool:
 
 ```
-# check register of the tests. Written by tools/check_register.py --record; do not edit.
+# check register of the tests. Written by checks/check_register.py --record; do not edit.
 # Not seen: limits computed while a test runs, assertions the flow never reaches, limits in src/.
 # totals: 292 cases (24 skip, 12 should_fail), 1939 assertions, 71 python tests
 
@@ -157,7 +157,7 @@ record. The existing convention for an expected parameters-file difference stays
 
 ### D6 The register's own proof
 
-`tests/test_check_register.py` (verification's) holds small C++ and Python sources as strings and plants the edits of
+`tests/test_check_register.py` (the orchestrator's, like the tool) holds small C++ and Python sources as strings and plants the edits of
 the spec (tolerance in an assertion, in a named value, in a case table row, in a helper's argument; assertion deleted;
 assertion commented out; `#if 0` round an assertion; `#ifdef` round an assertion; skip added; should_fail removed; case
 renamed; case moved; an assertion reworded), and requires the kind and the exit code for each. It also runs the reader
@@ -288,10 +288,9 @@ After these, the instruments' file is updated and the register recorded.
 - [A noisy register: every test edit is a difference] → additions and rewordings need no decision and do not fail in a
   worktree; only removals, changed numbers or operators and markers do. If rewordings turn out to hide real changes,
   the class moves to "change" (one line in the tool, stated in the tasks as a review point after the first weeks).
-- [The verification region owns the tool that guards its own tests] → the tool's proof is a test file in the register
-  (weakening it is itself a register change), and `tools/check_register.py` is named in `owners.toml` under the
-  orchestrator, overriding the `tools/**` glob for this one file if `region_owners.py` allows a file entry beside a
-  glob (to be confirmed in task 1.1; otherwise the tool lives in `checks/`).
+- [The tool that guards the tests could itself be weakened] → the tool (`checks/check_register.py`) and its test
+  (`tests/test_check_register.py`) are named by no region in `owners.toml` and are therefore the orchestrator's; a
+  branch that touches either is listed by `region_owners.py --diff`, and the test is in the register.
 - [The step checks grow by under a minute] → measured in task 1.6; the tool tests could run only the fast files if the
   slow one (`test_loop_fine_time.py`) dominates, but a skipped test file is exactly what this change is against.
 - [An agent's worktree run "HOLDS, to record" and the orchestrator forgets to record] → the main tree's step checks
@@ -316,7 +315,5 @@ instruments' file are data.
 
 ## Open Questions
 
-- Whether `tools/check_register.py` can be the orchestrator's by a file entry beside the `tools/**` glob (task 1.1
-  decides between that and placing it under `checks/`); either way the behaviour is the same.
 - Whether the class tables of the loop world can be given a stated power (not planned here; the item stays
   `not established`).

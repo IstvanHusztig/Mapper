@@ -22,7 +22,7 @@ and instruments, in one place, checked by a tool. Source: R3 and R4 of `experime
 
 ## What Changes
 
-- **The check register, part 1: the tests as data.** A new tool (`tools/check_register.py`) reads the test sources and
+- **The check register, part 1: the tests as data.** A new tool (`checks/check_register.py`) reads the test sources and
   writes one text file, `checks/tests.register`: per test case its file, name and markers, every assertion as one
   line, and the constants and case tables its limits come from. The file is committed and is the orchestrator's.
   `tools/step_checks.py` compares the sources against it and prints what differs by kind: case added or removed, marker
@@ -91,7 +91,7 @@ tolerance or marker of an existing test other than the loop chain's blindness de
 
 ## Impact
 
-- New: `tools/check_register.py`, `checks/tests.register`, `checks/instruments.toml`, `tests/test_check_register.py`.
+- New: `checks/check_register.py`, `checks/tests.register`, `checks/instruments.toml`, `tests/test_check_register.py`.
 - `tools/step_checks.py` (two more lines: the tool tests, the register), `tools/run_health.py` (limits from the log),
   `tools/README.md`.
 - `src/domain/window_verdict.cpp` (one log line with the limits; no result changes), `src/infrastructure/toml_io.cpp`

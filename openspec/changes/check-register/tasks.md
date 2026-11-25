@@ -8,10 +8,11 @@ and goes to the user.
 
 ## 1. The register of the tests
 
-- [ ] 1.1 Decide where the tool lives: try a file entry `tools/check_register.py` under `[orchestrator]` in
-      `docs/regions/owners.toml` beside verification's `tools/**`. Done when `python tools/region_owners.py` is clean
-      and `--owner tools/check_register.py` prints the orchestrator; if a file entry cannot override the glob, the tool
-      goes to `checks/check_register.py` and design.md's paths are corrected.
+- [x] 1.1 Decide where the tool lives: a file entry under `[orchestrator]` beside verification's `tools/**`, or
+      `checks/`. (2026-11-25: `region_owners.py` reports a file named by two regions as a problem
+      (`tools/region_owners.py:52-53`), so a file entry cannot override the glob. The tool is
+      `checks/check_register.py` and its test `tests/test_check_register.py`; neither is named in `owners.toml`, so both
+      are the orchestrator's. The paths in the proposal, design and tasks are corrected.)
 - [ ] 1.2 The reader (design D2) and the writer (D3) for the C++ tests: cases, markers, assertions, asserting helpers
       and their calls, values, `#if 0`, other conditionals, subcase prefixes; failure with file and line on what it
       cannot match; the cross-count per file. Done when `tests/test_check_register.py` passes its reader cases (each
@@ -31,7 +32,7 @@ and goes to the user.
 - [ ] 1.6 The orchestrator records the first register from master, reads it against the survey's counts (about 290
       cases, 12 `should_fail`, 24 to 26 `skip`, about 1,940 assertions; `LoopTolerances`' members and the two case
       tables present as values; the six helpers' calls present), and commits `checks/tests.register` in its own commit.
-      Done when `python tools/check_register.py` exits 0 on that commit and the totals line matches an independent
+      Done when `python checks/check_register.py` exits 0 on that commit and the totals line matches an independent
       count (`grep`) written into this task.
 - [ ] 1.7 `tools/step_checks.py`: the lines `tool tests` and `check register` (D5: additions hold in a region's
       worktree and fail in the main tree; a change fails everywhere), and the time-limit count on the full run's line.
@@ -55,7 +56,7 @@ and goes to the user.
 - [ ] 2.2 `checks/instruments.toml` written by the orchestrator from the survey of 2026-11-25 (design D7's list): every
       case name copied from the register, every tolerance and number from the source line; `not_established` and
       `not_applicable` where the survey found nothing, with the reason; the register tool as an instrument of its own.
-      Done when `python tools/check_register.py` exits 0 with the file in place and the printed table is pasted into
+      Done when `python checks/check_register.py` exits 0 with the file in place and the printed table is pasted into
       this task.
 - [ ] 2.3 Docs: the guide's instruments chapter (`docs/index.html#instruments`) says where each instrument's proof is
       listed and what the five items mean, in general words (no recording names); `docs/regions/verification.md` points
@@ -85,7 +86,7 @@ and goes to the user.
       the register.
 - [ ] 3.6 After 3.1 to 3.5 are merged: `checks/instruments.toml` updated (the closed items name their new cases, the
       simulator's resolution carries its measured numbers), the register recorded. Done when
-      `python tools/check_register.py` exits 0 and the table shows no `not established` item among those D10 closes.
+      `python checks/check_register.py` exits 0 and the table shows no `not established` item among those D10 closes.
 
 ## 4. One source for the verdict limits
 
@@ -101,7 +102,7 @@ and goes to the user.
 - [ ] 4.4 Docs: `tools/README.md` (run_health), the verify-run skill (`.claude/skills/verify-run/SKILL.md` and its
       `.agents` copy: the limits are the run's own, printed in the report), `CLAUDE.md` (Window verdict),
       `docs/regions/solver.md` and `verification.md`; the instruments' file's `run_health` section. Done when
-      `python tools/build_docs_index.py --check` holds and `python tools/check_register.py` exits 0 after the register
+      `python tools/build_docs_index.py --check` holds and `python checks/check_register.py` exits 0 after the register
       is recorded.
 
 ## 5. The settings hash and the retired threshold
