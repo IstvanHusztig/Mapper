@@ -81,8 +81,10 @@ has the covariance <i>P</i> − <i>P</i><sub>post</sub>, so</p>
 <pre>q = d<sup>T</sup> P<sup>-1</sup> d / (n − tr(P<sup>-1</sup> P<sub>post</sub>))      expected value 1</pre>
 <p>with <i>n</i> the state's dimension. <b>q near 1:</b> the window moved the state about as far as its claim allows.
 <b>q of 9:</b> the moves are about 3 times larger (in sigma) than claimed. <b>q well below 1:</b> the claim is more
-cautious than needed. Three states are read: the <b>start velocity</b> (every window with the accelerometer term), the
-<b>start velocity and offset jointly</b> (with <code>imu_carry_joint_covariance</code>), and the <b>gyro bias</b>.</p>
+cautious than needed. Two states are read: the <b>start velocity</b> (every window with the accelerometer term) and the
+<b>gyro bias</b>. A third, the <b>start velocity and offset jointly</b>, was read only with the joint prior of layer 2 of
+<code>honest-inertial-carry</code> (<code>imu_carry_joint_covariance</code>, removed 2026-11-25, the user's decision); its summary
+line, its place in the verdict line and its <code>move_joint*</code> columns stay, always NOT MEASURED (<code>absent</code>).</p>
 <div class="warn"><b>Why not the velocity chi²?</b>The <a href="index.html#t-chi2">velocity chi²</a> divides the same move
 by <i>P</i> alone. That statistic's expected value is not 3 but 3 − tr(<i>P</i><sup>-1</sup><i>P</i><sub>post</sub>), between 0
 and 3, and about 1 at rest, so it understates how far off a claim is. The chi² and its agreed limits stay as they are;

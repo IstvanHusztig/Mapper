@@ -84,20 +84,15 @@ struct HonestyInputs
 {
     // a covariance was taken during the iterations, and the state still holds it (a step taken back restores both)
     bool covariance_valid = false;
-    bool velocity = false;    // the accelerometer term: start velocity and acceleration offset
-    bool joint_prior = false; // imu_carry_joint_covariance: the prior on (start velocity, offset) is one joint Gaussian
-    bool bias = false;        // gyro-bias estimation
+    bool velocity = false; // the accelerometer term: start velocity
+    bool bias = false;     // gyro-bias estimation
     bool bias_clamped = false;
 
     Eigen::Vector3d velocity_prior_mean = Eigen::Vector3d::Zero();
     Eigen::Matrix3d velocity_prior_cov = Eigen::Matrix3d::Zero();
-    Eigen::Vector3d offset_prior_mean = Eigen::Vector3d::Zero();
-    Eigen::Matrix<double, 6, 6> joint_prior_cov = Eigen::Matrix<double, 6, 6>::Zero(); // (start velocity, offset); joint mode
     Eigen::Vector3d start_velocity = Eigen::Vector3d::Zero();
-    Eigen::Vector3d acc_offset = Eigen::Vector3d::Zero();
-    Eigen::Matrix<double, 6, 6> start_posterior = Eigen::Matrix<double, 6, 6>::Zero(); // (start velocity, offset)
-    Eigen::Vector3d start_velocity_step = Eigen::Vector3d::Zero();                    // since the covariance was taken
-    Eigen::Vector3d acc_offset_step = Eigen::Vector3d::Zero();
+    Eigen::Matrix3d start_velocity_posterior = Eigen::Matrix3d::Zero();
+    Eigen::Vector3d start_velocity_step = Eigen::Vector3d::Zero(); // since the covariance was taken
 
     Eigen::Vector3d bias_prior_mean = Eigen::Vector3d::Zero();
     Eigen::Matrix3d bias_prior_cov = Eigen::Matrix3d::Zero();
@@ -106,11 +101,13 @@ struct HonestyInputs
     Eigen::Vector3d bias_step = Eigen::Vector3d::Zero();
 };
 
-// a window's normalised moves: the start velocity (with the accelerometer term), start velocity and offset jointly (with
-// the joint prior), the gyro bias (with its estimation); NOT MEASURED otherwise, or for a reason of normalised_move
+// a window's normalised moves: the start velocity (with the accelerometer term), the gyro bias (with its estimation); NOT
+// MEASURED otherwise, or for a reason of normalised_move
 struct HonestyReadings
 {
     NormalisedMove start_velocity;
+    // start velocity and offset jointly: measured only with the joint prior of honest-inertial-carry layer 2, removed
+    // 2026-11-25; always NOT MEASURED (absent), kept so the verdict line, its summary and window_features.csv keep their layout
     NormalisedMove joint;
     NormalisedMove gyro_bias;
 };

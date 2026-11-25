@@ -137,15 +137,7 @@ HonestyReadings honesty_readings(const HonestyInputs &in, const NormalisedMoveLi
             r.start_velocity = not_measured(MoveNotMeasured::absent);
         else
             r.start_velocity = normalised_move(in.velocity_prior_mean, in.velocity_prior_cov, in.start_velocity,
-                                               in.start_posterior.topLeftCorner<3, 3>(), in.start_velocity_step, limits);
-        if (in.joint_prior && in.covariance_valid)
-        {
-            Eigen::Matrix<double, 6, 1> mean, result, step;
-            mean << in.velocity_prior_mean, in.offset_prior_mean;
-            result << in.start_velocity, in.acc_offset;
-            step << in.start_velocity_step, in.acc_offset_step;
-            r.joint = normalised_move(mean, in.joint_prior_cov, result, in.start_posterior, step, limits);
-        }
+                                               in.start_velocity_posterior, in.start_velocity_step, limits);
     }
     if (in.bias)
     {

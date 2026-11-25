@@ -114,8 +114,6 @@ namespace
             t.options.position_information_scale = params.imu_position_information_scale;
             t.options.zero_velocity_sigma_mps = params.imu_zero_velocity_sigma_mps;
             t.options.edges_follow_state = params.imu_edges_follow_state;
-            t.options.joint_covariance = params.imu_carry_joint_covariance;
-            t.options.window_sigma_mps2 = params.imu_accel_window_sigma_mps2;
         }
         return t;
     }
@@ -146,23 +144,7 @@ namespace
             const double gap = std::max(window.timestamps.front().first - carry.velocity_time_s, 0.0);
             const double density = params.imu_accel_noise_density_mps2_sqrt_hz, floor = params.imu_accel_floor_sigma_mps2;
             mean = carry.velocity_mean;
-            // with imu_carry_joint_covariance also the prior's covariance with the offset; it stays zero (the AccTerm's
-            // default) where the prior does not come from the previous window
-            if (t.options.joint_covariance)
-            {
-                // imu_carry_joint_covariance: (end velocity, offset) carried together, moved over the gap (the velocity
-                // changes by -offset x gap) and grown as below; the helper grows the offset by its random walk from the
-                // carried covariance once, as prepare_acc_term did (same function, same arguments: the same value)
-                const JointPriorCov p =
-                    joint_prior_cov_over_gap(joint_prior_cov(carry.velocity_cov, carry.velocity_offset_cov, carry.acc_offset_cov), density,
-                                             floor, gap, params.imu_acceleration_offset_rw_mps2_sqrt_s, t.window_duration_s);
-                cov = p.topLeftCorner<3, 3>();
-                t.options.velocity_offset_prior_cov = p.topRightCorner<3, 3>();
-                t.options.offset_prior_cov = p.bottomRightCorner<3, 3>();
-                t.offset_cov = t.options.offset_prior_cov;
-            }
-            else
-                cov = velocity_prior_cov_over_gap(carry.velocity_cov, density, floor, gap);
+            cov = velocity_prior_cov_over_gap(carry.velocity_cov, density, floor, gap);
         }
         else if (!carry.velocity_valid && carry.first_window_at_rest)
         {
@@ -190,12 +172,6 @@ namespace
             // fold the estimated offset into the gravity vector; its uncertainty carries over as the next prior
             carry.acc_gravity += acc_offset / t.options.to_mps2;
             carry.acc_offset_cov = t.offset_cov;
-            // imu_carry_joint_covariance: the solve's cov(end velocity, offset). The offset is folded into the gravity vector, so
-            // the next window's offset (prior mean zero) is the error left in the fold, minus that of this window's estimate:
-            // its prior error is this window's offset error, and its covariance with the velocity's error is this block as it
-            // is (the to_mps2 rescale of the fold, a factor 1 - O(|offset| / 9.8), is neglected)
-            if (t.options.joint_covariance)
-                carry.velocity_offset_cov = window.velocity.end_offset_covariance;
             {
                 const Eigen::Vector3d s = t.offset_cov.diagonal().cwiseMax(0.0).cwiseSqrt();
                 log_info(logger) << "acceleration offset [m/s^2] window " << i + 1 << ": " << std::fixed << std::setprecision(3)
@@ -978,7 +954,6 @@ namespace
             p.velocity_prior_cov = o.velocity_prior_cov;
             p.offset_prior_mean = Eigen::Vector3d::Zero(); // the offset is folded into gravity after every window
             p.offset_prior_cov = o.offset_prior_cov;
-            p.velocity_offset_prior_cov = o.velocity_offset_prior_cov;
             p.gravity = o.gravity;
         }
         if (w.rotation_options.estimate_bias)
@@ -1260,8 +1235,6 @@ namespace
                 handed->gravity = carry.acc_gravity;
                 handed->to_mps2_before_fold = w.acc_term.options.to_mps2;
                 handed->offset_cov = carry.acc_offset_cov;
-                if (w.acc_term.options.joint_covariance)
-                    handed->velocity_offset_cov = carry.velocity_offset_cov;
             }
             if (!windows[i].poses.empty() && !windows[i].timestamps.empty())
                 handed->last_node_solved = node_of(windows[i], windows);

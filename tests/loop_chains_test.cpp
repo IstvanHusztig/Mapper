@@ -264,7 +264,6 @@ namespace
             loop.carry.velocity_mean += s.carry_sigma_mps * Eigen::Vector3d(rng.normal(), rng.normal(), rng.normal());
         loop.carry.velocity_cov = Eigen::Matrix3d::Identity() * (s.carry_sigma_mps * s.carry_sigma_mps);
         loop.carry.velocity_time_s = node_time(1, T - 1);
-        loop.carry.velocity_offset_cov.setZero();
         const double sb = 0.05 * DEG_TO_RAD;
         loop.carry.bias.mean.setZero();
         loop.carry.bias.covariance = Eigen::Matrix3d::Identity() * (sb * sb);
@@ -524,7 +523,6 @@ TEST_CASE("loop chain: the blind stretch and its exit (K2), switches off and on,
     {
         OdometryConfig c = candidate_config();
         c.imu_edges_follow_state = switches;
-        c.imu_carry_joint_covariance = switches;
         std::vector<ChainRun> runs;
         const std::vector<double> errors{0.0, 0.10, 0.24};
         for (double e : errors)
@@ -537,7 +535,7 @@ TEST_CASE("loop chain: the blind stretch and its exit (K2), switches off and on,
             REQUIRE(runs.back().ok);
             CHECK(runs.back().map_rebuilds == 0); // validity: no rebuild
         }
-        const std::string tag = switches ? "switches ON (imu_edges_follow_state, imu_carry_joint_covariance)" : "switches OFF";
+        const std::string tag = switches ? "switches ON (imu_edges_follow_state)" : "switches OFF";
 
         // validity: blindness (projected NDT weight along travel near zero, sideways kept) in every blind window, every run
         double worst_along_ratio = 0.0, least_sideways = 1e300, worst_raw_share = 0.0;
@@ -635,7 +633,6 @@ TEST_CASE("loop chain: the blind stretch over seeds, the last blind window's nor
     {
         OdometryConfig c = candidate_config();
         c.imu_edges_follow_state = switches;
-        c.imu_carry_joint_covariance = switches;
         double sum = 0.0, seconds = 0.0;
         int used = 0, last_blind = 0;
         std::ostringstream each;
@@ -678,11 +675,10 @@ TEST_CASE("loop chain: K1, the velocity response to a map displaced along travel
     double seconds = 0.0;
     t << "K1, seen room, window 5 (T = " << f(Tw, 3) << " s): setting | shift | v_start, v_end response [mm/s per mm] | "
          "x T [per T] | claimed sigma: prior / handed-on end [mm/s] | iterations | window 6 v_start response\n";
-    for (const bool joint : {false, true})
+    for (const bool switches : {false, true})
     {
         OdometryConfig c = candidate_config();
-        c.imu_carry_joint_covariance = joint;
-        c.imu_edges_follow_state = joint;
+        c.imu_edges_follow_state = switches;
         Injection base;
         base.after = 4;
         base.map_shift = Eigen::Vector3d::Zero();
@@ -694,7 +690,7 @@ TEST_CASE("loop chain: K1, the velocity response to a map displaced along travel
         // validity: the window is seen along travel, not at rest
         CHECK(c5.ndt_along > 0.1 * c5.ndt_sideways);
         CHECK_FALSE(c5.at_rest);
-        t << "  " << (joint ? "switches on " : "switches off") << " | 0 (control) | v_start err " << f(c5.start_error * 1e3, 3) << ", v_end err "
+        t << "  " << (switches ? "switches on " : "switches off") << " | 0 (control) | v_start err " << f(c5.start_error * 1e3, 3) << ", v_end err "
           << f(c5.end_error * 1e3, 3) << " mm/s | | " << f(c5.prior_sigma * 1e3) << " / " << f(c5.end_sigma * 1e3) << " | " << c5.iterations << "\n";
         for (double d_mm : {0.001, 0.1, 1.0, 3.0, 10.0})
         {
@@ -706,7 +702,7 @@ TEST_CASE("loop chain: K1, the velocity response to a map displaced along travel
             const Reading m5 = read(r.records[5 - 2], s), m6 = read(r.records[6 - 2], s);
             CHECK(m5.first_x_error == c5.first_x_error); // the shift is in the map only: the prepared window is the control's
             const double ds = (m5.start_error - c5.start_error) / d_mm * 1e3, de = (m5.end_error - c5.end_error) / d_mm * 1e3;
-            t << "  " << (joint ? "switches on " : "switches off") << " | " << d_mm << " mm | " << f(ds, 3) << ", " << f(de, 3) << " | "
+            t << "  " << (switches ? "switches on " : "switches off") << " | " << d_mm << " mm | " << f(ds, 3) << ", " << f(de, 3) << " | "
               << f(ds * Tw, 2) << ", " << f(de * Tw, 2) << " | " << f(m5.prior_sigma * 1e3) << " / "
               << f(m5.end_sigma * 1e3) << " | " << m5.iterations << " (last delta " << std::scientific << std::setprecision(2) << m5.delta
               << std::fixed << ") | " << f((m6.start_error - c6.start_error) / d_mm * 1e3, 3) << " | total dv_start, dv_end "

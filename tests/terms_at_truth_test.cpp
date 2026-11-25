@@ -365,12 +365,12 @@ namespace
 
     struct PriorStats
     {
-        double velocity_prior = 0.0, velocity_prior_over_a_dt = 0.0, joint_difference = 0.0, zero_velocity = 0.0, bias = 0.0, offset = 0.0;
+        double velocity_prior = 0.0, velocity_prior_over_a_dt = 0.0, zero_velocity = 0.0, bias = 0.0, offset = 0.0;
         int windows = 0;
     };
 
-    // the priors at the truth: the velocity prior (its mean is the previous window's end velocity), the same in its joint
-    // form, the zero velocity, the bias prior, the offset prior (the carried offset folded into gravity: relative truth 0)
+    // the priors at the truth: the velocity prior (its mean is the previous window's end velocity), the
+    // zero velocity, the bias prior, the offset prior (the carried offset folded into gravity: relative truth 0)
     PriorStats evaluate_priors(const Fixture &f, const std::function<bool(int)> &in_class)
     {
         PriorStats st;
@@ -391,15 +391,6 @@ namespace
                                         ? (tw->align * tw->motion->state(tw->motion_time(tw->window.timestamps[0].first)).acceleration).norm() * tw->dt_s
                                         : 0.0;
                 st.velocity_prior_over_a_dt = std::max(st.velocity_prior_over_a_dt, a_dt > 0.0 ? r.norm() / a_dt : 0.0);
-                // the joint form with a zero cross block must give the same residual
-                WindowNoiseModel joint = nm;
-                joint.joint_prior = true;
-                joint.joint_prior_cov = joint_prior_cov(nm.velocity_prior_cov, Eigen::Matrix3d::Zero(), nm.offset_prior_cov);
-                joint.joint_prior_information = joint.joint_prior_cov.inverse();
-                WindowEquations eqj(nm.unknowns);
-                add_joint_velocity_offset_prior(eqj, joint, tw->window, Eigen::Vector3d::Zero());
-                const Eigen::Vector3d rj = nm.velocity_prior_cov * eqj.rhs.block<3, 1>(nm.unknowns.iv, 0);
-                st.joint_difference = std::max(st.joint_difference, (rj - r).norm());
             }
             {
                 WindowEquations eq(nm.unknowns);
@@ -504,7 +495,6 @@ TEST_CASE("terms at the truth: A1, rest (active states only)")
         priors.velocity_prior = std::max(priors.velocity_prior, p.velocity_prior);
         priors.bias = std::max(priors.bias, p.bias);
         priors.offset = std::max(priors.offset, p.offset);
-        priors.joint_difference = std::max(priors.joint_difference, p.joint_difference);
         const EdgeStats e = evaluate_edges(*f, [&](int w) { return window_at_rest(*f, w); });
         edges.n += e.n;
         edges.over += e.over;
@@ -515,7 +505,7 @@ TEST_CASE("terms at the truth: A1, rest (active states only)")
     MESSAGE(describe("A1 rest, " + std::to_string(windows) + " windows, offset " + "(0.05, -0.03, 0.04) m/s2 body", by_kind));
     MESSAGE("F-a A1 rotation edges: n " << edges.n << "  max|delta| " << edges.max_abs << " rad  max/bound " << edges.max_ratio << "  above bound " << edges.over);
     MESSAGE("F-a A1 priors (" << priors.windows << " windows): zero velocity residual " << priors.zero_velocity << " m/s, velocity prior " << priors.velocity_prior
-                              << " m/s, joint form differs by " << priors.joint_difference << ", bias prior " << priors.bias << " rad/s, offset prior " << priors.offset << " m/s2");
+                              << " m/s, bias prior " << priors.bias << " rad/s, offset prior " << priors.offset << " m/s2");
     for (const auto &[kind, a] : by_kind)
     {
         CAPTURE(kind);
@@ -526,7 +516,6 @@ TEST_CASE("terms at the truth: A1, rest (active states only)")
     CHECK(priors.velocity_prior == 0.0);
     CHECK(priors.bias == 0.0);
     CHECK(priors.offset == 0.0);
-    CHECK(priors.joint_difference <= 1e-15);
 }
 
 namespace
@@ -543,7 +532,7 @@ namespace
         MESSAGE(describe(label + ", " + std::to_string(windows) + " windows", by_kind));
         MESSAGE("F-a " << label << " rotation edges: n " << edges.n << "  max|delta| " << edges.max_abs << " rad  max/bound " << edges.max_ratio << "  above bound " << edges.over);
         MESSAGE("F-a " << label << " priors: velocity prior residual (mean = the previous window's end velocity, the F2a size) " << priors.velocity_prior << " m/s = "
-                       << priors.velocity_prior_over_a_dt << " x |a| dt; bias prior " << priors.bias << " rad/s; joint form differs by " << priors.joint_difference);
+                       << priors.velocity_prior_over_a_dt << " x |a| dt; bias prior " << priors.bias << " rad/s");
         if (check)
         {
             for (const auto &[kind, a] : by_kind)
@@ -675,31 +664,10 @@ TEST_CASE("terms at the truth: D4, gyro white noise at ARW/sqrt(dt) gives the ro
 
 TEST_CASE("terms at the truth: D4, the gap covariance's algebra, apart from its mean")
 {
-    // (1) joint F P F^T: the production function against an independent construction with explicit 6x6 matrices
-    truth_stats::Rng rng(5);
-    Eigen::MatrixXd a = Eigen::MatrixXd::Zero(6, 6);
-    for (int i = 0; i < 6; i++)
-        for (int j = 0; j < 6; j++)
-            a(i, j) = 0.02 * rng.normal();
-    const JointPriorCov P = a * a.transpose() + 0.01 * JointPriorCov::Identity();
-    const double gap = 0.002, density = 0.0013, floor = 0.1, rw = 1e-4, duration = 0.36;
-    JointPriorCov F = JointPriorCov::Identity();
-    F.topRightCorner<3, 3>() = -gap * Eigen::Matrix3d::Identity();
-    JointPriorCov expected = F * P * F.transpose();
-    expected.topLeftCorner<3, 3>() += (density * density * gap + floor * floor * gap * gap) * Eigen::Matrix3d::Identity();
-    expected.bottomRightCorner<3, 3>() += rw * rw * duration * Eigen::Matrix3d::Identity();
-    const JointPriorCov got = joint_prior_cov_over_gap(P, density, floor, gap, rw, duration);
-    const double difference = (got - expected).cwiseAbs().maxCoeff() / expected.cwiseAbs().maxCoeff();
-    MESSAGE("D4 gap algebra: production joint covariance against F P F^T + Q, largest relative difference " << difference);
-    CHECK(difference < 1e-14);
-    // the cross block is F P F^T's, not grown by Q (Q has no cross term: the noise of the gap and the offset's walk are independent)
-    CHECK((got.topRightCorner<3, 3>() - expected.topRightCorner<3, 3>()).cwiseAbs().maxCoeff() < 1e-15);
-    // the separate form
+    // (1) the start velocity's prior over the gap: carried + (D^2 gap + floor^2 gap^2) I
+    const double gap = 0.002, density = 0.0013, floor = 0.1;
     const Eigen::Matrix3d C = Eigen::Matrix3d::Identity() * 0.3;
     CHECK((velocity_prior_cov_over_gap(C, density, floor, gap) - (C + (density * density * gap + floor * floor * gap * gap) * Eigen::Matrix3d::Identity())).cwiseAbs().maxCoeff() < 1e-18);
-    // the sign of F: over the gap the true acceleration is the measured one minus the offset, so v_start = v_end + (a_measured - offset) gap:
-    // the velocity depends on the offset with coefficient -gap (the generator adds a constant offset to the force: a_measured = a + offset)
-    CHECK(F(0, 3) == -gap);
 
     // (2) the velocity noise over a gap of one node interval is D^2 gap: the generator's accelerometer noise at rest, summed over
     // the gap, against the production's D^2 gap with floor 0 (the floor is not generated: a claim the model world does not make true)

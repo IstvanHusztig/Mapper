@@ -87,29 +87,6 @@ Eigen::Matrix3d velocity_prior_cov_over_gap(const Eigen::Matrix3d &carried, doub
     return carried + Eigen::Matrix3d::Identity() * (density * density * gap_s + floor * floor * gap_s * gap_s);
 }
 
-JointPriorCov joint_prior_cov(const Eigen::Matrix3d &velocity, const Eigen::Matrix3d &cross, const Eigen::Matrix3d &offset)
-{
-    JointPriorCov cov;
-    cov.topLeftCorner<3, 3>() = velocity;
-    cov.topRightCorner<3, 3>() = cross;
-    cov.bottomLeftCorner<3, 3>() = cross.transpose();
-    cov.bottomRightCorner<3, 3>() = offset;
-    return cov;
-}
-
-JointPriorCov joint_prior_cov_over_gap(const JointPriorCov &carried, double density, double floor, double gap_s, double offset_rw,
-                                       double duration_s)
-{
-    const Eigen::Matrix3d vv = carried.topLeftCorner<3, 3>();
-    const Eigen::Matrix3d ve = carried.topRightCorner<3, 3>();
-    const Eigen::Matrix3d ee = carried.bottomRightCorner<3, 3>();
-    // F carried F^T with F = [[I, -gap I], [0, I]]
-    const Eigen::Matrix3d vv_moved = vv - (ve + ve.transpose()) * gap_s + ee * (gap_s * gap_s);
-    const Eigen::Matrix3d ve_moved = ve - ee * gap_s;
-    return joint_prior_cov(velocity_prior_cov_over_gap(vv_moved, density, floor, gap_s), ve_moved,
-                           random_walk_prior_cov(ee, offset_rw, duration_s));
-}
-
 namespace
 {
     // velocity continuity (only without the accelerometer term, with timestamps): sigma = acc_sigma * mean dt of the two
@@ -214,12 +191,6 @@ WindowNoiseModel build_window_noise_model(const Window &window, const ScanToMapO
         m.offset_prior_mean = translation_imu_options.offset_prior_mean;
         m.offset_prior_cov = translation_imu_options.offset_prior_cov;
         m.offset_prior_information = translation_imu_options.offset_prior_cov.inverse();
-        if (translation_imu_options.joint_covariance)
-        {
-            m.joint_prior = true;
-            m.joint_prior_cov = joint_prior_cov(m.velocity_prior_cov, translation_imu_options.velocity_offset_prior_cov, m.offset_prior_cov);
-            m.joint_prior_information = m.joint_prior_cov.inverse();
-        }
     }
 
     m.origin = {1.0 / (motion_model.fix_origin_x_sigma_m * motion_model.fix_origin_x_sigma_m),
@@ -329,9 +300,8 @@ void log_noise_budget(const OdometryConfig &p, Logger &logger)
                      << "; velocity continuity " << v(p.lidar_odometry_motion_model_acc_1_sigma_mps2) << " m/s^2 (without the accelerometer term); "
                      << "accelerometer term " << (p.imu_always_on ? "on" : "off") << ", density " << v(p.imu_accel_noise_density_mps2_sqrt_hz)
                      << " m/s^2/sqrt(Hz), floor " << v(p.imu_accel_floor_sigma_mps2) << " m/s^2, span " << v(p.imu_acceleration_span_s)
-                     << " s, window error " << v(p.imu_accel_window_sigma_mps2) << " m/s^2; edges follow the state "
-                     << (p.imu_edges_follow_state ? "yes" : "no") << ", joint velocity-offset carry "
-                     << (p.imu_carry_joint_covariance ? "yes" : "no") << "; zero velocity sigma " << v(p.imu_zero_velocity_sigma_mps) << " m/s; first start velocity sigma "
+                     << " s; edges follow the state "
+                     << (p.imu_edges_follow_state ? "yes" : "no") << "; zero velocity sigma " << v(p.imu_zero_velocity_sigma_mps) << " m/s; first start velocity sigma "
                      << v(p.imu_velocity_initial_sigma_mps) << " m/s; gyro bias " << (p.use_gyro_bias_estimation ? "estimated" : "off")
                      << ", initial sigma " << v(p.gyro_bias_initial_sigma_deg_s) << " deg/s, random walk " << v(p.gyro_bias_rw_deg_s_sqrt_s)
                      << " deg/s/sqrt(s); acceleration offset initial sigma " << v(p.imu_acceleration_offset_initial_sigma_mps2)

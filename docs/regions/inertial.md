@@ -231,7 +231,8 @@ None: no function of this region is above 80 lines (`python tools/function_sizes
   2026-11-19-joint-carry/summary.md`, reviewed): blind sigma grows ~linearly (lower 5.9 -> 90.6 mm/s, p 1.03); the exit
   correction stays ~1.2 m/s (12.3 sigma, today 6.6); the window after it 87.5 sigma (sigma back to 5.5 mm/s after one
   seen window); lower speed up to 1.86 m/s; end stretch 1.64-2.38 m and passage 0.06 m from today (spread 0.02). Open:
-  the sigma collapse after the exit; the end-stretch shift.
+  the sigma collapse after the exit; the end-stretch shift. Removed 2026-11-25 (the user), with
+  `imu_accel_window_sigma_mps2` (layer 3's setting, read by no code); both are retired settings.
 - 2026-11-19 Code review of the region (the owner agent, reading only; stage 8). Findings, none in the tracker yet:
   (1) the rotation edges measure the orientation filter's output, not the gyro: `compute_step_1`
   (`lidar_odometry.cpp:334-341`) makes the nodes and `motion_model_poses` from Fusion's orientation and

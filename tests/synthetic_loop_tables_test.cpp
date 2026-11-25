@@ -27,7 +27,8 @@
 // the MATCHED world (LoopWorld::matched: imu_noise_from_config of the run's own settings) over independent seeds
 // (SensorProfile::seed draws the points and every IMU error), under three settings:
 //   off      loop_candidate_config(sensor, false): the stage 8 candidate set, both layer switches off
-//   on       loop_candidate_config(sensor, true):  the same, imu_edges_follow_state and imu_carry_joint_covariance on
+//   on       loop_candidate_config(sensor, true):  the same, imu_edges_follow_state on (until 2026-11-25 also
+//            imu_carry_joint_covariance, layer 2, since removed; the joint move is always NOT MEASURED now)
 //   shipped  loop_shipped_config(sensor): settings/livox-vertical.toml as loaded, only real_time_threshold_seconds 1000 and
 //            log_window_terms true set, and the front end fields of front_end_config copied in (the values the copy
 //            changes are written to the output folder's settings.txt; for the loop's sensors none of them differ)

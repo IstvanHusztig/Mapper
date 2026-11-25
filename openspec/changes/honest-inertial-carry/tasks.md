@@ -56,6 +56,12 @@ and the two guards.
 
 ## 4. Layer 2: the joint covariance (solver J3 in region-b, then noise-budget and inertial J4 in region-a)
 
+**2026-11-25: layer 2 removed from the code on the user's decision** (it came out worse on the Livox 4 stall replays of
+2026-11-20: -0.61 m in the 3 s after the stall, exit correction 12.3 sigma, the next window 87.5 sigma, end stretch
+1.64-2.38 m from today). `imu_carry_joint_covariance` is a retired setting (accepted only as false); the window capture
+keeps its cross-block slot as zeros; `window_features.csv` keeps its columns; the joint normalised move is always NOT
+MEASURED. Branch `region/inertial/2026-11-25-remove-carry-layer-2`. The tasks below are kept as the record.
+
 - [x] 4.1 Solver: `take_covariance` hands out the 6×6 block of end velocity and offset, kept in the window problem's
   saved state. Verify: unit test against a dense inverse; a rejected step restores the block; results unchanged while
   nobody reads the cross block.
@@ -72,6 +78,10 @@ and the two guards.
   unresolved (not seen with layer 1, not yet looked at). Paused 2026-11-20 for `consistency-harness`.)
 
 ## 5. Layer 3: measured first (noise-budget and inertial, J6)
+
+**2026-11-25:** layer 3 was never built: `imu_accel_window_sigma_mps2` was read by no code (only logged in the noise
+budget line), and design D3 needs layer 2's cross term. The setting was removed with layer 2 (a retired setting, accepted
+only as 0). Building layer 3 would now need layer 2 back first.
 
 - [ ] 5.1 Is there an acceleration error common to a window, and how large? With layers 1 and 2 on and the offset's
   prior loose (so the window's estimate is not limited by it), replay the guards and the stairs capture and run

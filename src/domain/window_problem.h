@@ -2,8 +2,8 @@
 
 // A window's scan-to-map optimization as a problem for the Levenberg-Marquardt solver (lm_solver.h): it linearizes with
 // the term functions (ndt_term, motion_model_terms, accelerometer_term, the origin fix), takes the covariance of the
-// extra unknowns (gyro bias, acceleration offset, end velocity, and the end velocity's covariance with the offset; for the
-// honesty readings also the start velocity's and its covariance with the offset), applies a step to the window
+// extra unknowns (gyro bias, acceleration offset, end velocity; for the honesty readings also the start velocity's),
+// applies a step to the window
 // (window_solver.h) and keeps snapshots of the window's state for the step check.
 
 #include "lm_solver.h"
@@ -44,8 +44,8 @@ public:
     const ScanToMapCost &cost() const { return cost_; }
 
     // what the honesty readings (window_verdict.h, design D10 of consistency-harness) need of the present state: the priors
-    // the window was prepared with (from the noise model), the start velocity's, offset's and bias's results, their
-    // covariance as last taken, and how far the steps after it moved them. Only reads.
+    // the window was prepared with (from the noise model), the start velocity's and bias's results, their covariance as
+    // last taken, and how far the steps after it moved them. Only reads.
     HonestyInputs honesty_inputs() const;
 
 private:
@@ -59,13 +59,11 @@ private:
         Eigen::Matrix3d acc_offset_cov;
         Eigen::Matrix3d translation_information;
         ScanToMapCost cost;
-        // the honesty readings' part: the start velocity's covariance and its cross block with the offset (rows start
-        // velocity, columns offset), whether a covariance was taken, and the change of (start velocity, offset, bias) by
-        // the steps since it was taken
+        // the honesty readings' part: the start velocity's covariance, whether a covariance was taken, and the change of
+        // (start velocity, bias) by the steps since it was taken
         Eigen::Matrix3d start_velocity_cov = Eigen::Matrix3d::Zero();
-        Eigen::Matrix3d start_offset_cov = Eigen::Matrix3d::Zero();
         bool covariance_taken = false;
-        Eigen::Matrix<double, 9, 1> step_since_covariance = Eigen::Matrix<double, 9, 1>::Zero();
+        Eigen::Matrix<double, 6, 1> step_since_covariance = Eigen::Matrix<double, 6, 1>::Zero();
     };
     State state() const;
     void set_state(const State &s);
@@ -88,8 +86,7 @@ private:
     const WindowUnknowns &unknowns_; // noise_.unknowns
     ScanToMapCost cost_;
     Eigen::Matrix3d start_velocity_cov_ = Eigen::Matrix3d::Zero();
-    Eigen::Matrix3d start_offset_cov_ = Eigen::Matrix3d::Zero();
     bool covariance_taken_ = false;
-    Eigen::Matrix<double, 9, 1> step_since_covariance_ = Eigen::Matrix<double, 9, 1>::Zero(); // start velocity, offset, bias
+    Eigen::Matrix<double, 6, 1> step_since_covariance_ = Eigen::Matrix<double, 6, 1>::Zero(); // start velocity, bias
     State candidate_, accepted_;
 };
