@@ -119,8 +119,7 @@ longest-common-subsequence match of the lines):
 | Kind | Meaning | Class |
 |---|---|---|
 | case added, assertion added, call added, value added | new lines | addition |
-| case moved | same lines, other file | addition |
-| assertion reworded | a removed and an added line at the same place whose numeric literals and comparison operators (`<`, `<=`, `>`, `>=`, `==`, `!=`, the macro's own name, `Approx`, `epsilon`, `scale`) are the same sequence | addition |
+| case moved | same lines, other file (it can pick up that file's constants and helpers of the same name) | change |
 | case removed, assertion removed, call removed, value removed | lines gone | change |
 | assertion changed, call changed, value changed | a line replaced, numbers or operators differ | change |
 | marker added, marker removed | | change |
@@ -160,7 +159,7 @@ record. The existing convention for an expected parameters-file difference stays
 `tests/test_check_register.py` (the orchestrator's, like the tool) holds small C++ and Python sources as strings and plants the edits of
 the spec (tolerance in an assertion, in a named value, in a case table row, in a helper's argument; assertion deleted;
 assertion commented out; `#if 0` round an assertion; `#ifdef` round an assertion; skip added; should_fail removed; case
-renamed; case moved; an assertion reworded), and requires the kind and the exit code for each. It also runs the reader
+renamed; case moved), and requires the kind and the exit code for each. It also runs the reader
 over the real `tests/` folder and requires the cross-count of D2 to hold and the result to be stable over two runs.
 The register's section of `checks/instruments.toml` names these cases: the register is an instrument like the others.
 
@@ -282,14 +281,25 @@ stored hash equals `odometry_settings_hash` of its `settings.toml`, which the re
 
 After these, the instruments' file is updated and the register recorded.
 
+### D11 After the master reviewer (2026-11-25, push 82b559a..77c9a60)
+
+The reviewer planted edits that weaken a test and still read as identical or as an addition. The reader was extended:
+`FAIL` and `FAIL_CHECK` are assertions (the settings-hash pins of D9 use them and were invisible); a function object
+that asserts is a helper, with its calls recorded; markers on a suite or a test class and `skipTest` calls count for
+their cases, with their arguments as written; the bodies of asserting Python helpers and of `setUp` are listed; every
+`#define` in a test file is a line; local values without `const`, the lists of range loops and the headers of counted
+loops with a number are lines; a moved case is a change; a missing register fails everywhere; the class "reworded"
+is gone. The chi-square's weak ratio in the window diagnostics comes from `VerdictLimits`, like `run_health.py`'s.
+
 ## Risks / Trade-offs
 
 - [The reader misreads a construct and silently drops assertions] → the cross-count per file (D2), the planted edits
   (D6), failure on anything unmatched; the first recorded register is read by the orchestrator against the survey's
   counts before it is committed.
-- [A noisy register: every test edit is a difference] → additions and rewordings need no decision and do not fail in a
-  worktree; only removals, changed numbers or operators and markers do. If rewordings turn out to hide real changes,
-  the class moves to "change" (one line in the tool, stated in the tasks as a review point after the first weeks).
+- [A noisy register: every test edit is a difference] → additions need no decision and do not fail in a worktree. Any
+  change of an assertion's text is a change: a class "reworded" (the same numbers and operators) was built first and
+  removed after the master reviewer showed weakenings it let through (an `abs` dropped, another variable, `CHECK(true)`).
+  A renamed variable therefore reads as a change; the orchestrator may accept it with a line in the merge's message.
 - [The tool that guards the tests could itself be weakened] → the tool (`checks/check_register.py`) and its test
   (`tests/test_check_register.py`) are named by no region in `owners.toml` and are therefore the orchestrator's; a
   branch that touches either is listed by `region_owners.py --diff`, and the test is in the register.

@@ -88,12 +88,12 @@ step checks are listed in `tools/local_paths.toml`: `<guards>/44short-20-40/wind
 - **The check register** (`checks/tests.register`, written by `checks/check_register.py`) holds every test case, its
   markers, its assertions and the values its limits come from; `checks/instruments.toml` says what proves each
   measuring instrument. Both are the orchestrator's: an agent never records or edits them. The step checks compare
-  the tests with the register. A branch that only adds cases, assertions or values (or rewords an assertion with the
-  same numbers and operators) holds in its worktree (`HOLDS, to record`); the orchestrator merges it and records the
-  register in a commit of its own (on the main tree an unrecorded addition fails). A branch that removes a case or an
+  the tests with the register. A branch that only adds cases, assertions or values holds in its worktree (`HOLDS, to record`); the orchestrator merges it and records the
+  register in a commit of its own (on the main tree an unrecorded addition fails). A branch that removes or moves a case, removes an
   assertion, changes an assertion or a value, or adds or removes a marker is merged only after the user's decision,
   with the reason in the hand-back, unless the user's decision on the change already covers it (a feature removed
-  with its own tests).
+  with its own tests) or the orchestrator shows in the merge's message that it is a renamed variable or a moved case
+  and nothing else. Any change of an assertion's text counts, not only of its numbers.
 - **A build needs the worktree's executable free.** While a run or replay started from a worktree is going, that
   worktree cannot be built (the linker cannot replace `dMapper.exe`); `step_checks.py` then says so and builds nothing.
   Wait for your replays before you build or run the step checks.

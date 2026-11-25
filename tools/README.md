@@ -422,9 +422,10 @@ python checks/check_register.py --record       # write the register (the orchest
 should_fail, unittest skip / expectedFailure), every assertion as one line, every call of a test helper that asserts,
 and the values with a number in them (constants, struct member defaults such as the loop world's tolerances, case
 tables, constants in the generators). The comparison names each difference with its kind: case, assertion, call or
-value added, removed or changed; marker added or removed; case moved; assertion reworded (the same numbers and
-operators in other words). Exit 0: identical; 3: additions only (moved and reworded count as additions); 1: a change;
-2: a source it cannot read to its end, or whose macro count disagrees with a plain count. The step checks hold on
+value added, removed or changed; marker added or removed (on the case, its suite or class, or a `skipTest` call); case
+moved. Any change of an assertion's text is a change, not only of its numbers. Exit 0: identical; 3: additions only;
+1: a change (a moved case counts as one); 2: a source it cannot read to its end, a macro count that disagrees with a
+plain count, or no recorded register. The step checks hold on
 exit 3 in a region's worktree and fail on it in the main tree (an unrecorded addition must not stay); the full
 listing goes to `<guards>/runs/<worktree>/check_register.txt`.
 

@@ -8,11 +8,11 @@ number and SHALL be merged only after the user's decision on its numbers. After 
 on the main tree.
 
 A region agent SHALL NOT record the check register. A branch's difference from the register SHALL be part of its
-hand-back. A difference that only adds cases, assertions or values, or that rewords an assertion with the same numbers
-and comparison operators, SHALL be the orchestrator's to accept; the orchestrator SHALL record the register after the
-merge, in a commit of its own. A difference that removes a case or an assertion, changes an assertion or a value, or
+hand-back. A difference that only adds cases, assertions or values SHALL be the orchestrator's to accept; the orchestrator SHALL record the register after the
+merge, in a commit of its own. A difference that removes or moves a case, removes an assertion, changes an assertion or a value, or
 adds or removes a marker SHALL be merged only after the user's decision, with the reason given, unless the user's
-decision on the change itself already covers it (a feature removed with its tests).
+decision on the change itself already covers it (a feature removed with its tests) or the orchestrator shows in the
+merge's message that it is a renamed variable or a moved case and nothing else.
 
 #### Scenario: A change that changes no number
 - **WHEN** a region's branch passes the ownership check and its step checks are identical everywhere

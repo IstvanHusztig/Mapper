@@ -164,6 +164,18 @@ and goes to the user.
 - [x] 5.3 Docs: `docs/regions/back-end.md` (the pins: when a literal may move), the guide's settings text on retired
       settings. Done when `python tools/build_docs_index.py --check` holds.
       (2026-11-25: back-end.md entry from the agent (merged), the guide's settings text on retired settings; --check holds.)
+## 5b. After the master reviewer (design D11)
+
+- [ ] 5b.1 The reader's holes closed (verification's agent): FAIL and FAIL_CHECK, asserting function objects and
+      their calls, suite and class markers and `skipTest`, Python helper bodies, `#define` lines, more values and
+      loops, a moved case as a change, a missing register as a failure, no "reworded" class; the weak ratio of the
+      window diagnostics from `VerdictLimits`. Done when each of the reviewer's planted edits is a test that requires a
+      change, the cross-count holds on the real tree, and the step checks hold apart from the register's own line.
+- [ ] 5b.2 The orchestrator records the register again and reads the block of the settings-hash pins (the three
+      literals must be in it); the rule's wording in the spec deltas, `docs/regions/README.md` and `tools/README.md`
+      follows. Done when `python checks/check_register.py` exits 0 and a hand-changed pin literal is reported as a
+      change (tried once, reverted).
+
 ## 6. Close
 
 - [x] 6.1 `tools/step_checks.py` on master: every line identical or passed, the register identical. `tools/end_runs.py`
@@ -172,5 +184,6 @@ and goes to the user.
       (2026-11-25, master 07ad407, Release only: step checks ALL HOLD (272 tests, 182 tool tests in 30 s, check register
       IDENTICAL with 15 instruments ok, both guards and replays identical, 44_short IDENTICAL 11 files, 0 windows at the
       time limit); end runs ALL HOLD: 44 IDENTICAL 35 files, Livox 3 IDENTICAL 35 files, 44_short IDENTICAL 11 files.)
-- [ ] 6.2 The master reviewer on the push; `openspec validate "check-register" --strict`; archive. Done when the
+- [ ] 6.2 The master reviewer on the push (done for 82b559a..77c9a60: no code defect, the holes of 5b; again on the
+      push of 5b); `openspec validate "check-register" --strict`; archive. Done when the
       reviewer's findings are answered and the change is archived.

@@ -30,8 +30,9 @@ SHALL carry totals (cases, markers, assertions) and SHALL be the same for the sa
 ### Requirement: The sources are compared with the register by kind of difference
 A command SHALL compare the test sources with the committed register and SHALL print every difference with its kind:
 case added, case removed, case moved to another file, marker added, marker removed, assertion added, assertion removed,
-assertion reworded (the same numbers and comparison operators in other words), assertion changed, value changed. It
-SHALL exit 0 only when there is no difference. Differences that only add (cases, assertions, values) SHALL be
+assertion changed, value changed. Any difference in an assertion's text other than white space and comments SHALL be a
+change. A marker set on a group of cases (a suite, a test class) SHALL count for every case of the group. It
+SHALL exit 0 only when there is no difference, and SHALL fail when no register has been recorded. Differences that only add (cases, assertions, values) SHALL be
 distinguished in its output and exit code from differences that remove, change or mark.
 
 #### Scenario: A loosened tolerance
@@ -46,6 +47,14 @@ distinguished in its output and exit code from differences that remove, change o
 - **WHEN** a branch adds two cases and changes nothing else in the tests
 - **THEN** the command lists two cases added and reports the difference as additions only
 
+#### Scenario: The same numbers in a weaker assertion
+- **WHEN** an assertion on the absolute value of an error is changed to the error itself, with the same limit
+- **THEN** the command reports an assertion changed and exits non-zero
+
+#### Scenario: A case skipped through its group
+- **WHEN** existing cases are put into a suite that is marked as skipped
+- **THEN** the command reports a marker added for each of them
+
 ### Requirement: The register is recorded only on purpose
 The register SHALL be written to the repository only by an explicit record command, and that command SHALL refuse
 while the test sources have uncommitted changes. The register and the instruments' file SHALL belong to the
@@ -58,8 +67,10 @@ orchestrator in the ownership list.
 ### Requirement: The register's own reach is stated and tested
 The tool SHALL be tested with planted edits on test sources written for the purpose: a tolerance loosened in an
 assertion, in a named value, in a case table row and in the argument of an asserting helper; an assertion deleted; an
-assertion commented out; a skip marker added; an expected-to-fail marker removed; a case renamed. Each SHALL be
-reported with its kind. The tool SHALL check its own count of cases and assertions against an independent count of the
+assertion commented out; an assertion inside a local function object, and the call of it, removed; a failure macro's
+pinned literal changed; the list a loop runs over changed; a skip marker added on the case, on its suite or class, or
+as a call inside the test; an expected-to-fail marker removed; a macro defined round an assertion; a case renamed.
+Each SHALL be reported with its kind. The tool SHALL check its own count of cases and assertions against an independent count of the
 same sources and SHALL fail when they disagree or when a source cannot be read to its end. What the register cannot
 see (a limit computed while the test runs, an assertion that the flow of the test never reaches, a limit that lives in
 the program and not in the tests) SHALL be stated in the tool's documentation and in the register's header.
