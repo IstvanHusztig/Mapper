@@ -12,6 +12,7 @@
 - [x] 2.2 The angle wrap in `add_relative_pose_edge` (design decision 7). Verify: the full 44 with the kernel off bit-identical with `tools/baseline/44.manifest.json` apart from the parameters TOML (23 loops, 1.72 m).
 - [x] 2.3 Pose-graph unit tests in `tests/loop_closure_test.cpp` on two laps: a 15 cm wrong edge moves the solution clearly less with the kernel (0.5σ: 6.4 → 3.2 cm); consistent edges within 0.5 mm; a false edge still stands out. Verify: Release `ctest` passes.
 - [ ] 2.4 The kernel on real data: X3 settings plus `loop_closure_kernel_scale` 0.5 and 1.0 on `44_s0/s1/s2`. Verify: a results table here. If the kernel improves the floor offsets or the largest correction without losing loops on any input, it is switched on in `settings/l2-vertical.toml`; otherwise the setting and its code are removed (no unused code), the pose-graph tests trimmed, and the golden TOML files regenerated.
+  - Not run on real data; removed 2026-11-25 on the user's decision (setting, code, the kernel's pose-graph tests and the match check's kernel refusal; `loop_closure_kernel_scale` is a retired key, above 0 refused; golden TOML files regenerated; no result changed).
 
 ## 3. Cross-floor edges
 

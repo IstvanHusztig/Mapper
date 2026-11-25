@@ -90,7 +90,7 @@ odometry's −4° unless the drift itself shrinks or a constraint ties the galle
 <tr><td>Edges per segment</td><td><b>one</b> per pass: the first accepted candidate</td><td>C24</td></tr>
 <tr><td>Loop edge weights</td><td>same floor <b>fixed</b> 5 cm / 0.3°; cross-floor: the registration's information (height freed)</td><td>C23</td></tr>
 <tr><td>Odometry edge weights</td><td><b>fixed</b> 0.1 m / 0.5° per segment, whatever was walked or how degenerate it was</td><td>C23</td></tr>
-<tr><td>Outliers</td><td>worst edge dropped while its residual exceeds 0.15 m / 2°; Cauchy kernel available but <b>off</b> (<code>loop_closure_kernel_scale = 0</code>)</td><td>C24</td></tr>
+<tr><td>Outliers</td><td>worst edge dropped while its residual exceeds 0.15 m / 2°; a Cauchy kernel (<code>loop_closure_kernel_scale</code>) was built, left off and removed 2026-11-25</td><td>C24</td></tr>
 <tr><td>Solver</td><td>Levenberg–Marquardt with a cost check over Tait–Bryan segment poses (sound)</td><td>–</td></tr>
 </table></div>
 
