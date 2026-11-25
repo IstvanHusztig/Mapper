@@ -1,5 +1,7 @@
 # Tasks
 
+> **Closed 2026-11-25 (housekeeping; the user: "all as suggested"). Cross-floor loop edges ship in settings/l2-vertical.toml (2be7151), weighted by their registration's information (af7d538). The robust kernel (2.4) was never tested on real data and was removed from the code (merge c36722c). 5.1-5.2 were done with the shipping commits; 3.4, 3.5 and 4.2 were not done (the cross-floor angle default is still 1.5 deg in the code, 10 in both settings files: a point for settings-audit). The spec delta predates the later loop closure changes and is not synced; the main spec's one kernel sentence is removed.**
+
 ## 1. Start from a clean tree
 
 - [x] 1.1 Separate the working tree: candidate 2 (LM step check, unmatched-point cost) committed on branch `candidate-2-lm-step-check` (1c64cd6), the cross-floor prototype on master. Verify: `44_short` with the new settings off bit-identical with `tools/baseline/44_short.manifest.json` apart from the parameters TOML.

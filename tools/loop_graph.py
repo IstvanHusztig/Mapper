@@ -13,8 +13,8 @@ What it gives:
     fixed sigmas where the information is unusable; odometry edges with `loop_closure_odometry_sigma_*`). Hooks: a scale
     per loop edge's information (`loop_scale`), a sigma (translation m, rotation deg) per odometry edge or all of them
     (`odo_sigma`) or a full 6x6 information per odometry edge (`odo_omega`), a given 6x6 information per loop edge
-    (`loop_omega`), the robust kernel of dMapper
-    (`kernel_scale`, `loop_closure_kernel_scale`; two stages, plain first).
+    (`loop_omega`), a robust Cauchy kernel on the loop edges (`kernel_scale`; two stages, plain first; a prototype option
+    only: dMapper's own kernel was removed on 2026-11-25, an old capture's `loop_closure_kernel_scale` is still read).
   * `LoopGraph.solve`: Gauss-Newton with dMapper's step rule (a step that raises the cost is damped), first segment fixed;
     returns the segment poses and the cost split into odometry and loop parts and per factor.
   * `LoopGraph.node_poses` / `write_trajectory`: the per-segment correction put onto every node as dMapper does (slerp
@@ -321,7 +321,7 @@ class LoopGraph:
     odo_omega: None or (n-1, 6, 6) information of each odometry edge (replaces odo_sigma).
     loop_scale: {edge: s} multiplies that edge's information (edge key (i, j, cross) or 'i-j[x]' label); default 1.
     loop_omega: {edge: 6x6} information used as given instead of the one built from the registration (before loop_scale).
-    kernel_scale: None (the capture's loop_closure_kernel_scale; 0 = no kernel) or a value."""
+    kernel_scale: None (an old capture's loop_closure_kernel_scale, else 0 = no kernel) or a value."""
 
     def __init__(self, capture, edges, loop_scale=None, odo_sigma=None, odo_omega=None, kernel_scale=None, loop_omega=None):
         self.cap = capture
