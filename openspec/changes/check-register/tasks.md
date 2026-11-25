@@ -166,8 +166,11 @@ and goes to the user.
       (2026-11-25: back-end.md entry from the agent (merged), the guide's settings text on retired settings; --check holds.)
 ## 6. Close
 
-- [ ] 6.1 `tools/step_checks.py` on master: every line identical or passed, the register identical. `tools/end_runs.py`
+- [x] 6.1 `tools/step_checks.py` on master: every line identical or passed, the register identical. `tools/end_runs.py`
       once (full 44, Livox 3, 44_short; about 50 minutes, background): all three IDENTICAL against their manifests. Done
       when both outputs are quoted here, with the configurations that were run (Release only).
+      (2026-11-25, master 07ad407, Release only: step checks ALL HOLD (272 tests, 182 tool tests in 30 s, check register
+      IDENTICAL with 15 instruments ok, both guards and replays identical, 44_short IDENTICAL 11 files, 0 windows at the
+      time limit); end runs ALL HOLD: 44 IDENTICAL 35 files, Livox 3 IDENTICAL 35 files, 44_short IDENTICAL 11 files.)
 - [ ] 6.2 The master reviewer on the push; `openspec validate "check-register" --strict`; archive. Done when the
       reviewer's findings are answered and the change is archived.
