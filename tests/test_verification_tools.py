@@ -992,6 +992,126 @@ class RunHealthKnownLogTests(unittest.TestCase):
         self.assertEqual(rows["windows bent > 10 deg"], ("1", "0", "TRIGGER"))
 
 
+# ---- run_health.py takes its limits from the log's limits line (check-register D8, tasks 4.2 and 4.3) ----
+
+LIMITS_LINE_DEFAULT = ("window verdict limits: bend 3 deg, severe bend 10 deg, speed 2.5 m/s, gyro bias 0.5 deg/s, bent share 0.01, "
+                       "chi2 median 5, chi2 p95 20, weak ratio 0.45\n")
+LIMITS_LINE_OTHER = ("window verdict limits: bend 2 deg, severe bend 6 deg, speed 1.5 m/s, gyro bias 0.3 deg/s, bent share 0.05, "
+                     "chi2 median 4, chi2 p95 15, weak ratio 0.5\n")
+VERDICT_LIMITS_MEMBERS = ("bend_deg", "severe_bend_deg", "speed_mps", "bias_deg_s", "bent_share", "chi2_median", "chi2_p95", "weak_ratio")
+
+
+def verdict_limits_of_the_program():
+    """The default initialisers of `struct VerdictLimits` in src/domain/window_verdict.h, as {member: value}. Fails with a
+    message that names what was not found."""
+    import re
+    header = ROOT / "src/domain/window_verdict.h"
+    text = header.read_text()
+    m = re.search(r"struct\s+VerdictLimits\s*\{(.*?)\n\};", text, re.S)
+    if not m:
+        raise AssertionError(f"struct VerdictLimits not found in {header}: the tool's limits cannot be compared with the program's")
+    values = {}
+    for member in VERDICT_LIMITS_MEMBERS:
+        n = re.search(r"\bdouble\s+" + member + r"\s*=\s*([-+0-9.eE]+)\s*;", m.group(1))
+        if not n:
+            raise AssertionError(f"member {member} of struct VerdictLimits not found with a default initialiser in {header}")
+        values[member] = float(n.group(1))
+    return values
+
+
+class RunHealthLimitsTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.path = Path(self.tmp.name) / "run.log"
+
+    def rows(self, text, *options):
+        import argparse
+        self.path.write_text(text)
+        ap = argparse.ArgumentParser()
+        health.add_limits(ap)
+        r = health.analyse(self.path)
+        return r, {row[0]: row[1:] for row in health.judge(r, ap.parse_args(list(options)))}
+
+    def test_the_tools_defaults_equal_the_programs_verdict_limits(self):
+        program = verdict_limits_of_the_program()
+        self.assertEqual(set(program), set(health.DEFAULTS), "run_health.DEFAULTS and VerdictLimits name different limits")
+        for member, value in program.items():
+            self.assertEqual(health.DEFAULTS[member], value,
+                             f"run_health.py's default for {member} is {health.DEFAULTS[member]} but VerdictLimits in "
+                             f"src/domain/window_verdict.h has {value}: change one so that they agree")
+
+    def test_the_defaults_reach_the_options_and_the_rows_without_a_limits_line(self):
+        r, rows = self.rows(known_log())
+        self.assertEqual(rows["limits"][0], "defaults (the log has no limits line)")
+        self.assertEqual(r["limits"], health.DEFAULTS)
+        self.assertIn("windows bent > 3 deg against the gyro", rows)
+        self.assertIn("windows bent > 10 deg", rows)
+        self.assertIn("windows faster than 2.5 m/s", rows)
+
+    def test_the_log_that_holds_the_default_limits_line_reads_as_from_the_log(self):
+        _, rows = self.rows(LIMITS_LINE_DEFAULT + known_log())
+        self.assertEqual(rows["limits"][0], "from the run's log")
+        self.assertEqual(rows["windows faster than 2.5 m/s"], ("0 (max 1.00 m/s)", "0", "CLEAR"))
+
+    def test_the_rows_follow_the_limits_of_the_logs_line(self):
+        # bend 2 deg, severe 6 deg, speed 1.5 m/s, bias 0.3 deg/s, share 5 %, chi2 4 / 15, weak ratio 0.5; the planted values
+        # are under the program's defaults and over these
+        plants = dict(bends={20: 2.5, 77: -7.0}, speeds={120: 1.8}, biases={150: 0.35}, chi2=chi2_values(4.6, 16.0))
+        r, rows = self.rows(LIMITS_LINE_OTHER + known_log(**plants))
+        self.assertEqual(rows["limits"][0], "from the run's log")
+        self.assertEqual(r["limits"], {"bend_deg": 2.0, "severe_bend_deg": 6.0, "speed_mps": 1.5, "bias_deg_s": 0.3, "bent_share": 0.05,
+                                       "chi2_median": 4.0, "chi2_p95": 15.0, "weak_ratio": 0.5})
+        # the window bent 0.5 deg in the others is under 2 deg; the two plants are over; 2 of 200 is 1 %, under the 5 % share
+        self.assertEqual(rows["windows bent > 2 deg against the gyro"], ("2 (1.0 %)", "<= 5 %", "CLEAR"))
+        self.assertEqual(rows["windows bent > 6 deg"], ("1", "0", "TRIGGER"))
+        self.assertEqual(rows["windows faster than 1.5 m/s"], ("1 (max 1.80 m/s)", "0", "TRIGGER"))
+        self.assertEqual(rows["largest gyro bias estimate x / y / z"], ("0.35 / 0.05 / 0.02 deg/s", "<= 0.3", "TRIGGER"))
+        self.assertEqual(rows["chi2 of the velocity jump, median / p95"], ("5 / 16 (41 windows)", "<= 4 / 15", "TRIGGER"))
+        self.assertNotIn("windows bent > 3 deg against the gyro", rows)
+        # the weak ratio is the log's too: windows of information ratio 0.45 are weak under 0.5, not under 0.45
+        text = LIMITS_LINE_OTHER + known_log()
+        text = text.replace("window diagnostics 5: t 1.80 s, dt 0.36 s, iterations 100, delta 0, start 2.00 0 0, guess move 0 0 0, info ratio 0.6",
+                            "window diagnostics 5: t 1.80 s, dt 0.36 s, iterations 100, delta 0, start 2.00 0 0, guess move 0 0 0, info ratio 0.48")
+        r, _ = self.rows(text)
+        self.assertEqual(r["uncertainty_missing"], [5])
+        r, _ = self.rows(text.replace(LIMITS_LINE_OTHER, LIMITS_LINE_DEFAULT))
+        self.assertEqual(r["uncertainty_missing"], [])
+
+    def test_a_command_line_option_beats_the_logs_line_and_is_named(self):
+        _, rows = self.rows(LIMITS_LINE_OTHER + known_log(speeds={120: 1.8}), "--max-speed", "2.0")
+        self.assertEqual(rows["limits"][0], "command line: --max-speed")
+        self.assertIn("the others from the run's log", rows["limits"][1])
+        self.assertIn("speed 2 m/s", rows["limits"][1])
+        # the option's value is used (1.8 m/s is over the log's 1.5 and under the option's 2.0); the other limits stay the log's
+        self.assertEqual(rows["windows faster than 2 m/s"], ("0 (max 1.80 m/s)", "0", "CLEAR"))
+        self.assertEqual(rows["largest gyro bias estimate x / y / z"][1], "<= 0.3")
+        # the same option set to the default value is still "given": it beats the log
+        _, rows = self.rows(LIMITS_LINE_OTHER + known_log(speeds={120: 1.8}), "--max-speed", "2.5")
+        self.assertEqual(rows["limits"][0], "command line: --max-speed")
+        self.assertEqual(rows["windows faster than 2.5 m/s"][2], "CLEAR")
+        # and on a log without the line the others are the defaults
+        _, rows = self.rows(known_log(), "--max-bias", "0.4", "--max-chi2", "6")
+        self.assertEqual(rows["limits"][0], "command line: --max-bias, --max-chi2")
+        self.assertIn("the others defaults (the log has no limits line)", rows["limits"][1])
+
+    def test_the_last_of_several_limits_lines_counts_and_is_said(self):
+        _, rows = self.rows(LIMITS_LINE_DEFAULT + LIMITS_LINE_OTHER + known_log())
+        self.assertEqual(rows["limits"][0], "from the run's log (the last of 2 limits lines)")
+        self.assertIn("windows faster than 1.5 m/s", rows)
+
+    def test_a_malformed_limits_line_is_an_error(self):
+        for bad in ("window verdict limits: bend 3 deg\n", LIMITS_LINE_DEFAULT.replace("speed 2.5 m/s", "speed fast m/s"),
+                    LIMITS_LINE_DEFAULT.replace(", weak ratio 0.45", "")):
+            self.path.write_text(bad + known_log())
+            with self.assertRaises(ValueError, msg=bad):
+                health.analyse(self.path)
+        # also as the last of several
+        self.path.write_text(LIMITS_LINE_DEFAULT + "window verdict limits: nonsense\n" + known_log())
+        with self.assertRaises(ValueError):
+            health.analyse(self.path)
+
+
 # ---- compare_baseline.py on folders written here (check-register D10 item 3) ----
 
 def write_result_folder(folder, out_path, in_path, stamp, elapsed, commit, data=b"lidar-points-0123456789"):

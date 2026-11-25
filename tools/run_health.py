@@ -19,6 +19,11 @@ against fixed limits. It needs no map and no reference run, so it is the first c
                  result depends on the machine's load (the limit ended iterations), line missing = NOT MEASURED
                  (logs of older builds); neither is a trigger and neither changes the exit code
 
+limits         the verdict's limits come from the log's `window verdict limits:` line (the program's own limits, check-register
+               D8); the `limits` row says where they came from. Precedence: a --max-* option given on the command line, the
+               log's line, the defaults below (a log written before the line existed). The defaults equal `VerdictLimits` in
+               src/domain/window_verdict.h (a test in tests/test_verification_tools.py checks it).
+
 Exit 2 for incomplete evidence, 1 for diagnostic triggers, 0 for complete diagnostics without triggers. Never an accuracy PASS.
 
 usage: run_health.py <run.log> [--toml <settings used>] [--from T0] [--to T1] [limits, see --help]
@@ -32,11 +37,57 @@ import numpy as np
 
 NUM = r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?"
 
+# the limits when the log has no limits line; they equal the default initialisers of VerdictLimits in
+# src/domain/window_verdict.h (tests.test_verification_tools.RunHealthLimitsTests reads that struct and compares)
+DEFAULTS = {"bend_deg": 3.0, "severe_bend_deg": 10.0, "speed_mps": 2.5, "bias_deg_s": 0.5, "bent_share": 0.01,
+            "chi2_median": 5.0, "chi2_p95": 20.0, "weak_ratio": 0.45}
+LIMITS_ORDER = ("bend_deg", "severe_bend_deg", "speed_mps", "bias_deg_s", "bent_share", "chi2_median", "chi2_p95", "weak_ratio")
+LIMITS_LINE = (r"^window verdict limits: bend (" + NUM + r") deg, severe bend (" + NUM + r") deg, speed (" + NUM + r") m/s, gyro bias ("
+               + NUM + r") deg/s, bent share (" + NUM + r"), chi2 median (" + NUM + r"), chi2 p95 (" + NUM + r"), weak ratio (" + NUM + r")\s*$")
+# the command-line options that override a limit: option name (argparse dest) -> limit
+OPTION_LIMITS = {"max_bend_share": "bent_share", "max_speed": "speed_mps", "max_bias": "bias_deg_s", "max_chi2": "chi2_median",
+                 "max_chi2_p95": "chi2_p95"}
+
+
+class DefaultLimit(float):
+    """An option's default: it is the default value, and it tells `given on the command line` from `not given`."""
+
+
+def read_limits(text):
+    """(limits of the log's last `window verdict limits:` line or None, number of such lines). A line that starts as one
+    but does not parse is an error."""
+    lines = re.findall(r"^window verdict limits:.*$", text, re.M)
+    if not lines:
+        return None, 0
+    m = re.match(LIMITS_LINE, lines[-1])
+    if not m:
+        raise ValueError("malformed 'window verdict limits' line")
+    return dict(zip(LIMITS_ORDER, map(float, m.groups()))), len(lines)
+
+
+def effective_limits(r, args=None):
+    """(limits in use, where they came from, a note for the limit column, the options given on the command line): a --max-*
+    option given explicitly beats the log's line, which beats the defaults. bend, severe bend and weak ratio have no
+    option; analyse() used the log's or the defaults'."""
+    given = [o for o in OPTION_LIMITS if args is not None and getattr(args, o, None) is not None and not isinstance(getattr(args, o), DefaultLimit)]
+    limits = dict(r["limits"])
+    for o in given:
+        limits[OPTION_LIMITS[o]] = float(getattr(args, o))
+    if r["limits_lines"]:
+        base = "from the run's log" + (f" (the last of {r['limits_lines']} limits lines)" if r["limits_lines"] > 1 else "")
+    else:
+        base = "defaults (the log has no limits line)"
+    if given:
+        return limits, "command line: " + ", ".join("--" + o.replace("_", "-") for o in given), f"the others {base}", given
+    return limits, base, "", given
+
 
 def analyse(log_path, toml_path=None, t_from=None, t_to=None):
     """Per-run metrics from a diagnostics log, as a dict."""
     text = Path(log_path).read_text(errors="replace")
     windows = {}
+    log_limits, limits_lines = read_limits(text)
+    limits = dict(DEFAULTS, **(log_limits or {}))
     for m in re.finditer(r"^window diagnostics (\d+): t (" + NUM + r") s, dt (" + NUM + r") s, iterations (\d+),.*?start (" + NUM + ") (" + NUM + ") (" + NUM
                          + r"), guess move.*?info ratio (" + NUM + ")", text, re.M):
         windows[int(m.group(1))] = {"t": float(m.group(2)), "dt": float(m.group(3)), "it": int(m.group(4)),
@@ -74,7 +125,8 @@ def analyse(log_path, toml_path=None, t_from=None, t_to=None):
         raise ValueError("duplicate or malformed window diagnostic headers")
     if sorted(windows) != list(range(1, max(windows) + 1)):
         raise ValueError("missing complete window diagnostics")
-    r = {"windows": len(keys), "t_first": windows[keys[0]]["t"], "t_last": windows[keys[-1]]["t"]}
+    r = {"windows": len(keys), "t_first": windows[keys[0]]["t"], "t_last": windows[keys[-1]]["t"],
+         "limits": limits, "limits_lines": limits_lines}
 
     r["coverage"] = {name: sum(name in windows[k] for k in keys)
                      for name in ("bend", "speed", "bias", "chi2")}
@@ -86,10 +138,10 @@ def analyse(log_path, toml_path=None, t_from=None, t_to=None):
     r["expected_windows"] = expected
     if expected is None or set(windows) != set(range(1, expected+1)) or len(progress) != expected or {i for i,_ in progress} != set(windows):
         r["missing_required"].append("expected total window coverage NOT ESTABLISHED")
-    # Ratio is printed to three decimals; the solver prints chi2 only below 0.45, so a printed 0.450 is ambiguous and not required.
+    # Ratio is printed to three decimals; the solver prints chi2 only below the weak ratio (0.45), so a printed 0.450 is ambiguous and not required.
     # Zero/negative information can suppress the source diagnostic: absence then
     # remains unknown, rather than silently declaring its uncertainty measured.
-    r["uncertainty_missing"] = [k for k in keys if windows[k]["info"] < .450 and "chi2" not in windows[k]]
+    r["uncertainty_missing"] = [k for k in keys if windows[k]["info"] < limits["weak_ratio"] and "chi2" not in windows[k]]
     if r["uncertainty_missing"]:
         r["missing_required"].append("conditional chi2 (eligibility unresolved or missing)")
     r["window_starts"] = [{"id": k, "time_s": windows[k]["t"], "position": windows[k]["start"]} for k in keys]
@@ -99,7 +151,7 @@ def analyse(log_path, toml_path=None, t_from=None, t_to=None):
             raise ValueError(f"non-finite {name} diagnostics")
     bend = np.abs(col("bend"))
     if len(bend):
-        r["bend_gt3"], r["bend_gt10"], r["bend_max"] = int((bend > 3).sum()), int((bend > 10).sum()), float(bend.max())
+        r["bend_gt3"], r["bend_gt10"], r["bend_max"] = int((bend > limits["bend_deg"]).sum()), int((bend > limits["severe_bend_deg"]).sum()), float(bend.max())
         r["bend_gt3_share"] = r["bend_gt3"] / len(bend)
     speed = col("speed")
     if len(speed):
@@ -174,6 +226,7 @@ def read_timing(text):
 def judge(r, args):
     """Rows (check, value, limit, verdict) for the metrics of analyse()."""
     rows = []
+    lim, source, others, _ = effective_limits(r, args)
 
     def row(check, value, limit="", passed=None):
         rows.append((check, value, limit, "" if passed is None else ("CLEAR" if passed else "TRIGGER")))
@@ -187,23 +240,26 @@ def judge(r, args):
     if r["uncertainty_missing"]:
         rows.append(("conditional uncertainty", str(r["uncertainty_missing"]), "eligibility unresolved or missing", "INCOMPLETE"))
     row("windows", f"{r['windows']} ({r['t_first']:.0f}-{r['t_last']:.0f} s)")
+    row("limits", source, (others + "; " if others else "") + f"bend {lim['bend_deg']:g} deg, severe bend {lim['severe_bend_deg']:g} deg, "
+        f"speed {lim['speed_mps']:g} m/s, gyro bias {lim['bias_deg_s']:g} deg/s, bent share {lim['bent_share']:g}, "
+        f"chi2 median {lim['chi2_median']:g}, chi2 p95 {lim['chi2_p95']:g}, weak ratio {lim['weak_ratio']:g}")
     if "bend_max" in r:
-        row("windows bent > 3 deg against the gyro", f"{r['bend_gt3']} ({r['bend_gt3_share'] * 100:.1f} %)", f"<= {args.max_bend_share * 100:g} %",
-            r["bend_gt3_share"] <= args.max_bend_share)
-        row("windows bent > 10 deg", str(r["bend_gt10"]), "0", r["bend_gt10"] == 0)
+        row(f"windows bent > {lim['bend_deg']:g} deg against the gyro", f"{r['bend_gt3']} ({r['bend_gt3_share'] * 100:.1f} %)",
+            f"<= {lim['bent_share'] * 100:g} %", r["bend_gt3_share"] <= lim["bent_share"])
+        row(f"windows bent > {lim['severe_bend_deg']:g} deg", str(r["bend_gt10"]), "0", r["bend_gt10"] == 0)
         row("largest bend", f"{r['bend_max']:.1f} deg")
         if "bend_sigmas_p50" in r:
             row("bend in sigmas of the gyro term, median / p95", f"{r['bend_sigmas_p50']:.1f} / {r['bend_sigmas_p95']:.1f} "
                 f"(sigma {r['gyro_sigma_window_deg']:.3f} deg per window)", "diagnostic")
     if "speed_max" in r:
-        fast = int((r["speeds"] > args.max_speed).sum())
-        row(f"windows faster than {args.max_speed:g} m/s", f"{fast} (max {r['speed_max']:.2f} m/s)", "0", fast == 0)
+        fast = int((r["speeds"] > lim["speed_mps"]).sum())
+        row(f"windows faster than {lim['speed_mps']:g} m/s", f"{fast} (max {r['speed_max']:.2f} m/s)", "0", fast == 0)
     if "bias_max" in r:
-        row("largest gyro bias estimate x / y / z", " / ".join(f"{v:.2f}" for v in r["bias_max"]) + " deg/s", f"<= {args.max_bias:g}",
-            max(r["bias_max"]) <= args.max_bias)
+        row("largest gyro bias estimate x / y / z", " / ".join(f"{v:.2f}" for v in r["bias_max"]) + " deg/s", f"<= {lim['bias_deg_s']:g}",
+            max(r["bias_max"]) <= lim["bias_deg_s"])
     if "chi2_p50" in r:
         row("chi2 of the velocity jump, median / p95", f"{r['chi2_p50']:.0f} / {r['chi2_p95']:.0f} ({r['chi2_windows']} windows)",
-            f"<= {args.max_chi2:g} / {args.max_chi2_p95:g}", r["chi2_p50"] <= args.max_chi2 and r["chi2_p95"] <= args.max_chi2_p95)
+            f"<= {lim['chi2_median']:g} / {lim['chi2_p95']:g}", r["chi2_p50"] <= lim["chi2_median"] and r["chi2_p95"] <= lim["chi2_p95"])
         row("velocity jump between windows / its carried sigma, medians", f"{r['jump_p50'] * 1000:.0f} mm/s / {r['prior_sigma_p50'] * 1000:.1f} mm/s", "diagnostic")
     row("path before loop closure", f"{r['path_m']:.0f} m, height {r['z_min']:.2f} to {r['z_max']:.2f} m")
     row("window-start endpoint proxy", f"{r['closure_m']:.2f} m (height {r['closure_z_m']:.2f} m)", "not physical closure accuracy")
@@ -225,11 +281,18 @@ def judge(r, args):
 
 
 def add_limits(ap):
-    ap.add_argument("--max-bend-share", type=float, default=0.01, help="share of windows bent > 3 deg (default 0.01)")
-    ap.add_argument("--max-speed", type=float, default=2.5, help="m/s (default 2.5)")
-    ap.add_argument("--max-bias", type=float, default=0.5, help="deg/s (default 0.5)")
-    ap.add_argument("--max-chi2", type=float, default=5.0, help="median chi2 of the velocity jump (default 5)")
-    ap.add_argument("--max-chi2-p95", type=float, default=20.0, help="95th percentile (default 20)")
+    """The limit options. Each default is a DefaultLimit (a number equal to the program's default), so that a caller that
+    reads the value gets a number and effective_limits() can tell an option given on the command line from one not given;
+    an option given overrides the log's limits line, which overrides the defaults."""
+    d = DEFAULTS
+    ap.add_argument("--max-bend-share", type=float, default=DefaultLimit(d["bent_share"]),
+                    help="share of windows bent over the bend limit (default: the log's limits line, else 0.01)")
+    ap.add_argument("--max-speed", type=float, default=DefaultLimit(d["speed_mps"]), help="m/s (default: the log's limits line, else 2.5)")
+    ap.add_argument("--max-bias", type=float, default=DefaultLimit(d["bias_deg_s"]), help="deg/s (default: the log's limits line, else 0.5)")
+    ap.add_argument("--max-chi2", type=float, default=DefaultLimit(d["chi2_median"]),
+                    help="median chi2 of the velocity jump (default: the log's limits line, else 5)")
+    ap.add_argument("--max-chi2-p95", type=float, default=DefaultLimit(d["chi2_p95"]),
+                    help="95th percentile (default: the log's limits line, else 20)")
 
 
 def main():
