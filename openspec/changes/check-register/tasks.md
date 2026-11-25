@@ -1,0 +1,125 @@
+# Tasks
+
+Who does what: the verification region's agent writes the tool, its tests and the test cases of group 3 on branches of
+its own (Opus, medium effort); the orchestrator records the register, writes `checks/instruments.toml`, and merges.
+Release builds only. No result of a run may change: every merge is followed by `tools/step_checks.py` on the main tree.
+A register difference of kind "change" on any branch of this change, other than the one named in 3.4, stops the branch
+and goes to the user.
+
+## 1. The register of the tests
+
+- [ ] 1.1 Decide where the tool lives: try a file entry `tools/check_register.py` under `[orchestrator]` in
+      `docs/regions/owners.toml` beside verification's `tools/**`. Done when `python tools/region_owners.py` is clean
+      and `--owner tools/check_register.py` prints the orchestrator; if a file entry cannot override the glob, the tool
+      goes to `checks/check_register.py` and design.md's paths are corrected.
+- [ ] 1.2 The reader (design D2) and the writer (D3) for the C++ tests: cases, markers, assertions, asserting helpers
+      and their calls, values, `#if 0`, other conditionals, subcase prefixes; failure with file and line on what it
+      cannot match; the cross-count per file. Done when `tests/test_check_register.py` passes its reader cases (each
+      construct once, on sources held in the test) and the reader runs over the real `tests/` with the cross-count
+      holding in every file and two runs giving the same bytes.
+- [ ] 1.3 The Python tests in the register (`ast`: methods, skip and expected-failure decorators, `self.assert*` calls,
+      literal assignments). Done when the three files' 71 methods are listed and a planted `@unittest.skip` and a
+      changed `places=` argument are each reported by the test.
+- [ ] 1.4 The comparison and its kinds (D4), exit codes 0 / 3 / 1 / 2, output with the old and the new line, changes
+      first. Done when the test plants every edit of the spec's list (tolerance in an assertion, in a named value, in a
+      case table row, in a helper's argument; assertion deleted; assertion commented out; `#if 0` and `#ifdef` round an
+      assertion; skip added; should_fail removed; case renamed; case moved; assertion reworded) and requires the kind
+      and the exit code of each.
+- [ ] 1.5 `--record`: refuses with uncommitted changes under `tests/`, and outside the main working tree without
+      `--allow-worktree`. Done when the test shows both refusals in a temporary git repository and a record in a clean
+      one.
+- [ ] 1.6 The orchestrator records the first register from master, reads it against the survey's counts (about 290
+      cases, 12 `should_fail`, 24 to 26 `skip`, about 1,940 assertions; `LoopTolerances`' members and the two case
+      tables present as values; the six helpers' calls present), and commits `checks/tests.register` in its own commit.
+      Done when `python tools/check_register.py` exits 0 on that commit and the totals line matches an independent
+      count (`grep`) written into this task.
+- [ ] 1.7 `tools/step_checks.py`: the lines `tool tests` and `check register` (D5: additions hold in a region's
+      worktree and fail in the main tree; a change fails everywhere), and the time-limit count on the full run's line.
+      Done when, in a scratch branch in a region worktree, an added case gives `HOLDS, to record: +1 case`, a loosened
+      literal gives `FAILED: 1 assertion changed`, the same added case fails in the main tree, and the step checks on
+      master print both new lines as passed and identical; the added wall time is written here (expected under one
+      minute).
+- [ ] 1.8 Docs for the register: `tools/README.md` (the tool, its kinds, what it does not see), `docs/regions/README.md`
+      (the rule for a register difference and who records), the eight region agents' definitions
+      (`.claude/agents/region-*.md`: quote the register's line in the hand-back; never record), `CLAUDE.md` (Testing,
+      Regions), `docs/regions/verification.md` (the kit's "no unit test" line corrected; the register under Owns and
+      How to check). Done when `python tools/build_docs_index.py --check` holds and each named file states the rule in
+      the words of the spec.
+
+## 2. The instruments' file
+
+- [ ] 2.1 The schema and its check (D7): `check_register.py --instruments` and as part of the plain comparison; the
+      printed table; exit 1 on a missing case, a `should_fail` case as proof, a skipped case without `measured`. Done
+      when the test holds a small instruments file with one of each fault and requires the message for each, and a
+      correct one prints the table.
+- [ ] 2.2 `checks/instruments.toml` written by the orchestrator from the survey of 2026-11-25 (design D7's list): every
+      case name copied from the register, every tolerance and number from the source line; `not_established` and
+      `not_applicable` where the survey found nothing, with the reason; the register tool as an instrument of its own.
+      Done when `python tools/check_register.py` exits 0 with the file in place and the printed table is pasted into
+      this task.
+- [ ] 2.3 Docs: the guide's instruments chapter (`docs/index.html#instruments`) says where each instrument's proof is
+      listed and what the five items mean, in general words (no recording names); `docs/regions/verification.md` points
+      to the file instead of keeping its own partial lists. Done when `python tools/build_docs_index.py --check` holds.
+
+## 3. The gaps that are closed (design D10; each requirement is stated there and is not changed after a run)
+
+- [ ] 3.1 Simulator, planted noise (`tests/synthetic_inertial_test.cpp`): factors 1.5 and 1/1.5 required rejected in
+      every run and axis; 1.05 and 1/1.05 measured; the random walks at 1.5 required rejected in at least 4 of 5 seeds;
+      the 90 % power ratio computed. Done when the cases pass in `ctest` (or are `skip` with their measured result
+      recorded, if they take more than a few seconds), and the measured counts and the ratio are written here.
+- [ ] 3.2 `run_health.py` on a log with known readings (`tests/test_verification_tools.py`): the planted bend, speed,
+      bias and chi-square on both sides of each limit. Done when the cases pass and one of them fails when a limit in
+      `run_health.py` is changed by hand (tried once, reverted, noted here).
+- [ ] 3.3 `compare_baseline.py` on folders written by the test: equal up to the run-dependent fields; one changed byte
+      named; a manifest written and compared. Done when the three cases pass.
+- [ ] 3.4 The fixtures' blindness precondition against the truth (`tests/loop_chains_test.cpp`,
+      `tests/window_covariance_test.cpp`, the shared helper beside `tests/synthetic_loop.cpp`'s): the measured sets run
+      once before the change (`-tc="loop chain*" --no-skip -s`, `-tc="window covariance*" --no-skip -s`; logs kept in
+      the experiment folder), the definition changed with the loop world's tolerances unchanged, the sets run again.
+      Done when a table of every run's validity and of the old and new precondition values, before and after, is in
+      the experiment folder and summarised here, and no validity verdict differs. **If one differs, or a tolerance would
+      have to move: stop, numbers to the user.** The register's difference of this branch (changed assertions, removed
+      values) is quoted here; it is the change the user accepted with this proposal.
+- [ ] 3.5 R2's sensor range (`tests/synthetic_routes.cpp`): another range than the documented one is refused with a
+      message; a test case shows the refusal. Done when the case passes and the existing route cases are unchanged in
+      the register.
+- [ ] 3.6 After 3.1 to 3.5 are merged: `checks/instruments.toml` updated (the closed items name their new cases, the
+      simulator's resolution carries its measured numbers), the register recorded. Done when
+      `python tools/check_register.py` exits 0 and the table shows no `not established` item among those D10 closes.
+
+## 4. One source for the verdict limits
+
+- [ ] 4.1 The limits line in `log_run_verdict` (`src/domain/window_verdict.cpp`, the solver's file), first of its
+      block, in every run, replay and cancelled run; a case in `tests/window_verdict_test.cpp` on the line's text. Done
+      when the case passes and the step checks on the branch are identical everywhere (a log line changes no result).
+- [ ] 4.2 `tools/run_health.py` takes its limits from the line (D8's precedence), prints where they came from, and uses
+      them where 3, 10 and 0.45 are literals today. Done when tool tests show the three sources (log, defaults, command
+      line) and a log with other limits in the line is judged by those.
+- [ ] 4.3 The test that reads `VerdictLimits` from `src/domain/window_verdict.h` and requires the tool's defaults to
+      equal it; it fails when the struct or a member is not found. Done when it passes, and fails when one default in
+      `run_health.py` is changed by hand (tried once, reverted, noted here).
+- [ ] 4.4 Docs: `tools/README.md` (run_health), the verify-run skill (`.claude/skills/verify-run/SKILL.md` and its
+      `.agents` copy: the limits are the run's own, printed in the report), `CLAUDE.md` (Window verdict),
+      `docs/regions/solver.md` and `verification.md`; the instruments' file's `run_health` section. Done when
+      `python tools/build_docs_index.py --check` holds and `python tools/check_register.py` exits 0 after the register
+      is recorded.
+
+## 5. The settings hash and the retired threshold
+
+- [ ] 5.1 The three pins (`tests/odometry_snapshot_test.cpp`, the back-end's file): the literals computed on master
+      before any other task of this group; the failure message prints the new value and what a change means. Done when
+      the case passes on master, and fails with the message when a setting is added to `TomlIO::POINTERS` without the
+      `added_later` entry (tried once in the worktree, reverted, noted here).
+- [ ] 5.2 `turn_rate_threshold_deg_s` retired at 30.0 (`src/infrastructure/toml_io.cpp`), with a line in
+      `tests/toml_golden_test.cpp` (30 loads, 45 is refused and the message names 30). Done when the case passes and the
+      step checks on the branch are identical everywhere.
+- [ ] 5.3 Docs: `docs/regions/back-end.md` (the pins: when a literal may move), the guide's settings text on retired
+      settings. Done when `python tools/build_docs_index.py --check` holds.
+
+## 6. Close
+
+- [ ] 6.1 `tools/step_checks.py` on master: every line identical or passed, the register identical. `tools/end_runs.py`
+      once (full 44, Livox 3, 44_short; about 50 minutes, background): all three IDENTICAL against their manifests. Done
+      when both outputs are quoted here, with the configurations that were run (Release only).
+- [ ] 6.2 The master reviewer on the push; `openspec validate "check-register" --strict`; archive. Done when the
+      reviewer's findings are answered and the change is archived.
