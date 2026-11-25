@@ -262,5 +262,169 @@ class Corridor(unittest.TestCase):
         self.assertLessEqual(np.abs(P[:, :3, 3] - data.P1[:, :3, 3]).max(), 0.1 + 1e-9)
 
 
+# ---- zigzag RULE (OpenSpec change blind-stretch-zigzag): the total runs straight between the supported windows ---------------
+GAP_JAMBS = (3.0, 17.0)       # windows 7..17 and 33 see a jamb another visit saw; 18..32 (7.4 .. 13.0 s) see nothing
+T_A, T_B = 7.0, 13.5          # the times of window 17's and window 33's middle nodes
+
+
+def straight_corridor(odometry_error, lc_error):
+    """The jamb corridor with its blind gap, the odometry's error along x `odometry_error(t)` and the loop closure's result
+    `lc_error(t)` (truth + it). -> (Data, truth)."""
+    data, truth = corridor(jambs=GAP_JAMBS, error=lc_error)
+    data.P0[:, 0, 3] += np.array([odometry_error(t) for t in data.cap.node_t])
+    return data, truth
+
+
+def gap_error(total, first_half=True):
+    """The odometry's error growing evenly in time from T_A to T_B (from the middle of the gap only when not first_half)."""
+    lo = T_A if first_half else (T_A + T_B) / 2
+
+    def e(t):
+        return total * float(np.clip((t - lo) / (T_B - lo), 0.0, 1.0))
+    return e
+
+
+def seen_windows_off(bump_total=0.0):
+    """The loop closure's result for the gap tests: 0.5 m too far along x in the supported windows (7..17 and 33, so that the
+    rule has something to take out and the held-out score improves), and a bump of `bump_total` m in the gap's middle."""
+    def lc(t):
+        if 2.8 <= t < 7.2 or 13.2 <= t < 13.6:
+            return 0.5
+        if 7.2 <= t < 13.1:
+            return bump_total * max(0.0, 1.0 - abs(t - (T_A + T_B) / 2) / 3.0)
+        return 0.0
+    return lc
+
+
+def moved_correction(data, run, shift):
+    """The correction along the run's axis of the poses after the loop closure moved by `shift`."""
+    P = data.P1.copy()
+    P[:, :3, 3] += shift
+    return ft.correction(data, run["a"], P)
+
+
+class StraightGaps(unittest.TestCase):
+    def test_a_reversal_inside_the_gap_is_straightened_and_the_supported_offsets_stay(self):
+        e = gap_error(4.0)
+        # the loop closure sent the gap's middle the wrong way (a bump of 3 m) and the supported windows 0.5 m too far
+        data, truth = straight_corridor(e, seen_windows_off(3.0))
+        runs0, _, P0 = ft.run_rule(data, [], log=lambda *_: None)
+        runs1, _, P1 = ft.run_rule(data, [], log=lambda *_: None, straight_gaps=True)
+        r0, r1 = [[r for r in runs if r["eligible"]][0] for runs in (runs0, runs1)]
+        sup = [int(w) for w, s in zip(r1["scores"]["windows"], r1["supported"]) if s]
+        self.assertEqual(sup, list(range(7, 18)) + [33])
+        self.assertEqual(r1["status"], "applied")
+        gap = slice(data.first[18], data.first[33])
+        c = ft.correction(data, r1["a"])
+        self.assertGreater(ft.fall(c[data.mid_node[18:33]]), 1.0)  # the correction goes back inside the gap
+        self.assertLessEqual(np.abs(P1[gap, 0, 3] - truth[gap, 0]).max(), 0.1)  # a distance, not a grid step
+        self.assertLessEqual(ft.fall(ft.correction(data, r1["a"], P1)[data.mid_node[17:34]]), 1e-9)
+        # the supported windows keep the offsets they have without the option
+        self.assertTrue(np.array_equal(r0["supported"], r1["supported"]))
+        self.assertTrue(np.array_equal(r0["offsets"][r0["supported"]], r1["offsets"][r1["supported"]]))
+        self.assertLessEqual(np.abs(r1["eff"][r1["supported"]] - r1["offsets"][r1["supported"]]).max(), 1e-9)
+
+    def test_the_error_only_in_the_second_half_is_half_wrong_at_the_middle_and_right_at_the_ends(self):
+        e = gap_error(3.0, first_half=False)
+        data, truth = straight_corridor(e, seen_windows_off())  # the loop closure is right in the gap
+        runs, _, P = ft.run_rule(data, [], log=lambda *_: None, straight_gaps=True)
+        r = [r for r in runs if r["eligible"]][0]
+        self.assertEqual(r["status"], "applied")
+        err = P[:, 0, 3] - truth[:, 0]
+        nodes = np.arange(data.first[18], data.first[33])
+        mid = nodes[np.argmin(np.abs(data.cap.node_t[nodes] - (T_A + T_B) / 2))]
+        self.assertAlmostEqual(abs(err[mid]), 1.5, delta=0.1)  # half the gap's total error
+        self.assertLessEqual(abs(err[data.mid_node[17]]), 0.1)
+        self.assertLessEqual(abs(err[data.mid_node[33]]), 0.1)
+
+    def test_a_right_trajectory_moves_no_node_by_more_than_a_grid_step(self):
+        data, truth = straight_corridor(lambda t: 0.0, lambda t: 0.0)
+        runs, _, P = ft.run_rule(data, [], log=lambda *_: None, straight_gaps=True)
+        r = [r for r in runs if r["eligible"]][0]
+        self.assertEqual(r["status"], "unchanged")
+        self.assertLessEqual(np.abs(P[:, :3, 3] - data.P1[:, :3, 3]).max(), 0.1)
+
+    def test_equal_jambs_at_equal_spacing_stay(self):
+        data, _ = corridor(jambs=tuple(np.arange(1.0, 20.0, 2.0)), error=None)
+        runs, _, P = ft.run_rule(data, [], log=lambda *_: None, straight_gaps=True)
+        r = [r for r in runs if r["eligible"]][0]
+        self.assertLessEqual(np.abs(r["eff"]).max(), 0.1 + 1e-9)
+        self.assertLessEqual(np.abs(P[:, :3, 3] - data.P1[:, :3, 3]).max(), 0.1 + 1e-9)
+
+    def test_no_supported_window_is_no_candidate(self):
+        data, _ = corridor(jambs=(), error=bump)
+        runs, _, P = ft.run_rule(data, [], log=lambda *_: None, straight_gaps=True)
+        r = [r for r in runs if r["eligible"]][0]
+        self.assertEqual((r["status"], r["cause"]), ("not timed", "no surface across the passage seen by another visit"))
+        self.assertFalse(r["supported"].any())
+        self.assertTrue(np.array_equal(P, data.P1))
+
+    def test_the_fall(self):
+        self.assertAlmostEqual(ft.fall([0, 4.2, 2.4, 5.8]), 1.8)
+        self.assertEqual(ft.fall([0, 1, 1, 3]), 0.0)
+        self.assertAlmostEqual(ft.fall([0, -2, -1, -3]), 1.0)
+        self.assertEqual(ft.fall([2.0, 1.0, 2.0]), 1.0)  # equal ends: the sign is +1
+        self.assertEqual(ft.fall([]), 0.0)
+
+    def test_rounding_of_the_effective_offsets(self):
+        grid = ft.offset_grid(1.0)[0]  # bound 1.5: k -15 .. 15
+        kmax = (len(grid) - 1) // 2
+        idx = ft.round_offsets(np.array([0.04, 0.06, 0.25, -0.25, 0.35, -0.35, 0.0, 5.0, -5.0]), grid)
+        self.assertEqual((idx - kmax).tolist(), [0, 1, 2, -2, 3, -3, 0, 15, -15])  # a middle goes to the one nearer 0
+
+    def test_the_knots_and_the_moves(self):
+        data, _ = straight_corridor(gap_error(4.0), lambda t: 0.0)
+        r = [r for r in ft.find_stretches(data) if r["eligible"]][0]
+        win = np.arange(r["sup_first"], r["sup_last"] + 1)
+        sup = np.zeros(len(win), bool)
+        sup[[0, len(win) - 1]] = True
+        c = ft.correction(data, r["a"])
+        d = np.array([0.1] + [0.0] * (len(win) - 2) + [-0.2])
+        kt, kc = ft.straight_knots(data, r, win, sup, d, c)
+        self.assertEqual(len(kt), 4)
+        self.assertTrue(np.all(np.diff(kt) > 0))
+        self.assertAlmostEqual(kc[1], c[data.mid_node[win[0]]] + 0.1)
+        shift = ft.straight_shift(data, r, kt, kc, c)
+        n0, n1 = ft.pin_nodes(data, r)
+        self.assertEqual(float(np.abs(shift[:n0]).max()), 0.0)
+        self.assertEqual(float(np.abs(shift[n1 + 1:]).max()), 0.0)
+        self.assertEqual(float(np.abs(shift[n0]).max()), 0.0)  # the pin keeps its correction
+        idx = np.arange(n0, n1 + 1)  # after the move a node's correction is T at its time
+        self.assertLessEqual(np.abs(moved_correction(data, r, shift)[idx] - np.interp(data.cap.node_t[idx], kt, kc)).max(), 1e-9)
+
+    def test_the_total_fit_with_no_correction_is_the_profile(self):
+        rng = np.random.default_rng(3)
+        grid = np.arange(-3, 4) * 0.1
+        for _ in range(10):
+            E = rng.uniform(0, 1, (5, len(grid)))
+            self.assertEqual(ft.profile_total(E, grid, np.zeros(5), 0.0, 0.0).tolist(), ft.profile(E, grid).tolist())
+
+    def test_the_total_fit_equals_brute_force(self):
+        rng = np.random.default_rng(5)
+        grid = np.arange(-2, 3) * 0.1
+
+        def cost(E, c, c0, c1, path):
+            return sum(E[w, k] for w, k in enumerate(path)) + 0.1 * float(np.sum(np.diff(np.r_[c0, c + grid[list(path)], c1]) ** 2))
+
+        for _ in range(10):
+            E = rng.uniform(0, 1, (4, len(grid)))
+            c = rng.uniform(-1, 1, 4)
+            c0, c1 = rng.uniform(-1, 1, 2)
+            best = min(cost(E, c, c0, c1, p) for p in itertools.product(range(5), repeat=4))
+            self.assertAlmostEqual(cost(E, c, c0, c1, ft.profile_total(E, grid, c, c0, c1)), best, places=9)
+
+    def test_window_rows_end_with_the_correction_the_effective_offset_and_the_total(self):
+        data, _ = straight_corridor(gap_error(4.0), lambda t: 0.0)
+        for straight in (False, True):
+            runs, _, P = ft.run_rule(data, [], log=lambda *_: None, straight_gaps=straight)
+            rows = ft.window_rows(data, runs, ft.Rule())
+            self.assertEqual(list(rows[0])[-3:], ["correction_m", "effective_offset_m", "total_m"])
+            for r in rows:
+                self.assertAlmostEqual(r["total_m"], r["correction_m"] + r["effective_offset_m"], places=5)
+            s = ft.summary(data, runs, ft.Rule(), P)
+            self.assertIn("fall_after_loop_closure_m", s[0])
+            self.assertIn("fall_after_step_m", s[0])
+
+
 if __name__ == "__main__":
     unittest.main()
