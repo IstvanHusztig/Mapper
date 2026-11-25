@@ -318,8 +318,7 @@ void log_noise_budget(const OdometryConfig &p, Logger &logger)
     const auto v = [](double x) { return text(x, 6); };
     std::ostringstream rotation;
     if (p.use_time_scaled_rotation_sigma)
-        rotation << "time-scaled max(k * ARW * sqrt(dt), floor), k " << v(p.rotation_sigma_inflation_k) << " (turn windows "
-                 << (p.rotation_sigma_inflation_k_turn > 0.0 ? v(p.rotation_sigma_inflation_k_turn) : std::string("off")) << "), ARW x/y/z " << v(p.gyro_arw_x_deg_sqrt_s) << " " << v(p.gyro_arw_y_deg_sqrt_s) << " "
+        rotation << "time-scaled max(k * ARW * sqrt(dt), floor), k " << v(p.rotation_sigma_inflation_k) << ", ARW x/y/z " << v(p.gyro_arw_x_deg_sqrt_s) << " " << v(p.gyro_arw_y_deg_sqrt_s) << " "
                  << v(p.gyro_arw_z_deg_sqrt_s) << " deg/sqrt(s), floor " << v(p.rotation_sigma_floor_deg) << " deg";
     else
         rotation << "om/fi/ka " << v(p.lidar_odometry_motion_model_om_1_sigma_deg) << " " << v(p.lidar_odometry_motion_model_fi_1_sigma_deg) << " "

@@ -144,11 +144,6 @@ struct OdometryConfig
     double gyro_arw_z_deg_sqrt_s = 0.057;
     double rotation_sigma_inflation_k = 7.0898154; // covers model error beyond white gyro noise (timestamp jitter, vibration); 4.0 x sqrt(pi), as the prior lost its 1/pi Cauchy factor
     double rotation_sigma_floor_deg = 0.0035449077; // lower bound for near-zero dt (0.002 x sqrt(pi))
-    // in windows that turn faster than turn_rate_threshold_deg_s about the vertical (mean over the window, from the IMU),
-    // rotation_sigma_inflation_k_turn replaces rotation_sigma_inflation_k: tight turns (stairwells) trust the gyro more,
-    // since the LiDAR matching is weakest there; 0 = off
-    double rotation_sigma_inflation_k_turn = 0.0;
-    double turn_rate_threshold_deg_s = 30.0;
 
     // loop closure after the odometry (see loop_closure.h): segments of loop_closure_segment_windows windows,
     // revisits (same floor) = segments with at least loop_closure_min_path_m walked between them and centres within

@@ -178,7 +178,6 @@ namespace
         c.use_time_scaled_rotation_sigma = true;
         c.rotation_sigma_inflation_k = 1.0;
         c.rotation_sigma_floor_deg = 0.0;
-        c.rotation_sigma_inflation_k_turn = 0.0;
         c.imu_acceleration_span_s = 0.0039;
         c.imu_position_information_scale = s.position_scale;
         c.imu_edges_follow_state = s.switches;

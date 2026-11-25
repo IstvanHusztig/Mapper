@@ -161,7 +161,10 @@ namespace
         {"rgd_sf_sigma_z_m", std::nullopt},
         {"rgd_sf_sigma_om_deg", std::nullopt},
         {"rgd_sf_sigma_fi_deg", std::nullopt},
-        {"rgd_sf_sigma_ka_deg", std::nullopt}};
+        {"rgd_sf_sigma_ka_deg", std::nullopt},
+        // 2026-11-25: the turn gyro weighting (off in every settings file, never measured to help)
+        {"rotation_sigma_inflation_k_turn", 0.0},
+        {"turn_rate_threshold_deg_s", std::nullopt}};
     // sections whose every key was retired
     const std::set<std::string> RETIRED_SECTIONS = {"robust_lidar_odometry"};
 

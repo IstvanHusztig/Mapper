@@ -389,7 +389,6 @@ namespace
         r.delta = 2.5e-7;
         r.lm_factor = 0.125;
         r.at_rest = false;
-        r.turn_window = true;
         r.acc_term = true;
         r.guess_move = Eigen::Vector3d(0.25, -0.5, 0.0625);
         r.result_move = Eigen::Vector3d(0.3, -0.45, 0.07);
@@ -539,7 +538,8 @@ TEST_CASE("window term csv: the features file's old columns keep their names, or
                                    "e_bias_prior_1_deg_s,noise_bias_prior_2_deg_s,noise_bias_prior_3_deg_s,noise_offset_prior_1_mps2,noi"
                                    "se_offset_prior_2_mps2,noise_offset_prior_3_mps2,noise_zero_velocity_mps,noise_ndt_information_scale"
                                    ",noise_ndt_huber_cutoff";
-    const std::string old_row = "7,12.5,0.375,11,2.5e-07,0.125,0,1,1,0.6,0.8,0.25,-0.5,0.0625,0.3,-0.45,0.07,0.7,-1.1,0.02,0.8,-1.2,0"
+    // turn_window (8th) is 0: the turn gyro weighting was removed 2026-11-25 and the column is always written as 0
+    const std::string old_row = "7,12.5,0.375,11,2.5e-07,0.125,0,0,1,0.6,0.8,0.25,-0.5,0.0625,0.3,-0.45,0.07,0.7,-1.1,0.02,0.8,-1.2,0"
                                 ".03,0.01,-0.02,0.15,0.004,0.005,-0.006,0.25,0,0,1,1234,56,0,1,0.5,1.5,2.5,3.5,4.5,5.5,6.5,7.5,8.5,9."
                                 "5,10.5,,CLEAR,NOT MEASURED,TRIGGER,NOT MEASURED,0.75,-0.125,,1.5,,3.25,converged,2,1,3,,0.875,0.0001"
                                 ",0.0001,0.0001,0.01,0.02,0.03,0.011,0.021,0.031,0.012,0.022,0.032,,,0.004,0.006,0.0046,0.005,0.0052,"

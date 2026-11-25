@@ -67,7 +67,6 @@ struct WindowTermRecord
     double delta = 0.0;      // the last iteration's update
     double lm_factor = 0.0;  // the damping after the iterations
     bool at_rest = false;
-    bool turn_window = false;
     bool acc_term = false;
     Eigen::Vector3d guess_move = Eigen::Vector3d::Zero();  // first to last node, world frame [m]
     Eigen::Vector3d result_move = Eigen::Vector3d::Zero();
