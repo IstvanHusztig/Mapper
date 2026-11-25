@@ -1,5 +1,10 @@
 # Tasks
 
+> **2026-11-25: rejected and removed from the code on the user's decision** ("remove it completely and if needed
+> implement from scratch"): the gyro rotation term (`consistency_gyro_rotation_term`, `consistency_gyro_sigma_scale`,
+> `consistency_gyro_gate_deg`, now retired settings) and its test are gone. The hold-out mode (group 2, `holdout_block_s`)
+> and `tools/holdout_sharpness.py` stay. The results below and in `results.md` stay as the record.
+
 ## 1. Measures that measure what they claim
 
 - [x] 1.1 `tools/wall_precision.py`, findings of the post-push review: per visit pair an expected noise √(MAD₁²/n₁ + MAD₂²/n₂)·1.25 and the pair's difference against it (`pair_excess_m`), each visit's median position along the piece and the |Δalong| of a pair; 3D incidence; `plan_dist_m` summarised by `sides`; length from the line's extent, not its cell count; no KeyError without `gyro_bias_per_window` (windows then empty), the newest results JSON, clear messages on no pieces / no pairs; `--cell` and `--sigma`; legend bins match `searchsorted`; README. Verify: on `44_baseline` the tool runs, `pair_excess_m` is printed, and a run on a result made without gyro-bias estimation (44_short with `use_gyro_bias_estimation = false`) doesn't crash.

@@ -125,7 +125,7 @@ literature the repo does not cite; nothing in it was used.</p>
 
 
 
-<tr><td>2026-10-18</td><td>Gyro rotation term in consistency, hold-out mode (<code>consistency-gyro-term</code>)</td><td>Gyro term between consecutive nodes in the consistency pass.</td><td>Claude (Opus), from <code>map-precision-leaks</code> F2.</td><td><span class="off">built, off</span>; kept (the user, 2026-11-25), <span class="test">to test</span>.</td><td></td></tr>
+<tr><td>2026-10-18</td><td>Hold-out mode (<code>holdout_block_s</code>, change <code>consistency-gyro-term</code>)</td><td>Points of odd time blocks left out of every map and point term but saved, for <code>holdout_sharpness.py</code>.</td><td>Claude (Opus), from <code>map-precision-leaks</code> F2.</td><td><span class="off">off</span>; an evaluation tool.</td><td></td></tr>
 
 
 
@@ -154,8 +154,6 @@ literature the repo does not cite; nothing in it was used.</p>
 <p>Features the user marked while going through this list (2026-11-25): kept in the code, to be tested before a
 decision.</p>
 <ul>
-<li><b>Gyro rotation term in consistency</b> (<code>consistency_gyro_rotation_term</code>, off): measured on one recording
-only; test where consistency runs, and with a sensor whose gyro is sound.</li>
 <li><b>Honest inertial carry, layer 2</b> (<code>imu_carry_joint_covariance</code>, off): whether it is needed beside layer 1.</li>
 </ul>
 
