@@ -7,7 +7,8 @@
 In this order, one at a time: the Release build; the unit tests; the tool tests (the Python tests of tests/, `tool tests`);
 the check register (checks/check_register.py: the test sources against checks/tests.register and the instruments' file;
 additions only HOLD in a region's worktree and FAIL in the main working tree, any change fails everywhere; the full
-listing is <run folder>/check_register.txt); the characterization guard and the loop guard against
+listing is <run folder>/check_register.txt; the same line compares what the unit tests and the tool tests ran with the
+register's totals, `executed`); the characterization guard and the loop guard against
 their reference files (exact hexadecimal doubles); the replays of the captures of tools/local_paths.toml, every window
 identical with its capture; the per-term table of the captures marked `terms`, against its reference; and the recordings
 marked `step_check` (44_short) against their manifest, with the count of windows that stopped at the time limit (a
@@ -20,6 +21,7 @@ files are shared by all worktrees (<guards>/refs, with the commit they were reco
 import argparse
 import datetime
 import filecmp
+import json
 import json
 import os
 import re
@@ -84,14 +86,70 @@ def parse_register_output(out):
     return summary, inst
 
 
-def register_line(folder):
-    """Run the register tool in this worktree; (ok, the line's text). Its full listing goes to <folder>/check_register.txt."""
+DOCTEST_SUMMARY = re.compile(r"test cases:\s*(\d+)\s*\|\s*(\d+)\s*passed\s*\|\s*(\d+)\s*failed\s*\|\s*(\d+)\s*skipped")
+
+
+def executed_verdict(expected, doctest_text, unittest_text):
+    """(ok, text) of the executed counts: what the unit tests and the tool tests actually ran, against the totals the
+    register tool derives from the sources (`check_register.py --counts`). doctest's `test cases: N | .. | S skipped`:
+    N + S must equal the register's C++ cases and S lie between the cases skipped always and those plus the ones skipped by
+    a condition the register cannot evaluate (in Release `skip(loop_cases_skipped)` does not skip, so S is then the first
+    number; the range is what the register can promise). unittest's `Ran N tests` must equal the register's Python tests
+    and `skipped=K` lie in the same kind of range. A count that is missing is a mismatch. This sees a whole case that does
+    not run, not an assertion inside a case."""
+    problems, parts = [], []
+    d = DOCTEST_SUMMARY.search(doctest_text or "")
+    if d is None:
+        problems.append("no doctest 'test cases:' summary")
+    else:
+        n, skipped = int(d.group(1)), int(d.group(4))
+        lo, hi = expected["cpp_skip_always"], expected["cpp_skip_always"] + expected["cpp_skip_maybe"]
+        parts.append(f"C++ {n} run + {skipped} skipped = {n + skipped} (register {expected['cpp_cases']}; skipped {lo}..{hi})")
+        if n + skipped != expected["cpp_cases"]:
+            problems.append(f"C++ cases run + skipped {n + skipped} != register {expected['cpp_cases']}")
+        if not lo <= skipped <= hi:
+            problems.append(f"C++ skipped {skipped} outside the register's {lo}..{hi}")
+    ran = re.search(r"Ran (\d+) tests?", unittest_text or "")
+    if ran is None:
+        problems.append("no unittest 'Ran N tests' line")
+    else:
+        n = int(ran.group(1))
+        k = re.search(r"skipped=(\d+)", unittest_text)
+        k = int(k.group(1)) if k else 0
+        lo, hi = expected["py_skip_always"], expected["py_skip_always"] + expected["py_skip_maybe"]
+        parts.append(f"python {n} ran, {k} skipped (register {expected['py_runs']}; skipped {lo}..{hi})")
+        if n != expected["py_runs"]:
+            problems.append(f"python tests ran {n} != register {expected['py_runs']}")
+        if not lo <= k <= hi:
+            problems.append(f"python skipped {k} outside the register's {lo}..{hi}")
+    if problems:
+        return False, "executed MISMATCH: " + "; ".join(problems) + (" | " + "; ".join(parts) if parts else "")
+    return True, "executed " + "; ".join(parts)
+
+
+def executed_line(doctest_text, unittest_text):
+    """(ok, text): the executed counts against the register tool's totals for this worktree's sources."""
+    r = subprocess.run([sys.executable, "-B", str(kit.ROOT / "checks" / "check_register.py"), "--root", str(kit.ROOT), "--counts"],
+                       capture_output=True, text=True)
+    try:
+        expected = json.loads(r.stdout)
+    except ValueError:
+        return False, "executed NOT MEASURED: the register tool gave no counts: " + (r.stderr.strip() or r.stdout.strip())[:200]
+    return executed_verdict(expected, doctest_text, unittest_text)
+
+
+def register_line(folder, executed=None):
+    """Run the register tool in this worktree; (ok, the line's text). Its full listing goes to <folder>/check_register.txt.
+    `executed` is (ok, text) of the executed counts, added to the line and failing it when the counts differ."""
     started = time.time()
     r = subprocess.run([sys.executable, "-B", str(kit.ROOT / "checks" / "check_register.py"), "--root", str(kit.ROOT)], capture_output=True, text=True)
     listing = folder / "check_register.txt"
     listing.write_text(r.stdout + ((chr(10) + r.stderr) if r.stderr else ""), encoding="utf-8")
     summary, inst = parse_register_output(r.stdout)
     ok, text = register_verdict(r.returncode, summary, in_main_tree(), None if r.returncode == 0 else listing, r.stderr)
+    if executed is not None:
+        ok = ok and executed[0]
+        text += " | " + executed[1]
     return ok, text + (f" | {inst}" if inst else "") + f" ({time.time() - started:.1f} s)"
 
 
@@ -151,16 +209,18 @@ def main():
         sys.exit(0 if ok else 1)
 
     r = subprocess.run([str(kit.BIN / "lidar_odometry_tests.exe")], capture_output=True, text=True, cwd=kit.BIN)
+    doctest_text = r.stdout + r.stderr
     counts = " ".join(l.strip() for l in (r.stdout + r.stderr).splitlines() if "test cases:" in l)
     check("tests", r.returncode == 0, ("passed " if r.returncode == 0 else "FAILED ") + counts)
 
     started = time.time()
     r = subprocess.run([sys.executable, "-B", "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"], capture_output=True, text=True, cwd=kit.ROOT)
-    ran = re.search(r"Ran (\d+) tests?", r.stdout + r.stderr)
+    unittest_text = r.stdout + r.stderr
+    ran = re.search(r"Ran (\d+) tests?", unittest_text)
     check("tool tests", r.returncode == 0 and ran is not None,
           ("passed " if r.returncode == 0 else "FAILED ") + (f"{ran.group(1)} tests" if ran else "no count") + f" ({time.time() - started:.0f} s)")
 
-    ok_register, text = register_line(folder)
+    ok_register, text = register_line(folder, executed_line(doctest_text, unittest_text))
     check("check register", ok_register, text)
 
     for name, pattern, variable, ref_name in GUARDS:
