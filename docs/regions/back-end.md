@@ -68,8 +68,7 @@ orchestrator's):
   edge classes, `loop_fine_time_step`, the scores port with its point and capture sources); tests
   `tests/loop_fine_time_test.cpp` (`-tc="loop fine time*"`).
 - `src/application/consistency.h` / `.cpp`: `ConsistencyData` (points with nodes, chunks of 1e6 points, kept Cholesky
-  analysis), `Consistency`, file-local `add_gyro_rotation_terms` (`consistency_gyro_rotation_term`, off in both
-  shipped settings files).
+  analysis), `Consistency`.
 - `src/domain/odometry_snapshot.h`, `src/infrastructure/odometry_snapshot_file.h` / `.cpp`.
 - Tests: `tests/loop_closure_test.cpp`, `tests/consistency_test.cpp`, `tests/odometry_snapshot_test.cpp`.
 - In the front-end's file `src/application/lidar_odometry.cpp`: `run_consistency` (the passes' driver), by a function
@@ -85,8 +84,7 @@ orchestrator's):
     registration error, cross-floor edge carries no height, shaft vs box region), plausibility independent of the
     distance from the origin. Three end-to-end cases on the synthetic two-lap recording are `doctest::skip()` (about
     20 s each): add `--no-skip -s`. "a trajectory that is already right stays" is `should_fail` (moves 32 mm / 0.09°).
-  - `-tc="consistency*"`: gyro term keeps node-to-node rotation (and is repeatable), several chunks repeatable and reduce
-    seams, offsets between windows reduced, and the `should_fail` truth case (moves the true trajectory up to 6.3 mm).
+  - `-tc="consistency*"`: several chunks repeatable and reduce seams, offsets between windows reduced, and the `should_fail` truth case (moves the true trajectory up to 6.3 mm).
   - `-tc="odometry snapshot*"`: round trip bit for bit, refused for other odometry settings, damaged file, restore checks,
     post-processing after a restore equal to after the odometry.
 - **Loop closure replay** (the way to test a loop rule): a CLI run (also `--from-snapshot`) with `capture_loop_closure = true` writes `loop_closure_capture.bin`; `dMapper --replay-loop-closure <capture> <params.toml> <output_folder>` runs `close_loops` on the recorded registrations (edge choice, pose graph, pruning, node correction) and writes the trajectory and its loop log, in seconds. With the capture's own settings every node must equal the run's bit for bit (exit 1 otherwise). The capture holds no points, so it only chooses among recorded tries: settings that ask for another try are named as missing and write nothing; odometry settings, `loop_closure_segment_windows`, `loop_closure_max_correction_m` and `loop_closure_cross_floor_search_m` are refused. Measure the replayed trajectory with `wall_pairs.py measure` and `trajectory_seams.py`; a rule that looks better is confirmed by a full run. `capture_loop_closure_max_tries` bounds the tries kept. Files: `loop_closure_capture.h`, `loop_closure_replay.{h,cpp}`, `loop_closure_capture_file.{h,cpp}`, `loop_closure_replay_cli.cpp`.
@@ -102,7 +100,7 @@ orchestrator's):
   (with path and ratio, or the information ratio for `cross-floor`), `loop edge i -> j kept`, `loop segments i -> j dropped:
   residual ...`, `loop closure: loop edge residuals [m/deg]`, `loop closure: N loop(s) accepted, largest segment
   correction X m`, the implausible-result warning, `N of M cross-floor registrations accepted`, the cross-floor edge
-  sigmas; `consistency gyro term: N edges; G of W windows left out`; with `log_stage_timing` the `timing consistency`
+  sigmas; with `log_stage_timing` the `timing consistency`
   lines and the `loop_closure` / `consistency` step times.
 - **Not its readings**: the per-term table, the `window noise` line and the window verdict are odometry readings.
   `run_health.py`'s row "consistency" is the start-velocity chi², not this pass; its row "loop closure" (loops, largest
@@ -115,9 +113,9 @@ orchestrator's):
 ## Known flaws
 
 - **C1** (verified): consistency adds pose jitter. One 6-DOF unknown per node, smoothness weights constant and not scaled
-  by dt (`consistency.cpp:215`: x 1e6, y and z 1e8, rotation 1/(0.1°)²), no prior to the input poses, only node 0 held
-  (`:269`), 10 passes (`num_constistency_iter`). Measured on 44: rotation per IMU sample p50 0.041° (odometry) → 0.167°
-  (consistency), gyro 0.024°. The gyro rotation term (`add_gyro_rotation_terms`) is the candidate fix, off.
+  by dt (`consistency.cpp:124`: x 1e6, y and z 1e8, rotation 1/(0.1°)²), no prior to the input poses, only node 0 held
+  (`:179`), 10 passes (`num_constistency_iter`). Measured on 44: rotation per IMU sample p50 0.041° (odometry) → 0.167°
+  (consistency), gyro 0.024°. No fix in the code (the gyro rotation term was removed 2026-11-25, see Ideas rejected).
 - **C24** (partly fixed): robust kernel off (`loop_closure_kernel_scale` 0, `odometry_config.h:169`, not set in the
   settings files); up to two edges per segment since G2b; coarse-search ties still go to the first candidate in loop
   order (strict `>` in `coarse_search`, `loop_closure.cpp:165`, `:189`). G4 (yaw consistency vote, then kernel 3.55)
@@ -208,7 +206,7 @@ From `python tools/function_sizes.py src --min 80` (2026-11-18):
 - **2026-10-18, consistency gyro term on 44 s0/s1/s2:** gated windows 15/14/24 of 690 (gyro fault windows 629–639
   gated); jitter p50 0.91 → 0.49°, p99 4.44 → 1.40°; held-out wall thickness +1.31 → −1.40 mm against consistency off;
   façade and revisits within the spread; railing spread 3.0 → 4.1 cm; consistency time +10–20 %.
-  `openspec/changes/consistency-gyro-term/results.md`.
+  `openspec/changes/consistency-gyro-term/results.md`. The term was removed from the code 2026-11-25 (Ideas rejected).
 - **2026-10-18, post-processing ablation from one 44 snapshot:** visit-pair difference p50/p90 odometry 4.5/12.9 cm,
   loop closure only 2.9/6.4, consistency only 4.7/13.2, both 3.0/6.1; consistency helps only pairs < 10 s apart
   (2.2 → 1.3 cm). Hold-out on 44_short: consistency +1.85 mm on never-fitted points, −2.5 mm on fitted ones.
@@ -245,11 +243,14 @@ From `python tools/function_sizes.py src --min 80` (2026-11-18):
 - I1b, 2° rotation noise added to each cross-floor edge: s2's lowest floor fell back to 19.2 cm; removed. Findings 1.5.
 - I2, same-floor edges weighted by information in the setup of 2026-10-11: rejected then (turned floor 0 about 3°,
   gallery −52 cm, memory note); same-floor information edges shipped later as G3b, with 2.4 s segments and two slots.
+- The gyro rotation term in consistency (`consistency_gyro_rotation_term`, `_sigma_scale`, `_gate_deg`; change
+  `consistency-gyro-term`, off in every settings file): removed from the code 2026-11-25 on the user's decision ("remove
+  it completely and if needed implement from scratch"); the three keys are retired settings (on is refused). The
+  measured results stay in `openspec/changes/consistency-gyro-term/results.md`. The hold-out mode of the same change
+  (`holdout_block_s`) stays.
 
 ## Open questions
 
-- Ship the consistency gyro term? Task 4.4 of `consistency-gyro-term` waits for the user; two reviewer findings first:
-  no gyro edge across window seams (`consistency.cpp:80`), and the gate is re-evaluated in every pass and can flip.
 - The robust kernel on real data (`robust-loop-closure` task 2.4) was never run; G4a (yaw vote) waits for the cave data.
 - `crop_to_shared_footprint` has no unit test (`robust-loop-closure` task 3.5).
 - Why C* is 0.2–3.3 cm worse than C10 on the stairwell in 6 of 6 inputs (tracker C22).

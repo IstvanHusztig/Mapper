@@ -168,7 +168,11 @@ namespace
         // 2026-11-25: layer 2 of honest-inertial-carry, the joint velocity-offset carry (tested worse on the Livox 4 stall
         // replays, the user's decision), and the window sigma meant for it (never read by the code)
         {"imu_carry_joint_covariance", 0.0},
-        {"imu_accel_window_sigma_mps2", 0.0}};
+        {"imu_accel_window_sigma_mps2", 0.0},
+        // 2026-11-25: the gyro rotation term in consistency (off in every settings file; removed on the user's decision)
+        {"consistency_gyro_rotation_term", 0.0},
+        {"consistency_gyro_sigma_scale", std::nullopt},
+        {"consistency_gyro_gate_deg", std::nullopt}};
     // sections whose every key was retired
     const std::set<std::string> RETIRED_SECTIONS = {"robust_lidar_odometry"};
 

@@ -17,9 +17,6 @@ build_date = "Mar 28 2026"
 [consistency]
 use_consistency = true
 num_constistency_iter = 10
-consistency_gyro_rotation_term = false
-consistency_gyro_sigma_scale = 3.0
-consistency_gyro_gate_deg = 3.0
 
 [evaluation]
 holdout_block_s = 0.0

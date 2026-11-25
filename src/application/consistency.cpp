@@ -1,5 +1,4 @@
 #include "consistency.h"
-#include "window_noise_model.h"
 #include "holdout.h"
 #include "ndt_map.h"
 #include "normal_equations.h"
@@ -7,9 +6,6 @@
 #include <transformations.h>
 #include <python-scripts/point-to-point-metrics/point_to_point_source_to_target_tait_bryan_wc_jacobian.h>
 #include <python-scripts/constraints/smoothness_tait_bryan_wc_jacobian.h>
-#include <python-scripts/constraints/relative_pose_tait_bryan_wc_jacobian.h>
-#include "imu_kinematics.h"
-#include "optimizer_options.h"
 
 #include "angle_units.h"
 #include <mutex>
@@ -32,93 +28,6 @@ namespace
     // at most this many chunks are worked on at the same time (a chunk holds its global points and its NDT map)
     constexpr int chunks_in_flight = 8;
     constexpr size_t smoothness_batch = 4096;
-
-    Eigen::Affine3d imu_orientation(const Eigen::Vector3d &angles)
-    {
-        TaitBryanPose p{};
-        p.om = angles.x();
-        p.fi = angles.y();
-        p.ka = angles.z();
-        return affine_matrix_from_pose_tait_bryan(p);
-    }
-
-    // consistency_gyro_rotation_term: between consecutive nodes k, k + 1 of the same window, the relative rotation is tied
-    // to the IMU's (orientation increment, corrected by exp(-bias * dt) with the window's gyro bias), rotation weights only,
-    // sigma per axis = scale x max(inflation_k x ARW x sqrt(dt), floor) as the odometry's rotation prior. A window whose
-    // IMU rotation over the window differs from its odometry result by more than the gate gets no terms (a stretch where
-    // the gyro is wrong). The terms couple k and k + 1 only and are added in node order.
-    void add_gyro_rotation_terms(const std::vector<Window> &windows, const std::vector<std::pair<int, int>> &indexes,
-                                 const std::vector<TaitBryanPose> &poses, const OdometryConfig &params, BandedNormalMatrix &normal,
-                                 Eigen::VectorXd &rhs, Logger &logger)
-    {
-        const MotionModelRotationOptions rotation = get_motion_model_rotation_options(params);
-        const double scale = params.consistency_gyro_sigma_scale;
-        int edges = 0, gated = 0, without_imu = 0;
-        std::vector<bool> use_window(windows.size(), false);
-        for (size_t w = 0; w < windows.size(); w++)
-        {
-            const Window &win = windows[w];
-            if (win.poses.size() < 2 || win.imu_angles.size() != win.poses.size() || win.timestamps.size() != win.poses.size())
-            {
-                without_imu++;
-                continue;
-            }
-            const double duration = win.timestamps.back().first - win.timestamps.front().first;
-            const Eigen::Quaterniond imu = relative_rotation(imu_orientation(win.imu_angles.front()), imu_orientation(win.imu_angles.back())) *
-                                           Eigen::Quaterniond(exp_so3(-win.gyro_bias.mean * duration));
-            const Eigen::Quaterniond result = relative_rotation(win.poses.front(), win.poses.back());
-            if (imu.angularDistance(result) > params.consistency_gyro_gate_deg * DEG_TO_RAD)
-            {
-                gated++;
-                continue;
-            }
-            use_window[w] = true;
-        }
-        for (size_t k = 0; k + 1 < indexes.size(); k++)
-        {
-            const auto [w, j] = indexes[k];
-            if (indexes[k + 1].first != w || !use_window[w])
-                continue;
-            const Window &win = windows[w];
-            const double dt = std::max(win.timestamps[j + 1].first - win.timestamps[j].first, 0.0);
-            const Eigen::Quaterniond q = relative_rotation(imu_orientation(win.imu_angles[j]), imu_orientation(win.imu_angles[j + 1])) *
-                                         Eigen::Quaterniond(exp_so3(-win.gyro_bias.mean * dt));
-            Eigen::Affine3d rel = Eigen::Affine3d::Identity();
-            rel.linear() = q.normalized().toRotationMatrix();
-            const TaitBryanPose m = pose_tait_bryan_from_affine_matrix(rel);
-            double weight[3];
-            for (int axis = 0; axis < 3; axis++)
-            {
-                const double sigma =
-                    scale * time_scaled_rotation_sigma(rotation.inflation_k, rotation.arw_rad_sqrt_s(axis), dt, rotation.sigma_floor_rad);
-                weight[axis] = 1.0 / (sigma * sigma);
-            }
-            const TaitBryanPose &p1 = poses[k], &p2 = poses[k + 1];
-            Eigen::Matrix<double, 12, 12> AtPA;
-            relative_pose_obs_eq_tait_bryan_wc_case1_AtPA_simplified(AtPA, p1.px, p1.py, p1.pz, p1.om, p1.fi, p1.ka, p2.px, p2.py, p2.pz, p2.om, p2.fi,
-                                                                     p2.ka, 0.0, 0.0, 0.0, weight[0], weight[1], weight[2]);
-            Eigen::Matrix<double, 12, 1> AtPB;
-            relative_pose_obs_eq_tait_bryan_wc_case1_AtPB_simplified(AtPB, p1.px, p1.py, p1.pz, p1.om, p1.fi, p1.ka, p2.px, p2.py, p2.pz, p2.om, p2.fi,
-                                                                     p2.ka, 0.0, 0.0, 0.0, m.om, m.fi, m.ka, 0.0, 0.0, 0.0, weight[0], weight[1], weight[2]);
-            const int i1 = static_cast<int>(k) * 6, i2 = i1 + 6;
-            for (int row = 0; row < 6; row++)
-            {
-                for (int col = 0; col < 6; col++)
-                {
-                    normal.add(i1 + row, i1 + col, AtPA(row, col));
-                    normal.add(i1 + row, i2 + col, AtPA(row, col + 6));
-                    normal.add(i2 + row, i1 + col, AtPA(row + 6, col));
-                    normal.add(i2 + row, i2 + col, AtPA(row + 6, col + 6));
-                }
-                rhs(i1 + row) -= AtPB(row);
-                rhs(i2 + row) -= AtPB(row + 6);
-            }
-            edges++;
-        }
-        log_info(logger) << "consistency gyro term: " << edges << " edges; " << gated << " of " << windows.size()
-                         << " windows left out (IMU and odometry differ by more than " << params.consistency_gyro_gate_deg << " deg)"
-                         << (without_imu ? ", " + std::to_string(without_imu) + " without IMU angles" : std::string());
-    }
 }
 
 void Consistency(std::vector<Window> &windows, const OdometryConfig &params, PointStore &point_store, Logger &logger, ConsistencyTiming *timing,
@@ -268,9 +177,6 @@ void Consistency(std::vector<Window> &windows, const OdometryConfig &params, Poi
     // the first node is held where it is
     for (int k = 0; k < 6; k++)
         normal.add(k, k, 1000000);
-
-    if (params.consistency_gyro_rotation_term)
-        add_gyro_rotation_terms(windows, indexes, poses, params, normal, rhs, logger);
 
     smoothness_timer.stop();
 

@@ -5,7 +5,6 @@
 #include "lidar_odometry.h"
 #include "memory_point_store.h"
 #include "synthetic_recording.h"
-#include "transformations.h"
 
 #include <chrono>
 #include <random>
@@ -107,88 +106,6 @@ namespace
                 after.largest.rotation / deg, " deg, mean ", after.mean.position * 1000.0, " mm; ", ms, " ms");
         CHECK(after.largest.position <= 0.005);
         CHECK(after.largest.rotation <= 0.1 * deg);
-    }
-}
-
-namespace
-{
-    // a perfect gyro: every node's IMU orientation is its true orientation, the bias zero
-    void set_imu_from_truth(Recording &r)
-    {
-        for (size_t w = 0; w < r.windows.size(); w++)
-        {
-            r.windows[w].imu_angles.clear();
-            for (const Eigen::Affine3d &pose : r.truth[w])
-            {
-                const TaitBryanPose tb = pose_tait_bryan_from_affine_matrix(pose);
-                r.windows[w].imu_angles.emplace_back(tb.om, tb.fi, tb.ka);
-            }
-            r.windows[w].gyro_bias.mean.setZero();
-        }
-    }
-
-    // mean and largest error of the rotation between consecutive nodes of a window, against the truth [rad]
-    std::pair<double, double> node_rotation_error(const Recording &r)
-    {
-        double sum = 0.0, largest = 0.0;
-        int n = 0;
-        for (size_t w = 0; w < r.windows.size(); w++)
-            for (size_t k = 0; k + 1 < r.windows[w].poses.size(); k++)
-            {
-                const Eigen::Matrix3d got = r.windows[w].poses[k].linear().transpose() * r.windows[w].poses[k + 1].linear();
-                const Eigen::Matrix3d want = r.truth[w][k].linear().transpose() * r.truth[w][k + 1].linear();
-                const double e = Eigen::AngleAxisd(Eigen::Matrix3d(got.transpose() * want)).angle();
-                sum += e;
-                largest = std::max(largest, e);
-                n++;
-            }
-        return {sum / n, largest};
-    }
-
-    double run_with(Recording &r, const OdometryConfig &config)
-    {
-        MemoryPointStore store;
-        for (size_t w = 0; w < r.points.size(); w++)
-            store.save(PointSet::WindowIntermediate, w, r.points[w]);
-        NullLogger logger;
-        const auto start = std::chrono::steady_clock::now();
-        run_consistency(r.windows, config, store, logger);
-        return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
-    }
-}
-
-// The gyro rotation term (consistency_gyro_rotation_term) ties consecutive nodes to the IMU's relative rotation: with a
-// perfect gyro the node-to-node rotation must stay closer to the truth than without the term, from the true trajectory
-// and from one with window seams, and the result must be repeatable bit for bit.
-TEST_CASE("consistency: the gyro rotation term keeps the node-to-node rotation")
-{
-    OdometryConfig with = consistency_config();
-    with.consistency_gyro_rotation_term = true;
-    const OdometryConfig without = consistency_config();
-    for (const bool seams : {false, true})
-    {
-        Recording a = loop_recording(2);
-        set_imu_from_truth(a);
-        if (seams)
-            add_window_offsets(a, 0.03, 0.2 * deg);
-        Recording b = a, c = a;
-        run_with(a, without);
-        const double ms = run_with(b, with);
-        run_with(c, with);
-        const auto [mean_without, largest_without] = node_rotation_error(a);
-        const auto [mean_with, largest_with] = node_rotation_error(b);
-        const Measured m_without = measure(a), m_with = measure(b);
-        MESSAGE("gyro term, ", seams ? "seams" : "truth", ": node-to-node rotation error mean ", mean_without / deg, " -> ", mean_with / deg,
-                " deg, largest ", largest_without / deg, " -> ", largest_with / deg, " deg; pose error largest ", m_without.largest.position * 1000.0,
-                " -> ", m_with.largest.position * 1000.0, " mm, mean ", m_without.mean.position * 1000.0, " -> ", m_with.mean.position * 1000.0,
-                " mm; ", ms, " ms");
-        CHECK(mean_with < mean_without);
-        CHECK(largest_with < largest_without);
-        const auto poses_b = all_poses(b.windows), poses_c = all_poses(c.windows);
-        bool same = true;
-        for (size_t i = 0; i < poses_b.size(); i++)
-            same = same && poses_b[i].matrix() == poses_c[i].matrix();
-        CHECK(same);
     }
 }
 

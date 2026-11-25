@@ -12,9 +12,6 @@ config_version = "1.0"
 build_date = "GOLDEN"
 
 [consistency]
-consistency_gyro_gate_deg = 3.0
-consistency_gyro_rotation_term = false
-consistency_gyro_sigma_scale = 3.0
 num_constistency_iter = 10
 use_consistency = false
 
