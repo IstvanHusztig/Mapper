@@ -723,13 +723,8 @@ std::vector<Eigen::Affine3d> optimize_loop_pose_graph(const std::vector<Eigen::A
     for (const auto &p : initial)
         poses.push_back(pose_tait_bryan_from_affine_matrix(p));
 
-    // robust kernel on the loop edges: s2 = the edge's squared residual in sigmas. Two stages: plain least squares first,
-    // then the kernel from that solution. Reweighting from the odometry's poses would treat every true loop as an outlier:
-    // before the solve each one is off by the whole drift (metres on a long recording, tens of sigmas)
-    const double kernel_scale2 = params.loop_closure_kernel_scale * params.loop_closure_kernel_scale;
-    double kernel2 = 0.0; // the kernel of the current stage (0: plain)
-    // the edge's squared residual in sigmas
-    const auto loop_edge_s2 = [&](const std::vector<TaitBryanPose> &ps, size_t e)
+    // the loop edge's squared residual in sigmas
+    const auto loop_edge_cost = [&](const std::vector<TaitBryanPose> &ps, size_t e)
     {
         if (loops[e].information)
         {
@@ -737,18 +732,6 @@ std::vector<Eigen::Affine3d> optimize_loop_pose_graph(const std::vector<Eigen::A
             return d.dot(loops[e].omega * d);
         }
         return relative_pose_edge_cost(ps, loops[e].i, loops[e].j, loop_meas[e], w_loop_t, w_loop_r);
-    };
-    const auto loop_edge_cost = [&](const std::vector<TaitBryanPose> &ps, size_t e)
-    {
-        const double s2 = loop_edge_s2(ps, e);
-        return kernel2 > 0.0 ? kernel2 * std::log1p(s2 / kernel2) : s2;
-    };
-    const auto loop_edge_weight = [&](const std::vector<TaitBryanPose> &ps, size_t e)
-    {
-        if (kernel2 <= 0.0)
-            return 1.0;
-        const double s2 = loop_edge_s2(ps, e);
-        return 1.0 / (1.0 + s2 / kernel2);
     };
 
     const auto cost_of = [&](const std::vector<TaitBryanPose> &ps)
@@ -782,15 +765,10 @@ std::vector<Eigen::Affine3d> optimize_loop_pose_graph(const std::vector<Eigen::A
                 else
                     add_relative_pose_edge(A, b, poses, k, k + 1, odo[k], w_odo_t, w_odo_r);
             for (size_t e = 0; e < loops.size(); e++)
-            {
-                // the kernel's weight at the current poses (1 without the kernel): the reweighted quadratic bounds the robust
-                // cost from above, so a step that lowers it lowers the cost, and the step check below stays valid
-                const double f = loop_edge_weight(poses, e);
                 if (loops[e].information)
-                    add_information_edge(A, b, poses, loops[e].i, loops[e].j, loop_meas[e], loops[e].omega * f);
+                    add_information_edge(A, b, poses, loops[e].i, loops[e].j, loop_meas[e], loops[e].omega);
                 else
-                    add_relative_pose_edge(A, b, poses, loops[e].i, loops[e].j, loop_meas[e], w_loop_t * f, w_loop_r * f);
-            }
+                    add_relative_pose_edge(A, b, poses, loops[e].i, loops[e].j, loop_meas[e], w_loop_t, w_loop_r);
             for (int r = 0; r < 6; r++)
                 A.emplace_back(r, r, 1e12); // first segment pose fixed
             Eigen::SparseMatrix<double> AtPA(6 * n, 6 * n);
@@ -836,11 +814,6 @@ std::vector<Eigen::Affine3d> optimize_loop_pose_graph(const std::vector<Eigen::A
         }
     };
     solve();
-    if (kernel_scale2 > 0.0)
-    {
-        kernel2 = kernel_scale2;
-        solve();
-    }
     std::vector<Eigen::Affine3d> result;
     for (const auto &p : poses)
         result.push_back(affine_matrix_from_pose_tait_bryan(p));
@@ -1072,13 +1045,6 @@ std::optional<std::pair<std::string, std::string>> loop_match_check_refusal(cons
         std::ostringstream why;
         why << "loop_closure_match_check_quantile = " << q << " is not a probability between 0 and 1 (exclusive)";
         return std::make_pair(std::string("match_check_bad_quantile"), why.str());
-    }
-    if (params.loop_closure_kernel_scale > 0.0)
-    {
-        std::ostringstream why;
-        why << "loop_closure_match_check with loop_closure_kernel_scale = " << params.loop_closure_kernel_scale
-            << ": the graphs would be solved with the kernel and scored without it, so the test value is not the held-out innovation";
-        return std::make_pair(std::string("match_check_with_kernel"), why.str());
     }
     if (!params.loop_closure_odometry_from_readings)
         return std::make_pair(std::string("match_check_without_readings"),

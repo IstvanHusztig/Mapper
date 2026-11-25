@@ -172,7 +172,10 @@ namespace
         // 2026-11-25: the gyro rotation term in consistency (off in every settings file; removed on the user's decision)
         {"consistency_gyro_rotation_term", 0.0},
         {"consistency_gyro_sigma_scale", std::nullopt},
-        {"consistency_gyro_gate_deg", std::nullopt}};
+        {"consistency_gyro_gate_deg", std::nullopt},
+        // 2026-11-25: the robust (Cauchy) kernel on the loop edges (off in every settings file, never run on real data;
+        // removed on the user's decision)
+        {"loop_closure_kernel_scale", 0.0}};
     // sections whose every key was retired
     const std::set<std::string> RETIRED_SECTIONS = {"robust_lidar_odometry"};
 
