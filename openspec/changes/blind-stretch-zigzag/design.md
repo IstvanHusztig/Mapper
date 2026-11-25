@@ -104,6 +104,11 @@ gap it need not be even either.
 before the first run of the new form. No constant of `fine_time/RULE.md` changes. If the rule misses a criterion of D5,
 that is reported; the rule is not adjusted to pass.
 
+(2026-11-25: frozen after the conclusion reviewer's reading. Its corrections, all before any run: knots at the middle
+node's time, the rounding of the effective offset, criterion 1 taken over the gap and its two knots (the support's own
+knots already fall by 0.10 m), criterion 2 on the offsets and not on every node, the by-hand residuals, a section on what
+the rule assumes.)
+
 What is already known when it is frozen, and therefore cannot count as a test: today's rule's offsets and the pose
 graph's correction in every window of the stall (Context), from which the line's values in the gap follow by hand
 (for example +0.70 m at window 486, where today's rule gives +3.25 m). The stall can show that the rule does what it
@@ -114,13 +119,15 @@ says and breaks nothing that is measured; not that the gap's windows are right.
 Inputs as in `results.md` section 8: capture `stall_fmt3` (dMapper's own per-window information), its replay as the
 trajectory, cache `fine_time/cache`. "Today's rule" = `rule_fmt3`.
 
-1. **No reversal.** The fall over the support (the reading of D3 taken over the support's windows) is at most 0.10 m
-   after the step. (After the loop closure: 1.84 m. After today's rule: 2.24 m.)
-2. **Supported windows unchanged.** Every supported window has the offset of today's rule, exactly.
+1. **No reversal in the gap.** Over windows 481 to 496 the fall is at most 1e-6 m after the step (after the loop
+   closure: 1.84 m; after today's rule: 2.24 m). True by construction: it checks the code. The fall over the whole
+   support is reported; the supported windows' own knots already give 0.10 m at window 479.
+2. **Supported windows unchanged.** The same windows are supported, each with today's rule's offset (the same grid
+   index). Their nodes other than the middle node can differ from today's rule; the largest difference is reported.
 3. **Applied**, with the held-out mean lower than at 0. Its value is reported beside today's 0.2745 m.
 4. **Edges.** No edge is contradicted. 71 -> 84 and 74 -> 84 stay within their limits (0.221 and 0.211 m) at their time
    support; 75 -> 82 is reported beside today's -0.339 m (limit 0.315 m) and must not be classed contradicted;
-   71 -> 81 stays unconfirmed and its residual is reported (by hand: about -3.3 m).
+   71 -> 81 stays unconfirmed and its residual is reported (by hand: about -3.5 m).
 5. **Map checks** (the tolerances of `fine_time/RULE.md` section 9): the ghost line holds at most 50 returns in each of
    the bands -5..-4, -3..-2, -2..-1 and 0..+1 m; the 54 cm double within 5 mm of +0.015 m; facade out minus back within
    0.02 deg of -0.07; Wohnen hall minus room within 5 mm of +0.308 m; reference contacts >= 8 cm within one of 5, none
@@ -200,7 +207,7 @@ exist (Livox 3's cache is the recording's own: no dMapper job may run on Livox 3
   it (R3).
 - [The held-out check is not independent and now decides a larger move] → unchanged from today's rule (master reviewer,
   2026-11-25); the reported held-out margin and the edge classes are the guard, with the limits said.
-- [An edge the line leaves far behind] → 71 -> 81 stays a kept edge about 3.3 m from the trajectory along the axis. It
+- [An edge the line leaves far behind] → 71 -> 81 stays a kept edge about 3.5 m from the trajectory along the axis. It
   is unconfirmed and stops nothing; it still shapes the pose graph outside the fine-time step (R1 measures by how much).
 - [One recording, and the rule designed knowing it] → frozen before its results; the corridor recording is the test.
 - [Runs the step does not treat keep the fault] → the fall is logged for every weak run, so the new recording shows it.

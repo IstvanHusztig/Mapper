@@ -5,10 +5,12 @@ results). No dMapper run in group 1. Numbers before verdicts; the user judges th
 
 ## 1. Freeze the rule, prototype it, read it (design D3-D6)
 
-- [ ] 1.1 `zigzag/RULE.md`: the changes to `fine_time/RULE.md` (design D3), the criteria and readings (D5), what was
+- [x] 1.1 `zigzag/RULE.md`: the changes to `fine_time/RULE.md` (design D3), the criteria and readings (D5), what was
       known when it was frozen (D4). Done when the conclusion reviewer has read it against the design and the code of
       `tools/loop_fine_time.py` it changes, its findings are worked in, and the file is dated before any run of the new
       form.
+      (2026-11-25: frozen. The conclusion reviewer read it against the design, the trace and the tool: the core holds; its
+      corrections are in (see design D4). No run of the new form before this.)
 - [ ] 1.2 `tools/loop_fine_time.py`: `--straight-gaps` (the knots, the nodes' move, the effective offsets, section 8's
       two changed conditions), `--fit-total` (reading F2), the fall in the summary and the correction, effective offset
       and total in `windows.csv`. `tests/test_loop_fine_time.py`: the corridor cases of D5 (a reversal with an even true
