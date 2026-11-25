@@ -9,6 +9,7 @@
 #include <cmath>
 #include <limits>
 #include <stdexcept>
+#include <string>
 
 namespace synthetic
 {
@@ -211,6 +212,11 @@ bool cast_ray(const Scene &scene, const Eigen::Vector3d &origin, const Eigen::Ve
 
 InertialRecording generate_recording(const Route &route, const SensorProfile &sensor, const ImuNoise &noise)
 {
+    // R2's middle is blind only within a sensor range of 6 m (synthetic_routes.h): another range would make the route
+    // something else under the same name, so it is refused (check-register D10 item 5)
+    if (route.name == "R2" && sensor.max_range_m != 6.0)
+        throw std::invalid_argument("generate_recording: route R2 needs SensorProfile::max_range_m = 6 (its middle is blind only at that range), got " +
+                                    std::to_string(sensor.max_range_m));
     const Motion &motion = route.motion;
     const double dt = sensor.dt_ns * 1e-9;
     ImuOptions io;

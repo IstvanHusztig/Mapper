@@ -891,5 +891,181 @@ class StepChecksRegisterLineTest(unittest.TestCase):
         self.assertIn("time limit: not reported", self.sc.short_run_detail(True, True, "IDENTICAL", "5 min", None))
 
 
+# ---- run_health.py on a log whose readings are known (check-register D10 item 2) ----
+
+def known_log(n=200, bends=None, speeds=None, biases=None, chi2=None):
+    """A run log of n windows in run_health's input format. Every window is bent 0.5 deg, walks at 1 m/s, has the gyro
+    bias 0.10 / -0.05 / 0.02 deg/s and information ratio 0.6; the given dicts (window number -> value) plant a bend [deg],
+    an end speed [m/s along x] or a bias x [deg/s]; chi2 (window number -> value) makes those windows weak (information
+    ratio 0.3) with that chi-square of the start-velocity jump."""
+    bends, speeds, biases, chi2 = bends or {}, speeds or {}, biases or {}, chi2 or {}
+    lines = []
+    for i in range(1, n + 1):
+        info = 0.3 if i in chi2 else 0.6
+        lines.append(f"window diagnostics {i}: t {i * 0.36:.2f} s, dt 0.36 s, iterations 100, delta 0, start {i * 0.4:.2f} 0 0, guess move 0 0 0, info ratio {info}")
+        lines.append(f"window diagnostics {i}: velocity start 0 0 0, end {speeds.get(i, 1.0)} 0 0")
+        lines.append(f"window diagnostics {i}: heading 0 deg, yaw correction first 0 last {bends.get(i, 0.5)} deg")
+        if i in chi2:
+            lines.append(f"window diagnostics {i}: weak axis 1 0 0, start-velocity jump 0.01 0 0 m/s, chi2 {chi2[i]}, prior sigma along it 0.02 m/s; "
+                         "stiffness: ndt 3, velocity prior 1, motion model 1")
+        lines.append(f"gyro bias [deg/s] window {i}: {biases.get(i, 0.10)} -0.05 0.02")
+        lines.append(f"finished at iteration 100/100 optimizing window {i}/{n} with acc_distance 0")
+    lines.append("Processing time: 1 [s]")
+    return "\n".join(lines) + "\n"
+
+
+def chi2_values(median, p95):
+    """41 chi-square values on weak windows 10, 13, ... with exactly this median (sorted position 20 of 0..40) and 95th
+    percentile (position 0.95 * 40 = 38); the values between the two sit halfway."""
+    values = [median] * 21 + [(median + p95) / 2] * 17 + [p95] * 3
+    return {10 + 3 * j: v for j, v in enumerate(values)}
+
+
+class RunHealthKnownLogTests(unittest.TestCase):
+    """run_health on logs written here: every reading and every row's verdict exact, with the plants above the limits
+    (bent 4 deg, 2.6 m/s, bias 0.6 deg/s, chi2 median 8 and p95 30) and just below them (2.9 deg, 2.49 m/s, 0.49 deg/s,
+    chi2 median 4.9 and p95 19.4)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.path = Path(self.tmp.name) / "run.log"
+
+    def read(self, text):
+        import argparse
+        self.path.write_text(text)
+        ap = argparse.ArgumentParser()
+        health.add_limits(ap)
+        r = health.analyse(self.path)
+        return r, {row[0]: row[1:] for row in health.judge(r, ap.parse_args([]))}
+
+    def exit_code(self):
+        proc = subprocess.run([sys.executable, "-B", str(ROOT / "tools/run_health.py"), str(self.path)], capture_output=True, text=True)
+        return proc.returncode, proc.stdout
+
+    ABOVE = dict(bends={77: -4.0}, speeds={120: 2.6}, biases={150: 0.6}, chi2=chi2_values(8.0, 30.0))
+    BELOW = dict(bends={77: -2.9}, speeds={120: 2.49}, biases={150: 0.49}, chi2=chi2_values(4.9, 19.4))
+
+    def test_the_planted_values_are_read_back_exactly_and_judged(self):
+        r, rows = self.read(known_log(**self.ABOVE))
+        self.assertEqual(r["windows"], 200)
+        self.assertEqual((r["bend_gt3"], r["bend_gt10"], r["bend_max"]), (1, 0, 4.0))
+        self.assertEqual(r["speed_max"], 2.6)
+        self.assertEqual(r["bias_max"], [0.6, 0.05, 0.02])
+        self.assertEqual((r["chi2_windows"], r["chi2_p50"], r["chi2_p95"]), (41, 8.0, 30.0))
+        self.assertEqual(r["coverage"], {"bend": 200, "speed": 200, "bias": 200, "chi2": 41})
+        self.assertEqual(r["missing_required"], [])
+        # one window in 200 is 0.5 %, under the 1 % share limit: a single 4 deg bend does not trigger
+        self.assertEqual(rows["windows bent > 3 deg against the gyro"], ("1 (0.5 %)", "<= 1 %", "CLEAR"))
+        self.assertEqual(rows["windows bent > 10 deg"], ("0", "0", "CLEAR"))
+        self.assertEqual(rows["largest bend"], ("4.0 deg", "", ""))
+        self.assertEqual(rows["windows faster than 2.5 m/s"], ("1 (max 2.60 m/s)", "0", "TRIGGER"))
+        self.assertEqual(rows["largest gyro bias estimate x / y / z"], ("0.60 / 0.05 / 0.02 deg/s", "<= 0.5", "TRIGGER"))
+        self.assertEqual(rows["chi2 of the velocity jump, median / p95"], ("8 / 30 (41 windows)", "<= 5 / 20", "TRIGGER"))
+        code, out = self.exit_code()
+        self.assertEqual(code, 1)
+        self.assertIn("result: TRIGGERS", out)
+
+    def test_each_planted_value_just_below_its_limit_is_clear(self):
+        r, rows = self.read(known_log(**self.BELOW))
+        self.assertEqual((r["bend_gt3"], r["bend_max"], r["speed_max"], r["bias_max"][0]), (0, 2.9, 2.49, 0.49))
+        self.assertEqual((r["chi2_p50"], r["chi2_p95"]), (4.9, 19.4))
+        self.assertEqual(rows["windows bent > 3 deg against the gyro"], ("0 (0.0 %)", "<= 1 %", "CLEAR"))
+        self.assertEqual(rows["largest bend"], ("2.9 deg", "", ""))
+        self.assertEqual(rows["windows faster than 2.5 m/s"], ("0 (max 2.49 m/s)", "0", "CLEAR"))
+        self.assertEqual(rows["largest gyro bias estimate x / y / z"], ("0.49 / 0.05 / 0.02 deg/s", "<= 0.5", "CLEAR"))
+        self.assertEqual(rows["chi2 of the velocity jump, median / p95"], ("5 / 19 (41 windows)", "<= 5 / 20", "CLEAR"))
+        self.assertEqual([k for k, v in rows.items() if v[2] == "TRIGGER"], [])
+        code, out = self.exit_code()
+        self.assertEqual(code, 0)
+        self.assertIn("result: DIAGNOSTICS COMPLETE", out)
+
+    def test_the_bend_share_triggers_from_the_third_window_in_200(self):
+        # the share limit is 1 %: 2 windows bent 4 deg of 200 are exactly at it (CLEAR), 3 are over (TRIGGER)
+        _, rows = self.read(known_log(bends={20: 4.0, 90: -4.0}))
+        self.assertEqual(rows["windows bent > 3 deg against the gyro"], ("2 (1.0 %)", "<= 1 %", "CLEAR"))
+        _, rows = self.read(known_log(bends={20: 4.0, 90: -4.0, 160: 4.0}))
+        self.assertEqual(rows["windows bent > 3 deg against the gyro"], ("3 (1.5 %)", "<= 1 %", "TRIGGER"))
+        self.assertEqual(self.exit_code()[0], 1)
+        # one window bent over 10 deg triggers by itself
+        _, rows = self.read(known_log(bends={20: 10.5}))
+        self.assertEqual(rows["windows bent > 10 deg"], ("1", "0", "TRIGGER"))
+
+
+# ---- compare_baseline.py on folders written here (check-register D10 item 3) ----
+
+def write_result_folder(folder, out_path, in_path, stamp, elapsed, commit, data=b"lidar-points-0123456789"):
+    """The smallest result folder that exercises compare_baseline's normalisation: the two dMapper_* files named with a
+    date-time, session.mjs and the params TOML with the folders' own paths, run-dependent fields in the TOML and the
+    JSON, a trajectory CSV and a LAZ stand-in (raw bytes), and a foreign .asc file the tool ignores."""
+    folder.mkdir(parents=True)
+    (folder / "session.mjs").write_text(json.dumps({"Session Settings": {"out_folder_name": str(out_path), "lidar_odometry_version": "0.1.0"}}, indent=2))
+    (folder / f"dMapper_params_0.1.0_{stamp[:16]}.toml").write_text(
+        f"# Created on: {stamp}\n[version_info]\nbuild_date = \"{stamp}\"\n[paths]\nworking_directory_preview = '{in_path}'\n"
+        f"[lidar_odometry]\nthreshold = 0.5\n")
+    (folder / f"dMapper_results_0.1.0_{stamp[:16]}.json").write_text(json.dumps(
+        {"elapsed time seconds": elapsed, "processing_date": stamp, "git_commit": commit, "output": str(out_path) + "\\scan_lio_0.laz",
+         "input": str(in_path) + "\\lidar0.laz", "windows": 12}, indent=2))
+    (folder / "trajectory_lio_0.csv").write_text("timestamp x y z\n1 0.0 0.0 0.0\n2 1.0 0.5 0.0\n")
+    (folder / "scan_lio_0.laz").write_bytes(data)
+    (folder / "scan_lio_0.asc").write_text(f"foreign {stamp}\n")
+
+
+class CompareBaselineTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.a, self.b = self.root / "a" / "out", self.root / "b" / "out"
+        write_result_folder(self.a, self.a, self.root / "inA" / "rec", "2026-11-25_10-00-31", 12.5, "abc1234")
+        write_result_folder(self.b, self.b, self.root / "inB" / "rec", "2026-11-26_17-45-02", 99.0, "def5678")
+
+    def run_tool(self, *args):
+        proc = subprocess.run([sys.executable, "-B", str(ROOT / "tools/compare_baseline.py"), *map(str, args)], capture_output=True, text=True)
+        return proc.returncode, proc.stdout
+
+    def flip_a_byte(self, path):
+        data = bytearray(path.read_bytes())
+        data[len(data) // 2] ^= 0x01
+        path.write_bytes(bytes(data))
+
+    def test_folders_that_differ_only_in_run_dependent_fields_are_identical(self):
+        code, out = self.run_tool(self.b, self.a)
+        self.assertEqual((code, out.strip()), (0, "IDENTICAL: 5 files"))  # the .asc file is not one of them
+
+    def test_a_changed_setting_is_not_normalised_away(self):
+        toml = next(self.b.glob("dMapper_params_*.toml"))
+        toml.write_text(toml.read_text().replace("threshold = 0.5", "threshold = 0.6"))
+        code, out = self.run_tool(self.b, self.a)
+        self.assertEqual(code, 1)
+        self.assertIn("DIFFERENT: 1 of 5 files", out)
+
+    def test_one_changed_byte_in_a_data_file_is_reported_by_name(self):
+        for name in ("scan_lio_0.laz", "trajectory_lio_0.csv"):
+            with self.subTest(name):
+                changed = self.root / "c" / name
+                write_result_folder(changed, changed, self.root / "inC" / "rec", "2026-11-27_08-00-00", 1.0, "0000000")
+                self.flip_a_byte(changed / name)
+                code, out = self.run_tool(changed, self.a)
+                self.assertEqual(code, 1)
+                self.assertIn(f"different  {name}", out.splitlines())
+                self.assertEqual(sum(line.startswith("different") for line in out.splitlines()), 1)
+                self.assertIn("DIFFERENT: 1 of 5 files", out)
+
+    def test_a_manifest_written_from_a_folder_is_identical_to_it_and_to_its_twin(self):
+        manifest = self.root / "manifest.json"
+        code, out = self.run_tool("--write-manifest", self.a, manifest, "--dataset", "known", "--params", "p.toml")
+        self.assertEqual((code, out.strip()), (0, f"wrote {manifest} (5 files)"))
+        written = json.loads(manifest.read_text())
+        self.assertEqual((written["dataset"], written["params"], len(written["files"])), ("known", "p.toml", 5))
+        self.assertEqual(self.run_tool(self.a, manifest), (0, "IDENTICAL: 5 files\n"))
+        self.assertEqual(self.run_tool(self.b, manifest), (0, "IDENTICAL: 5 files\n"))
+        self.flip_a_byte(self.b / "scan_lio_0.laz")
+        code, out = self.run_tool(self.b, manifest)
+        self.assertEqual(code, 1)
+        self.assertIn("different  scan_lio_0.laz", out.splitlines())
+        self.assertIn("DIFFERENT: 1 of 5 files", out)
+
+
 if __name__=='__main__':
     unittest.main()

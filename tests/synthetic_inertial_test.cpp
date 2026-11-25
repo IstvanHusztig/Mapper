@@ -345,3 +345,156 @@ TEST_CASE("synthetic IMU: bias and offset are constant inside a window, step bet
     o2.seed = 2;
     CHECK(generate_imu(m, o2).gyro_rad_s != rec.gyro_rad_s);
 }
+
+// ---- planted noise: the same statistic against a recording whose noise is not the claim (check-register D10 item 1) ----
+//
+// The claim is ImuOptions::noise (what the check reads); the recording draws white_noise_scale / walk_scale times it. A
+// statistic is REJECTED when the variance statistic of the existing noise-statistics case falls outside its two-sided
+// chi-square interval at alpha = 1e-4 (the mean is not part of it: a scale does not move the mean).
+namespace
+{
+    struct PlantedRejections
+    {
+        bool gyro[3], accel[3];
+        bool gyro_walk, accel_walk;
+    };
+
+    PlantedRejections planted_noise_check(double white_scale, double walk_scale, std::uint64_t seed)
+    {
+        Motion m(Eigen::Vector3d(0, 0, 1.5), 0.0);
+        m.rest(160.0);
+        ImuOptions o;
+        o.seed = seed;
+        o.window_origin_node = 0;
+        o.white_noise_scale = white_scale;
+        o.walk_scale = walk_scale;
+        const ImuRecording rec = generate_imu(m, o);
+        const double dt = rec.dt_s(), deg = pi / 180.0, g = standard_gravity;
+        const int n = rec.n_nodes();
+        const double alpha = 1e-4;
+        PlantedRejections out{};
+        for (int a = 0; a < 3; a++)
+        {
+            double sum = 0, sum2 = 0;
+            for (int k = 1; k < n; k++)
+            {
+                const double e = rec.gyro_rad_s[k][a] - rec.gyro_bias_rad_s[rec.bias_index(k)][a];
+                sum += e;
+                sum2 += e * e;
+            }
+            const double sigma = o.noise.gyro_arw_deg_sqrt_s[a] * deg / std::sqrt(dt), count = n - 1;
+            const double mean = sum / count, var = (sum2 - count * mean * mean) / (count - 1);
+            const auto interval = truth_stats::chi2_interval(count - 1, alpha);
+            const double stat = (count - 1) * var / (sigma * sigma);
+            out.gyro[a] = stat <= interval.first || stat >= interval.second;
+
+            sum = sum2 = 0;
+            for (int k = 0; k < n; k++)
+            {
+                const double e = rec.acc_g[k][a] * g - ((a == 2 ? g : 0.0) + rec.accel_offset_mps2[rec.bias_index(k)][a]);
+                sum += e;
+                sum2 += e * e;
+            }
+            const double sigma_a = o.noise.accel_density_mps2_sqrt_hz / std::sqrt(dt), count_a = n;
+            const double mean_a = sum / count_a, var_a = (sum2 - count_a * mean_a * mean_a) / (count_a - 1);
+            const auto interval_a = truth_stats::chi2_interval(count_a - 1, alpha);
+            const double stat_a = (count_a - 1) * var_a / (sigma_a * sigma_a);
+            out.accel[a] = stat_a <= interval_a.first || stat_a >= interval_a.second;
+        }
+        const int windows = static_cast<int>(rec.gyro_bias_rad_s.size()) - 2;
+        double sum_gyro = 0, sum_acc = 0;
+        for (int w = 2; w < static_cast<int>(rec.gyro_bias_rad_s.size()); w++)
+        {
+            sum_gyro += (rec.gyro_bias_rad_s[w] - rec.gyro_bias_rad_s[w - 1]).squaredNorm();
+            sum_acc += (rec.accel_offset_mps2[w] - rec.accel_offset_mps2[w - 1]).squaredNorm();
+        }
+        const double T = o.nodes_per_window * dt;
+        const double var_gyro = std::pow(o.noise.gyro_bias_rw_deg_s_sqrt_s * deg, 2) * T, var_acc = std::pow(o.noise.accel_offset_rw_mps2_sqrt_s, 2) * T;
+        const auto interval = truth_stats::chi2_interval(3.0 * windows, alpha);
+        out.gyro_walk = sum_gyro / var_gyro <= interval.first || sum_gyro / var_gyro >= interval.second;
+        out.accel_walk = sum_acc / var_acc <= interval.first || sum_acc / var_acc >= interval.second;
+        return out;
+    }
+
+    // the smallest sigma ratio (> 1) at which both directions have power >= 0.9 for k degrees of freedom: the claim is
+    // too large by ratio (low side) or too small (high side); returns the larger of the two ratios found
+    double sigma_ratio_with_power(double k, double alpha, double power)
+    {
+        double result = 1.0;
+        for (const bool low : {true, false})
+        {
+            double lo = 1.0, hi = 3.0;
+            for (int i = 0; i < 60; i++)
+            {
+                const double mid = 0.5 * (lo + hi), var_ratio = low ? mid * mid : 1.0 / (mid * mid);
+                (truth_stats::power_of_variance_ratio(k, var_ratio, alpha) >= power ? hi : lo) = mid;
+            }
+            result = std::max(result, hi);
+        }
+        return result;
+    }
+
+    const int planted_seeds = 5;
+}
+
+TEST_CASE("synthetic IMU: planted white noise at 1.5 is rejected on every axis (smoke, one seed)")
+{
+    const PlantedRejections r = planted_noise_check(1.5, 1.0, 1);
+    for (int a = 0; a < 3; a++)
+    {
+        CHECK_MESSAGE(r.gyro[a], "gyro axis " << a << " not rejected");
+        CHECK_MESSAGE(r.accel[a], "accelerometer axis " << a << " not rejected");
+    }
+}
+
+TEST_CASE("synthetic IMU: planted white noise at 1.5 and 1/1.5 is rejected on every axis" * doctest::skip()) // measured set: -tc="synthetic IMU: planted*" --no-skip -s (about 21 s in Release)
+{
+    for (const double factor : {1.5, 1.0 / 1.5})
+        for (int seed = 1; seed <= planted_seeds; seed++)
+        {
+            const PlantedRejections r = planted_noise_check(factor, 1.0, seed);
+            for (int a = 0; a < 3; a++)
+            {
+                CHECK_MESSAGE(r.gyro[a], "factor " << factor << " seed " << seed << " gyro axis " << a << " not rejected");
+                CHECK_MESSAGE(r.accel[a], "factor " << factor << " seed " << seed << " accelerometer axis " << a << " not rejected");
+            }
+        }
+}
+
+TEST_CASE("synthetic IMU: planted white noise at 1.05 and 1/1.05, rejections counted (measured, not required)" * doctest::skip()) // measured set: -tc="synthetic IMU: planted*" --no-skip -s (about 21 s in Release)
+{
+    // the statistic's resolution: the sigma ratio detected with 90 % power at the samples' size and alpha = 1e-4
+    ImuOptions o;
+    const double n_gyro = 160.0 / (o.dt_ns * 1e-9) - 1, n_acc = 160.0 / (o.dt_ns * 1e-9);
+    MESSAGE("sigma ratio detected with 90 % power at alpha 1e-4: gyro (" << n_gyro - 1 << " dof) " << sigma_ratio_with_power(n_gyro - 1, 1e-4, 0.9)
+                                                                           << ", accelerometer (" << n_acc - 1 << " dof) " << sigma_ratio_with_power(n_acc - 1, 1e-4, 0.9));
+    for (const double factor : {1.05, 1.0 / 1.05})
+    {
+        int gyro_rejected = 0, accel_rejected = 0;
+        for (int seed = 1; seed <= planted_seeds; seed++)
+        {
+            const PlantedRejections r = planted_noise_check(factor, 1.0, seed);
+            for (int a = 0; a < 3; a++)
+            {
+                gyro_rejected += r.gyro[a];
+                accel_rejected += r.accel[a];
+            }
+        }
+        MESSAGE("factor " << factor << ": gyro " << gyro_rejected << " of " << 3 * planted_seeds << " (seed, axis) rejected, accelerometer " << accel_rejected << " of "
+                          << 3 * planted_seeds);
+    }
+}
+
+TEST_CASE("synthetic IMU: planted random walks at 1.5 are rejected in at least 4 of 5 seeds" * doctest::skip()) // measured set: -tc="synthetic IMU: planted*" --no-skip -s (about 21 s in Release)
+{
+    int gyro_rejected = 0, accel_rejected = 0;
+    for (int seed = 1; seed <= planted_seeds; seed++)
+    {
+        const PlantedRejections r = planted_noise_check(1.0, 1.5, seed);
+        gyro_rejected += r.gyro_walk;
+        accel_rejected += r.accel_walk;
+    }
+    MESSAGE("walk factor 1.5: gyro bias steps rejected in " << gyro_rejected << " of " << planted_seeds << " seeds, offset steps in " << accel_rejected << " of " << planted_seeds);
+    CHECK(gyro_rejected >= 4);
+    CHECK(accel_rejected >= 4);
+}
