@@ -120,18 +120,25 @@ and goes to the user.
       (2026-11-25: merged; the line is first of the block in run, cancelled run and replay; quoted from a replay log:
       `window verdict limits: bend 3 deg, severe bend 10 deg, speed 2.5 m/s, gyro bias 0.5 deg/s, bent share 0.01, chi2 median 5, chi2 p95 20, weak ratio 0.45`.
       Step checks ALL HOLD; tools parse only `window verdict summary:` lines.)
-- [ ] 4.2 `tools/run_health.py` takes its limits from the line (D8's precedence), prints where they came from, and uses
+- [x] 4.2 `tools/run_health.py` takes its limits from the line (D8's precedence), prints where they came from, and uses
       them where 3, 10 and 0.45 are literals today. Done when tool tests show the three sources (log, defaults, command
       line) and a log with other limits in the line is judged by those.
-- [ ] 4.3 The test that reads `VerdictLimits` from `src/domain/window_verdict.h` and requires the tool's defaults to
+      (2026-11-25, merged: precedence command line > the log's line > defaults; a `limits` row says which; bend 3/10 and
+      the weak ratio 0.45 come from the limits; the last of several lines counts; a malformed one is an error.)
+- [x] 4.3 The test that reads `VerdictLimits` from `src/domain/window_verdict.h` and requires the tool's defaults to
       equal it; it fails when the struct or a member is not found. Done when it passes, and fails when one default in
       `run_health.py` is changed by hand (tried once, reverted, noted here).
-- [ ] 4.4 Docs: `tools/README.md` (run_health), the verify-run skill (`.claude/skills/verify-run/SKILL.md` and its
+      (2026-11-25, merged: RunHealthLimitsTests, 7 cases; speed_mps changed by hand to 2.6 failed with "run_health.py's
+      default for speed_mps is 2.6 but VerdictLimits ... has 2.5", reverted. Step checks ALL HOLD; register +7 cases,
+      +32 assertions, recorded. Not measured: run_health on a real log of the new build with diagnostics.)
+- [x] 4.4 Docs: `tools/README.md` (run_health), the verify-run skill (`.claude/skills/verify-run/SKILL.md` and its
       `.agents` copy: the limits are the run's own, printed in the report), `CLAUDE.md` (Window verdict),
       `docs/regions/solver.md` and `verification.md`; the instruments' file's `run_health` section. Done when
       `python tools/build_docs_index.py --check` holds and `python checks/check_register.py` exits 0 after the register
       is recorded.
-
+      (2026-11-25: tools/README.md, the verify-run skill (both copies, check_agent_setup PASS), CLAUDE.md (Window
+      verdict), docs/regions/solver.md (by the agent, merged) and verification.md, the instruments file's run_health
+      guards; --check holds; the register identical.)
 ## 5. The settings hash and the retired threshold
 
 - [x] 5.1 The three pins (`tests/odometry_snapshot_test.cpp`, the back-end's file): the literals computed on master

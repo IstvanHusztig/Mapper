@@ -2,8 +2,8 @@
 # Not seen: limits computed while a test runs from data, assertions the flow never reaches (a branch not taken,
 # a loop that runs zero times), limits in src/ (the verdict limits, the settings hash), the meaning of a test,
 # constants without a numeric literal in their initialiser (reference bindings), constructor-style declarations.
-# totals: 299 cases (7 should_fail, 28 skip), 1954 assertions, 175 python tests
-# assertions by macro: CHECK 1499, CHECK_FALSE 105, CHECK_MESSAGE 12, CHECK_NOTHROW 1, CHECK_THROWS_WITH_AS 1, REQUIRE 328, REQUIRE_FALSE 5, REQUIRE_MESSAGE 2, WARN_MESSAGE 1; 68 of them in asserting helpers; 101 calls of helpers, 1019 values; 520 python assertions
+# totals: 299 cases (7 should_fail, 28 skip), 1954 assertions, 182 python tests
+# assertions by macro: CHECK 1499, CHECK_FALSE 105, CHECK_MESSAGE 12, CHECK_NOTHROW 1, CHECK_THROWS_WITH_AS 1, REQUIRE 328, REQUIRE_FALSE 5, REQUIRE_MESSAGE 2, WARN_MESSAGE 1; 68 of them in asserting helpers; 101 calls of helpers, 1019 values; 552 python assertions
 
 [file] tests/accelerometer_noise_test.cpp
   value: NoiseWindows :: double D = 0.0
@@ -4015,6 +4015,59 @@
   assert: self.assertEqual(rows['windows bent > 3 deg against the gyro'], ('3 (1.5 %)', '<= 1 %', 'TRIGGER'))
   assert: self.assertEqual(self.exit_code()[0], 1)
   assert: self.assertEqual(rows['windows bent > 10 deg'], ('1', '0', 'TRIGGER'))
+
+[case] tests/test_verification_tools.py :: RunHealthLimitsTests.test_the_tools_defaults_equal_the_programs_verdict_limits
+  markers: -
+  assert: self.assertEqual(set(program), set(health.DEFAULTS), 'run_health.DEFAULTS and VerdictLimits name different limits')
+  assert: self.assertEqual(health.DEFAULTS[member], value, f"run_health.py's default for {member} is {health.DEFAULTS[member]} but VerdictLimits in src/domain/window_verdict.h has {value}: change one so that they agree")
+
+[case] tests/test_verification_tools.py :: RunHealthLimitsTests.test_the_defaults_reach_the_options_and_the_rows_without_a_limits_line
+  markers: -
+  assert: self.assertEqual(rows['limits'][0], 'defaults (the log has no limits line)')
+  assert: self.assertEqual(r['limits'], health.DEFAULTS)
+  assert: self.assertIn('windows bent > 3 deg against the gyro', rows)
+  assert: self.assertIn('windows bent > 10 deg', rows)
+  assert: self.assertIn('windows faster than 2.5 m/s', rows)
+
+[case] tests/test_verification_tools.py :: RunHealthLimitsTests.test_the_log_that_holds_the_default_limits_line_reads_as_from_the_log
+  markers: -
+  assert: self.assertEqual(rows['limits'][0], "from the run's log")
+  assert: self.assertEqual(rows['windows faster than 2.5 m/s'], ('0 (max 1.00 m/s)', '0', 'CLEAR'))
+
+[case] tests/test_verification_tools.py :: RunHealthLimitsTests.test_the_rows_follow_the_limits_of_the_logs_line
+  markers: -
+  assert: self.assertEqual(rows['limits'][0], "from the run's log")
+  assert: self.assertEqual(r['limits'], {'bend_deg': 2.0, 'severe_bend_deg': 6.0, 'speed_mps': 1.5, 'bias_deg_s': 0.3, 'bent_share': 0.05, 'chi2_median': 4.0, 'chi2_p95': 15.0, 'weak_ratio': 0.5})
+  assert: self.assertEqual(rows['windows bent > 2 deg against the gyro'], ('2 (1.0 %)', '<= 5 %', 'CLEAR'))
+  assert: self.assertEqual(rows['windows bent > 6 deg'], ('1', '0', 'TRIGGER'))
+  assert: self.assertEqual(rows['windows faster than 1.5 m/s'], ('1 (max 1.80 m/s)', '0', 'TRIGGER'))
+  assert: self.assertEqual(rows['largest gyro bias estimate x / y / z'], ('0.35 / 0.05 / 0.02 deg/s', '<= 0.3', 'TRIGGER'))
+  assert: self.assertEqual(rows['chi2 of the velocity jump, median / p95'], ('5 / 16 (41 windows)', '<= 4 / 15', 'TRIGGER'))
+  assert: self.assertNotIn('windows bent > 3 deg against the gyro', rows)
+  assert: self.assertEqual(r['uncertainty_missing'], [5])
+  assert: self.assertEqual(r['uncertainty_missing'], [])
+
+[case] tests/test_verification_tools.py :: RunHealthLimitsTests.test_a_command_line_option_beats_the_logs_line_and_is_named
+  markers: -
+  assert: self.assertEqual(rows['limits'][0], 'command line: --max-speed')
+  assert: self.assertIn("the others from the run's log", rows['limits'][1])
+  assert: self.assertIn('speed 2 m/s', rows['limits'][1])
+  assert: self.assertEqual(rows['windows faster than 2 m/s'], ('0 (max 1.80 m/s)', '0', 'CLEAR'))
+  assert: self.assertEqual(rows['largest gyro bias estimate x / y / z'][1], '<= 0.3')
+  assert: self.assertEqual(rows['limits'][0], 'command line: --max-speed')
+  assert: self.assertEqual(rows['windows faster than 2.5 m/s'][2], 'CLEAR')
+  assert: self.assertEqual(rows['limits'][0], 'command line: --max-bias, --max-chi2')
+  assert: self.assertIn('the others defaults (the log has no limits line)', rows['limits'][1])
+
+[case] tests/test_verification_tools.py :: RunHealthLimitsTests.test_the_last_of_several_limits_lines_counts_and_is_said
+  markers: -
+  assert: self.assertEqual(rows['limits'][0], "from the run's log (the last of 2 limits lines)")
+  assert: self.assertIn('windows faster than 1.5 m/s', rows)
+
+[case] tests/test_verification_tools.py :: RunHealthLimitsTests.test_a_malformed_limits_line_is_an_error
+  markers: -
+  assert: self.assertRaises(ValueError, msg=bad)
+  assert: self.assertRaises(ValueError)
 
 [case] tests/test_verification_tools.py :: CompareBaselineTests.test_folders_that_differ_only_in_run_dependent_fields_are_identical
   markers: -

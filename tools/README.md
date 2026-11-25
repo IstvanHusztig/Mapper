@@ -137,7 +137,16 @@ python tools/wall_pairs.py measure set.npz <result or replay folder | odometry_s
 - Plan-independent contacts: `python tools/contacts_to_wall_pairs.py <contacts.pkl> <sample.npz> <trajectory> <out.npz> [--local-shift X Y Z] [--node-ties ties.npz]` turns the 852 revisit contacts of the earlier Livox 4 study (four storeys, found without a plan) into a set `measure` reads (one pair per shared cell, a contact's gap the median of its cells', a class per storey; `--before/--after` use the contact's own time ranges). Checked against that study's own gaps: equal to 4e-15 m on 852 contacts for three trajectories (96 / 6, 9 / 0, 63 / 2 at 8 / 30 cm).
 - One identified wall: `python tools/landmark_check.py freeze|from-cohort|measure` (a cohort of returns with the expected line of the wall in the reference result's world frame, from a plan fit; per trajectory the signed median and 90th percentile of |distance| and the change of the median against the first trajectory). The absolute value depends on the plan alignment (fixed for all trajectories compared); the change between trajectories does not. One wall is one feature, and a wall that helped choose a variant is a selection check.
 
-## run_health.py: stage durations and time limit
+## run_health.py: the limits, stage durations and time limit
+
+The limits a run is judged by are the run's own: every run, replay and cancelled run logs `window verdict limits: bend
+3 deg, severe bend 10 deg, speed 2.5 m/s, gyro bias 0.5 deg/s, bent share 0.01, chi2 median 5, chi2 p95 20, weak ratio
+0.45` (the values of `VerdictLimits` in `src/domain/window_verdict.h`), and `run_health.py` judges with them. A
+`--max-*` option given on the command line beats the log; a log without the line (an older build) gets the defaults,
+which a test requires to equal `VerdictLimits`. The row `limits` says which: `from the run's log`, `defaults (the log
+has no limits line)` or `command line: ...`, and lists the eight values in use; the row labels carry the values
+(`windows faster than 2.5 m/s`). With several limits lines the last counts and the row says so; a malformed one is an
+error.
 
 Besides the odometry readings, the table has two rows from the log: `stage durations` (the `stage durations: loading .. s, odometry .. s, loop closure .. s, consistency .. s, saving .. s` line every run logs; a stage that did not run prints `n/a`) and `windows stopped at the time limit` (0: the result does not depend on the machine's load; n > 0: it does, since the per-window time limit ended iterations). The count comes from the dedicated line, or from the `time limit` count of the window verdict summary when the line is missing; a log with neither is NOT MEASURED. Both rows are descriptive: no trigger, no change to the exit code.
 

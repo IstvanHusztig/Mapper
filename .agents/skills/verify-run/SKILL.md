@@ -41,8 +41,11 @@ incomplete evidence, exit1 triggers, exit0 complete logged diagnostics without
 triggers. None is a map-accuracy verdict. Missing expected windows, duplicate or
 malformed lines, missing eligible uncertainty, and cancellation cannot pass.
 Endpoint proxies are not independently known physical closure errors.
-Bend counts (3/10 degrees), speed crossings (2.5 m/s), residual bias (0.5 degree/s)
-and chi-square median/p95 (5/20) are investigation triggers. Record actual metric
+Bend counts, speed crossings, residual bias and chi-square median/p95 are
+investigation triggers. Their limits are the run's own: every run logs a `window
+verdict limits:` line (3/10 degrees, 2.5 m/s, 0.5 degree/s, 5/20 by default) and
+run_health reads it; its `limits` row says where the limits came from (the run's log,
+the defaults for an older log, or the command line). Quote that row in the report. Record actual metric
 coverage per window. Missing rows cannot pass. Report velocity jump and sigma
 separately. Bias is residual to startup bias, not raw sensor bias. Approximate bend sigmas and inferred stop causes are no longer reported. Loop-correction size has no universal 1 m fail limit.
 Use the agreed contract for endpoint and height targets and their prerequisites.

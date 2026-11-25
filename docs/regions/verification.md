@@ -65,7 +65,8 @@ All of `tools/**`, the verify skills and the test helpers (`docs/regions/owners.
 - **Recording checks:** `imu_health.py` (rate, gaps, rest at start, gravity, bias, false gyro offsets, noise),
   `imu_time_offset.py`, `restamp_imu.py`, `fix_imu_timestamps.py`, `stationary_plane_noise.py`.
 - **Run checks:** `run_health.py` (bends, slides, bias, velocity chi², closure proxy, loop closure, from a log with
-  `log_window_diagnostics`), `perturbation_sweep.py` (base plus six perturbations, identity and resume checks),
+  `log_window_diagnostics`; it judges with the limits the run logged, `window verdict limits:`, and a test ties its
+  defaults to `VerdictLimits`), `perturbation_sweep.py` (base plus six perturbations, identity and resume checks),
   `trajectory_seams.py`, `snapshot_trajectory.py`, `window_terms.py`, `convergence_summary.py`, `live_run_monitor.py`.
 - **Map checks:** `map_quality.py` + `map_quality_lib.py` (recording 44's three measures), `wall_precision.py`,
   `holdout_sharpness.py`, `eval_odometry.py`, `spot_check.py`, `stairwell_check.py`, `facade_check.py`,
