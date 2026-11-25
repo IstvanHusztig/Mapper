@@ -1,0 +1,132 @@
+# What proves each measuring instrument. Hand-kept by the orchestrator; checked by checks/check_register.py against
+# checks/tests.register (every case named here must exist, must not be expected to fail, and a case that is skipped in
+# the regular run counts only with the date and place of its last measured result).
+#
+# Five items per instrument:
+#   known_answer     an input whose right output is known independently, and the tolerance of the check
+#   smallest_effect  the smallest effect the instrument detects, and where that was measured
+#   planted_fault    a fault that was planted and must be reported; not_seen = what the instrument is known not to see
+#   valid_for        the inputs it is valid for; outside = whether an input outside that range is detected
+#   guards           the checks it applies to its own input before it reports
+# An item is given with cases and words, or as not_established (a gap), or as not_applicable (with the reason).
+# First written 2026-11-25 from a survey of the sources (change check-register); numbers are quoted from the tests.
+
+[synthetic_inertial]
+what = "analytic motion with truth and IMU samples in the estimator's time conventions: tests/synthetic_inertial.{h,cpp}"
+known_answer = { cases = ["synthetic IMU: an independent strap-down integration reproduces the truth within the derived bounds", "synthetic IMU: the estimator's time conventions", "synthetic motion: derivatives agree and segments join smoothly"], tolerance = "bounds derived from the step size, then pinned at 6e-6 rad, 1e-2 m/s, 7e-2 m (measured, pinned with a factor of 4); conventions 1e-12 / 1e-9" }
+smallest_effect = { not_established = "the noise check runs at alpha 1e-4 on about 160 s of rest, but the sigma ratio it detects is not stated (closed by task 3.1)" }
+planted_fault = { not_established = "no case generates a wrong noise and requires the noise check to reject it (closed by task 3.1)" }
+valid_for = { says = "a handheld walk with the gait measured on a Livox recording (synthetic_inertial.h:30-40); walking segments are straight; the turns carry no gait and no hand swing", outside = "bad segments throw (synthetic_inertial.cpp:97-99, 137, 184, 308); a motion outside the gait's stated range is not detected" }
+guards = { cases = ["synthetic IMU: the noise statistics match the parameters", "synthetic IMU: bias and offset are constant inside a window, step between windows, and the seed decides"], says = "the generated noise against its claim (chi-square interval, alpha 1e-4)" }
+
+[synthetic_routes]
+what = "routes R1 (loop), R2 (out and back through a corridor with a blind middle), R3 (rest, walk, rest), and the recordings cut from them: tests/synthetic_routes.{h,cpp}, tests/synthetic_recording.{h,cpp}"
+known_answer = { cases = ["synthetic routes: R1, the loop, is cut as generated", "synthetic routes: the points are the latent hits plus the specified jitter, stamped inside their node's interval", "loop recording: points on the scene, timestamps map to their node, windows filled, laps revisit"], tolerance = "no point missing or wrong; jitter sigma within 4 / sqrt(2n); a latent hit on its face within 1e-9; points within 0.01 m of the scene" }
+smallest_effect = { not_established = "no resolution is stated for the routes" }
+planted_fault = { cases = ["synthetic routes: R2 has a blind middle and structure at both ends"], says = "the design is checked (no structure seen along the blind middle, more than 1000 points at both ends); no fault is planted", not_seen = "a scene that is blind by drift of the solved poses and not by construction" }
+valid_for = { says = "always walked; the turns carry no gait (synthetic_routes.h:56-60); R2 needs a sensor range of 6 m (h:72-73)", outside = "a leg that is too short and an incomplete seed or window throw (synthetic_routes.cpp:43, 258, 261); another sensor range for R2 is not detected (closed by task 3.5)" }
+guards = { says = "throws on a leg too short for its gait and on an incomplete window (synthetic_routes.cpp:43, 258, 261)", cases = [] }
+
+[loop_world]
+what = "the complete front end and window loop on model-world recordings, with preconditions and class tables: tests/synthetic_loop.{h,cpp}"
+known_answer = { cases = ["synthetic loop: projected shift weight along any direction from the table's three", "synthetic loop tables: percentile, RMS and the interval of a mean per degree of freedom"], tolerance = "1e-9 of the weight's norm, a removed direction within 1e-12; percentiles against numpy, chi-square quantiles within 1e-3" }
+smallest_effect = { not_established = "no power is stated for the class tables (the interval printed with them is a reference scale, not a test)" }
+planted_fault = { cases = ["synthetic loop controls: the default world (model mismatch), R1 R2 R3"], says = "a world built with other noise values than the run's settings makes the run invalid", measured = "2026-11-21, experiments/consistency/loop.md", not_seen = "a precondition that reads the run's own solved result (the exit landmark and blind-window readings) depends on the outcome" }
+valid_for = { says = "LoopWorld's scenes and loop_sensor's jitter and point count only (synthetic_loop.h:57-83); a handheld walk", outside = "reported: preconditions fail and the run is listed as not evaluated (synthetic_loop.cpp:968-984, 1106-1130)" }
+guards = { cases = ["synthetic loop smoke: a short run completes, its preconditions hold, its deterministic fields repeat"], says = "LoopTolerances are declared before any run (synthetic_loop.h:120-169); time limit, map rebuilds, a moved origin, cut matches, blind and exit preconditions; NOT MEASURED where a reading is missing", measured = "2026-11-21, experiments/consistency/loop.md (the smoke case runs in Release and is skipped in Debug)" }
+
+[truth_statistics]
+what = "normalised error, chi-square intervals, the number of runs for a stated power, a platform-stable random generator: tests/truth_statistics.{h,cpp}"
+known_answer = { cases = ["exact control 2: the statistic and the chi-square quantiles on inputs with known values", "exact control 1: batch solve and exact sequential elimination of the same factors agree"], tolerance = "hand values 1e-14, closed forms 1e-12, published table rows 5e-7 to 5e-4; batch against sequential 1e-10" }
+smallest_effect = { cases = ["exact control 3: the power plan, and the honest chain lies inside its interval"], says = "a variance ratio of 1.5 at 200 degrees of freedom and 1 %: power 0.92 / 0.94 (within 0.01); 6 runs are a smoke check only" }
+planted_fault = { cases = ["exact control 4: the reported covariance x1.5 and /1.5 are rejected, low and high"], says = "covariance scaled by 1.5 and by 1/1.5 rejected in at least 160 of 200 trials; size: at most 10 of 200 honest trials rejected", not_seen = "errors that are dependent, not centred or not Gaussian" }
+valid_for = { says = "independent, centred, Gaussian errors (consistency-harness design D6)", outside = "not detected" }
+guards = { says = "throws on a covariance that is not positive definite and on bad arguments (truth_statistics.cpp:12, 20, 60, 67, 97, 158)", cases = [] }
+
+[fixtures]
+what = "the fixtures on the model world: terms at the truth (F-a), accelerometer noise (F-b), window covariance, the unit cases, the loop chains, the LiDAR claim (K8)"
+known_answer = { cases = ["terms at the truth: the observation is valid (alignment, isolation, the edge path)", "accelerometer noise: (a) the sample-aligned fixture, disjoint supports, unit variance and no covariance", "lidar claim smoke: K8 fixture valid, the NDT term's claim against its scatter on a few trials"], tolerance = "isolated spans within 1e-9 of the whole; analytic variance 1 within 1e-9, correlation below 1e-12; the median normal sigma 10 mm within 1 %" }
+smallest_effect = { cases = ["window covariance: the handed-on state against its claim, cases (a) and (b), switches off and on", "loop chain: the blind stretch over seeds, the last blind window's normalised velocity error"], says = "the number of runs is set for 90 % power to see a variance ratio of 1.5 at 1 % (runs_for_power); the detectable ratio is printed with each result", measured = "2026-11-20, experiments/consistency/fixtures.md (fixtures/window_covariance.log, fixtures/chains.log)" }
+planted_fault = { cases = ["terms at the truth: the observation is valid (alignment, isolation, the edge path)", "loop chain smoke: the corridor's fixture is valid (blindness, injected error retained, no rebuild)"], says = "a planted rotation of 1e-4 rad is read back within 1e-7 and a bias shift of 0.01 rad/s within 1e-9; an injected boundary error of 0.10 m is retained within 1e-6", not_seen = "the blindness precondition of the loop chains and of the window covariance reads the run's own solved poses along their travel direction (closed by task 3.4)" }
+valid_for = { says = "each fixture states what it isolates in its header; window covariance case (b) excludes runs that are not blind and reports them", outside = "reported for the blind cases (excluded runs are counted and must stay below a fifth); not detected elsewhere" }
+guards = { cases = ["loop chain smoke: the corridor's fixture is valid (blindness, injected error retained, no rebuild)", "window covariance smoke: one window per run completes with finite values and valid preconditions", "lidar claim smoke: K8 fixture valid, the NDT term's claim against its scatter on a few trials"], says = "validity preconditions before any reading" }
+
+[honesty_report]
+what = "tools/honesty_report.py: the carried states' sigmas, corrections and normalised moves from window_features.csv"
+known_answer = { cases = ["HonestyReportTests.test_honesty_report_known_figures"], tolerance = "exact strings worked out by hand; a ratio to 12 places" }
+smallest_effect = { not_applicable = "descriptive: it prints readings and takes no decision (no verdict, no limits)" }
+planted_fault = { cases = ["HonestyReportTests.test_honesty_report_old_table_is_unavailable"], says = "a table without the needed columns gives UNAVAILABLE; a move is never rebuilt from other columns", not_seen = "a table is conditional on its own map" }
+valid_for = { says = "a table written with log_window_terms by the same build; the readings are conditional on the run's own map", outside = "missing columns are reported as UNAVAILABLE; a table from another map is not detected" }
+guards = { cases = ["HonestyReportTests.test_honesty_report_side_by_side"], says = "a bad csv exits 2; a mismatch of the labels' count stops it" }
+
+[trajectory_seams]
+what = "tools/trajectory_seams.py: the position difference between two results of one recording"
+known_answer = { cases = ["VerificationTests.test_strict_seams", "VerificationTests.test_final_chunk_transform_and_exact_time"], tolerance = "a planted shift of 0.2 m read as 0.2 m; the time above 5 cm exact" }
+smallest_effect = { says = "positions are compared as written (millimetres); what a difference means is set by the run-to-run noise, measured with the robustness sweep; the report counts time above 5, 20 and 50 cm", cases = [] }
+planted_fault = { cases = ["VerificationTests.test_strict_seams"], says = "a shifted stretch is reported with its size and duration", not_seen = "a rotation without a position difference; differences between two results of different recordings are refused, not measured" }
+valid_for = { says = "two results of the same recording and node times", outside = "refused, exit 2 (trajectory_seams.py:20-23, 83)" }
+guards = { cases = ["VerificationTests.test_strict_seams"], says = "malformed rows, unequal timestamps, NaN and a missing chunk are refused" }
+
+[wall_pairs]
+what = "tools/wall_pairs.py: the gap between two visits of a wall, from a frozen set of returns and any trajectory"
+known_answer = { cases = ["WallPairsTests.test_frozen_result_reproduces_its_cloud", "WallPairsTests.test_rigid_move_changes_nothing_and_a_shifted_visit_shows_its_shift"], tolerance = "a synthetic gap of 0.05 m to 9 places; the cloud reproduced within 1e-9" }
+smallest_effect = { says = "a set frozen on one map cannot show a gap above about 0.37 m on that map (tools/README.md); counts use 8 cm and 30 cm", cases = [] }
+planted_fault = { cases = ["WallPairsTests.test_rigid_move_changes_nothing_and_a_shifted_visit_shows_its_shift", "WallPairsUnionTests.test_a_gap_the_first_map_cannot_show_is_measured_on_another_trajectory"], says = "a shifted visit shows its shift (0.12 m); a rigid move of everything shows nothing", not_seen = "a gap the set's source map cannot show; agreement between visits is not accuracy" }
+valid_for = { says = "trajectories of the recording the set was frozen on, with the same node times", outside = "refused (node times differ); a set favours its source map, which is printed with the result" }
+guards = { cases = ["WallPairsTests.test_measure_table_crossings_and_refusal"], says = "node times differ: refused; no pair survived: said; a missing path exits 2" }
+
+[run_health]
+what = "tools/run_health.py: bends, speeds, gyro bias and the velocity chi-square of a run from its log, against the verdict limits"
+known_answer = { not_established = "tested on its parsing and on missing evidence only; no log with known bends, speeds, bias and chi-square (closed by task 3.2)" }
+smallest_effect = { not_applicable = "it applies fixed limits to the log's readings; it estimates nothing" }
+planted_fault = { cases = ["VerificationTests.test_missing_diagnostics_never_success", "VerificationTests.test_canceled_run_refused_even_with_exit_marker"], says = "missing diagnostics and a cancelled run can never pass (NOT MEASURED, exit 2)", not_seen = "the limits are investigation triggers, not a statement about the map" }
+valid_for = { says = "a log written with log_window_diagnostics; the chi-square exists only for windows with an information ratio below 0.45; the speed limit assumes a walker", outside = "missing lines are reported as NOT MEASURED or INCOMPLETE; a carrier faster than a walker is not detected" }
+guards = { cases = ["VerificationTests.test_duplicate_and_malformed_headers", "RunHealthTimingTests.test_malformed_or_duplicate_lines_are_errors", "RunHealthTimingTests.test_missing_lines_are_not_measured_and_do_not_change_the_exit_code"], says = "coverage rows per metric; duplicate or malformed lines are errors" }
+
+[perturbation_sweep]
+what = "tools/perturbation_sweep.py: the noise floor of a settings file on a recording (the verify-robustness skill)"
+known_answer = { cases = ["VerificationTests.test_seven_member_sweep_and_verified_resume"], tolerance = "identical members give a largest difference of 0; the limit for 20 m is 0.06 m" }
+smallest_effect = { says = "the tool is the measure of the smallest meaningful effect: its family's spread is the floor a difference must exceed (0.10 m on the short recording, 0.3 m per 100 m on a full one)", cases = [] }
+planted_fault = { cases = ["VerificationTests.test_provenance_refuses_mutations", "VerificationTests.test_sweep_failure_retains_files_and_exits_nonzero"], says = "a changed executable, settings file or output is refused on resume; a failed member fails the sweep", not_seen = "overlapping families are inconclusive, not proof of equality" }
+valid_for = { says = "one recording, one settings file, the fixed family of perturbations", outside = "identity by SHA-256: a resume on other inputs is refused" }
+guards = { cases = ["VerificationTests.test_canceled_run_refused_even_with_exit_marker", "VerificationTests.test_provenance_refuses_mutations"], says = "input, settings, executable and outputs fingerprinted; a cancelled run is refused" }
+
+[loop_graph]
+what = "tools/loop_graph.py: dMapper's loop closure pose graph of a capture, solved in Python"
+known_answer = { cases = ["LoopGraphTest.test_chain_with_one_loop_edge_matches_hand_computed", "LoopGraphTest.test_zero_residual_graph_stays_put"], tolerance = "a hand-computed chain within 1e-9, its costs to 9 places; a graph without residual within 1e-12" }
+smallest_effect = { says = "on a real capture its solution equals dMapper's within 0.005 mm (tools/README.md, loop_graph.py check)", cases = [] }
+planted_fault = { cases = ["LoopGraphTest.test_leave_one_out_consistent_edges_have_small_innovation"], says = "an edge 1 m off is identified by its leave-one-out innovation", not_seen = "no registration, pruning or consistency: agreement between edges, not accuracy" }
+valid_for = { says = "a loop closure capture of formats 1 to 4 and its replay folder", outside = "a try the capture lacks is an error" }
+guards = { cases = ["LoopGraphTest.test_missing_try_is_an_error", "LoopGraphTest.test_capture_readings_format_2_and_none_in_format_1", "LoopGraphTest.test_capture_format_3_per_window_information", "LoopGraphTest.test_capture_format_4_fine_time_curves"], says = "capture formats read as written; a missing try stops it" }
+
+[loop_fine_time]
+what = "tools/loop_fine_time.py: the fine-time placement of a blind stretch as a Python prototype"
+known_answer = { cases = ["Profile.test_equals_brute_force", "Corridor.test_an_error_inside_the_blind_stretch_is_taken_out_where_jambs_are_seen"], tolerance = "the profile equals brute force; a planted error is removed to within one grid step (0.1 m)" }
+smallest_effect = { says = "one grid step, 0.1 m; against dMapper's own step the nodes agree within 1e-9 m with the capture's information and within 0.007 m with rebuilt information (tools/README.md)", cases = [] }
+planted_fault = { cases = ["Corridor.test_an_error_inside_the_blind_stretch_is_taken_out_where_jambs_are_seen", "Corridor.test_nothing_across_the_passage_is_not_timed"], says = "an error planted inside a blind stretch is taken out where surfaces across the passage are seen", not_seen = "a stretch with nothing across the passage is reported as not timed; a passage with equal features at equal spacing can be shifted by one spacing when the trajectory is already wrong (master reviewer, 2026-11-25)" }
+valid_for = { says = "a capture, the trajectory without the fine-time step, and the recording's point cache", outside = "another pose graph result or other eligible runs: exit 1" }
+guards = { cases = ["Corridor.test_a_right_trajectory_stays", "Corridor.test_equal_jambs_at_equal_spacing_do_not_move_a_right_trajectory"], says = "a right trajectory is left alone" }
+
+[bit_identity_kit]
+what = "tools/compare_baseline.py, tools/step_checks.py, tools/kit_lib.py (the gate), tools/run_replay.py: does the code still give the same bits"
+known_answer = { not_established = "compare_baseline.py has no test (closed by task 3.3); step_checks.py, run_replay.py and the gate are checked by acceptance runs only" }
+smallest_effect = { says = "one bit: files are compared by SHA-256 after normalising the fields a run changes; guards are exact hexadecimal doubles", cases = [] }
+planted_fault = { not_established = "no test changes one byte and requires the comparison to name the file (closed by task 3.3); --record runs each guard twice and records only when the two runs agree" }
+valid_for = { says = "one floating-point mode (/fp:precise) and one machine: bit identity across compilers or modes is not claimed", outside = "a Release folder configured as Debug is refused; a full run that stopped windows at the time limit depends on the machine's load (reported by the step checks from task 1.7)" }
+guards = { cases = ["VerificationTests.test_build_refuses_a_release_folder_configured_as_debug"], says = "--record refuses uncommitted source changes; missing references stop it; a replay must say identical for every window; memory and slots through the gate" }
+
+[map_quality]
+what = "tools/map_quality.py: global geometry, revisits and sharpness of a result of one recording"
+known_answer = { not_established = "no test; reference readings of 2026-10-13 in tools/README.md" }
+smallest_effect = { says = "counts only beyond the spread of three repeats (s0, s1, s2); headings saturate at 8 degrees (tools/README.md)", cases = [] }
+planted_fault = { not_established = "no planted fault", not_seen = "the revisit check registers all heights together and missed a misplaced ground floor (docs/regions/verification.md, Known flaws)" }
+valid_for = { says = "one recording: its constants are at the top of tools/map_quality_lib.py", outside = "another recording is not detected" }
+guards = { says = "a measure that cannot be computed is FAIL; a saturated heading is printed as >= 8.00", cases = [] }
+
+[check_register]
+what = "checks/check_register.py: the register of the tests (cases, markers, assertions, helper calls, values) and the check of this file"
+known_answer = { cases = ["ReaderTest.test_assertions_as_one_line_each_in_source_order", "ReaderTest.test_values_outside_bodies_members_and_tables", "ReaderTest.test_asserting_helper_closure_and_call_lines", "RealTreeTest.test_the_reader_reads_every_real_test_file_with_the_cross_count_holding"], tolerance = "exact: every construct read as written; on the real tree the reader's count of assertion macros equals a plain count in every file" }
+smallest_effect = { says = "one changed character of a number or a comparison operator in an assertion, a value or a helper's argument; one marker; one case", cases = ["ComparisonTest.test_tolerance_loosened_in_an_assertion", "ComparisonTest.test_comparison_operator_turned_round_is_a_change"] }
+planted_fault = { cases = ["ComparisonTest.test_tolerance_loosened_in_a_named_value", "ComparisonTest.test_tolerance_loosened_in_a_case_table_row", "ComparisonTest.test_tolerance_loosened_in_a_helpers_argument", "ComparisonTest.test_assertion_deleted", "ComparisonTest.test_assertion_commented_out", "ComparisonTest.test_if_zero_round_an_assertion", "ComparisonTest.test_ifdef_round_an_assertion", "ComparisonTest.test_skip_added", "ComparisonTest.test_should_fail_removed", "ComparisonTest.test_a_changed_generator_constant_is_a_value_changed", "InstrumentsTest.test_a_renamed_proof_fails_the_instrument_and_the_register_comparison"], says = "each planted edit is reported with its kind and exit code", not_seen = "limits computed while a test runs, assertions the flow never reaches, limits in src/, the meaning of a test, constants without a numeric literal" }
+valid_for = { says = "the forms the tests use: TEST_CASE with doctest decorators, the doctest assertion macros, unittest test methods", outside = "a source it cannot read to its end, or whose macro count disagrees with a plain count, stops it with the file and line (exit 2)" }
+guards = { cases = ["UnreadableSourceTest.test_unmatched_open_bracket_names_its_line", "UnreadableSourceTest.test_cross_count_catches_an_assertion_the_reader_did_not_reach", "RecordTest.test_record_refuses_with_uncommitted_changes_under_tests", "RecordTest.test_record_refuses_in_a_linked_worktree_unless_allowed"], says = "the cross-count; recording refuses uncommitted test changes and a linked worktree" }

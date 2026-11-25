@@ -13,27 +13,32 @@ and goes to the user.
       (`tools/region_owners.py:52-53`), so a file entry cannot override the glob. The tool is
       `checks/check_register.py` and its test `tests/test_check_register.py`; neither is named in `owners.toml`, so both
       are the orchestrator's. The paths in the proposal, design and tasks are corrected.)
-- [ ] 1.2 The reader (design D2) and the writer (D3) for the C++ tests: cases, markers, assertions, asserting helpers
+- [x] 1.2 The reader (design D2) and the writer (D3) for the C++ tests: cases, markers, assertions, asserting helpers
       and their calls, values, `#if 0`, other conditionals, subcase prefixes; failure with file and line on what it
       cannot match; the cross-count per file. Done when `tests/test_check_register.py` passes its reader cases (each
       construct once, on sources held in the test) and the reader runs over the real `tests/` with the cross-count
       holding in every file and two runs giving the same bytes.
-- [ ] 1.3 The Python tests in the register (`ast`: methods, skip and expected-failure decorators, `self.assert*` calls,
+      (2026-11-25: merged 92a1c38; tests/test_check_register.py 87 cases pass; the Python discover run 158 tests OK.)
+- [x] 1.3 The Python tests in the register (`ast`: methods, skip and expected-failure decorators, `self.assert*` calls,
       literal assignments). Done when the three files' 71 methods are listed and a planted `@unittest.skip` and a
       changed `places=` argument are each reported by the test.
-- [ ] 1.4 The comparison and its kinds (D4), exit codes 0 / 3 / 1 / 2, output with the old and the new line, changes
+      (2026-11-25: merged 92a1c38; tests/test_check_register.py 87 cases pass; the Python discover run 158 tests OK.)
+- [x] 1.4 The comparison and its kinds (D4), exit codes 0 / 3 / 1 / 2, output with the old and the new line, changes
       first. Done when the test plants every edit of the spec's list (tolerance in an assertion, in a named value, in a
       case table row, in a helper's argument; assertion deleted; assertion commented out; `#if 0` and `#ifdef` round an
       assertion; skip added; should_fail removed; case renamed; case moved; assertion reworded) and requires the kind
       and the exit code of each.
-- [ ] 1.5 `--record`: refuses with uncommitted changes under `tests/`, and outside the main working tree without
+      (2026-11-25: merged 92a1c38; tests/test_check_register.py 87 cases pass; the Python discover run 158 tests OK.)
+- [x] 1.5 `--record`: refuses with uncommitted changes under `tests/`, and outside the main working tree without
       `--allow-worktree`. Done when the test shows both refusals in a temporary git repository and a record in a clean
       one.
-- [ ] 1.6 The orchestrator records the first register from master, reads it against the survey's counts (about 290
+      (2026-11-25: merged 92a1c38; tests/test_check_register.py 87 cases pass; the Python discover run 158 tests OK.)
+- [x] 1.6 The orchestrator records the first register from master, reads it against the survey's counts (about 290
       cases, 12 `should_fail`, 24 to 26 `skip`, about 1,940 assertions; `LoopTolerances`' members and the two case
       tables present as values; the six helpers' calls present), and commits `checks/tests.register` in its own commit.
       Done when `python checks/check_register.py` exits 0 on that commit and the totals line matches an independent
       count (`grep`) written into this task.
+      (2026-11-25: recorded from 92a1c38. Totals: 292 cases (7 should_fail, 25 skip), 1,933 assertions, 158 Python tests, 996 C++ values, 101 helper calls; grep: 292 TEST_CASE, 7 should_fail and 25 skip on code lines, the macro counts equal per macro. The design's 12 should_fail / 1,939 were raw greps that counted comments. LoopTolerances' 17 members and both case tables are values.)
 - [ ] 1.7 `tools/step_checks.py`: the lines `tool tests` and `check register` (D5: additions hold in a region's
       worktree and fail in the main tree; a change fails everywhere), and the time-limit count on the full run's line.
       Done when, in a scratch branch in a region worktree, an added case gives `HOLDS, to record: +1 case`, a loosened
@@ -49,15 +54,17 @@ and goes to the user.
 
 ## 2. The instruments' file
 
-- [ ] 2.1 The schema and its check (D7): `check_register.py --instruments` and as part of the plain comparison; the
+- [x] 2.1 The schema and its check (D7): `check_register.py --instruments` and as part of the plain comparison; the
       printed table; exit 1 on a missing case, a `should_fail` case as proof, a skipped case without `measured`. Done
       when the test holds a small instruments file with one of each fault and requires the message for each, and a
       correct one prints the table.
-- [ ] 2.2 `checks/instruments.toml` written by the orchestrator from the survey of 2026-11-25 (design D7's list): every
+      (2026-11-25: merged 92a1c38; InstrumentsTest covers each fault and the table.)
+- [x] 2.2 `checks/instruments.toml` written by the orchestrator from the survey of 2026-11-25 (design D7's list): every
       case name copied from the register, every tolerance and number from the source line; `not_established` and
       `not_applicable` where the survey found nothing, with the reason; the register tool as an instrument of its own.
       Done when `python checks/check_register.py` exits 0 with the file in place and the printed table is pasted into
       this task.
+      (2026-11-25: 15 instruments incl. the register tool itself; every named case resolves. Table: known answer not established for run_health, the bit-identity kit and map_quality; smallest effect not established for the simulator, routes and loop world; planted fault not established for the simulator, the kit and map_quality; the rest established or stated.)
 - [ ] 2.3 Docs: the guide's instruments chapter (`docs/index.html#instruments`) says where each instrument's proof is
       listed and what the five items mean, in general words (no recording names); `docs/regions/verification.md` points
       to the file instead of keeping its own partial lists. Done when `python tools/build_docs_index.py --check` holds.
