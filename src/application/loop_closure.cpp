@@ -61,10 +61,9 @@ namespace
         return s;
     }
 
-    // the points of `points` whose horizontal cell (with one cell of margin) also holds points of `other`: the footprint two
-    // segments on different floors share, in practice the stairwell
-    std::vector<Eigen::Vector3d> crop_to_shared_footprint(const std::vector<Eigen::Vector3d> &points, const std::vector<Eigen::Vector3d> &other,
-                                                         double cell)
+    // the indices (ascending) of the points of `points` whose horizontal cell (with one cell of margin) also holds points of
+    // `other`: the footprint two segments on different floors share, in practice the stairwell
+    std::vector<size_t> shared_footprint(const std::vector<Eigen::Vector3d> &points, const std::vector<Eigen::Vector3d> &other, double cell)
     {
         const auto key = [cell](double x, double y)
         {
@@ -76,11 +75,27 @@ namespace
             for (int dx = -1; dx <= 1; dx++)
                 for (int dy = -1; dy <= 1; dy++)
                     footprint.insert(key(p.x() + dx * cell, p.y() + dy * cell));
-        std::vector<Eigen::Vector3d> out;
-        for (const auto &p : points)
-            if (footprint.count(key(p.x(), p.y())))
-                out.push_back(p);
+        std::vector<size_t> out;
+        for (size_t k = 0; k < points.size(); k++)
+            if (footprint.count(key(points[k].x(), points[k].y())))
+                out.push_back(k);
         return out;
+    }
+
+    template <typename T>
+    std::vector<T> take(const std::vector<T> &v, const std::vector<size_t> &indices)
+    {
+        std::vector<T> out;
+        out.reserve(indices.size());
+        for (const size_t k : indices)
+            out.push_back(v[k]);
+        return out;
+    }
+
+    std::vector<Eigen::Vector3d> crop_to_shared_footprint(const std::vector<Eigen::Vector3d> &points, const std::vector<Eigen::Vector3d> &other,
+                                                         double cell)
+    {
+        return take(points, shared_footprint(points, other, cell));
     }
 
     // how well a point set constrains every direction: smallest over largest eigenvalue of sum(n n^T) over the normals of
@@ -193,9 +208,14 @@ namespace
 
     // fine registration: rigid point-to-distribution alignment of the source to NDT cells of the target
     // information: the undamped normal matrix of the last iteration (at the finest resolution), over T's Tait-Bryan parameters
+    // window_information (with source_slot, one slot per source point, below window_information->size()): the translation
+    // block of each point's contribution summed per slot, from the iteration whose matrix `information` receives; summed
+    // beside AtPA, which stays as it is
     Eigen::Affine3d ndt_refine(const std::vector<Eigen::Vector3d> &source, const std::vector<Eigen::Vector3d> &target, Eigen::Affine3d T,
-                               bool exact_ndt_statistics, Eigen::Matrix<double, 6, 6> *information = nullptr)
+                               bool exact_ndt_statistics, Eigen::Matrix<double, 6, 6> *information = nullptr,
+                               const std::vector<int> *source_slot = nullptr, std::vector<Eigen::Matrix3d> *window_information = nullptr)
     {
+        std::vector<Eigen::Matrix3d> per_slot(window_information ? window_information->size() : 0);
         std::vector<Point3Di> target_points(target.size());
         Eigen::Vector3d viewport = Eigen::Vector3d::Zero();
         for (size_t k = 0; k < target.size(); k++)
@@ -219,9 +239,12 @@ namespace
                 Eigen::Matrix<double, 6, 6> AtPA = Eigen::Matrix<double, 6, 6>::Zero();
                 Eigen::Matrix<double, 6, 1> AtPB = Eigen::Matrix<double, 6, 1>::Zero();
                 const TaitBryanPose pose = pose_tait_bryan_from_affine_matrix(T);
+                for (auto &m : per_slot)
+                    m.setZero();
                 int used = 0;
-                for (const auto &p : source)
+                for (size_t k = 0; k < source.size(); k++)
                 {
+                    const Eigen::Vector3d &p = source[k];
                     const auto it = buckets.find(ndt_cell_index(T * p, b));
                     if (it == buckets.end() || it->second.number_of_points < 3)
                         continue;
@@ -239,12 +262,16 @@ namespace
                         it->second.mean.x(), it->second.mean.y(), it->second.mean.z());
                     AtPA += a;
                     AtPB -= v;
+                    if (window_information)
+                        per_slot[(*source_slot)[k]] += a.topLeftCorner<3, 3>();
                     used++;
                 }
                 if (used < 100)
                     break;
                 if (information)
                     *information = AtPA;
+                if (window_information)
+                    *window_information = per_slot;
                 AtPA += Eigen::Matrix<double, 6, 6>::Identity() * (1e-3 * AtPA.trace() / 6.0);
                 const Eigen::Matrix<double, 6, 1> dx = AtPA.ldlt().solve(AtPB);
                 if (!dx.allFinite())
@@ -1367,6 +1394,115 @@ std::vector<int> cross_floor_revisits(const std::vector<LoopClosureSegment> &seg
     return out;
 }
 
+LoopEdgeTimeSupport loop_edge_time_support(const std::vector<Eigen::Matrix3d> &window_information, const Eigen::Vector3d &axis_odometry,
+                                           const Eigen::Vector3d &axis, const Eigen::Affine3d &target_correction, const Eigen::Affine3d &registration,
+                                           const Eigen::Vector3d &first_before, const Eigen::Vector3d &first_after,
+                                           const std::vector<Eigen::Vector3d> &middle_before, const std::vector<Eigen::Vector3d> &middle_after)
+{
+    LoopEdgeTimeSupport s;
+    const Eigen::Affine3d predict = target_correction * registration;
+    const auto residual = [&](const Eigen::Vector3d &before, const Eigen::Vector3d &after) { return axis.dot(after - predict * before); };
+    s.first_pose_residual_m = residual(first_before, first_after);
+    std::vector<double> along;
+    double sum = 0.0;
+    for (const Eigen::Matrix3d &h : window_information)
+    {
+        along.push_back(axis_odometry.dot(h * axis_odometry));
+        sum += along.back();
+    }
+    if (!(sum > 0.0) || middle_before.size() != along.size() || middle_after.size() != along.size())
+        return s;
+    s.along_axis = true;
+    s.residual_m = 0.0;
+    for (size_t w = 0; w < along.size(); w++)
+    {
+        s.shares.push_back(along[w] / sum);
+        s.residual_m += s.shares[w] * residual(middle_before[w], middle_after[w]);
+    }
+    return s;
+}
+
+namespace
+{
+    // the kept edges read at the times of their information along each weak run's axis (RULE.md section 7, the source side;
+    // before = every window's poses before the node correction, windows = after it); edge_tries: each kept edge's registration
+    std::vector<LoopEdgeTimeSupportReading> edge_time_support_readings(const std::vector<std::vector<Eigen::Affine3d>> &before,
+                                                                       const std::vector<Window> &windows, const std::vector<LoopClosureSegment> &segments,
+                                                                       const std::vector<LoopClosureEdge> &loops,
+                                                                       const std::map<std::tuple<int, int, bool>, const LoopClosureTry *> &edge_tries,
+                                                                       const std::vector<LoopOdometryRun> &runs)
+    {
+        std::vector<LoopEdgeTimeSupportReading> out;
+        const int n_windows = static_cast<int>(windows.size());
+        for (const Window &w : windows)
+            if (w.poses.empty() || w.timestamps.size() != w.poses.size())
+                return out;
+        // a window's start = its first node's time, end = the next window's start (the last window: its last node's time);
+        // middle node = its first node at or after the middle time (its last node if none)
+        const auto start = [&](int w) { return windows[w].timestamps.front().first; };
+        const auto end = [&](int w) { return w + 1 < n_windows ? start(w + 1) : windows[w].timestamps.back().first; };
+        const auto first_at_or_after = [](const Window &w, double t)
+        {
+            const auto it = std::lower_bound(w.timestamps.begin(), w.timestamps.end(), t,
+                                             [](const std::pair<double, double> &s, double v) { return s.first < v; });
+            return std::min(static_cast<size_t>(it - w.timestamps.begin()), w.timestamps.size() - 1);
+        };
+        const auto middle_node = [&](int w) { return first_at_or_after(windows[w], (start(w) + end(w)) / 2.0); };
+        const auto correction = [&](int w, size_t n) { return windows[w].poses[n] * before[w][n].inverse(); };
+        // each run's axis turned by the correction at the first node at or after the run's middle
+        std::vector<Eigen::Vector3d> axes;
+        for (const LoopOdometryRun &r : runs)
+        {
+            const double t = (start(r.first_window) + end(r.last_window)) / 2.0;
+            int w = n_windows - 1;
+            size_t n = windows[w].timestamps.size() - 1;
+            for (int k = 0; k < n_windows; k++)
+                if (windows[k].timestamps.back().first >= t)
+                {
+                    w = k;
+                    n = first_at_or_after(windows[k], t);
+                    break;
+                }
+            axes.push_back(correction(w, n).linear() * r.axis);
+        }
+        for (const LoopClosureEdge &e : loops)
+        {
+            const LoopClosureSegment &source = segments[e.j];
+            const int ti = segments[e.i].first_window;
+            const auto it = edge_tries.find(std::make_tuple(e.i, e.j, e.cross_floor));
+            const LoopClosureTry *t = it != edge_tries.end() ? it->second : nullptr;
+            const int count = source.last_window - source.first_window + 1;
+            const bool blocks = t && static_cast<int>(t->window_information.size()) == count;
+            std::vector<Eigen::Vector3d> middle_before, middle_after;
+            for (int w = source.first_window; w <= source.last_window; w++)
+            {
+                const size_t n = middle_node(w);
+                middle_before.push_back(before[w][n].translation());
+                middle_after.push_back(windows[w].poses[n].translation());
+            }
+            for (size_t r = 0; r < runs.size(); r++)
+            {
+                if (source.first_window > runs[r].last_window || runs[r].first_window > source.last_window)
+                    continue;
+                LoopEdgeTimeSupportReading reading;
+                reading.i = e.i;
+                reading.j = e.j;
+                reading.cross_floor = e.cross_floor;
+                reading.run = static_cast<int>(r);
+                reading.first_window = source.first_window;
+                reading.last_window = source.last_window;
+                reading.axis = axes[r];
+                reading.window_information = blocks;
+                reading.support = loop_edge_time_support(blocks ? t->window_information : std::vector<Eigen::Matrix3d>{}, runs[r].axis, axes[r],
+                                                         correction(ti, 0), e.correction, before[source.first_window][0].translation(),
+                                                         windows[source.first_window].poses[0].translation(), middle_before, middle_after);
+                out.push_back(reading);
+            }
+        }
+        return out;
+    }
+} // namespace
+
 int close_loops(std::vector<Window> &windows, const std::vector<LoopClosureSegment> &segments, LoopClosureRegistrations &registrations,
                 const OdometryConfig &params, Logger &logger, LoopClosureReport *report)
 {
@@ -1430,6 +1566,7 @@ int close_loops(std::vector<Window> &windows, const std::vector<LoopClosureSegme
 
     // 2.+3. revisit candidates and their registration
     std::vector<LoopClosureEdge> loops;
+    std::map<std::tuple<int, int, bool>, const LoopClosureTry *> edge_tries; // each accepted edge's registration
     const bool use_cross_floor = params.loop_closure_cross_floor_max_vertical_m > params.loop_closure_max_vertical_offset_m;
     double near_x = 0.0, near_y = 0.0, near_r = -1.0; // loop_closure_cross_floor_only_near, r < 0: off
     std::sscanf(params.loop_closure_cross_floor_only_near.c_str(), "%lf %lf %lf", &near_x, &near_y, &near_r);
@@ -1478,6 +1615,7 @@ int close_loops(std::vector<Window> &windows, const std::vector<LoopClosureSegme
                                  << (accepted ? " ACCEPTED" : named ? " rejected (named for rejection)" : " rejected");
                 if (accepted)
                 {
+                    edge_tries[std::make_tuple(best_i, j, cross_floor)] = registration;
                     LoopClosureEdge e;
                     e.i = best_i;
                     e.j = j;
@@ -1590,7 +1728,11 @@ int close_loops(std::vector<Window> &windows, const std::vector<LoopClosureSegme
         return 0;
     }
 
-    // 5. interpolate the per-segment correction onto every node
+    // 5. interpolate the per-segment correction onto every node (the poses before it kept for the time-support readings)
+    std::vector<std::vector<Eigen::Affine3d>> odometry_poses;
+    if (!rep.odometry_runs.empty())
+        for (const Window &w : windows)
+            odometry_poses.push_back(w.poses);
     std::vector<Eigen::Affine3d> correction(segments.size());
     for (size_t k = 0; k < segments.size(); k++)
         correction[k] = optimized[k] * initial[k].inverse();
@@ -1613,6 +1755,8 @@ int close_loops(std::vector<Window> &windows, const std::vector<LoopClosureSegme
         }
     }
     rep.outcome = "applied";
+    if (!rep.odometry_runs.empty())
+        rep.edge_time_support = edge_time_support_readings(odometry_poses, windows, segments, loops, edge_tries, rep.odometry_runs);
     log_info(logger) << "loop closure: " << loops.size() << " loop(s) accepted, largest segment correction " << std::fixed << std::setprecision(2)
                      << max_shift << " m";
     return static_cast<int>(loops.size());
@@ -1620,11 +1764,22 @@ int close_loops(std::vector<Window> &windows, const std::vector<LoopClosureSegme
 
 namespace
 {
-    // a segment's points in world coordinates (as the odometry placed them), 0.1 m voxel-decimated
-    std::vector<Eigen::Vector3d> segment_points(const std::vector<Window> &windows, const LoopClosureSegment &s, const OdometryConfig &params,
-                                                PointStore &point_store)
+    // a segment's points in world coordinates (as the odometry placed them), 0.1 m voxel-decimated (the first point of each
+    // voxel kept, in input order), each with the window it came from and its node in that window
+    struct SegmentPoints
     {
         std::vector<Eigen::Vector3d> points;
+        std::vector<int> window; // absolute window index
+        std::vector<int> node;   // node index in its window (index_pose)
+        int first_window = 0;
+        int windows = 0; // the segment's window count
+    };
+
+    SegmentPoints segment_points(const std::vector<Window> &windows, const LoopClosureSegment &s, const OdometryConfig &params,
+                                 PointStore &point_store)
+    {
+        std::vector<Eigen::Vector3d> points;
+        std::vector<int> window, node;
         for (int w = s.first_window; w <= s.last_window; w++)
         {
             const auto &tr = windows[w].poses;
@@ -1638,16 +1793,29 @@ namespace
                 if (r < params.min_distance_lidar || r > params.max_distance_lidar || p.index_pose < 0 || p.index_pose >= static_cast<int>(tr.size()))
                     continue;
                 points.push_back(tr[p.index_pose] * p.point);
+                window.push_back(w);
+                node.push_back(p.index_pose);
             }
         }
-        return voxel_decimate(points, 0.1);
+        std::unordered_set<uint64_t> seen;
+        std::vector<size_t> kept;
+        for (size_t k = 0; k < points.size(); k++)
+            if (seen.insert(voxel_key(points[k], 0.1)).second)
+                kept.push_back(k);
+        SegmentPoints out;
+        out.points = take(points, kept);
+        out.window = take(window, kept);
+        out.node = take(node, kept);
+        out.first_window = s.first_window;
+        out.windows = s.last_window - s.first_window + 1;
+        return out;
     }
 
     // step 3 on the points: each pair registered once, kept in the order registered
     class PointRegistrations : public LoopClosureRegistrations
     {
     public:
-        PointRegistrations(std::vector<std::vector<Eigen::Vector3d>> points, const OdometryConfig &params) : points_(std::move(points)), params_(params) {}
+        PointRegistrations(std::vector<SegmentPoints> points, const OdometryConfig &params) : points_(std::move(points)), params_(params) {}
 
         const LoopClosureTry *registration(int i, int j, bool cross_floor) override
         {
@@ -1679,15 +1847,21 @@ namespace
             // target: the earlier segment with its neighbours
             std::vector<Eigen::Vector3d> target;
             for (int k = std::max(0, i - 1); k <= std::min(j - 1, i + 1); k++)
-                target.insert(target.end(), points_[k].begin(), points_[k].end());
-            std::vector<Eigen::Vector3d> source = points_[j];
+                target.insert(target.end(), points_[k].points.begin(), points_[k].points.end());
+            std::vector<Eigen::Vector3d> source = points_[j].points;
+            std::vector<int> source_window = points_[j].window;
             if (cross_floor)
             {
                 // only what both floors see (the shaft): the rest of each segment is ground the other never saw
                 const std::vector<Eigen::Vector3d> shared_target = crop_to_shared_footprint(target, source, 0.5);
-                source = crop_to_shared_footprint(source, target, 0.5);
+                const std::vector<size_t> shared_source = shared_footprint(source, target, 0.5);
+                source = take(source, shared_source);
+                source_window = take(source_window, shared_source);
                 target = shared_target;
             }
+            // the source points' slots in window_information: their window within segment j
+            for (int &w : source_window)
+                w -= points_[j].first_window;
             if (source.size() < 500 || target.size() < 500)
                 return t;
             t.registered = true;
@@ -1695,7 +1869,8 @@ namespace
             const auto fitness_grid = voxel_set(target, 0.2);
             t.overlap_before = overlap(source, Eigen::Affine3d::Identity(), fitness_grid, 0.2);
             Eigen::Affine3d T = coarse_search(source, target, cross_floor ? params_.loop_closure_cross_floor_search_m : params_.loop_closure_max_correction_m);
-            T = ndt_refine(source, target, T, params_.use_exact_ndt_bucket_statistics, &t.information);
+            t.window_information.assign(static_cast<size_t>(points_[j].windows), Eigen::Matrix3d::Zero());
+            T = ndt_refine(source, target, T, params_.use_exact_ndt_bucket_statistics, &t.information, &source_window, &t.window_information);
             t.overlap_after = overlap(source, T, fitness_grid, 0.2);
             // how far the correction moves the segment: its centre's movement (T's translation would also contain the
             // rotation about the world origin, growing with the distance from the start)
@@ -1712,7 +1887,7 @@ namespace
             return t;
         }
 
-        std::vector<std::vector<Eigen::Vector3d>> points_;
+        std::vector<SegmentPoints> points_;
         const OdometryConfig &params_;
         std::deque<LoopClosureTry> tries_; // a deque: the pointers handed out stay valid while it grows
         std::map<std::tuple<int, int, bool>, size_t> index_;
@@ -1756,7 +1931,7 @@ int run_loop_closure(std::vector<Window> &windows, const OdometryConfig &params,
     // 1. the segments' world points (the only step besides the registrations that reads points)
     // (none with too few windows: close_loops then registers nothing)
     const bool enough_windows = static_cast<int>(windows.size()) >= 2 * std::max(1, params.loop_closure_segment_windows);
-    std::vector<std::vector<Eigen::Vector3d>> points;
+    std::vector<SegmentPoints> points;
     if (enough_windows)
         for (const auto &s : segments)
             points.push_back(segment_points(windows, s, params, point_store));

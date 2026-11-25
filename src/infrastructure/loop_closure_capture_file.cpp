@@ -19,7 +19,8 @@ namespace
     using binary_io::Writer;
 
     constexpr char MAGIC[8] = {'D', 'M', 'L', 'C', 'C', 'A', 'P', '1'};
-    constexpr std::uint32_t FORMAT_VERSION = 2;          // 2: the windows' readings after the loop count
+    constexpr std::uint32_t FORMAT_VERSION = 3;          // 2: the windows' readings after the loop count; 3: then each try's
+                                                         // information per source window (LoopClosureTry::window_information)
     constexpr std::uint32_t FIRST_READABLE_VERSION = 1; // 1: without readings
 
     // the odometry settings hash (odometry_snapshot_file.h) as one more setting: it also covers what the TOML keys don't
@@ -258,6 +259,9 @@ bool write_loop_closure_capture(const std::filesystem::path &file, const LoopClo
     });
     w.value(capture.loops);
     write_window_readings(w, capture.windows);
+    w.list(capture.tries, [&](const CapturedLoopTry &t) {
+        w.list(t.registration.window_information, [&](const Eigen::Matrix3d &m) { w.matrix(m); });
+    });
     out.flush();
     if (!out)
     {
@@ -320,6 +324,16 @@ bool read_loop_closure_capture(const std::filesystem::path &file, LoopClosureCap
         return damaged("loop count");
     if (version >= 2 && !read_window_readings(r, c.windows))
         return damaged("window readings");
+    if (version >= 3)
+    {
+        std::vector<std::vector<Eigen::Matrix3d>> blocks;
+        if (!r.list(blocks, [&](std::vector<Eigen::Matrix3d> &b) { r.list(b, [&](Eigen::Matrix3d &m) { r.matrix(m); }, 100000ULL); },
+                    100000000ULL) ||
+            blocks.size() != c.tries.size())
+            return damaged("per-window information");
+        for (size_t k = 0; k < blocks.size(); k++)
+            c.tries[k].registration.window_information = std::move(blocks[k]);
+    }
     capture = std::move(c);
     settings = std::move(s);
     return true;
@@ -370,6 +384,33 @@ bool write_loop_closure_replay_json(const std::filesystem::path &file, const Loo
             dropped.back()["match_check"] = match_json(*result.report.dropped_match_tests[k]);
     }
     j["edges_dropped"] = dropped;
+    // the kept edges read at the times of their information along each weak run's axis (loop_closure_odometry_from_readings)
+    nlohmann::json time_support = nlohmann::json::array();
+    for (const LoopEdgeTimeSupportReading &t : result.report.edge_time_support)
+    {
+        nlohmann::json e;
+        e["i"] = t.i;
+        e["j"] = t.j;
+        e["cross_floor"] = t.cross_floor;
+        const LoopOdometryRun &run = result.report.odometry_runs[t.run];
+        e["run_windows"] = {run.first_window, run.last_window};
+        e["run_sigma_m"] = run.sigma_m;
+        e["source_windows"] = {t.first_window, t.last_window};
+        e["axis"] = {t.axis.x(), t.axis.y(), t.axis.z()};
+        e["first_pose_residual_m"] = t.support.first_pose_residual_m;
+        e["per_window_information"] = t.window_information; // false: a capture of format 1 or 2
+        if (t.window_information)
+            e["information_along_axis"] = t.support.along_axis;
+        if (t.support.along_axis)
+        {
+            e["time_support_residual_m"] = t.support.residual_m;
+            e["shares"] = t.support.shares;
+        }
+        else
+            e["time_support_residual_m"] = nullptr;
+        time_support.push_back(e);
+    }
+    j["edge_time_support"] = time_support;
     nlohmann::json against;
     against["nodes"] = result.nodes;
     against["identical_nodes"] = result.identical_nodes;

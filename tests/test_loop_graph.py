@@ -43,9 +43,11 @@ def try_of(correction, H=None):
                 angle=0.0, information_ratio=0.0, accepted=True, asked=True, registered=True)
 
 
-def capture_bytes(version, readings=None):
+def capture_bytes(version, readings=None, blocks=None):
     """A capture file as dMapper writes it (loop_closure_capture_file.cpp): one setting, two windows of two nodes, one
-    segment, no tries, the result poses, the loop count and, from format 2 on, the windows' readings (None: absent)."""
+    segment, the result poses, the loop count and, from format 2 on, the windows' readings (None: absent). blocks: None for
+    no tries, else one try per entry (segment 0 -> k, k from 1), registered when its entry (a list of 3x3 per source window,
+    format 3 only) is not empty."""
     out = bytearray(b"DMLCCAP1" + struct.pack("<I", version))
     q = lambda n: struct.pack("<Q", n)  # noqa: E731
     d = lambda *v: struct.pack("<%dd" % len(v), *v)  # noqa: E731
@@ -58,7 +60,10 @@ def capture_bytes(version, readings=None):
         out += q(0) + q(0)                                                           # IMU angles, accelerations
         out += d(*[0.0] * 27)                                                        # gyro bias and velocity states
     out += q(1) + struct.pack("<ii", 0, 1) + d(*np.eye(4).T.ravel()) + d(0, 0, 0) + d(0, 1, 0, 1.4)
-    out += q(0)
+    out += q(len(blocks or []))
+    for k, b in enumerate(blocks or [], start=1):
+        out += struct.pack("<iiBB", 0, k, 0, int(len(b) > 0)) + d(0.5, 0.8) + d(*translation(0.1 * k).T.ravel())
+        out += d(*np.arange(36.0)) + d(0.1, 0.2, 0.3) + d(0, 0, 0) + struct.pack("<BB", 1, 1)
     out += q(2) + (q(2) + d(*np.eye(4).T.ravel()) * 2) * 2
     out += struct.pack("<i", 0)
     if version >= 2:
@@ -69,6 +74,10 @@ def capture_bytes(version, readings=None):
                 continue
             ratio, axis, rest, move, dur = r
             out += struct.pack("<B", 1) + d(ratio, *axis) + struct.pack("<B", rest) + d(*move, dur)
+    if version >= 3:
+        out += q(len(blocks or []))
+        for b in blocks or []:
+            out += q(len(b)) + b"".join(d(*np.asarray(m, float).T.ravel()) for m in b)
     return bytes(out)
 
 
@@ -219,7 +228,35 @@ class LoopGraphTest(unittest.TestCase):
             self.assertEqual(list(r["move"][1]), [0.1, 0.2, 0.3])
             self.assertEqual(r["dur"][1], 0.4)
             self.assertEqual(list(r["t"]), [0.0, 1.0])
-            p.write_bytes(capture_bytes(3, [None, None]))
+            p.write_bytes(capture_bytes(4, [None, None]))
+            with self.assertRaises(ValueError):
+                lg.read_capture(p)
+
+    def test_capture_format_3_per_window_information(self):
+        H0 = np.array([[1.0, 2.5, 3.0], [2.0, 5.0, 6.0], [3.0, 6.0, 9.0]])  # not symmetric: a transposed read would show
+        H1 = np.diag([7.0, 8.0, 9.0])
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "c.bin"
+            readings = [None, (0.01, (0.0, 1.0, 0.0), 1, (0.1, 0.2, 0.3), 0.4)]
+            p.write_bytes(capture_bytes(3, readings, blocks=[[H0, H1], []]))
+            c = lg.read_capture(p)
+            self.assertEqual(sorted(c.tries), [(0, 1, False), (0, 2, False)])
+            Hw = c.tries[(0, 1, False)]["Hw"]
+            self.assertEqual(Hw.shape, (2, 3, 3))
+            np.testing.assert_array_equal(Hw[0], H0)
+            np.testing.assert_array_equal(Hw[1], H1)
+            self.assertFalse(c.tries[(0, 2, False)]["registered"])
+            self.assertEqual(c.tries[(0, 2, False)]["Hw"].shape, (0, 3, 3))
+            self.assertEqual(list(c.readings["present"]), [False, True])
+            # format 2 with the same tries: no Hw
+            p.write_bytes(capture_bytes(2, readings, blocks=[[H0, H1], []]))
+            c = lg.read_capture(p)
+            self.assertNotIn("Hw", c.tries[(0, 1, False)])
+            # format 3 with a damaged count of blocks
+            b = bytearray(capture_bytes(3, readings, blocks=[[H0, H1], []]))
+            tail = 8 + 8 + 2 * 9 * 8 + 8  # the try count, the first try's count and blocks, the second's count
+            b[-tail:-tail + 8] = struct.pack("<Q", 3)
+            p.write_bytes(bytes(b))
             with self.assertRaises(ValueError):
                 lg.read_capture(p)
 

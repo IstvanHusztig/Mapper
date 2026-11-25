@@ -118,7 +118,9 @@ class Capture:
 
 
 def read_capture(path):
-    """Read a DMLCCAP1 capture, format 1 or 2 (little-endian doubles; matrices stored column-major)."""
+    """Read a DMLCCAP1 capture, format 1, 2 or 3 (little-endian doubles; matrices stored column-major). Format 3 adds each try's
+    information per source window: `Hw` (windows of segment j, 3, 3), the translation block of `H` summed per window (empty for a try
+    that was not registered); a try of format 1 or 2 has no `Hw`."""
     with open(path, "rb") as f:
         def val(fmt):
             return struct.unpack("<" + fmt, f.read(struct.calcsize("<" + fmt)))
@@ -133,7 +135,7 @@ def read_capture(path):
             return arr(n * n).reshape(n, n).T
 
         magic, version = val("8sI")
-        if magic != b"DMLCCAP1" or version not in (1, 2):
+        if magic != b"DMLCCAP1" or version not in (1, 2, 3):
             raise ValueError(f"{path}: not a loop closure capture (magic {magic!r}, version {version})")
         cfg = {}
         for _ in range(count()):
@@ -158,7 +160,7 @@ def read_capture(path):
             center = arr(3)
             pb, pe, tb, te = arr(4)
             segs.append(dict(first=first, last=last, pose=pose, center=center, path_begin=pb, path_end=pe, t_begin=tb, t_end=te))
-        tries = {}
+        tries, order = {}, []
         for _ in range(count()):
             i, j, xf, registered = val("iiBB")
             before, after = arr(2)
@@ -170,6 +172,7 @@ def read_capture(path):
             tries[(i, j, bool(xf))] = dict(C=corr, H=info, center=centre, overlap_before=before, overlap_after=after, shift=shift,
                                           angle=angle, information_ratio=ratio, accepted=bool(accepted), asked=bool(asked),
                                           registered=bool(registered))
+            order.append((i, j, bool(xf)))
         for _ in range(count()):  # the poses the capturing run left in the windows (not needed here)
             f.seek(count() * 16 * 8, 1)
         val("i")  # loops accepted
@@ -189,6 +192,12 @@ def read_capture(path):
                 readings["rest"][w] = bool(val("B")[0])
                 readings["move"][w] = arr(3)
                 readings["dur"][w] = arr(1)[0]
+        if version >= 3:
+            if count() != len(order):
+                raise ValueError(f"{path}: the per-window information does not match the tries")
+            for key in order:
+                k = count()
+                tries[key]["Hw"] = arr(9 * k).reshape(k, 3, 3).transpose(0, 2, 1)
         if f.read():
             raise ValueError(f"{path}: trailing bytes, the format has changed")
     st = np.concatenate(stamps)

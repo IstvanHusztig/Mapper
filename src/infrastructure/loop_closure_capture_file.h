@@ -39,7 +39,8 @@ bool read_loop_closure_capture(const std::filesystem::path &file, LoopClosureCap
                                std::string &why);
 
 // the replay's edges as JSON: the outcome, the edges kept and dropped (with their residuals), the missing tries, the
-// comparison with the capturing run, and the settings changed
+// comparison with the capturing run, the settings changed, and the kept edges read at the times of their information along
+// each weak run's axis (edge_time_support, LoopClosureReport::edge_time_support; empty without the readings rule)
 bool write_loop_closure_replay_json(const std::filesystem::path &file, const LoopClosureReplayResult &result,
                                     const LoopClosureSettingsDifference &settings, const OdometryConfig &config, std::string &why);
 
