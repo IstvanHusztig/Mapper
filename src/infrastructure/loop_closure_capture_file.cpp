@@ -10,6 +10,7 @@
 #include <cstring>
 #include <fstream>
 #include <iomanip>
+#include <limits>
 #include <set>
 #include <sstream>
 #include <type_traits>
@@ -189,7 +190,9 @@ namespace
         });
     }
 
-    bool read_fine_time(Reader &r, std::optional<LoopFineTimeCapture> &f)
+    // every count bounded by what the capture itself allows (its segments and windows, the longest offset grid the rule
+    // makes, the grid's length), so a damaged count is a damaged file and never a huge allocation
+    bool read_fine_time(Reader &r, std::optional<LoopFineTimeCapture> &f, std::uint64_t segments, std::uint64_t windows)
     {
         f.reset();
         std::uint8_t present = 0;
@@ -199,26 +202,31 @@ namespace
         if (!present)
             return true;
         LoopFineTimeCapture c;
-        const std::uint64_t many = 100000000ULL;
-        bool inner = true; // the lists inside the curves
+        double largest_bound = 0.0;
+        const std::uint64_t longest_grid =
+            fine_time_offset_grid(std::numeric_limits<double>::infinity(), LoopFineTimeRule{}, largest_bound).size();
+        bool inner = true; // the lists inside the curves (each read only while everything before it was read)
         const bool outer =
-            r.list(c.segment_poses, [&](Eigen::Affine3d &p) { r.matrix(p.matrix()); }, many) &&
-            r.list(c.eligible, [&](LoopFineTimeRun &run) { read_fine_time_run(r, run); }, many) &&
+            r.list(c.segment_poses, [&](Eigen::Affine3d &p) { r.matrix(p.matrix()); }, segments) &&
+            r.list(c.eligible, [&](LoopFineTimeRun &run) { read_fine_time_run(r, run); }, windows) &&
             r.list(c.curves, [&](LoopFineTimeCurves &x) {
+                if (!inner)
+                    return;
                 r.value(x.support_first);
                 r.value(x.support_last);
                 r.value(x.bound_m);
-                inner = inner && r.list(x.grid, [&](double &v) { r.value(v); }, many);
+                inner = r.list(x.grid, [&](double &v) { r.value(v); }, longest_grid);
                 r.value(x.reference_patches);
+                const std::uint64_t G = x.grid.size();
                 inner = inner && r.list(x.windows, [&](LoopFineTimeWindowCurves &y) {
+                    if (!inner)
+                        return;
                     r.value(y.training_patches);
                     r.value(y.held_out_patches);
-                    inner = inner && r.list(y.training, [&](double &v) { r.value(v); }, many) &&
-                            r.list(y.training_matched, [&](int &v) { r.value(v); }, many) &&
-                            r.list(y.held_out, [&](double &v) { r.value(v); }, many) &&
-                            r.list(y.held_out_matched, [&](int &v) { r.value(v); }, many);
-                }, many);
-            }, many);
+                    inner = r.list(y.training, [&](double &v) { r.value(v); }, G) && r.list(y.training_matched, [&](int &v) { r.value(v); }, G) &&
+                            r.list(y.held_out, [&](double &v) { r.value(v); }, G) && r.list(y.held_out_matched, [&](int &v) { r.value(v); }, G);
+                }, windows);
+            }, c.eligible.size());
         if (!outer || !inner || !r.ok())
             return false;
         f = std::move(c);
@@ -497,15 +505,22 @@ bool read_loop_closure_capture(const std::filesystem::path &file, LoopClosureCap
         return damaged("window readings");
     if (version >= 3)
     {
+        // one list per try, each of at most the longest segment's windows
+        std::uint64_t longest = 0;
+        for (const LoopClosureSegment &seg : c.segments)
+            longest = std::max<std::uint64_t>(longest, static_cast<std::uint64_t>(std::max(0, seg.last_window - seg.first_window + 1)));
         std::vector<std::vector<Eigen::Matrix3d>> blocks;
-        if (!r.list(blocks, [&](std::vector<Eigen::Matrix3d> &b) { r.list(b, [&](Eigen::Matrix3d &m) { r.matrix(m); }, 100000ULL); },
-                    100000000ULL) ||
-            blocks.size() != c.tries.size())
+        bool inner = true;
+        if (!r.list(blocks, [&](std::vector<Eigen::Matrix3d> &b) {
+                if (inner)
+                    inner = r.list(b, [&](Eigen::Matrix3d &m) { r.matrix(m); }, longest);
+            }, c.tries.size()) ||
+            !inner || blocks.size() != c.tries.size())
             return damaged("per-window information");
         for (size_t k = 0; k < blocks.size(); k++)
             c.tries[k].registration.window_information = std::move(blocks[k]);
     }
-    if (version >= 4 && !read_fine_time(r, c.fine_time))
+    if (version >= 4 && !read_fine_time(r, c.fine_time, c.segments.size(), c.windows.size()))
         return damaged("fine-time curves");
     capture = std::move(c);
     settings = std::move(s);

@@ -82,10 +82,19 @@ public:
     std::size_t size() const { return points_.size(); }
 
 private:
-    static std::uint64_t key(std::int64_t x, std::int64_t y, std::int64_t z);
+    // a cell by its exact coordinates (no two cells share a list, so a query reads each list once without a visited set)
+    struct Cell
+    {
+        std::int64_t x, y, z;
+        bool operator==(const Cell &o) const { return x == o.x && y == o.y && z == o.z; }
+    };
+    struct CellHash
+    {
+        std::size_t operator()(const Cell &c) const;
+    };
     std::vector<Eigen::Vector3d> points_;
     double cell_;
-    std::unordered_map<std::uint64_t, std::vector<std::size_t>> cells_;
+    std::unordered_map<Cell, std::vector<std::size_t>, CellHash> cells_;
 };
 
 // rule 3: the patches of a point set (thinned to v first): the indices into `points` of the patches' points and their unit
@@ -221,6 +230,12 @@ public:
     // capture without curves, or with those of another pose graph result or another set of eligible runs)
     virtual bool curves(const LoopFineTimeQuery &query, std::vector<LoopFineTimeCurves> &out, std::string &why) = 0;
 };
+
+// whether the curves can be read for the eligible runs (whatever their source): one per run; for each run not overlapping
+// another, its support's windows, the offset grid and bound its sigma gives (bit for bit, with an exact 0), and every
+// window's curves empty or of the grid's length. false (and `why` names what doesn't fit) otherwise.
+bool fine_time_curves_fit(const std::vector<LoopFineTimeRun> &eligible, const std::vector<LoopFineTimeCurves> &curves, const LoopFineTimeRule &rule,
+                          std::string &why);
 
 // what a capture keeps of the step (capture format 4): the curves with the pose graph result and the eligible runs they
 // were computed for

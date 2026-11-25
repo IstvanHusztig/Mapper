@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstring>
 #include <iomanip>
 #include <map>
 #include <sstream>
@@ -116,22 +117,18 @@ std::vector<std::size_t> fine_time_thin(const std::vector<Eigen::Vector3d> &poin
     return kept;
 }
 
-std::uint64_t FineTimeIndex::key(std::int64_t x, std::int64_t y, std::int64_t z)
+std::size_t FineTimeIndex::CellHash::operator()(const Cell &c) const
 {
-    std::uint64_t h = 1469598103934665603ULL;
-    for (const std::int64_t v : {x, y, z})
-        h = (h ^ static_cast<std::uint64_t>(v)) * 1099511628211ULL;
-    return h;
+    return VoxelKeyHash{}(VoxelKey{c.x, c.y, c.z});
 }
 
 FineTimeIndex::FineTimeIndex(const std::vector<Eigen::Vector3d> &points, double cell) : points_(points), cell_(cell)
 {
-    // a cell's list holds the indices of the points in it; two cells whose keys collide share a list, which only adds
-    // candidates (every candidate's distance is computed), so each point is listed once per distinct key
+    // a cell's list holds the indices of the points in it, in input order
     for (std::size_t k = 0; k < points_.size(); k++)
     {
         const VoxelKey c = voxel_of(points_[k], cell_);
-        cells_[key(c.x, c.y, c.z)].push_back(k);
+        cells_[Cell{c.x, c.y, c.z}].push_back(k);
     }
 }
 
@@ -146,14 +143,12 @@ void FineTimeIndex::nearest(const Eigen::Vector3d &q, int k, double reach, std::
         lo[a] = static_cast<std::int64_t>(std::floor((q(a) - r) / cell_));
         hi[a] = static_cast<std::int64_t>(std::floor((q(a) + r) / cell_));
     }
-    std::unordered_set<std::uint64_t> visited; // a list shared by colliding keys is read once
     for (std::int64_t x = lo[0]; x <= hi[0]; x++)
         for (std::int64_t y = lo[1]; y <= hi[1]; y++)
             for (std::int64_t z = lo[2]; z <= hi[2]; z++)
             {
-                const std::uint64_t kk = key(x, y, z);
-                const auto it = cells_.find(kk);
-                if (it == cells_.end() || !visited.insert(kk).second)
+                const auto it = cells_.find(Cell{x, y, z});
+                if (it == cells_.end())
                     continue;
                 for (const std::size_t i : it->second)
                 {
@@ -419,6 +414,53 @@ std::vector<FineTimeSupport> fine_time_supports(const std::vector<std::pair<int,
     return out;
 }
 
+bool fine_time_curves_fit(const std::vector<LoopFineTimeRun> &eligible, const std::vector<LoopFineTimeCurves> &curves, const LoopFineTimeRule &rule,
+                          std::string &why)
+{
+    const auto bits_equal = [](double a, double b) { return std::memcmp(&a, &b, sizeof(double)) == 0; };
+    if (curves.size() != eligible.size())
+    {
+        why = "the score curves are for " + std::to_string(curves.size()) + " runs, not the " + std::to_string(eligible.size()) + " eligible ones";
+        return false;
+    }
+    for (size_t e = 0; e < eligible.size(); e++)
+    {
+        const LoopFineTimeRun &run = eligible[e];
+        const LoopFineTimeCurves &c = curves[e];
+        if (run.overlap)
+            continue; // its curves are not read
+        const std::string name = "the score curves of the run of windows " + std::to_string(run.first_window) + "-" + std::to_string(run.last_window);
+        if (c.support_first != run.support_first || c.support_last != run.support_last ||
+            static_cast<int>(c.windows.size()) != run.support_last - run.support_first + 1)
+        {
+            why = name + " don't cover its support";
+            return false;
+        }
+        double bound = 0.0;
+        const std::vector<double> grid = fine_time_offset_grid(run.sigma_m, rule, bound);
+        bool same_grid = bits_equal(bound, c.bound_m) && grid.size() == c.grid.size();
+        for (size_t k = 0; same_grid && k < grid.size(); k++)
+            same_grid = bits_equal(grid[k], c.grid[k]);
+        if (!same_grid || std::find(c.grid.begin(), c.grid.end(), 0.0) == c.grid.end())
+        {
+            why = name + " have another offset grid than its sigma gives";
+            return false;
+        }
+        const size_t G = c.grid.size();
+        for (const LoopFineTimeWindowCurves &wc : c.windows)
+        {
+            const auto sized = [G](const auto &v) { return v.empty() || v.size() == G; };
+            if (!sized(wc.training) || !sized(wc.training_matched) || !sized(wc.held_out) || !sized(wc.held_out_matched) ||
+                wc.training.empty() != wc.training_matched.empty())
+            {
+                why = name + " have a window's curve of another length than the grid";
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 // ---- the replay's source ------------------------------------------------------------------------------------------------
 
 namespace
@@ -451,10 +493,15 @@ bool CapturedFineTimeScores::curves(const LoopFineTimeQuery &query, std::vector<
               remedy;
         return false;
     }
-    size_t differing = query.segment_poses.size() == capture_->segment_poses.size() ? 0 : query.segment_poses.size();
-    if (differing == 0)
-        for (size_t k = 0; k < query.segment_poses.size(); k++)
-            differing += query.segment_poses[k].matrix() != capture_->segment_poses[k].matrix();
+    if (query.segment_poses.size() != capture_->segment_poses.size())
+    {
+        why = "the captured fine-time score curves belong to another pose graph result (" + std::to_string(query.segment_poses.size()) +
+              " segment poses now, " + std::to_string(capture_->segment_poses.size()) + " in the capture)" + remedy;
+        return false;
+    }
+    size_t differing = 0;
+    for (size_t k = 0; k < query.segment_poses.size(); k++)
+        differing += query.segment_poses[k].matrix() != capture_->segment_poses[k].matrix();
     if (differing > 0)
     {
         why = "the captured fine-time score curves belong to another pose graph result (" + std::to_string(differing) + " of " +
@@ -771,6 +818,7 @@ bool loop_fine_time_step(std::vector<Window> &windows, const std::vector<std::ve
     if (eligible.empty())
     {
         report.seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - clock_start).count();
+        log_info(logger) << "loop closure fine time: step " << std::fixed << std::setprecision(1) << report.seconds << " s";
         return true;
     }
 
@@ -779,23 +827,8 @@ bool loop_fine_time_step(std::vector<Window> &windows, const std::vector<std::ve
     const LoopFineTimeQuery query{windows, odometry_poses, segment_poses, eligible};
     if (!scores.curves(query, curves, why))
         return false;
-    bool fit = curves.size() == eligible.size();
-    for (size_t e = 0; fit && e < eligible.size(); e++)
-    {
-        const LoopFineTimeCurves &c = curves[e];
-        if (eligible[e].overlap)
-            continue;
-        fit = c.support_first == eligible[e].support_first && c.support_last == eligible[e].support_last &&
-              static_cast<int>(c.windows.size()) == c.support_last - c.support_first + 1 && !c.grid.empty();
-        for (const LoopFineTimeWindowCurves &wc : c.windows)
-            fit = fit && (wc.training.empty() || (wc.training.size() == c.grid.size() && wc.training_matched.size() == c.grid.size())) &&
-                  (wc.held_out.empty() || wc.held_out.size() == c.grid.size());
-    }
-    if (!fit)
-    {
-        why = "the score curves don't fit the eligible runs' supports";
+    if (!fine_time_curves_fit(eligible, curves, rule, why))
         return false;
-    }
 
     // rules 5 and 6 and conditions 1 to 3 of rule 8
     std::vector<bool> in_set(eligible.size(), false);
@@ -919,6 +952,17 @@ bool loop_fine_time_step(std::vector<Window> &windows, const std::vector<std::ve
         }
         return p;
     };
+    // rule 7: a window is blind when it lies in an eligible run's support (any of them) and is unsupported there; a run
+    // without scores (its support overlaps another's) has no supported window
+    std::vector<char> blind_window(W, 0);
+    for (const LoopFineTimeRunReport &rr : report.runs)
+        for (int w = rr.run.support_first; w <= rr.run.support_last; w++)
+            blind_window[w] = 1;
+    for (const LoopFineTimeRunReport &rr : report.runs)
+        if (rr.scored)
+            for (int w = rr.run.support_first; w <= rr.run.support_last; w++)
+                if (rr.supported[w - rr.run.support_first])
+                    blind_window[w] = 0;
     std::vector<char> stopped(touches.size(), 0);
     const auto read_edges = [&](const std::vector<bool> &set)
     {
@@ -980,7 +1024,6 @@ bool loop_fine_time_step(std::vector<Window> &windows, const std::vector<std::ve
             row.limit_m = row.sigma_a_m * params.loop_closure_max_residual_m / params.loop_closure_edge_sigma_m;
             if (t.eligible >= 0 && report.runs[t.eligible].scored)
             {
-                const LoopFineTimeRunReport &rr = report.runs[t.eligible];
                 if (!b.along_axis)
                     row.cls = FineTimeEdgeClass::unconfirmed;
                 else
@@ -988,8 +1031,7 @@ bool loop_fine_time_step(std::vector<Window> &windows, const std::vector<std::ve
                     std::vector<double> informed;
                     for (int w = source.first_window; w <= source.last_window; w++)
                     {
-                        const bool blind = w >= rr.run.support_first && w <= rr.run.support_last && !rr.supported[w - rr.run.support_first];
-                        if (!blind)
+                        if (!blind_window[w])
                             informed.push_back(b.shares[w - source.first_window]);
                     }
                     row.informed_share = fine_time_pairwise_sum(informed.data(), informed.size());
@@ -1084,5 +1126,6 @@ bool loop_fine_time_step(std::vector<Window> &windows, const std::vector<std::ve
             line << " (it contradicted the run's profile and stopped it; read here without that profile)";
     }
     report.seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - clock_start).count();
+    log_info(logger) << "loop closure fine time: step " << std::fixed << std::setprecision(1) << report.seconds << " s";
     return true;
 }
